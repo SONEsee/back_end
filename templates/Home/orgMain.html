@@ -1,0 +1,30 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+{% block title %}Boad OF Director{%endblock%}
+
+{% block content %}
+    <div id="important" class="important">
+        <div class="container">
+        <div class="row">
+            <div class="col-md-12">
+            <div class="titlepage">
+                <h2><strong class="blue">
+                    {% if Lang == "la" %}
+                    {% for bod in H_bod %}
+                    {{bod.Trans_LA}}
+                    {% endfor %}
+                   {% elif Lang == "en" %}
+                    {% for bod in H_bod %}
+                    {{bod.Trans_EN}}
+                    {% endfor %}
+                  {% endif %}</strong></h2>
+                    <div class="container" style="margin-bottom:-100px">
+                        <center><figure><img src="{% static 'images/mdr01_new.jpg' %}"></figure></center> 
+                        <center><figure><img src="{% static 'images/mdr02.jpg' %}"></figure></center> 
+                        <center><figure><img src="{% static 'images/mdr03.jpg' %}"></figure></center> 
+                    </div>
+            </div>
+            </div>
+        </div>
+    </div> <!-- end History -->
+{%endblock%}

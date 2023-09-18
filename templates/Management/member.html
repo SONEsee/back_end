@@ -1,0 +1,81 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{%block title%}LCIC{%endblock%}</title>
+  <link stype="text/css" href="{% static '/css/navlog.css' %}" rel="stylesheet"/>
+  <!-- Boxicons CDN Link -->
+  <link href="{% static '/css/bootstrap2.min.css' %}" rel="stylesheet"> 
+  <link href="https://unpkg.com/boxicons@2.0.7/css/boxicons.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="{% static '/css/login.css' %}">
+
+</head>
+<body>
+  {% include 'Login/lognav.html' %}
+
+  {% comment %} <div class="UserInfo">
+    Hello, {% for u in u %} {{u.username}} {% endfor%}
+  </div> {% endcomment %}
+  {% block content %}
+  <br />
+  <br />
+  <br />
+  <div class="User">
+    <div class="UserInfo">
+      {% if Lang == "la" %}
+      ຍິນດີຕ້ອນຮັບ, {% for u in uname %} {{u.nameL}} {% endfor%}
+      </br><span>ພາກສ່ວນ:</span>{% if check_UserGroup == 1 or check_UserGroup == 2 or check_UserGroup == 3 or check_UserGroup == 4 or check_UserGroup == 5 %}
+      ຂສລ, ບໍລິສັດ ຂໍ້ມູນຂ່າວສານສິນເຊື່ອແຫ່ງ ສ.ປ.ລາວ
+      {% else %}
+      {% for c in code %} {{c.code}} {% endfor%}, {% for c in code %} {{c.nameL}} {% endfor%}
+      {% endif %}
+      </br><span>ກຸ່ມຜູ້ໃຊ້:</span>{% for g in ugroup %} {{g.nameL}} {% endfor%}
+      <br />
+      <a href="{% url 'lcicHome:loginPage' %}?Lang=la">ອອກຈາກລະບົບ</a>
+      {% elif Lang == "en" %}
+      Welcome, {% for u in uname %} {{u.nameE}} {% endfor%}
+      </br><span>From:</span>{% for c in code %} {{c.code}} {% endfor%}, {% for c in code %} {{c.nameE}} {% endfor%}
+      </br><span>User Group:</span>
+      {% for g in ugroup %} {{g.nameE}} {% endfor%}
+      <br />
+      <a href="{% url 'lcicHome:loginPage' %}?Lang=en">Logout</a>
+      {% endif %}
+    </div>
+  </div>
+</br>
+</br>
+</br>
+<div class="container-fluid">
+    <h3 class="m-4">ຜູ້ໃຊ້ລະບົບທັງໝົດ</h3>
+    <div class="row">
+        <div class="col-12">
+            <div class="card bg-light ms-4 me-4 mb-4">
+                <div class="card-header">Header</div>
+                <div class="card-body">
+                  <h4 class="card-title">Light card title</h4>
+                  <p class="card-text">Some quick example text to build on the card title and make up the bulk of the card's content.</p>
+                </div>
+              </div>
+        </div>
+    </div>
+</div>
+
+  {% endblock %}
+
+</body>
+<footer class="mt-auto mb-4">
+    {% block footer %}
+    <div class="text-center">
+        <span>
+            Copyright &copy; <script>document.write(new Date().getFullYear())</script> LCIC Team.
+        </span>
+    </div>
+    {% endblock %}
+</footer>
+<script src="{% static 'js/navlog.js' %}"></script>
+{% comment %} <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/js/bootstrap.bundle.min.js"></script> {% endcomment %}
+</html>

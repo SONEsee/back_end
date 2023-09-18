@@ -1,0 +1,205 @@
+{% extends "Login/main.html" %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% block title %}LCIC{% endblock %}
+{% block content %}
+</br>
+</br>
+</br>
+</br>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="{% static '/icons/favicon.ico' %}" type="image/gif" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" stype="text/css" href="{% static '/css/font-awesome.css' %}">
+    <link href="{% static 'fontawesomefree/css/fontawesome.css' %}" rel="stylesheet" type="text/css">
+    <link href="{% static 'fontawesomefree/css/brands.css' %}" rel="stylesheet" type="text/css">
+    <link href="{% static 'fontawesomefree/css/solid.css' %}" rel="stylesheet" type="text/css">
+    <link
+      href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Line Awesome CDN Link -->
+    <link
+      rel="stylesheet"
+      href="https://maxst.icons8.com/vue-static/landings/line-awesome/line-awesome/1.3.0/css/line-awesome.min.css"
+    />
+    <title>Document</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
+    
+          body {
+            margin: 0;
+            padding: 0;
+          }
+    
+          .main-container {
+            height: 50vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+          }
+    
+          .main-container {
+            margin: 0 0 80px 0;
+            color: #000078;
+            font-size: 30px;
+            font-family: "Raleway", sans-serif;
+            font-weight: 400;
+          }
+    
+          .radio-buttons {
+            width: 100%;
+            margin: 0 auto;
+            text-align: center;
+          }
+    
+          .custom-radio input {
+            display: none;
+          }
+    
+          .radio-btn {
+            margin: 10px;
+            width: 180px;
+            height: 200px;
+            border: 3px solid transparent;
+            display: inline-block;
+            border-radius: 10px;
+            position: relative;
+            text-align: center;
+            box-shadow: 0 0 20px #c3c3c367;
+            cursor: pointer;
+          }
+    
+          .radio-btn > i {
+            color: #ffffff;
+            background-color: #000078;
+            font-size: 20px;
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%) scale(4);
+            border-radius: 50px;
+            padding: 3px;
+            transition: 0.2s;
+            pointer-events: none;
+            opacity: 0;
+          }
+    
+          .radio-btn .search-icon {
+            width: 100px;
+            height: 80px;
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+          }
+    
+          .radio-btn .search-icon i {
+            color: #000078;
+            line-height: 80px;
+            font-size: 60px;
+          }
+    
+          .radio-btn .search-icon h3 {
+            color: #000078;
+            font-family: "Raleway", sans-serif;
+            font-size: 16px;
+            font-weight: 400;
+            text-transform: uppercase;
+          }
+    
+         .custom-radio input:checked + .radio-btn {
+            {% comment %} border: 3px solid #000078; {% endcomment %}
+          }
+    
+          .custom-radio   .radio-btn > i {
+            {% comment %} opacity: 1;
+            transform: translateX(-50%) scale(1); {% endcomment %}
+          }
+
+          .radio-btn:hover{
+            border: 3px solid #000078;
+            
+          }
+
+           
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        {% comment %} <h2>ທ່ານຕ້ອງການຄົ້ນຫາຂໍ້ມູນໃດ?</h2> {% endcomment %}
+        <div class="radio-buttons">
+
+          <label class="custom-radio">
+            <a class="radio-link" name="radio-link" id="radio-link" href="#">
+            <input type="radio" name="radio" />
+            <span class="radio-btn"
+              ><i class="las la-check"></i>
+              <div class="search-icon">
+                <i class="las la-user-alt"></i>
+                <h3>ບຸກຄົນ</h3>
+              </div>
+            </span>
+        </a>
+          </label>
+          
+          <label class="custom-radio">
+            <a class="radio-link" name="radio-link" href="#">
+            <input type="radio" name="radio" />
+            <span class="radio-btn"
+              ><i class="las la-check">
+                </i>
+              <div class="search-icon">
+                
+                <i class="las la-building"></i>
+                <h3>ນິຕິບຸກຄົນ</h3>
+            
+              </div>
+            </span>
+        </a>
+          </label>
+        
+          <label class="custom-radio">
+            <a class="radio-link" name="radio-link" href="#">
+            <input type="radio" name="radio" />
+            <span class="radio-btn"
+              ><i class="las la-check"></i>
+              <div class="search-icon">
+                <i class="las la-tools"></i>
+                <h3>ສາທານຸປະໂພກ</h3>
+                
+              </div>
+            </span>
+          </a>
+          </label>
+          <label class="custom-radio">
+            <a class="radio-link" name="radio-link" href="#">
+            <input type="radio" name="radio" />
+            <span class="radio-btn"
+              ><i class="las la-check"></i>
+              <div class="search-icon">
+                <i class="las la-star"></i>
+                <h3>ຄະແນນສິນເຊື່ອ</h3>
+              </div>
+            </span>
+          </a>
+          </label>
+        </div>
+      </div>
+    <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+<script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+</body>
+</html>
+{% endblock %}

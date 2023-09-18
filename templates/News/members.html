@@ -1,0 +1,98 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+{% block title %}Member Of LCIC{%endblock%}
+{% block content %}
+<div id="important" class="important">
+    <div class="container-sm">
+        <div class="row">
+            <div class="col-md-3">
+                {% if Lang == "la" %}
+                <div class="list-group">
+                    <a href="{% url 'lcicNews:members'%}?Lang=la" class="list-group-item list-group-item-action {% if not mType_v %}active{%endif%} " aria-current="true">
+                       ສະມາຊິກທັງໝົດ</a> 
+                    {% for t in memberType_v %}
+                    <a href="{% url 'lcicNews:members' %}?memberTypeid={{ t.id }}&Lang=la" class="list-group-item list-group-item-action {%if mType_v|add:'0' == t.id %}active{% endif %} " aria-current="true">{{t.nameL}}</a>
+                    {%endfor%}
+                </div>
+
+                {% elif Lang == "en" %}
+                <div class="list-group">
+                    <a href="{% url 'lcicNews:members'%}?Lang=en" class="list-group-item list-group-item-action {% if not mType_v %}active{%endif%} " aria-current="true">{% for all in H_mem %}
+                        {{all.Trans_EN}}
+                       {% endfor %}</a> 
+                    {% for t in memberType_v %}
+                    <a href="{% url 'lcicNews:members' %}?memberTypeid={{ t.id }}&Lang=en" class="list-group-item list-group-item-action {%if mType_v|add:'0' == t.id %}active{% endif %} " aria-current="true">{{t.nameE}}</a>
+                    {%endfor%}
+                </div>
+                {% endif %}
+            </div>
+            <div class="col-md-9">
+                <div class="row ">
+                    <div class="col-md-12">
+                        <div class="card border-0">
+                            {% if Lang == "la" %}
+                            <div class="row">
+                                {% for m in memberInfo_v %}
+                                    <div class="col-md-1">
+                                    {% if m.mImage %} 
+                                        <a href="#"><img src="{{ m.mImage.url }}" alt="" class="card-img-top"max-width="50px"></a>
+                                    {%endif%} 
+                                    </div>
+                                    <div class="col-md-11">
+                                        <h6><strong class="blue">{{m.nameL}}</strong></h6>
+                                        <span>ທີ່ຢູ່: {{m.streetInfoL}} {{m.villageInfo}} {{m.districtInfo}} {{m.provInfo}} </span>
+                                    </div>
+                                {%endfor%}
+                            </div>
+
+                            {% elif Lang == "en" %}
+                            <div class="row">
+                                {% for m in memberInfo_v %}
+                                    <div class="col-md-1">
+                                    {% if m.mImage %} 
+                                        <a href="#"><img src="{{ m.mImage.url }}" alt="" class="card-img-top"max-width="50px"></a>
+                                    {%endif%} 
+                                    </div>
+                                    <div class="col-md-11">
+                                        <h6><strong class="blue">{{m.nameE}}</strong></h6>
+                                        <span>Address: {{m.streetInfoE}} {{m.villageInfo.nameE}} {{m.districtInfo.nameE}} {{m.provInfo.nameE}} </span>
+                                    </div>
+                                {%endfor%}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <hr>
+                {% if Lang == "la" %}
+                    <ul class="pagination" >                   
+                        {% if memberInfo_v.has_previous %}
+                            <li class="page-item"><a class="page-link" href="?page=memberInfo_v.previous_page_number&Lang=la">Previous</a></li>
+                        {% endif %}
+                        {% for i in memberInfo_v.paginator.page_range %}
+                            <li class="page-item {% if memberInfo_v == i %}active{%endif%}"><a class="page-link" href="?page={{ i }}&Lang=la">{{i}}</a></li>
+                        {% endfor %}
+                        {% if memberInfo_v.has_next %}
+                            <li class="page-item"><a class="page-link" href="?page=memberInfo_v.next_page_number&Lang=la">Next</a></li>
+                        {% endif %}
+                    </ul><!-- end Previour Page and Next Page-->
+
+                    {% elif Lang == "en" %}
+                    <ul class="pagination" >                   
+                        {% if memberInfo_v.has_previous %}
+                            <li class="page-item"><a class="page-link" href="?page=memberInfo_v.previous_page_number&Lang=en">Previous</a></li>
+                        {% endif %}
+                        {% for i in memberInfo_v.paginator.page_range %}
+                            <li class="page-item {% if memberInfo_v == i %}active{%endif%}"><a class="page-link" href="?page={{ i }}&Lang=en">{{i}}</a></li>
+                        {% endfor %}
+                        {% if memberInfo_v.has_next %}
+                            <li class="page-item"><a class="page-link" href="?page=memberInfo_v.next_page_number&Lang=en">Next</a></li>
+                        {% endif %}
+                    </ul><!-- end Previour Page and Next Page-->
+                    {% endif %}
+            </div>
+            
+        </div>
+    </div> <!-- end History -->
+</div>
+{%endblock%}
