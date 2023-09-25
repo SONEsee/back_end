@@ -104,7 +104,7 @@ DATABASES = {
         # 'NAME': BASE_DIR / 'db.sqlite3',
         'NAME' : 'lcicwebsitedb',
         'USER' : 'postgres',
-        'PASSWORD' : 'Lcic@123',
+        'PASSWORD' : 'root',
         'PORT' : '5432',
         'HOST' : 'localhost'
     }
