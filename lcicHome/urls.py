@@ -32,4 +32,6 @@ urlpatterns = [
    path('search/', views.search, name='search'),
    path('searchIndividual/', views.searchIndividual, name='searchIndividual'),
    path('searchConfirm/', views.searchConfirm, name='searchConfirm'),
+   path('searchList/', views.searchList, name='searchList'),
+   
 ]

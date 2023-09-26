@@ -1761,3 +1761,22 @@ def searchConfirm(request):
                 'H_ofl':H_ofl, 'H_loca':H_loca, 'H_cap':H_cap,
         }
     return render(request,'Search/searchIndividual.html',context)
+
+def searchList(request):
+    Change_Lang= request.GET.get('Lang')
+    Lang='la'
+    if Change_Lang == "la" and Lang == "la":
+        Lang ='la'
+    elif Change_Lang == "en" and Lang == "la":
+        Lang = 'en'
+    elif Change_Lang == "en" and Lang == "la":
+        Lang = 'la'
+    H_ofl = H_Lang.objects.filter(id=26)
+    H_loca = H_Lang.objects.filter(id=27)
+    H_cap = H_Lang.objects.filter(id=28)
+              
+    return render(request, 'Search/searchList.html',{'u':u,'uname':uname,'code':code,'ugroup':ugroup,'L':L,'Lang':Lang,
+                'Main_Menu':Main_Menu, 'Management_Menu':Management_Menu, 'Report_Menu':Report_Menu, 'User_Menu':User_Menu, 
+                'Service_Menu':Service_Menu,'cus_manage':cus_manage, 'mem_manage':mem_manage, 'Search_Menu':Search_Menu,'report_manage':report_manage, 
+                'user_report':user_report, 'mem_report':mem_report, 'usesys_report':usesys_report, 'check_UserGroup':check_UserGroup,
+                'H_ofl':H_ofl, 'H_loca':H_loca, 'H_cap':H_cap,})

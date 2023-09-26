@@ -1,0 +1,67 @@
+{% extends "Login/main.html" %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% block title %}LCIC{% endblock %}
+{% block content %}
+</br>
+</br>
+</br>
+</br>
+<h3 class="text-center m-4"><i class="fa-solid fa-magnifying-glass"></i>    ຄົ້ນຫາຂໍ້ມູນຂ່າວສານສິນເຊື່ອ</h3>
+<div class="container-fluid border border-primary"  >
+    <div class="row justify-content-center">
+     <div class="col-lg-2 col-md-4">
+        <div class="card" style="width: 14rem;">
+          <img src="https://bcel.la:8083/img/logo.png" width="100" height="100" class="mx-auto d-block" alt="...">
+          <div class="card-body">
+            <h6 class="card-title">ການຄົ້ນຫາຂໍ້ມູນ</h6>
+            <table class="table border-0">
+                <tr>
+                  <th>ລະຫັດວິສາຫະກິດ</th>
+                  <th>result 1</th>
+                </tr>
+                <tbody>
+                  <tr>
+                    <td>ລະຫັດຂສລ</td>
+                    <td>result 1</td>
+                  </tr>
+                </tbody>
+              </table>
+            <a href="#" class="btn btn-danger mx-auto d-block">ລອງອີກຄັ້ງ</a>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-10 col-md-8">
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead class="bg-light ">
+              <tr>
+                <th>#</th>
+                <th> ຊື່ບໍລິສັດ(ພາສາລາວ) </th>
+                <th> ຊື່ບໍລິສັດ(ພາສາອັງກິດ) </th>
+                <th> ລະຫັດວິສາຫະກິດ </th>
+                <th> ທີ່ຢູ່ເປັນ(ພາສາອັງກິດ) </th>
+                <th> ທີ່ຢູ່ເປັນ(ພາສາລາວ) </th>
+                <th> ທີ່ທໍາອິດຂອງຜູ້ຖືຮຸ້ນລາຍໃຫຍ່/ເຈົ້າຂອງບໍລິສັດ </th>
+                <th> ຜູ້ຈັດການທົ່ວໄປ </th>
+                <th> ໝາຍເລກໂທລະສັບ </th>
+                <th> ລາຍລະອຽດ </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td scope="row">{{forloop.counter}}</td>
+                <td>pele</td>
+                <td>pele</td>
+                <td>pele</td>
+                <td>pele</td>
+                <td>pele</td>            
+                </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+{% endblock %}
