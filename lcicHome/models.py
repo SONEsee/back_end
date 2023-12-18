@@ -20,7 +20,7 @@ class H_imageBar(models.Model):
     class Meta:
         ordering =['-id']
         verbose_name_plural='ImageSlidBar'
-    def __str__(self):
+    def _str_(self):
         return self.code
     def ImageB(self):
         if self.imageBar:
@@ -39,7 +39,7 @@ class H_proType(models.Model):
     nameE = models.CharField(max_length=100)
     class Meta:
         verbose_name_plural='proType'
-    def __str__(seft):
+    def _str_(seft):
         return seft.nameL
 
 class H_productInfo(models.Model):
@@ -59,7 +59,7 @@ class H_productInfo(models.Model):
     class Meta:
         ordering=['id']
         verbose_name_plural='ProductInfo'
-    def __str__(self):
+    def _str_(self):
         return self.nameL
     def pshowImage(self):
         if self.pimage:
@@ -78,7 +78,7 @@ class H_newsType(models.Model):
     nameE = models.CharField(max_length=100)
     class Meta:
         verbose_name_plural='newsType'
-    def __str__(seft):
+    def _str_(seft):
         return seft.nameL
 
 class H_userInfo(models.Model):
@@ -87,7 +87,7 @@ class H_userInfo(models.Model):
     nameE = models.CharField(max_length=100)
     class Meta:
         verbose_name_plural='userInfo'
-    def __str__(seft):
+    def _str_(seft):
         return seft.nameL
 
 class H_newsInfo(models.Model):
@@ -99,14 +99,15 @@ class H_newsInfo(models.Model):
     newsType = models.ForeignKey(H_newsType, null=True, blank=True ,on_delete=models.CASCADE)
     userInfo = models.ManyToManyField(H_userInfo,blank=True)
     nimage = models.FileField(upload_to='uploadNews',null=True,blank=True)
-    nFiles = models.FileField(upload_to='uploadNewsFlils',null=True,blank=True)
+    nFilesL = models.FileField(upload_to='uploadNewsFlils/uploadNewsFlilsL',null=True,blank=True)
+    nFilesE = models.FileField(upload_to='uploadNewsFlils/uploadNewsFlilsE',null=True,blank=True)
     published = models.BooleanField(default=False)
     insertDate = models.DateTimeField(auto_now_add = True)
     updateDate = models.DateTimeField(auto_now = True)
     class Meta:
         ordering =['-id']
         verbose_name_plural='newsInfo'
-    def __str__(self):
+    def _str_(self):
         return self.nameL
     def showImage(self):
         if self.nimage:
@@ -122,13 +123,18 @@ class H_newsCommand(models.Model):
     class Meta:
         ordering =['-id']
         verbose_name_plural='news'
-    def __str__(self):
+    def _str_(self):
         return self.commandL
     
 class H_Lang(models.Model):
     id =  models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
     Trans_LA = models.TextField(null=True,blank=True)
     Trans_EN = models.TextField(null=True,blank=True)
+    class Meta:
+        #ordering= ('id')
+        verbose_name_plural='H_Lang'
+    def _str_(self):
+        return self.Trans_LA
     
     
 class User_Login(models.Model):
@@ -149,7 +155,7 @@ class User_Group(models.Model):
     class Meta:
         # ordering= ('GID')
         verbose_name_plural='GroupUser'
-    def __str__(self):
+    def _str_(self):
         return self.nameL
     
     
@@ -160,7 +166,7 @@ class Menu(models.Model):
     class Meta:
         # ordering=('MID')
         verbose_name_plural='Nav_Menu'
-    def __str__(self):
+    def _str_(self):
         return self.nameL
 
 class SubMenu(models.Model):
@@ -171,7 +177,7 @@ class SubMenu(models.Model):
     class Meta:
         # ordering='SMID'
         verbose_name_plural='Nav_Submenu'
-    def __str__(self):
+    def _str_(self):
         return self.nameL
     
 class GroupSubMenu(models.Model):
@@ -260,7 +266,7 @@ class CustomerWater(models.Model):
     #     return CustomerWater
     class Meta:
         verbose_name_plural='CustomerWater'
-    def __str__(seft):
+    def _str_(seft):
         return seft.Name
     
     
@@ -287,7 +293,7 @@ class SegmentType(models.Model):
     nameE = models.CharField(max_length=150, null=False, blank=True)
     class meta:
         verbose_name_plural ='SegmentType'
-    def __str__(self):
+    def _str_(self):
         return self.SType
     
     
@@ -298,7 +304,7 @@ class SType(models.Model):
     class meta:
         ordering=['SType']
         verbose_name_plural ='SegmentType'
-    def __str__(self):
+    def _str_(self):
         return self.nameL
 # class Uploads(models.Model):
 #     FID = models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
@@ -340,7 +346,7 @@ class Upload_Type(models.Model):
     class meta:
         ordering=['UType']
         verbose_name_plural = 'UploadType'
-    def __str__(self):
+    def _str_(self):
         return self.nameL
 
 class Upload_File(models.Model):
@@ -584,18 +590,8 @@ class EnterpriseInfo(models.Model):
     CancellationDate = models.DateTimeField(blank=True,null=True)
     InsertDate = models.DateTimeField(blank=True, null=True,auto_now_add=True)
     UpdateDate = models.DateTimeField(blank=True, null=True)
-    
-    
-    
+
 class InvestorInfo(models.Model):
-    ID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False,verbose_name='ID')
-    EnterpriseID = models.CharField(max_length=50,blank=True,null=True)
-    IsisCodes = models.CharField(max_length=255,blank=True,null=True)
-    IsisName = models.CharField(max_length=255,blank=True,null=True)
-    InsertDate = models.DateTimeField(blank=True,null=True)
-    UpdateDate = models.DateTimeField(blank=True,null=True)
-    
-class ISISCode(models.Model):
     ID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False,verbose_name='ID')
     EnterpriseID = models.CharField(max_length=50,blank=True,null=True)
     investorName = models.CharField(max_length=255,blank=True,null=True)
@@ -603,6 +599,13 @@ class ISISCode(models.Model):
     investorNationality = models.CharField(max_length=50,blank=True,null=True)
     investorcardNumber = models.CharField(max_length=100,blank=True,null=True)
     investorMobile = models.CharField(max_length=50,blank=True,null=True)
-    InsertDate = models.DateTimeField(blank=True,null=True)
+    InsertDate = models.DateTimeField(blank=True,null=True,auto_now_add=True)
     UpdateDate = models.DateTimeField(blank=True,null=True)
     
+class ISISCode(models.Model):
+    ID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False,verbose_name='ID')
+    EnterpriseID = models.CharField(max_length=50,blank=True,null=True)
+    IsisCodes = models.CharField(max_length=255,blank=True,null=True)
+    IsisName = models.CharField(max_length=4000,blank=True,null=True)
+    InsertDate = models.DateTimeField(blank=True,null=True,auto_now_add=True)
+    UpdateDate = models.DateTimeField(blank=True,null=True)

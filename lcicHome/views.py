@@ -2,11 +2,12 @@ from asyncio.windows_events import NULL
 from contextlib import nullcontext
 from datetime import datetime
 from multiprocessing import context
+from crispy_forms.helper import FormHelper
 from re import M
 from tkinter.messagebox import NO
 from django.http import request
 from django.shortcuts import render, redirect
-from .models import Group_User, GroupSubMenu, H_imageBar,H_productInfo,H_newsInfo,H_Lang, User_Group, User_Login, Login, Menu, SubMenu, Upload_File, CustomerWater, SegmentType
+from .models import Login,Group_User, GroupSubMenu, H_imageBar,H_productInfo,H_newsInfo,H_Lang, User_Group, User_Login, Login, Menu, SubMenu, Upload_File, CustomerWater, SegmentType, EnterpriseInfo, InvestorInfo
 from lcicNews.models import*
 # from ..lcicNews.models import newsType, newsInfo
 from django.views.generic import ListView
@@ -16,15 +17,28 @@ from django.contrib import messages
 import hashlib
 from django.http import HttpResponseRedirect
 from django.urls import reverse
-from .forms import*
+# from .forms import*
 from lcicHome.forms import*
 from django.core.files.storage import FileSystemStorage
 import calendar
 import pathlib
 import os
 import json
+from xhtml2pdf import pisa
 from psycopg2.extras import Json
 import psycopg2
+from django.http import JsonResponse
+from django.db.models import Q
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
+import os
+from django.http import HttpResponse
+from django.template.loader import get_template
+from xhtml2pdf import pisa
+from crispy_forms.layout import Layout, Row, Column
+import tempfile
+import subprocess
+from weasyprint import HTML, CSS
+
 
 #import requests
 # import pymysql
@@ -1711,7 +1725,41 @@ def searchIndividual(request):
                 'user_report':user_report, 'mem_report':mem_report, 'usesys_report':usesys_report, 'check_UserGroup':check_UserGroup,
                 'H_ofl':H_ofl, 'H_loca':H_loca, 'H_cap':H_cap,})
     
+def function_confirm(request):
+    return render(request, 'Search/searchListconfirm')
+
+def searchEnterpise(request):
     
+    
+    form = SearchEnterpise(request.GET)
+
+    if form.is_valid():
+        # Process the form data
+        enterprise_id = form.cleaned_data.get('enterprise_id')
+        lcic_id = form.cleaned_data.get('lcic_id')
+
+        try:
+            enterprise_object = EnterpriseInfo.objects.get(EnterpriseID=enterprise_id, LCICID=lcic_id)
+            invs_name = InvestorInfo.objects.get(EnterpriseID=enterprise_id)
+
+            print("=====> En_Objects ", enterprise_object)
+            # print*("====> invs_name", invs_name)
+            context = {'object': enterprise_object, 'invs_name': invs_name}
+
+            return render(request, 'Search/searchList.html', context)
+
+        except ObjectDoesNotExist:
+            messages.error(request, "ບໍ່ພົບຂໍ້ມູນ ກະລຸນາກວດເບິ່ງລະຫັດອີກຄັ້ງ!")
+            
+            print("Object does not exist")
+            # Handle the case when the object is not found, maybe display an error message or redirect to a different page.
+
+    # If form is not valid or if the object is not found, render the original form page with the results
+    results = EnterpriseInfo.objects.all()
+    context = {'results': results, 'form': form}
+    return render(request, 'Search/searchEnterpise.html', context)
+    
+   
 def searchConfirm(request):
     Change_Lang= request.GET.get('Lang')
     Lang='la'
@@ -1762,7 +1810,7 @@ def searchConfirm(request):
         }
     return render(request,'Search/searchIndividual.html',context)
 
-def searchList(request):
+def searchList(request,object):
     Change_Lang= request.GET.get('Lang')
     Lang='la'
     if Change_Lang == "la" and Lang == "la":
@@ -1774,9 +1822,181 @@ def searchList(request):
     H_ofl = H_Lang.objects.filter(id=26)
     H_loca = H_Lang.objects.filter(id=27)
     H_cap = H_Lang.objects.filter(id=28)
-              
-    return render(request, 'Search/searchList.html',{'u':u,'uname':uname,'code':code,'ugroup':ugroup,'L':L,'Lang':Lang,
-                'Main_Menu':Main_Menu, 'Management_Menu':Management_Menu, 'Report_Menu':Report_Menu, 'User_Menu':User_Menu, 
-                'Service_Menu':Service_Menu,'cus_manage':cus_manage, 'mem_manage':mem_manage, 'Search_Menu':Search_Menu,'report_manage':report_manage, 
-                'user_report':user_report, 'mem_report':mem_report, 'usesys_report':usesys_report, 'check_UserGroup':check_UserGroup,
-                'H_ofl':H_ofl, 'H_loca':H_loca, 'H_cap':H_cap,})
+    
+    next = request.POST.get('btn_detail')
+    if next:
+        try:
+            url = reverse('searchListfee')
+            return render(request, 'Search/searchListfee.html',{'url':url})
+        except:
+            pass
+    return render(request, 'Search/searchList.html',{'url':url}) 
+
+def searchListfee(request, object_id):
+    Change_Lang= request.GET.get('Lang')
+    Lang='la'
+    if Change_Lang == "la" and Lang == "la":
+        Lang ='la'
+    elif Change_Lang == "en" and Lang == "la":
+        Lang = 'en'
+    elif Change_Lang == "en" and Lang == "la":
+        Lang = 'la'
+    H_ofl = H_Lang.objects.filter(id=26)
+    H_loca = H_Lang.objects.filter(id=27)
+    H_cap = H_Lang.objects.filter(id=28)
+    
+    # mydata = request.GET.get(data)
+    print("=====>",object_id)
+    
+    fee_data = EnterpriseInfo.objects.filter(
+            EnterpriseID=object_id
+        )
+    
+    listfee = EnterpriseInfo.objects.get(EnterpriseID=object_id)
+    
+    fee_info = H_productInfo.objects.get(code='p002')
+    print(fee_info)
+    print("!====ListFee",listfee.LCICID)
+    
+    print("Mydata==>", fee_data)
+    return render(request, 'Search/searchListfee.html', {'object_id':object_id, 'fee_data':fee_data, 'listfee':listfee, 'fee_info':fee_info})
+    # return render(request, 'Search/searchListfee.html',{'u':u,'uname':uname,'code':code,'ugroup':ugroup,'L':L,'Lang':Lang,
+    #             'Main_Menu':Main_Menu, 'Management_Menu':Management_Menu, 'Report_Menu':Report_Menu, 'User_Menu':User_Menu, 
+    #             'Service_Menu':Service_Menu,'cus_manage':cus_manage, 'mem_manage':mem_manage, 'Search_Menu':Search_Menu,'report_manage':report_manage, 
+    #             'user_report':user_report, 'mem_report':mem_report, 'usesys_report':usesys_report, 'check_UserGroup':check_UserGroup,
+    #             'H_ofl':H_ofl, 'H_loca':H_loca, 'H_cap':H_cap,})
+
+   
+def searchListConfirm(request, object_id):
+    Change_Lang = request.GET.get('Lang')
+    Lang = 'la'
+    
+    if Change_Lang == "la" and Lang == "la":
+        Lang = 'la'
+    elif Change_Lang == "en" and Lang == "la":
+        Lang = 'en'
+    elif Change_Lang == "en" and Lang == "la":
+        Lang = 'la'
+
+    H_ofl = H_Lang.objects.filter(id=26)
+    H_loca = H_Lang.objects.filter(id=27)
+    H_cap = H_Lang.objects.filter(id=28)
+
+    report_data = EnterpriseInfo.objects.get(EnterpriseID=object_id)
+    print("Myreport ===> Data",report_data)
+    report_invs = InvestorInfo.objects.get(EnterpriseID=object_id)
+    report_detail = H_productInfo.objects.get(code='p002')
+    
+    
+    context ={
+        'report_data':report_data,
+        'report_invs':report_invs,
+        'report_detail':report_detail
+    }
+
+    return render(request, 'Search/searchListConfirm.html', context)
+   
+   
+def progress (request):
+    Change_Lang= request.GET.get('Lang')
+    Lang='la'
+    if Change_Lang == "la" and Lang == "la":
+        Lang ='la'
+    elif Change_Lang == "en" and Lang == "la":
+        Lang = 'en'
+    elif Change_Lang == "en" and Lang == "la":
+        Lang = 'la'
+    H_ofl = H_Lang.objects.filter(id=26)
+    H_loca = H_Lang.objects.filter(id=27)
+    H_cap = H_Lang.objects.filter(id=28)
+    
+    enp_info =EnterpriseInfo.objects.all()
+
+    return render(request, 'Search/progress.html')
+    
+# Function Print Report
+def render_pdf_view(request):
+    # # -------------------------------- Method 1
+    # template_path = 'Search/progress.html'
+    # # context = {'object':object,'invs_name':invs_name}
+    # context = {}
+    # # Create a Django response object, and specify content_type as pdf
+    # response = HttpResponse(content_type='application/pdf')
+    
+    # # Download Only -------
+    # response['Content-Disposition'] = 'attachment; filename="report.pdf"'
+    
+    # # Display Only  -------
+    # # response['Content-Disposition'] = 'filename="report.pdf"'
+    # # response['Content-Disposition'] = 'attachment; filename="report.pdf"'
+    
+    # # find the template and render it.
+    # template = get_template(template_path)
+    # html = template.render(context)
+
+    # # create a pdf
+    # pisa_status = pisa.CreatePDF(
+    #    html, dest=response, encoding='utf-8')
+    # # if error then show some funny view
+    # if pisa_status.err:
+    #    return HttpResponse('We had some errors <pre>' + html + '</pre>')
+    #     # return HttpResponse(f'Error creating PDF: {pisa_status.err}')
+    # return response
+    
+    
+     # ----------------------------------- Method 2
+    
+    # html_file = "searchListConfirm.html"
+    
+    # pdf_file = "report_fcr.pdf"
+
+    # HTML(html_file).write_pdf(pdf_file)
+    
+    # pdf_document = fitz.open(pdf_file)
+    
+    # printer = fitz.open_printer() 
+    # printer.print_document(pdf_document)  
+    # printer.finish()  
+
+    # # Close the PDF document
+    # pdf_document.close()
+         
+    # ------------------------------------ Method 3
+    template_path = 'Search/progress.html'
+
+    # Replace context_data with the data you want to pass to the template
+    context_data = {}
+
+    pdf = render_to_pdf(template_path, context_data)
+
+    response = HttpResponse(pdf, content_type='application/pdf')
+    response['Content-Disposition'] = 'filename="report_fcr.pdf"'
+
+    return response
+
+def render_to_pdf(template_path, context_dict):
+    template = get_template(template_path)
+    html_string = template.render(context_dict)
+    
+    font_file_path = os.path.abspath('../css/NotoSansLao.ttf')
+    # font_file_path = os.path.abspath('D:/MY PROJECT/From Github/LCICEnterpriseWebsite/static/css/NotoSansLao.ttf')
+ 
+    css_string = f'''
+
+         @font-face {{
+             font-family: "NotoSansLao";
+             src: url("../css/NotoSansLao.ttf");
+             src: url('{font_file_path}') format('truetype');
+         }}
+     
+         body {{
+             font-family: "Times New Roman", sans-serif;
+         }}
+    '''
+    print(css_string)
+    return HTML(string=html_string).write_pdf(stylesheets=[CSS(string=css_string)])   
+ 
+def your_view(request):
+    # Add your view logic here
+    return render(request, 'Search/progress.html', {})
+        

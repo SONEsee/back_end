@@ -9,12 +9,13 @@ class newCommandAdminTabularInline(admin.TabularInline):
     model = H_newsCommand
     extra = 1
 class H_newsAdmin(admin.ModelAdmin):
-    list_display=['code','nameL','showImage','nFiles','published']
+    list_display=['code','nameL','showImage','nFilesL','published']
     list_filter=['newsType']
     search_fields=['nameL','userInfo']
     fieldsets=(
-        (None , { 'fields':['code','nameL','descL','nimage','nFiles','published']} ),
-        ('English' , {'fields':['nameE','descE']}),
+        (None , { 'fields':['code','nimage','published']} ),
+        ('Lao' , {'fields':['nameL','descL','nFilesL']}),
+        ('English' , {'fields':['nameE','descE','nFilesE']}),
         ('Category', {'fields':['newsType','userInfo'],'classes':['collapse']})
     )
     inlines = [newCommandAdminTabularInline]
@@ -86,6 +87,12 @@ class LoginAdmin(admin.ModelAdmin):
         ('Date',{'fields':['insertDate','updateDate',]}),
         ('Active',{'fields':['is_active',]}),
     )
+class H_LangAdmin(admin.ModelAdmin):
+    list_display=['id','Trans_LA','Trans_EN']
+    search_fields=['id','Trans_LA','Trans_EN']
+    fieldsets = (
+        (None,{'fields':['id','Trans_LA','Trans_EN']}),
+    )
     
 admin.site.register(H_imageBar,H_imageBarAdmin)
 admin.site.register(H_proType)
@@ -93,7 +100,7 @@ admin.site.register(H_productInfo,H_productInforAdmin)
 admin.site.register(H_newsType)
 admin.site.register(H_userInfo)
 admin.site.register(H_newsInfo,H_newsAdmin)
-admin.site.register(H_Lang)
+admin.site.register(H_Lang,H_LangAdmin)
 admin.site.register(User_Login)
 admin.site.register(User_Group,User_GroupAdmin)
 admin.site.register(Menu,MenuAdmin)

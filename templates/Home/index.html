@@ -284,13 +284,17 @@
               {%for p in H_newsInfo_v %}
                 <div class="row">
                   <div class="col-sm-2">                    
-                    {% if p.nimage %} 
-                    <a href="{{ p.nFiles.url }}"><img src="{{ p.nimage.url }}" alt="" class="card-img-top mt-2" max-width="20px"></a>
+                    {% if p.nimage %}
+                    {% if Lang == "la" %}
+                    <a href="{{ p.nFilesL.url }}"><img src="{{ p.nimage.url }}" alt="" class="card-img-top mt-2" max-width="20px"></a>
+                    {% elif Lang == "en" %}
+                    <a href="{{ p.nFilesE.url }}"><img src="{{ p.nimage.url }}" alt="" class="card-img-top mt-2" max-width="20px"></a>             
+                    {% endif %}
                     {%endif%} 
                   </div>
                   <div class="col-sm-10">
                     {% if Lang == "la" %}
-                    <a href="{{ p.nFiles.url }}"><h3><strong class="blue">{{p.nameL}} </strong> <span class="redblink"> {% for new in H_new %}
+                    <a href="{{ p.nFilesL.url }}"><h3><strong class="blue">{{p.nameL}} </strong> <span class="redblink"> {% for new in H_new %}
                       {{new.Trans_LA}}
                      {% endfor %} </span></h3></a>
                     <span class="text-align:left!important">{{ p.descL }}</span><br>
@@ -298,7 +302,7 @@
                       {{more.Trans_LA}}
                      {% endfor %} </a>
                     {% elif Lang == "en" %}
-                     <a href="{{ p.nFiles.url }}"><h3><strong class="blue">{{p.nameE}} </strong> <span class="redblink">{% for new in H_new %}
+                     <a href="{{ p.nFilesE.url }}"><h3><strong class="blue">{{p.nameE}} </strong> <span class="redblink">{% for new in H_new %}
                       {{new.Trans_EN}}
                      {% endfor %} </span></h3></a>
                     <span class="text-align:left!important">{{ p.descE }}</span><br>

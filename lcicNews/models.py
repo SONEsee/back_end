@@ -13,7 +13,7 @@ class newsType(models.Model):
     nameE = models.CharField(max_length=100)
     class Meta:
         verbose_name_plural='newsType'
-    def __str__(seft):
+    def _str_(seft):
         return seft.nameL
 
 class userInfo(models.Model):
@@ -22,7 +22,7 @@ class userInfo(models.Model):
     nameE = models.CharField(max_length=100)
     class Meta:
         verbose_name_plural='userInfo'
-    def __str__(seft):
+    def _str_(seft):
         return seft.nameL
 
 class newsInfo(models.Model):
@@ -34,11 +34,12 @@ class newsInfo(models.Model):
     newsType = models.ForeignKey(newsType, null=True, blank=True ,on_delete=models.CASCADE)
     userInfo = models.ManyToManyField(userInfo,blank=True)
     nimage = models.FileField(upload_to='upload',null=True,blank=True)
-    nFiles = models.FileField(upload_to='uploadNewsFlils',null=True,blank=True)
+    nFilesL = models.FileField(upload_to='uploadNewsFlils/uploadNewsFlilsL',null=True,blank=True)
+    nFilesE = models.FileField(upload_to='uploadNewsFlils/uploadNewsFlilsE',null=True,blank=True)
     published = models.BooleanField(default=False)
     insertDate = models.DateTimeField(auto_now_add = True)
     updateDate = models.DateTimeField(auto_now = True)
-    def __str__(self):
+    def _str_(self):
         return self.nameL
     def showImage(self):
         if self.nimage:
@@ -59,7 +60,7 @@ class newsCommand(models.Model):
     class Meta:
         ordering =['-id']
         verbose_name_plural='news'
-    def __str__(self):
+    def _str_(self):
         return self.commandL
 
 newsLevelChoice=(
@@ -73,7 +74,7 @@ class proType(models.Model):
     nameE = models.CharField(max_length=100)
     class Meta:
         verbose_name_plural='proType'
-    def __str__(seft):
+    def _str_(seft):
         return seft.nameL
 
 class productInfo(models.Model):
@@ -85,24 +86,26 @@ class productInfo(models.Model):
     descL = models.TextField(null=True,blank =True )
     price = models.IntegerField (default=0)
     proType = models.ForeignKey(proType, null=True,blank=True, on_delete=models.CASCADE)
-    pimage = models.FileField(upload_to='uploadProducts',null=True,blank=True)
-    pFiles = models.FileField(upload_to='uploadProducts',null=True,blank=True)
+    pimageL = models.FileField(upload_to='uploadProducts/uploadProductsL',null=True,blank=True)
+    pimageE = models.FileField(upload_to='uploadProducts/uploadProductsE',null=True,blank=True)
+    pFilesL = models.FileField(upload_to='uploadProducts/uploadProductsL',null=True,blank=True)
+    pFilesE = models.FileField(upload_to='uploadProducts/uploadProductsE',null=True,blank=True)
     published = models.BooleanField(default=False)
     insertDate = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     updateDate = models.DateTimeField(auto_now=True, null=True, blank=True)
     class Meta:
         ordering=['id']
         verbose_name_plural='ProductInfo'
-    def __str__(self):
+    def _str_(self):
         return self.nameL
     def pshowImage(self):
-        if self.pimage:
-            return format_html('<img src="'+ self.pimage.url +'" height="40px" >')
+        if self.pimageL:
+            return format_html('<img src="'+ self.pimageL.url +'" height="40px" >')
         return ''
     pshowImage.allow_tags =True
     def pshowFiles(self):
-        if self.pFiles:
-            return format_html('<img src="'+ self.pFiles.url +'" height="40px" >')
+        if self.pFilesL:
+            return format_html('<img src="'+ self.pFilesL.url +'" height="40px" >')
         return ''    
     pshowFiles.allow_tags =True
 class customerInfo(models.Model):
@@ -124,35 +127,35 @@ class customerInfo(models.Model):
     class Meta:
         ordering =['-id']
         verbose_name_plural='CustomerInfo'
-    def __str__(self):
+    def _str_(self):
         return self.nameL 
 class memberType(models.Model):
     nameL = models.CharField(max_length=500)
     nameE = models.CharField(max_length=500)
     class Meta:
         verbose_name_plural='memberType'
-    def __str__(seft):
+    def _str_(seft):
         return seft.nameL
 class villageInfo(models.Model):
     nameL = models.CharField(max_length=500)
     nameE = models.CharField(max_length=500)
     class Meta:
         verbose_name_plural='villageInfo'
-    def __str__(self):
+    def _str_(self):
         return self.nameL
 class districtInfo(models.Model):
     nameL = models.CharField(max_length=500)
     nameE = models.CharField(max_length=500)
     class Meta:
         verbose_name_plural = 'districtInfo'
-    def __str__(self):
+    def _str_(self):
         return self.nameL
 class provInfo(models.Model):
     nameL = models.CharField(max_length=250)
     nameE = models.CharField(max_length=250)
     class meta:
         verbose_name_plural ='provInfo'
-    def __str__(self):
+    def _str_(self):
         return self.nameL
 
 class memberInfo(models.Model):
@@ -176,7 +179,7 @@ class memberInfo(models.Model):
     class Meta:
         ordering=['code']
         verbose_name_plural='memberInfo'
-    def __str__(self):
+    def _str_(self):
         return self.nameL
     def memShowImage(self):
         if self.mImage:
@@ -187,7 +190,7 @@ class memberInfo(models.Model):
 class fdocType(models.Model):
     nameL = models.CharField(max_length=250)
     nameE = models.CharField(max_length=250)
-    def __str__(self):
+    def _str_(self):
         return self.nameL
 
 class fdocInfo(models.Model):
@@ -198,14 +201,15 @@ class fdocInfo(models.Model):
     descL = models.TextField(null=True,blank=True)
     descE = models.TextField(null=True,blank=True)
     fdocType = models.ForeignKey(fdocType, null=True, blank=True, on_delete = models.CASCADE)
-    dFiles = models.FileField(upload_to='documentUpload',null=True,blank=True)
+    dFilesL = models.FileField(upload_to='documentUpload/docL',null=True,blank=True)
+    dFilesE = models.FileField(upload_to='documentUpload/docE',null=True,blank=True)
     published = models.BooleanField(default=True)
     insertDate = models.DateTimeField(auto_now_add=True)
     updateDate = models.DateTimeField(auto_now = True)
     class Meta:
         ordering =['-id']
         verbose_name_plural ='fdocInfo'
-    def __str__(self):
+    def _str_(self):
         return self.nameL
     def docShowFiles(self):
         if self.dFiles:
@@ -228,7 +232,7 @@ class jobInfo(models.Model):
     class Meta:
         ordering = ['-id']
         verbose_name_plural = 'jobsInfo'
-    def __str__(self):
+    def _str_(self):
         return self.nameL
     def jobShowImage(self):
         if self.jimage:
@@ -246,24 +250,3 @@ class H_Lang(models.Model):
     id =  models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
     Trans_LA = models.TextField(null=True,blank=True)
     Trans_EN = models.TextField(null=True,blank=True)
-    
-    
-class bank_bnk(models.Model):
-    bnk_sys_id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
-    bnk_code = models.CharField(max_length=10,null=False, blank=False)
-    bnk_short_form = models.CharField(max_length=10)
-    bnk_name = models.CharField(max_length=100)
-    bnk_lao_name = models.TextField()
-    bnk_insert_date = models.DateField(null=True, blank=True)
-    bnk_type = models.IntegerField()
-    
-class bank_branch(models.Model):
-    branch_sys_id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False,verbose_name='ID')
-    bnk_code = models.CharField(max_length=10,null=False, blank=False)
-    branch_id = models.CharField(max_length=15,null=False, blank=False)
-    branch_name = models.CharField(max_length=50)
-    Vill = models.CharField(max_length=50)
-    Dis = models.CharField(max_length=50)
-    Province = models.CharField(max_length=50)    
-
-    

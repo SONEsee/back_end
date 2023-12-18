@@ -4,7 +4,9 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from . import views 
+from . import views
+from .views import render_pdf_view
+# from .views import searchListfee
 
 urlpatterns = [
    path('',views.index, name='index'),
@@ -31,7 +33,12 @@ urlpatterns = [
    path('uploadFile/', views.uploadFile, name='uploadFile'),
    path('search/', views.search, name='search'),
    path('searchIndividual/', views.searchIndividual, name='searchIndividual'),
+   path('searchEnterpise/', views.searchEnterpise, name='searchEnterpise'),
    path('searchConfirm/', views.searchConfirm, name='searchConfirm'),
    path('searchList/', views.searchList, name='searchList'),
-   
+   path('searchListfee/<slug:object_id>', views.searchListfee, name='searchListfee'),
+   path('searchListConfirm/<slug:object_id>', views.searchListConfirm, name='searchListConfirm'),
+   path('render_pdf_view', render_pdf_view, name='render_pdf'),
+   path('progress', views.progress, name='progress'),
+
 ]

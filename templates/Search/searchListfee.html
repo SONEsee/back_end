@@ -123,9 +123,9 @@
 </br>
 </br>
 </br>
-<div class="container-fluid p-5 ">
-  <div class="p-5 shadow p-3 mb-5 bg-body rounded">
-    <form method="post" action="{% url 'lcicHome:searchListfee' object_id=object.EnterpriseID %}">
+<div class="container-fluid p-5">
+  <div class="p-5 bg-light shadow p-3 mb-5 bg-body rounded">
+    <form method="post" action="{% url 'lcicHome:searchListConfirm' object_id=listfee.EnterpriseID %}">
       {% csrf_token %}
       <h5 class="text-center m-4 fontlao fw-bold mb-2">ຄົ້ນຫາຂໍ້ມູນນິຕິບຸກຄົນ</h5>
 
@@ -143,7 +143,7 @@
                 List
             </div>
             <div class="progress-step" style="font-size:10px;">
-                <i class="fa-solid fa-paperclip" style="background-color:#d5d5d5; font-size:14px;"></i>
+                <i class="fa-solid fa-paperclip" style="background-color:#000DD1; font-size:14px; color:white;"></i>
                 Select
             </div>
             <div class="progress-step" style="font-size:10px;">
@@ -155,57 +155,43 @@
                 Report
             </div>
         </div>
-
-            {% comment %} <div class="container border border-danger head-id">
-              <div class="d-flex justify-content-between align-items-center">
-                <label class="fw-bold text-danger" >Enterpise_ID:{{object.EnterpriseID}} </label>
-                <label class="fw-bold text-danger">LCIC_ID: {{object.LCICID}} </label>
-              </div>
-            </div> {% endcomment %}
-            <div class=" container-fluid p-2 pt-5 ">
-              <div class="d-flex row">
+              <div class="d-flex row mt-5">
                 <div class="col-md-8">
-                <h4 class="text-start" style="vertical-align: middle;">ລາຍການລູກຄ້າທີ່ໄດ້ຜ່ານການສອບຖາມ:</h4>
+                <h4 class="text-start fw-bold" style="vertical-align: middle;">ລາຍການລູກຄ້າທີ່ໄດ້ຜ່ານການສອບຖາມ:</h4>
                 </div>
                 <div class="col-md-4 " style="margin-left:0px;">
                   <div class="d-flex inline justify-content-end">
                     <label class="fw-bold text-danger px-2" >ລະຫັດວິສາຫະກິດ:</label>
-                    <p class="fw-bold px-2">{{object.EnterpriseID}} </p>
+                    <p class="fw-bold px-2">{{object_id}} </p>
                     <label class="fw-bold text-danger px-2 ">ລະຫັດຂສລ:</label>
-                    <p class="fw-bold">{{object.LCICID}}</p> </div>
+                    <p class="fw-bold"> {{listfee.LCICID}}</p> </div>
                 </div>
               </div>
               <div class="table-responsive ">
                 <table class="table">
                   <thead class="shadow p-3 mb-5 bg-body rounded">
-                    <tr>
-                      <th>#</th>
-                      <th> ຊື່ບໍລິສັດ(ພາສາລາວ) </th>
-                      <th> ຊື່ບໍລິສັດ(ພາສາອັງກິດ) </th>
-                      <th> ລະຫັດວິສາຫະກິດ </th>
-                      <th> ທີ່ຢູ່ເປັນ(ພາສາອັງກິດ) </th>
-                      <th> ທີ່ຢູ່ເປັນ(ພາສາລາວ) </th>
-                      <th> ທີ່ທໍາອິດຂອງຜູ້ຖືຮຸ້ນລາຍໃຫຍ່/ເຈົ້າຂອງບໍລິສັດ </th>
-                      <th> ຜູ້ຈັດການທົ່ວໄປ </th>
-                      <th> ໝາຍເລກໂທລະສັບ </th>
-                      <th> ລາຍລະອຽດ </th>
+                    <tr class="" style="">
+                      <th class="col-0">#</th>
+                      <th class="col-2"> ປະເພດຂອງບົດລາຍງານ </th>
+                      <th class="col-8"> ລາຍລະອຽດ </th>
+                      <th class="text-end col-md-2"> ຄ່າທໍານຽມ </th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr class="text-start align-center" style="font-size: 9pt">
+                    <tr class="text-start align-center" style="font-size: 10pt; height:70px;">
                       {% comment %} <td class=""><input class="form-check-input" type="checkbox" name="ent_info"></td> {% endcomment %}
-                      <td>#</td>
-                      <td>{{object.enterpriseNameLao}}</td>
-                      <td>{{object.eneterpriseNameEnglish}}</td>
-                      <td>{{object.EnterpriseID}}</td>
-                      <td>{{invs_name.investorName}}</td>
-                      <td>{{invs_name.investorName}}</td>
-                      <td><td>      
-                      <td>{{invs_name.investorMobile}}</td>
-                      <td><input class="btn btn-warning" type="submit" name="btn_detail" value="ເລືອກ"> </td>
+                      <td>1</td>
+                      <td>{{fee_info.nameL}}</td>
+                      <td>ສະເເດງຫຼັກຖານ, ສັງລວມຂໍ້ມູນກ່ຽວກັບວົງເງິນກູ້, ລາຍລະອຽດກ່ຽວກັບວົງເງິນກູ້, ປະຫວັດການສອບຖາມໃນໄລຍະຜ່ານມາ</td>
+                      <td class="text-end text-danger fw-bold">{{fee_info.price}} ກີບ</td>
                       </tr>
                   </tbody>
                 </table>
+              </div>
+              <div class="container d-flex justify-content-center p-2">
+                <input onclick="goBack()" value="ກັບຄືນ" class="btn btn-secondary mx-2">
+                <input  onclick="showConfirmation()" value="ຕໍ່ໄປ" class="btn" style="background-color: #020FBB; color:white;">
+                {% comment %} <button class="btn btn-primary w-15 mx-2" onclick="window.location.href='/searchListConfirm';">Next pages</button> {% endcomment %}
               </div>
             </div>
           </div>
@@ -214,4 +200,33 @@
   
   </div>
 </div>
+
+
+  
+</div>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script>  
+    function showConfirmation(){
+      Swal.fire({
+        
+        title: "ທ່ານຕ້ອງການສະເເດບົດລາຍງານນີ້ ຫຼື ບໍ່?",
+        icon: "warning",
+        showCancelButton: true,
+        confirmButtonColor: "#3085d6",
+        cancelButtonColor: "#d33",
+        confirmButtonText: "ຕ້ອງການ",
+        cancelButtonText: "ຍົກເລີກ",
+        html: '<div class="d-flex row shadow-sm p-3 mb-5 bg-body rounded justify-content-center align-items-center"><h5 class="text-start bg-light px-3">ບົດລາຍລະອຽດບົດລາຍງານ</h5><div class="col-md-4"><p class="text-start">ຊື່ພາສາລາວ</p><p class="text-start" >ຊື່ອັງກິດ</p><p class="text-start" >ປະເພດບົດລາຍງານ</p></div><div class="col-md-8"><p class="text-start" style="font-size:10pt;">{{listfee.enterpriseNameLao}}</p><p class="text-start style="font-size:10pt;">{{listfee.eneterpriseNameEnglish}}</p><p class="text-start style="font-size:10pt;">{{fee_info.nameL}}</p></div>',
+      }).then((result) => {
+        if (result.isConfirmed) {
+            document.forms[0].submit();
+        }
+      });
+    }
+
+    function goBack() {
+      window.history.back();
+    }
+  </script>
+
 {% endblock %}

@@ -4,11 +4,14 @@ from socket import fromshare
 from tkinter import Widget
 from xml.dom import ValidationErr
 from django import forms 
-from .models import Login, User_Group, Upload_File, Customer_Info_IND ,SegmentType, SType,Upload_Type
-from lcicNews.models import*
+from .models import Login, User_Group, Upload_File, Customer_Info_IND ,SegmentType, SType,Upload_Type, EnterpriseInfo
+from lcicNews.models import*    
 from django.core.validators import RegexValidator
 import hashlib
 from .validators import validate_file_extension
+from crispy_forms.helper import FormHelper
+from crispy_forms.layout import Layout, Row, Column
+from django.core.exceptions import ValidationError, ObjectDoesNotExist
 
 # Every letters to LowerCase
 class Lowercase(forms.CharField):
@@ -50,9 +53,6 @@ class addUserForm1(forms.ModelForm):
             'MID': forms.Select(attrs={'class': 'form-control'}),
         }
         
-        
-
-
 class addUserForm2(forms.ModelForm):
     
     # Validations
@@ -348,8 +348,6 @@ class showUploadForm(forms.ModelForm):
         self.fields['status'].empty_label = "ທັງໝົດ"
         self.fields['period'].empty_label = "ທັງໝົດ"
 
-
-
 class uploadForm(forms.ModelForm):
 
     SType_id =(
@@ -437,3 +435,70 @@ class searchIndividualForm(forms.ModelForm):
             'ind_surname': 'ນາມສະກຸນພາສາອັງກິດ',
             'customerid': 'ລະຫັດລູກຄ້າ'
         }
+              
+class SearchEnterpise(forms.ModelForm):
+    enterprise_id = forms.CharField(
+        label = 'ລະຫັດວິສະຫາກິດ', min_length=4, max_length=50,
+        error_messages={'required':'ກະລຸນາປ້ອນລະຫັດວິສະຫາກິດ'},
+        widget = forms.TextInput(attrs=
+        {'placeholder':'ລະຫັດວິສະຫາກິດ'}))
+        
+    lcic_id = forms.CharField(
+        label = 'ລະຫັດຂສລ', min_length=4, max_length=50,
+        error_messages={'required':'ກະລຸນາປ້ອນລະຫັດຂສລ'},
+        widget = forms.TextInput(attrs=
+        {'placeholder':'ລະຫັດຂສລ'}))
+
+    
+    class Meta:
+        model = EnterpriseInfo
+        fields =['enterprise_id']
+        labels = {
+            'enterprise_id': 'ລະຫັດວິສະຫາກິດ',
+            'lcic_id': 'ລະຫັດຂສລ'
+        }
+    # def clean(self):
+    #     cleaned_data = super().clean()
+    #     enterprise_id = cleaned_data.get('enterprise_id')
+    #     lcic_id = cleaned_data.get('lcic_id')
+
+    #     # Check if both enterprise_id and lcic_id exist in the model
+    #     try:
+    #         EnterpriseInfo.objects.get(enterprise_id=enterprise_id, lcic_id=lcic_id)
+    #     except EnterpriseInfo.DoesNotExist:
+    #         raise forms.ValidationError('Wrong password! Enterprise ID and LCIC ID combination not found.')
+
+    #     return cleaned_data
+        
+        
+class SearchForm(forms.Form):
+    enterprise_id = forms.CharField(label='ລະຫັດວິສາຫະກິດ', required=False)
+    lcic_id = forms.CharField(label='ລະຫັດຂສລ', required=False)
+
+    def __init__(self, *args, **kwargs):
+        super(SearchForm, self).__init__(*args, **kwargs)
+        self.helper = FormHelper()
+        self.helper.form_method = 'get'
+        self.helper.layout = Layout(
+            Row(
+                Column('enterprise_id', css_class='col-6'),
+                Column('lcic_id', css_class='col-6'),
+            ),
+            Row(
+                Column('submit', css_class='col-6'),
+                Column('cancel', css_class='col-6'),
+            ),
+        )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        enterprise_id = cleaned_data.get('enterprise_id')
+        lcic_id = cleaned_data.get('lcic_id')
+
+        # Perform custom validation
+        if not enterprise_id and not lcic_id:
+            raise ValidationError("ກະລຸນາໃສລະຫັດວິສາຫະກິດ ເເລະ ລະຫັດຂສລ")
+
+        # Add more specific validation if needed
+
+        return cleaned_data

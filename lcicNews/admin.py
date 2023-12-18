@@ -13,8 +13,9 @@ class newsAdmin(admin.ModelAdmin):
     list_filter=['newsType']
     search_fields=['nameL','userInfo']
     fieldsets=(
-        (None , { 'fields':['code','nameL','descL','nimage','nFiles','published']} ),
-        ('English' , {'fields':['nameE','descE']}),
+        (None , { 'fields':['code','nimage','published']} ),
+        ('Lao' , {'fields':['nameL','descL','nFilesL']}),
+        ('English' , {'fields':['nameE','descE','nFilesE']}),
         ('Category', {'fields':['newsType','userInfo'],'classes':['collapse']})
     )
     inlines = [newCommandAdminTabularInline]
@@ -25,7 +26,10 @@ class productInforAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug':['nameE']}
     fieldsets=(
             (None,{'fields':['code','nameL','nameE','slug','descL','descE','price']}),
-            ('Type',{'fields':['proType','pimage','pFiles','published']}),
+            ('Type',{'fields':['proType']}),
+            ('Lao',{'fields':['pimageL','pFilesL']}),
+            ('English',{'fields':['pimageE','pFilesE']}),
+            (None,{'fields':['published']})
     )
 
 class customerInforAdmin(admin.ModelAdmin):
@@ -44,12 +48,14 @@ class memberInforAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug':['nameE']}
 
 class documentInfoAdmin(admin.ModelAdmin):
-    list_display=['code','nameL','dFiles','published']
+    list_display=['code','nameL','dFilesE','published']
     search_fields=['nameL','nameE']
     prepopulated_fields ={'slug':['nameE']}
     fieldsets=(
-        (None,{'fields':['code','nameL','nameE','slug','descL','descE']}),
-        ('Type',{'fields':['fdocType','dFiles','published']})
+        (None,{'fields':['code','nameL','nameE','slug','descL','descE','fdocType']}),
+        ('Lao',{'fields':['dFilesL']}),
+        ('English',{'fields':['dFilesE']}),
+        (None,{'fields':['published']})
     )
 
 class jobsInfoAdmin(admin.ModelAdmin):
@@ -60,7 +66,12 @@ class jobsInfoAdmin(admin.ModelAdmin):
         (None, {'fields':['code','nameE','nameL','slug','jimage','jfiles']}),
         ('Type:',{'fields':['descL','descE','published']})
     )
-
+class H_LangAdmin(admin.ModelAdmin):
+    list_display=['id','Trans_LA','Trans_EN']
+    search_fields=['id','Trans_LA','Trans_EN']
+    fieldsets = (
+        (None,{'fields':['id','Trans_LA','Trans_EN']}),
+    )
 admin.site.register(userInfo)
 admin.site.register(newsType)
 admin.site.register(newsInfo,newsAdmin)
@@ -75,4 +86,4 @@ admin.site.register(memberInfo,memberInforAdmin)
 admin.site.register(fdocType)
 admin.site.register(fdocInfo,documentInfoAdmin)
 admin.site.register(jobInfo,jobsInfoAdmin)
-admin.site.register(H_Lang)
+admin.site.register(H_Lang,H_LangAdmin)
