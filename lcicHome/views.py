@@ -1,4 +1,4 @@
-from asyncio.windows_events import NULL
+#from asyncio.windows_events import NULL
 from contextlib import nullcontext
 from datetime import datetime
 from multiprocessing import context
@@ -7,7 +7,7 @@ from re import M
 from tkinter.messagebox import NO
 from django.http import request
 from django.shortcuts import render, redirect
-from .models import Login,Group_User, GroupSubMenu, H_imageBar,H_productInfo,H_newsInfo,H_Lang, User_Group, User_Login, Login, Menu, SubMenu, Upload_File, CustomerWater, SegmentType, EnterpriseInfo, InvestorInfo
+from .models import Login,Group_User, GroupSubMenu, H_imageBar,H_productInfo,H_newsInfo,H_Lang, User_Group, User_Login, Menu, SubMenu, Upload_File, CustomerWater, SegmentType, EnterpriseInfo, InvestorInfo, user_logged, searchLog, request_charge
 from lcicNews.models import*
 # from ..lcicNews.models import newsType, newsInfo
 from django.views.generic import ListView
@@ -33,12 +33,14 @@ from django.core.exceptions import ObjectDoesNotExist, ValidationError
 import os
 from django.http import HttpResponse
 from django.template.loader import get_template
-from xhtml2pdf import pisa
+#from xhtml2pdf import pisa
 from crispy_forms.layout import Layout, Row, Column
 import tempfile
 import subprocess
 from weasyprint import HTML, CSS
-
+import datetime
+from django_weasyprint import WeasyTemplateResponse
+import requests
 
 #import requests
 # import pymysql
@@ -76,7 +78,7 @@ from weasyprint import HTML, CSS
 #     H_ofl = H_Lang.objects.filter(id=26)
 #     H_loca = H_Lang.objects.filter(id=27)
 #     H_cap = H_Lang.objects.filter(id=28)
-
+ 
 #     # paginator = Paginator(H_newsInfo_v, 10)
 #     # page = request.GET.get('page')
 #     # try:
@@ -572,6 +574,7 @@ def loginPage(request):
             messages.info(request, 'Username OR Password is incorrect')           
             return render(request,'Login/login.html')
         G_ID = Login.objects.filter(username=username).values_list('GID_id',flat=True)
+        # M_ID get filter user_id
         M_ID = Login.objects.filter(username=username).values_list('MID_id',flat=True)
         GSM_ID = GroupSubMenu.objects.filter(GID=G_ID[0]).values_list('GSMID',flat=True)
         G_nameL = User_Group.objects.filter(GID=G_ID[0])
@@ -604,6 +607,7 @@ def loginPage(request):
         u= user
         L=Lang   
         gsm_id = GSM_ID 
+        # pa kard hai user_id pen global
         check_UserGroup= G_ID[0]
         check_member = M_ID[0]
         Main_Menu = Main
@@ -621,7 +625,9 @@ def loginPage(request):
         office = H_ofl
         location = H_loca
         capital = H_cap
-        #print(check_UserGroup)
+        # check user_id
+        print("user_id check----->", check_UserGroup)
+        request.session['check_UserGroup'] = check_UserGroup
         if user.exists():
             return render(request, 'Login/main.html',{'u':u,'G_nameL':G_nameL,
             'G_nameE':G_nameE,'M_code':M_code,'M_nameL':M_nameL,'M_nameE':M_nameE,
@@ -847,7 +853,7 @@ def editUser(request, UID):
         uusers= Login.objects.get(pk=UID)
         password = request.POST.get('password')
         new_password = hashlib.md5(password.encode()).hexdigest()
-        edit_date = datetime.now()
+        edit_date = datetime.datetime.now()
         form = editUserForm(request.POST, instance=uusers)
         if form.is_valid():
             # new_username = form.cleaned_data['username']
@@ -972,6 +978,7 @@ def showUploadfile(request):
         Lang = 'la'
     form = showUploadForm(request.POST or None)
     alluser = Login.objects.order_by("UID")
+    print(alluser, "showiploadfile in views")
     member = memberInfo.objects.all()
     H_ofl = H_Lang.objects.filter(id=26)
     H_loca = H_Lang.objects.filter(id=27)
@@ -1033,8 +1040,8 @@ def uploadFile(request):
     H_ofl = H_Lang.objects.filter(id=26)
     H_loca = H_Lang.objects.filter(id=27)
     H_cap = H_Lang.objects.filter(id=28)
-    Month = datetime.now()
-    Year = datetime.now()
+    Month = datetime.datetime.now()
+    Year = datetime.datetime.now()
     
     period= Upload_File.objects.filter(MID_id=check_member).values_list('period', flat=True).exists()
     print(period)
@@ -1667,6 +1674,14 @@ def search(request):
     H_ofl = H_Lang.objects.filter(id=26)
     H_loca = H_Lang.objects.filter(id=27)
     H_cap = H_Lang.objects.filter(id=28)
+    
+    # print user_id jark login
+    check_UserGroup = request.session.get('check_UserGroup', None)
+    if check_UserGroup is not None:
+        print("user_id from loginpage : ",check_UserGroup)
+    else:
+        print("error")
+    # print(check_UserGroup,"<-- My user_id")
     return render(request, 'Search/search.html',{'u':u,'uname':uname,'code':code,'ugroup':ugroup,'L':L,'Lang':Lang,
             'Main_Menu':Main_Menu,'Management_Menu':Management_Menu, 'Report_Menu':Report_Menu, 'User_Menu':User_Menu, 
             'Service_Menu':Service_Menu,'cus_manage':cus_manage, 'mem_manage':mem_manage, 'Search_Menu':Search_Menu,'report_manage':report_manage, 
@@ -1729,22 +1744,77 @@ def function_confirm(request):
     return render(request, 'Search/searchListconfirm')
 
 def searchEnterpise(request):
-    
+    Change_Lang= request.GET.get('Lang')
+    Lang='la'
+    if Change_Lang == "la" and Lang == "la":
+        Lang ='la'
+    elif Change_Lang == "en" and Lang == "la":
+        Lang = 'en'
+    elif Change_Lang == "en" and Lang == "la":
+        Lang = 'la'
+    H_ofl = H_Lang.objects.filter(id=26)
+    H_loca = H_Lang.objects.filter(id=27)
+    H_cap = H_Lang.objects.filter(id=28)
     
     form = SearchEnterpise(request.GET)
-
+    # test_UID = Login.objects.filter(UID=2)
+    check_UserGroup = request.session.get('check_UserGroup', None)
+    
+    if check_UserGroup is not None:
+        print("kep log jark user_id login : ",check_UserGroup)
+    else:
+        print("error")
+        
     if form.is_valid():
         # Process the form data
         enterprise_id = form.cleaned_data.get('enterprise_id')
         lcic_id = form.cleaned_data.get('lcic_id')
-
+        
         try:
             enterprise_object = EnterpriseInfo.objects.get(EnterpriseID=enterprise_id, LCICID=lcic_id)
             invs_name = InvestorInfo.objects.get(EnterpriseID=enterprise_id)
+            # creditType = H_productInfo.objects.filter(code='p002').values()
+            # for i in creditType:
+            #     print("test nameL in ProductInfo ", i['nameL'])
+            creditType = H_productInfo.objects.get(code='p002')
+            sys_user = Login.objects.get(UID=check_UserGroup)
+            print("Login: UID -->", sys_user)
+            # user_object = Login.objects.get(UID=check_UserGroup)
+            # print("User_id_check in searchPage",check_UserGroup)
+            # print("======> Check_UserGroup", check_UserGroup)
+            print("=====> En_Objects ", invs_name.EnterpriseID)
+            print("=====> LCIC Objects", enterprise_object.LCICID)
+            # print("=====> CreditType",  i['nameL'])
+            # kep bank code jark user_member 
+            print("=====> bnk_code", sys_user.MID)
+            print("=====> branch(010)",)
+            print("=====> sys_user", sys_user)
+            print("=====> CreditType",  creditType)
+            print("=====> inquiry_date", )
+            print("=====> inquiry_month", )
+            print("=====> inquiry_time", )
+            print("=====> com_tel", invs_name.investorMobile )
+            print("=====> com_location", )
+            print("=====> rec_loan_amount_currency",  )
+            print("=====> rec_loan_amoount",  )
+            print("=====> rec_loan_purpose",  )
+            print("=====> rec_enquiry_type",  )
+            # kep jark phu thuek khon ha 
+            print("=====> cusType", )
+    
+            # Search Log for Enterprise
+            search_log_insert = searchLog.objects.create(enterprise_ID=invs_name.EnterpriseID, LCIC_ID=enterprise_object.LCICID,
+            bnk_code = (sys_user.MID).id,
+            cus_ID=sys_user.UID,
+            credit_type=creditType.code,
+            com_tel=invs_name.investorMobile)
+            
+            print(search_log_insert)
 
-            print("=====> En_Objects ", enterprise_object)
             # print*("====> invs_name", invs_name)
-            context = {'object': enterprise_object, 'invs_name': invs_name}
+            context = {'object': enterprise_object, 'invs_name': invs_name,
+                       
+                       }
 
             return render(request, 'Search/searchList.html', context)
 
@@ -1752,11 +1822,20 @@ def searchEnterpise(request):
             messages.error(request, "ບໍ່ພົບຂໍ້ມູນ ກະລຸນາກວດເບິ່ງລະຫັດອີກຄັ້ງ!")
             
             print("Object does not exist")
+            
             # Handle the case when the object is not found, maybe display an error message or redirect to a different page.
+    # context = {
+    #     'u':u,'uname':uname,'code':code,'ugroup':ugroup,'L':L,'Lang':Lang,
+    #         'Main_Menu':Main_Menu,'Management_Menu':Management_Menu, 'Report_Menu':Report_Menu, 'User_Menu':User_Menu, 
+    #         'Service_Menu':Service_Menu,'cus_manage':cus_manage, 'mem_manage':mem_manage, 'Search_Menu':Search_Menu,'report_manage':report_manage, 
+    #         'user_report':user_report, 'mem_report':mem_report, 'usesys_report':usesys_report, 'check_UserGroup':check_UserGroup,
+    #         'H_ofl':H_ofl, 'H_loca':H_loca, 'H_cap':H_cap,
+    #     }
+    # return render(request, 'Search/searchEnterpise', context)
 
     # If form is not valid or if the object is not found, render the original form page with the results
     results = EnterpriseInfo.objects.all()
-    context = {'results': results, 'form': form}
+    context = {'results': results, 'form': form, 'check_UserGroup':check_UserGroup,}
     return render(request, 'Search/searchEnterpise.html', context)
     
    
@@ -1827,7 +1906,7 @@ def searchList(request,object):
     if next:
         try:
             url = reverse('searchListfee')
-            return render(request, 'Search/searchListfee.html',{'url':url})
+            return render(request, 'Search/searchListfee.html',{'url':url, 'check_UserGroup':check_UserGroup,})
         except:
             pass
     return render(request, 'Search/searchList.html',{'url':url}) 
@@ -1845,16 +1924,22 @@ def searchListfee(request, object_id):
     H_loca = H_Lang.objects.filter(id=27)
     H_cap = H_Lang.objects.filter(id=28)
     
+    check_UserGroup = request.session.get('check_UserGroup', None)
     # mydata = request.GET.get(data)
     print("=====>",object_id)
-    
+    charge_amount = H_productInfo.objects.get(code='p002')
+    sys_user = Login.objects.get(UID=check_UserGroup)
+    reportType = productInfo.objects.get(id='2')
+    # bank_code = memberInfo.objects.get()
+    print("Bank_code : ", sys_user.MID )
+
     fee_data = EnterpriseInfo.objects.filter(
-            EnterpriseID=object_id
-        )
+            EnterpriseID=object_id)
     
     listfee = EnterpriseInfo.objects.get(EnterpriseID=object_id)
     
     fee_info = H_productInfo.objects.get(code='p002')
+    
     print(fee_info)
     print("!====ListFee",listfee.LCICID)
     
@@ -1886,18 +1971,57 @@ def searchListConfirm(request, object_id):
     print("Myreport ===> Data",report_data)
     report_invs = InvestorInfo.objects.get(EnterpriseID=object_id)
     report_detail = H_productInfo.objects.get(code='p002')
+    now = datetime.datetime.now()
+    formatted_datetime = now.strftime("%d-%m-%Y %H:%M")
+    
+    check_UserGroup = request.session.get('check_UserGroup', None)
+    # mydata = request.GET.get(data)
+    print("=====>",object_id)
+    charge_amount_data = H_productInfo.objects.get(code='p002')
+    sys_user = Login.objects.get(UID=check_UserGroup)
+    reportType = productInfo.objects.get(id='2')
+    # bank_code = memberInfo.objects.get()
+    print("Bank_code : ", sys_user.MID )
+    fee_data = EnterpriseInfo.objects.get(EnterpriseID=object_id)
+    listfee = EnterpriseInfo.objects.get(EnterpriseID=object_id)
+    fee_info = H_productInfo.objects.get(code='p002')
+    
+    rec_charge = request.POST.get('object_id')
+
+    print("=====> charge amount: ", charge_amount_data.price)
+    # rec_charges = request_charge.objects.create(bnk_code = sys_user.MID,chg_amount = charge_amount.price,chg_code = charge_amount.code,status = 'InActive',insert_date = '',update_date = '',rtp_code = '1',chg_unit = 'LAK',user_sys_id = sys_user,LCIC_ID = fee_data
+    #         )
+    # print(rec_charges)
+    
+    print(fee_data, " : Data get from FeeData")
+    
+    rec_charge_insert = request_charge.objects.create(
+        bnk_code = (sys_user.MID).id,
+        chg_amount = charge_amount_data.price,
+        chg_code = charge_amount_data.code,
+        status = 'InActive',
+        # insert_date = '',
+        # update_date = '',
+        rtp_code = '1',
+        chg_unit = 'LAK',
+        user_sys_id = sys_user.UID,
+        LCIC_ID = fee_data.LCICID,
+        cusType = ''
+    )
     
     
     context ={
         'report_data':report_data,
         'report_invs':report_invs,
-        'report_detail':report_detail
+        'report_detail':report_detail,
+        'report_date':now,
+        'formatted_datetime':formatted_datetime,
+        'object_id': object_id
     }
 
     return render(request, 'Search/searchListConfirm.html', context)
    
-   
-def progress (request):
+def progress (request, object_id):
     Change_Lang= request.GET.get('Lang')
     Lang='la'
     if Change_Lang == "la" and Lang == "la":
@@ -1909,13 +2033,12 @@ def progress (request):
     H_ofl = H_Lang.objects.filter(id=26)
     H_loca = H_Lang.objects.filter(id=27)
     H_cap = H_Lang.objects.filter(id=28)
-    
-    enp_info =EnterpriseInfo.objects.all()
 
+    print(object_id)
     return render(request, 'Search/progress.html')
     
 # Function Print Report
-def render_pdf_view(request):
+def render_pdf_view(request, object_id):
     # # -------------------------------- Method 1
     # template_path = 'Search/progress.html'
     # # context = {'object':object,'invs_name':invs_name}
@@ -1942,8 +2065,6 @@ def render_pdf_view(request):
     #    return HttpResponse('We had some errors <pre>' + html + '</pre>')
     #     # return HttpResponse(f'Error creating PDF: {pisa_status.err}')
     # return response
-    
-    
      # ----------------------------------- Method 2
     
     # html_file = "searchListConfirm.html"
@@ -1963,14 +2084,34 @@ def render_pdf_view(request):
          
     # ------------------------------------ Method 3
     template_path = 'Search/progress.html'
-
+    
+    # image_lcic = '../static/images/lcic_logo.png'
     # Replace context_data with the data you want to pass to the template
-    context_data = {}
+    print(object_id)
+    report_data = EnterpriseInfo.objects.get(EnterpriseID=object_id)
+    # print("Myreport ===> Data",report_data)
+    # report_invs = InvestorInfo.objects.get(EnterpriseID=object_id)
+    report_detail = H_productInfo.objects.get(code='p002')
+    now = datetime.datetime.now()
+    formatted_datetime = now.strftime("%d-%m-%Y %H:%M")  
 
+    # Test Print Data
+    print("====> Report Data ", report_data)
+
+    context_data = {
+        'image_path': 'D:\MY PROJECT\From Github\LCICEnterpriseWebsite\static\images\logo.png',
+        'report_data':report_data,
+        # 'report_invs':report_invs,
+        'report_detail':report_detail,
+        'report_date':now,
+        'formatted_datetime':formatted_datetime
+        
+    }
     pdf = render_to_pdf(template_path, context_data)
 
     response = HttpResponse(pdf, content_type='application/pdf')
-    response['Content-Disposition'] = 'filename="report_fcr.pdf"'
+    # download files pdf 
+    # response['Content-Disposition'] = 'filename="report_fcr.pdf"'
 
     return response
 
@@ -1999,4 +2140,267 @@ def render_to_pdf(template_path, context_dict):
 def your_view(request):
     # Add your view logic here
     return render(request, 'Search/progress.html', {})
+
+def tax(request):
+    return render(request, 'Search/tax_invoice.html', {})
+
+# gold API keys
+def make_gapi_request():
+    api_key = "goldapi-aylvjurlrhfyjm1-io"
+    symbol = "XAU"
+    curr = "USD"
+    date = ""
+
+    url = f"https://www.goldapi.io/api/{symbol}/{curr}{date}"
+    
+    headers = {
+        "x-access-token": api_key,
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+
+        # result = response.text
+        # print(result)
         
+        result_json = response.json()
+        
+        price = result_json["price"]
+        print(price)
+    except requests.exceptions.RequestException as e:
+        print("Error:", str(e))
+
+result = make_gapi_request()    
+
+
+
+
+# views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import SType
+from .serializers import STypeSerializer
+
+class STypeView(APIView):
+    def get(self, request):
+        stypes = SType.objects.all()
+        serializer = STypeSerializer(stypes, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import User_Group
+from .serializers import UserGroupSerializer
+
+class UserGroupView(APIView):
+    def get(self, request):
+        user_groups = User_Group.objects.all()
+        serializer = UserGroupSerializer(user_groups, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+# views.py
+from django.contrib.auth import authenticate
+from django.http import JsonResponse
+from rest_framework.decorators import api_view
+from rest_framework_simplejwt.tokens import RefreshToken
+
+@api_view(['POST'])
+def login_view(request):
+    data = request.data
+    username = data.get('username')
+    password = data.get('password')
+
+    user = authenticate(username=username, password=password)
+
+    if user is not None:
+        refresh = RefreshToken.for_user(user)
+        return JsonResponse({'token': str(refresh.access_token)})
+    else:
+        return JsonResponse({'error': 'ຂໍ້ມູນຜູ້ໃຊ້ງານບໍ່ຖືກຕອ້ງ'}, status=400)
+    
+    
+    
+    
+from django.http import JsonResponse
+from django.middleware.csrf import get_token
+
+def get_csrf_token(request):
+    token = get_token(request)
+    return JsonResponse({'csrfToken': token})
+
+
+from django.shortcuts import get_object_or_404
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth import authenticate
+from .models import User_Login
+import json
+
+@csrf_exempt
+def login_view1(request):
+    if request.method == 'POST':
+        body = json.loads(request.body)
+        username = body.get('username')
+        password = body.get('password')
+
+        user = get_object_or_404(User_Login, UserName=username)
+        
+        if user.Password == password:
+            # Generate token (you can use Django Rest Framework or any other method)
+            token = "your_generated_token"  # Replace with actual token generation logic
+            return JsonResponse({'token': token}, status=200)
+        else:
+            return JsonResponse({'error': 'Invalid credentials'}, status=400)
+    return JsonResponse({'error': 'Invalid method'}, status=405)
+
+
+# login
+from django.contrib.auth import authenticate
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from lcicHome.models import User_Login  # Adjust the import according to your models
+
+
+
+from lcicHome.models import EnterpriseInfo
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+
+class Search(APIView):
+    def post(self, request):
+        LCICID = request.data.get('LCICID')
+        EnterpriseID = request.data.get('EnterpriseID')
+        
+        if LCICID is not None and EnterpriseID is not None:
+            # Perform search operation based on LCICID and EnterpriseID
+            # Example logic:
+            # result = perform_search(LCICID, EnterpriseID)
+            # return Response({'data': result}, status=status.HTTP_200_OK)
+            return Response({'message': 'Search performed successfully'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'LCICID and EnterpriseID are required fields'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+# get Enterprise
+from rest_framework import viewsets
+from .models import EnterpriseInfo
+from .serializers import EnterpriseInfoSerializer
+
+class EnterpriseInfoViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = EnterpriseInfo.objects.all()
+    serializer_class = EnterpriseInfoSerializer
+
+    
+    
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import Customer_Info_IND
+from .serializers import CustomerInfoINDSerializer
+
+class CustomerInfoINDView(APIView):
+    def get(self, request):
+        customers = Customer_Info_IND.objects.all()
+        serializer = CustomerInfoINDSerializer(customers, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    
+# Search Enterprise
+
+# views.py
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from rest_framework import status
+# from .models import EnterpriseInfo
+# from .serializers import EnterpriseInfoSerializer
+
+# class Search(APIView):
+#     def post(self, request):
+#         LCICID = request.data.get('LCICID')
+#         EnterpriseID = request.data.get('EnterpriseID')
+        
+#         if LCICID is not None and EnterpriseID is not None:
+#             # Perform search operation based on LCICID and EnterpriseID
+#             results = EnterpriseInfo.objects.filter(LCICID=LCICID, EnterpriseID=EnterpriseID)
+#             serializer = EnterpriseInfoSerializer(results, many=True)
+#             return Response({'data': serializer.data}, status=status.HTTP_200_OK)
+#         else:
+#             return Response({'error': 'LCICID and EnterpriseID are required fields'}, 
+#             status=status.HTTP_400_BAD_REQUEST)
+
+
+# search 
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import EnterpriseInfo
+from .serializers import EnterpriseInfoSerializer
+
+class EnterpriseInfoSearch(APIView):
+    def post(self, request):
+        LCICID = request.data.get('LCICID')
+        EnterpriseID = request.data.get('EnterpriseID')
+        
+        # print("LCIC: ",LCICID)
+        # print("Enterpriseid: ",EnterpriseID)
+        
+        if LCICID is not None and EnterpriseID is not None:
+            try:
+                enterprise_info = EnterpriseInfo.objects.filter(LCICID=LCICID, EnterpriseID=EnterpriseID)
+                investor_info = InvestorInfo.objects.filter(EnterpriseID=EnterpriseID)
+                for i in investor_info:
+                    invesinfo = i.investorName
+                    # print(invesinfo)
+                serializer = EnterpriseInfoSerializer(enterprise_info, many=True)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            except EnterpriseInfo.DoesNotExist:
+                return Response({'error': 'EnterpriseInfo not found'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            return Response({'error': 'LCICID and EnterpriseID are required fields'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        
+        
+class LoginView(APIView):
+    def post(self, request):
+        username = request.data.get('username')
+        password = request.data.get('password')
+
+        if username is None or password is None:
+            return Response({'error': 'Please provide both username and password'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        user = authenticate(username=username, password=password)
+        login_user = User_Login.objects.filter(UserName=username, Password=password).first()
+
+        if login_user is not None:
+            return Response({'success': 'Done'}, status=status.HTTP_201_CREATED)
+        else:
+            return Response({'error': 'Invalid username or password'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        
+        
+        
+from rest_framework import viewsets
+from .models import EnterpriseInfo, InvestorInfo
+from .serializers import EnterpriseInfoSerializer, InvestorInfoSerializer
+
+class EnterpriseInfoViewSet(viewsets.ModelViewSet):
+    queryset = EnterpriseInfo.objects.all()
+    serializer_class = EnterpriseInfoSerializer
+
+class InvestorInfoViewSet(viewsets.ModelViewSet):
+    queryset = InvestorInfo.objects.all()
+    serializer_class = InvestorInfoSerializer

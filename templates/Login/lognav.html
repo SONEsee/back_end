@@ -29,6 +29,7 @@
           </li>
           <li><a href="{% url 'lcicHome:search'%}?Lang=la">{% for search in Search_Menu %} {{search.nameL}} {% endfor %}</a></li>
           <li>
+            ........
             <a href="#">{% for manage in Management_Menu %} {{manage.nameL}} {% endfor %}</a>
             <i class="bx bxs-chevron-down htmlcss-arrow arrow"></i>
             <ul class="htmlCss-sub-menu sub-menu">
@@ -50,6 +51,8 @@
                   {% endfor %}
                 </a>
               </li>
+              {% comment %} Porfolio Report_Menu {% endcomment %}
+              
               {% comment %} <li><a href="#">ຂໍ້ມູນລູກຄ້າ</a></li>
               <li><a href="#">ຂໍ້ມູນສະມາຊິກ</a></li>
               <li><a href="#">ຂໍ້ມູນສາທານຸປະໂພກ</a></li> {% endcomment %}
@@ -124,7 +127,7 @@
           </li>
           <li><a href="{% url 'lcicHome:search'%}?Lang=la">{% for search in Search_Menu %} {{search.nameL}} {% endfor %}</a></li>
           <li>
-            <a href="#">{% for report in Report_Menu %} {{report.nameL}} {% endfor %}</a>
+            <a href="#">{% for User in User_Menu %} {{User.nameL}} {% endfor %}</a>
             <i class="bx bxs-chevron-down js-arrow arrow"></i>
             <ul class="js-sub-menu sub-menu">
               <li><a href="#">
@@ -149,6 +152,32 @@
               <li><a href="#">ຕິດຕາມການຄົ້ນຫາ</a></li>
               <li><a href="#">ຄ່າທຳນຽມ</a></li>
               <li><a href="#">ເບິ່ງບົດລາຍງານປະຈຳວັນ</a></li> {% endcomment %}
+            </ul>
+          </li>
+          {% comment %} credit Report  {% endcomment %}
+          <li>
+            <a href="#">{% for report in Report_Menu %} {{report.nameL}} {% endfor %}</a>
+            <i class="bx bxs-chevron-down js-arrow arrow"></i>
+            <ul class="js-sub-menu sub-menu">
+              {% comment %} <li><a href="#">
+                  {% for UserRp in user_report %}
+                  {{UserRp.nameL}}
+                  {% endfor %}
+                </a>
+              </li>
+              <li><a href="#">
+                  {% for MemRp in mem_report %}
+                  {{MemRp.nameL}}
+                  {% endfor %}
+                </a>
+              </li>
+              <li><a href="#">
+                  {% for UseSysRp in usesys_report %}
+                  {{UseSysRp.nameL}}
+                  {% endfor %}
+                </a>
+              </li> {% endcomment %}
+
             </ul>
           </li>
           <li><a href="{% url 'lcicHome:showUploadfile' %}">ນຳສົ່ງຂໍ້ມູນ</a></li> 

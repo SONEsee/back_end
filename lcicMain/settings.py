@@ -33,7 +33,7 @@ DEBUG = True
 # DEBUG = False
 
 # ALLOWED_HOSTS = ['192.168.45.247','localhost','139.5.159.151','lcic.com.la','www.lcic.com.la']
-#ALLOWED_HOSTS = ['192.168.45.230','localhost']
+# ALLOWED_HOSTS = ['192.168.45.230','localhost']
 ALLOWED_HOSTS = ['*']
 
 # Application definition
@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'livereload',
     'django.contrib.staticfiles',
+    'corsheaders',
     'lcicHome',
     'lcicNews',
     "crispy_forms",
@@ -69,9 +70,17 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'livereload.middleware.LiveReloadScript',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django_session_timeout.middleware.SessionTimeoutMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.common.CommonMiddleware',
 ]
 
 ROOT_URLCONF = 'lcicMain.urls'
+
+# session  timeout
+SESSION_COOKIE_AGE = 3600
+SESSION_TIMEOUT_REDIRECT = 'http://127.0.0.1:8000/'
 
 TEMPLATES = [
     {
@@ -89,7 +98,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'lcicMain.wsgi.application'
+# WSGI_APPLICATION = 'lcicMain.wsgi.application'
 
 
 # Database
@@ -107,12 +116,11 @@ WSGI_APPLICATION = 'lcicMain.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        # 'NAME': BASE_DIR / 'db.sqlite3',
-        'NAME' : 'postgres',
-        'USER' : 'postgres',
-        'PASSWORD' : 'paylay559',
-        'PORT' : '5432',
-        'HOST' : 'localhost'
+        'NAME': 'lcicwebsitedb',
+        'USER': 'postgres',
+        'PASSWORD': 'sone',
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
 
@@ -170,21 +178,21 @@ USE_TZ = True
 #MEDIA_ROOT = os.path.join(BASE_DIR,'media')
 STATIC_URL = '/static/'
 
-MEDIA_URL = '/media/'
+# MEDIA_URL = '/media/'
 
 
 
-if DEBUG:
+# if DEBUG:
 
-  STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+#   STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 
-else:
+# else:
 
-  STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+#   STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
 
 
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+# MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 # Default primary key field type
@@ -192,3 +200,24 @@ STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",  
+]
+# CORS_ORIGIN_ALLOW_ALL = True
+
+# AUTH_USER_MODEL = 'lcicMain.MyUser'
+
+# settings.py
+
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:3000',
+    # Add your other trusted origins here
+]
+
+
+CORS_ALLOW_ALL_ORIGINS = True
+CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SECURE = False
+CORS_ORIGIN_ALLOW_ALL = True
+CORS_ALLOW_CREDENTIALS = True

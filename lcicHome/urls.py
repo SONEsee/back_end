@@ -7,6 +7,34 @@ from django.conf.urls.static import static
 from . import views
 from .views import render_pdf_view
 # from .views import searchListfee
+from .views import CustomerInfoINDView
+from .views import STypeView
+from .views import UserGroupView
+from .views import login_view
+from .views import login_view1
+from .views import get_csrf_token, login_view
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.http import JsonResponse
+from .views import LoginView
+from rest_framework.routers import DefaultRouter
+from .views import EnterpriseInfoViewSet
+from rest_framework.routers import DefaultRouter
+from .views import EnterpriseInfoViewSet
+from .views import Search
+from .views import EnterpriseInfoSearch
+from .views import EnterpriseInfoViewSet, InvestorInfoViewSet
+from rest_framework.routers import DefaultRouter
+# from .views import enterprise_info_search
+# router = DefaultRouter()
+# router.register(r'enterpriseinfo', EnterpriseInfoViewSet)
+router = DefaultRouter()
+
+
+router.register(r'investorinfo', InvestorInfoViewSet)
+router.register(r'enterpriseinfo', EnterpriseInfoViewSet)
+@ensure_csrf_cookie
+def get_csrf_token(request):
+    return JsonResponse({'csrfToken': request.META.get('CSRF_COOKIE')})
 
 urlpatterns = [
    path('',views.index, name='index'),
@@ -38,7 +66,36 @@ urlpatterns = [
    path('searchList/', views.searchList, name='searchList'),
    path('searchListfee/<slug:object_id>', views.searchListfee, name='searchListfee'),
    path('searchListConfirm/<slug:object_id>', views.searchListConfirm, name='searchListConfirm'),
-   path('render_pdf_view', render_pdf_view, name='render_pdf'),
-   path('progress', views.progress, name='progress'),
+   path('render_pdf_view/<slug:object_id>', render_pdf_view, name='render_pdf_view'),
+   path('progress/<slug:object_id>', views.progress, name='progress'),
+   path('tax_invoice', views.tax, name='tax'),
+   
+# new urls 
+   path('customers/', CustomerInfoINDView.as_view(), name='customer-info-ind'),
+   path('stypes/', STypeView.as_view(), name='stype-view'),
+   path('user-groups/', UserGroupView.as_view(), name='user-groups'),
+   
+   path('api1/login/', login_view, name='login'),
+   path('api1/login1/', login_view1, name='login'),
+   path('get-csrf-token/', get_csrf_token, name='get_csrf_token'),
+   path('login/', LoginView.as_view(), name='login'),
+   path('api2/login/', LoginView.as_view(), name='login'),
+   
+   # path('test1', include(router.urls)),
+   path('api2/', include(router.urls)),
+   
+   
+   # Search Enterprise 
+   # path('api/search/', Search.as_view(), name='search'),
+     path('api/v1/enterprise-info/search/', EnterpriseInfoSearch.as_view(), name='enterprise-info-search'),
+   # path('api/v2/enterprise-info/search/', enterprise_info_search),
+   
+   path('enter', include(router.urls)),
+     
+
+
+
+
+
 
 ]

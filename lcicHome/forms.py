@@ -1,6 +1,6 @@
 from cProfile import label
 from email import message
-from socket import fromshare
+#from socket import fromshare
 from tkinter import Widget
 from xml.dom import ValidationErr
 from django import forms 
@@ -440,7 +440,7 @@ class SearchEnterpise(forms.ModelForm):
     enterprise_id = forms.CharField(
         label = 'ລະຫັດວິສະຫາກິດ', min_length=4, max_length=50,
         error_messages={'required':'ກະລຸນາປ້ອນລະຫັດວິສະຫາກິດ'},
-        widget = forms.TextInput(attrs=
+        widget = forms.TextInput(attrs= 
         {'placeholder':'ລະຫັດວິສະຫາກິດ'}))
         
     lcic_id = forms.CharField(
@@ -457,19 +457,19 @@ class SearchEnterpise(forms.ModelForm):
             'enterprise_id': 'ລະຫັດວິສະຫາກິດ',
             'lcic_id': 'ລະຫັດຂສລ'
         }
-    # def clean(self):
-    #     cleaned_data = super().clean()
-    #     enterprise_id = cleaned_data.get('enterprise_id')
-    #     lcic_id = cleaned_data.get('lcic_id')
-
-    #     # Check if both enterprise_id and lcic_id exist in the model
-    #     try:
-    #         EnterpriseInfo.objects.get(enterprise_id=enterprise_id, lcic_id=lcic_id)
-    #     except EnterpriseInfo.DoesNotExist:
-    #         raise forms.ValidationError('Wrong password! Enterprise ID and LCIC ID combination not found.')
-
-    #     return cleaned_data
         
+    # def clean_enterprise_id(self):
+    #     enterprise_id = self.cleaned_data.get('enterprise_id')
+    #     if not enterprise_id.isalpha():
+    #         raise ValidationError('ກະລຸນາປ້ອນຕົວອັກສອນໃຫມ່')
+    #     return enterprise_id
+
+    # def clean_lcic_id(self):
+    #     lcic_id = self.cleaned_data.get('lcic_id')
+    #     if not lcic_id.isalpha():
+    #         raise ValidationError('ກະລຸນາປ້ອນຕົວອັກສອນໃຫມ່')
+    #     return lcic_id
+    
         
 class SearchForm(forms.Form):
     enterprise_id = forms.CharField(label='ລະຫັດວິສາຫະກິດ', required=False)
@@ -496,6 +496,7 @@ class SearchForm(forms.Form):
         lcic_id = cleaned_data.get('lcic_id')
 
         # Perform custom validation
+        
         if not enterprise_id and not lcic_id:
             raise ValidationError("ກະລຸນາໃສລະຫັດວິສາຫະກິດ ເເລະ ລະຫັດຂສລ")
 

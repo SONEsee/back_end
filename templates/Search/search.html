@@ -140,6 +140,7 @@
 
     <div class="main-container">
         {% comment %} <h2>ທ່ານຕ້ອງການຄົ້ນຫາຂໍ້ມູນໃດ?</h2> {% endcomment %}
+        <p>{{check_UserGroup}}</p>
         <div class="radio-buttons">
 
           <label class="custom-radio">
@@ -156,7 +157,7 @@
           </label>
           
           <label class="custom-radio">
-            <a class="radio-link" name="radio-link" href="/searchEnterpise">
+            <a class="radio-link" name="radio-link" href="{% url 'lcicHome:searchEnterpise' %}">
             <input type="radio" name="radio" />
             <span class="radio-btn"
               ><i class="las la-check">

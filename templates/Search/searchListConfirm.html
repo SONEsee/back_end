@@ -1,16 +1,23 @@
-{% extends "Login/main.html" %}
+{% extends "login/main.html" %}
 {% load static %}
 {% block title %}Upload Files{%endblock%}
 {% block content %}
 <style>
   th{
     font-size: 10px;
+    font-family:Noto Sans Lao;
+  }
+  td{
+    font-family:Noto Sans Lao;
   }
 </style>
 </br>
 </br>
 <div class="d-flex float-right justify-content- p-2">
-  <a href="{% url 'lcicHome:render_pdf' %}" target="_blank">
+  <form  method="post" action=" {% url 'lcicHome:render_pdf_view' object_id=report_data.EnterpriseID %}">
+    {% csrf_token %}
+  
+  <a href="" type="submit" target="_blank">
     <button class="btn btn-danger"><i class="fa-solid fa-download"></i> PDF</button>
   </a>
 </div>
@@ -45,12 +52,12 @@
           <p style="font-size:10px; margin:1; line-height: 1;">Email: LCIC@bol.Gov.la</p>
       </div>
     </div>
-    <div class=" text-end px-2" style="font-size:10px">ພິມວັນທີ XX-XX-XXXX</div>
+    <div class=" text-end px-2" style="font-size:10px">ພິມວັນທີ {{formatted_datetime}}</div>
 
 
     {% comment %}  {% endcomment %} 
     <div class="text-center text-light rounded-2 p-1" style="background-color:#000080;">
-      <p class="m-0" style="font-family:Time News Romance;">ບົດລາຍງານສິນເຊື່ອຄົບຖ້ວນ (ສໍາລັບນິຕິບຸກຄົນ)</p>
+      <p class="m-0" style="font-family:Noto Sans Lao;">ບົດລາຍງານສິນເຊື່ອຄົບຖ້ວນ (ສໍາລັບນິຕິບຸກຄົນ)</p>
     </div>
     <div class="d-flex justify-content-space-between p-2 row">
       <div class="col-md-3">
@@ -152,10 +159,10 @@
               <td>-</td>
             </tr>
             <tr>
-              <td>{{report_data.eneterpriseNameEnglish}}</td>
+              <td>{{report_data.enterpriseNameLao}}</td>
             </tr>
             <tr>
-              <td>{{report_data.enterpriseNameLao}}​</td>
+              <td>{{report_data.eneterpriseNameEnglish}}​</td>
             </tr>
             <tr>
               <td>{{report_invs.investorName}}</td>
@@ -182,19 +189,19 @@
       </div>
     {% comment %}  {% endcomment %}
     <div class="text-start text-light rounded-2 p-1 fs-6" style="background-color:#000080; font-size:10px;">
-      <p class="m-0 ps-2" style="font-family:Time News Romance;">ລາຍລະອຽດຂອງຂໍ້ມູນທີ່ຜ່ານມາ</p> 
+      <p class="m-0 ps-2" style="font-family:Noto Sans Lao;">ລາຍລະອຽດຂອງຂໍ້ມູນທີ່ຜ່ານມາ</p> 
     </div>
     {% comment %}  {% endcomment %}
     <div class="">
       <table class="table text-start border border-dange mt-2" style="margin:1; line-height: 1;">
         <thead class="bg-light">
           <tr >
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance; font-size: 10px;">ຊື່ທະນາຄານ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance; font-size: 10px;">ຊື່ບໍລິສັດ(ພາສາອັງກິດ)</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance; font-size: 10px;">ຊື່ບໍລິສັດ(ພາສາລາວ)</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance; font-size: 10px;">ປະເພດຂອງຂໍ້ມູນ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance; font-size: 10px;">ປະເພດຂອງຜະລິດຕະພັນ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance; font-size: 10px;">ວັນທີເດຶອນປີ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ຊື່ທະນາຄານ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ຊື່ບໍລິສັດ(ພາສາອັງກິດ)</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ຊື່ບໍລິສັດ(ພາສາລາວ)</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ປະເພດຂອງຂໍ້ມູນ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ປະເພດຂອງຜະລິດຕະພັນ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ວັນທີເດຶອນປີ</th>
           </tr>
         </thead>
         <tbody>
@@ -212,22 +219,22 @@
     </div>
     {% comment %}  {% endcomment %}
     <div class="text-start text-light rounded-2 p-1 mt-2" style="background-color:#000080;">
-      <p class="m-0 ps-2" style="font-family:Time News Romance;">ລວມວົງເງິນກູ້ທີ່ເຄື່ອນໄຫວທັງໝົດ (ອີງຕາມສັນຍາກູ້ຢືມ)</p> 
+      <p class="m-0 ps-2" style="font-family:Noto Sans Lao;">ລວມວົງເງິນກູ້ທີ່ເຄື່ອນໄຫວທັງໝົດ (ອີງຕາມສັນຍາກູ້ຢືມ)</p> 
     </div>
     {% comment %}  {% endcomment %}
     <div>
       <table class="table text-start mt-2 " style="margin:1; line-height: 1;">
         <thead class="bg-light">
           <tr >
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance; font-size: 10px;">ສະມາຊິກ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance; font-size: 10px;">ລະຫັດຂອງເງິນກູ້</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance; font-size: 10px;">ວັນທີເຊັນສັນຍາ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance; font-size: 10px;">ວົງເງິນອະນູມັດກູ້</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance; font-size: 10px;">ຍອດເຫຼືອໜີ້</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance; font-size: 10px;">ສະກຸນເງິນ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance; font-size: 10px;">ຈໍານວນວັນທີ່ຊໍາລະຊ້າ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance; font-size: 10px;">ປະຫວັດການຈັດຊັ້ນໜີ້ 12 ເດືອນນັບຈາກເດືອນປະຈຸບັນ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance; font-size: 10px;">ວັນທີລ້າສຸດ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ສະມາຊິກ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ລະຫັດຂອງເງິນກູ້</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ວັນທີເຊັນສັນຍາ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ວົງເງິນອະນູມັດກູ້</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ຍອດເຫຼືອໜີ້</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ສະກຸນເງິນ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ຈໍານວນວັນທີ່ຊໍາລະຊ້າ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ປະຫວັດການຈັດຊັ້ນໜີ້ 12 ເດືອນນັບຈາກເດືອນປະຈຸບັນ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ວັນທີລ້າສຸດ</th>
           </tr>
         </thead>
         <tbody>
@@ -249,27 +256,27 @@
     </div>
     {% comment %}  {% endcomment %}
     <div class="text-start text-light rounded-2 p-1 mt-2" style="background-color:#000080;">
-      <p class="m-0 ps-2" style="font-family:Time News Romance;">ລາຍລະອຽດກ່ຽວກັບວົງເງິນກູ້</p> 
+      <p class="m-0 ps-2" style="font-family:Noto Sans Lao;">ລາຍລະອຽດກ່ຽວກັບວົງເງິນກູ້</p> 
     </div>
     {% comment %}  {% endcomment %}
     <div>
       <table class="table mt-2" style="margin:1; line-height: 1;">
         <thead class="bg-light">
           <tr class="text-center" >
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ສະມາຊິກ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ລະຫັດຂອງເງິນກູ້</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ວັນທີເຊັນສັນຍາ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ວັນໝົດອາຍຸສັນຍາ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ວົງເງິນອະນູມັດກູ້</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ຍອດເຫຼືອໜີ້</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ສະກຸນເງິນ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ອັດຕາດອກເບ້ຍ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ເປົ້າໝາຍເງິນກູ້ / ປະເພດບັດສິນເຊື່ອ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ຈໍານວນວັນທີ່ຊໍາລະຊ້າ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ການຈັດຊັ້ນໜີ້</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ປະເພດເງິນກູ້</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ໄລຍະເວລາໃນການກູ້ຢືມ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ສະຖານະພາບ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ສະມາຊິກ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ລະຫັດຂອງເງິນກູ້</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ວັນທີເຊັນສັນຍາ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ວັນໝົດອາຍຸສັນຍາ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ວົງເງິນອະນູມັດກູ້</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ຍອດເຫຼືອໜີ້</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ສະກຸນເງິນ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ອັດຕາດອກເບ້ຍ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ເປົ້າໝາຍເງິນກູ້ / ປະເພດບັດສິນເຊື່ອ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ຈໍານວນວັນທີ່ຊໍາລະຊ້າ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ການຈັດຊັ້ນໜີ້</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ປະເພດເງິນກູ້</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ໄລຍະເວລາໃນການກູ້ຢືມ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ສະຖານະພາບ</th>
           </tr>
         </thead>
         <tbody>
@@ -295,27 +302,27 @@
     </div>
     {% comment %}  {% endcomment %}
     <div class="text-start text-light rounded-3 p-1 mt-2" style="background-color:#000080;">
-      <p class="m-0 ps-2" style="font-family:Time News Romance;">ລາຍລະອຽດກ່ຽວກັບວົງເງິນກູ້ຂອງຜູ້ກູ້ຮ່ວມ / ບັດເສີມ</p> 
+      <p class="m-0 ps-2" style="font-family:Noto Sans Lao;">ລາຍລະອຽດກ່ຽວກັບວົງເງິນກູ້ຂອງຜູ້ກູ້ຮ່ວມ / ບັດເສີມ</p> 
     </div>
     {% comment %}  {% endcomment %}
     <div >
-      <table class="table mt-2" style="margin:1; line-height: 1; font-family:Time news Romance; mt-2">
+      <table class="table mt-2" style="margin:1; line-height: 1; font-family:Noto Sans Lao; mt-2">
         <thead class="bg-light">
           <tr class="text-center" >
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ສະມາຊິກ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ລະຫັດຂອງເງິນກູ້</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ວັນທີເຊັນສັນຍາ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ວັນໝົດອາຍຸສັນຍາ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ວົງເງິນອະນູມັດກູ້</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ຍອດເຫຼືອໜີ້</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ສະກຸນເງິນ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ອັດຕາດອກເບ້ຍ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ເປົ້າໝາຍເງິນກູ້/ປະເພດບັດສິນເຊື່ອ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ຈໍານວນວັນທີ່ຊໍາລະຊ້າ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ການຈັດຊັ້ນໜີ້</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ປະເພດເງິນກູ້</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ໄລຍະເວລາໃນການກູ້ຢືມ</th>
-            <th scope="col" class="fw-bold" style="font-family:Time News Romance;font-size: 10px;">ສະຖານະພາບ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ສະມາຊິກ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ລະຫັດຂອງເງິນກູ້</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ວັນທີເຊັນສັນຍາ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ວັນໝົດອາຍຸສັນຍາ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ວົງເງິນອະນູມັດກູ້</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ຍອດເຫຼືອໜີ້</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ສະກຸນເງິນ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ອັດຕາດອກເບ້ຍ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ເປົ້າໝາຍເງິນກູ້/ປະເພດບັດສິນເຊື່ອ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ຈໍານວນວັນທີ່ຊໍາລະຊ້າ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ການຈັດຊັ້ນໜີ້</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ປະເພດເງິນກູ້</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ໄລຍະເວລາໃນການກູ້ຢືມ</th>
+            <th scope="col" class="fw-bold" style="font-family:Noto Sans Lao; font-size: 10px;">ສະຖານະພາບ</th>
           </tr>
         </thead>
         <tbody>
@@ -340,12 +347,12 @@
     </div>
     {% comment %}  {% endcomment %}
     <div class="border rounded-3 my-3 p-2">
-      <p class="text-start m-0" style="font-family:Time News Romance; font-size: 11px;">ປະຫັດສິນເຊື່ອ ໄດ້ສະເເດງໃຫ້ເຫັນລາຍລະອຽດກ່ຽວກັບວົງເງິນກູ້ ເເລະ ເເນວໂນ້ມການຊໍາລະ ຂອງທຸກສິນເຊື່ອ ເເລະ ວົງເງິນກູ້ ສະເເດງໃຫ້ເຫັນຈໍານວນທີ່ມື້ຊໍາລະຊ້າ ເເລະ ການຈັດປະເພດວົງເງິນກູ້ ເເລະ ເເນວໂນ້ມການຊໍາລະໃນໄລຍະເວລາ 12 ເດືອນ ຜ່ານມາ.</p>
+      <p class="text-start m-0" style="font-family:Noto Sans Lao; font-size: 11px;">ປະຫັດສິນເຊື່ອ ໄດ້ສະເເດງໃຫ້ເຫັນລາຍລະອຽດກ່ຽວກັບວົງເງິນກູ້ ເເລະ ເເນວໂນ້ມການຊໍາລະ ຂອງທຸກສິນເຊື່ອ ເເລະ ວົງເງິນກູ້ ສະເເດງໃຫ້ເຫັນຈໍານວນທີ່ມື້ຊໍາລະຊ້າ ເເລະ ການຈັດປະເພດວົງເງິນກູ້ ເເລະ ເເນວໂນ້ມການຊໍາລະໃນໄລຍະເວລາ 12 ເດືອນ ຜ່ານມາ.</p>
     </div> 
   </div>
   {% comment %} Footer {% endcomment %}
   <div class="container align-items-center" style="margin-b-m: 150px;"> 
-    <p class="text-danger text-center fw-bold" style="font-family:">*ໝາຍເຫດ: ຂໍ້ມູນນີ້ເເມ່ນນໍາໃຊ້ເຂົ້າໃນວຽກງານພິຈາລະນາສິນເຊື່ອເທົ່ານັ້ນ.</p>
+    <p class="text-danger text-center fw-bold" style="font-family:Noto Sans Lao; ">*ໝາຍເຫດ: ຂໍ້ມູນນີ້ເເມ່ນນໍາໃຊ້ເຂົ້າໃນວຽກງານພິຈາລະນາສິນເຊື່ອເທົ່ານັ້ນ.</p>
   </div>
   <div class="d-flex justify-content-space-between text-light rounded-4 container-xxl " style="background-color:#000080; flex-direction:row; padding:0;">
     <div class=" col-md-7 d-flex justify-content-center align-items-start" style="flex-direction: column; float: left;">
@@ -370,8 +377,7 @@
 </div>
     </div>
   </div>
+</form>
 </div>
-
-
 
 {%endblock%}

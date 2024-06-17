@@ -85,6 +85,11 @@
 			width: 250px;
 			height: 200px;
 		}
+		@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Lao&display=swap');
+
+		.fontlao{
+			font-family: 'Noto Sans Lao', sans-serif;
+		}
 	</style>
 
 </head>
@@ -94,10 +99,10 @@
 		<div class="d-flex justify-content-center h-100">
 			
 			<div class="user_card">
-				<img id ="image" src="{% static '/images/logo1.png' %}" alt="#"/>
+				<img  class="m-auto" src="{% static '/images/logo1.png' %}" width="250px" height="250px" alt="#"/>
 				<div class="d-flex justify-content-center">
 
-					<h3 id="form-title">Welcome to LCIC System</h3>
+					<h3 class="fontlao text-primary mt-2">ຍິນດີຕ້ອນຮັບເຂົ້າສູ່ລະບົບ ຂສລ</h3>
 				</div>
 				<div class="d-flex justify-content-center form_container">
 					<form method="POST" action="">
@@ -121,7 +126,7 @@
 
 								<div class="align-items-end">
 									<i class="fa-solid fa-backward" style="margin-left:200px; margin-top:12px">
-										<a class="linkback" href="{% url 'lcicHome:index' %}">
+										<a class="fontlao" href="{% url 'lcicHome:index' %}">
 										ກັບຄືນສູ່ໜ້າເວັບໄຊ້
 									    </a>
 							        </i>

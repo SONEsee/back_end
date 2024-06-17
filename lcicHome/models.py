@@ -1,4 +1,4 @@
-from sre_parse import Verbose
+# from sre_parse import Verbose
 from tabnanny import verbose
 from tkinter.tix import Tree
 from unittest.util import _MAX_LENGTH
@@ -190,20 +190,88 @@ class GroupSubMenu(models.Model):
         # ordering='GSMID'
         verbose_name_plural='GroupSubMenu'
 
-class Login(models.Model):
+# class Login(models.Model):
+#     UID = models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+#     MID = models.ForeignKey(memberInfo, related_name='memberInfo', null=True, blank=True, on_delete=models.CASCADE)
+#     GID = models.ForeignKey(User_Group, null=True, blank=True , on_delete=models.CASCADE)
+#     username = models.CharField(max_length=150)
+#     password = models.CharField(max_length=150)
+#     nameL = models.CharField(max_length=150)
+#     nameE = models.CharField(max_length=150)
+#     surnameL = models.CharField(max_length=150)
+#     surnameE = models.CharField(max_length=150)
+#     insertDate = models.DateTimeField(auto_now_add=True, auto_now=False, blank=True)
+#     updateDate = models.DateTimeField(auto_now_add=True, auto_now=False, blank=True)
+#     is_active = models.BooleanField(default=True)
+    
+    
+    from django.db import models
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
+
+class UserManager(BaseUserManager):
+    def create_user(self, username, password=None, **extra_fields):
+        if not username:
+            raise ValueError('The Username field must be set')
+        user = self.model(username=username, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, username, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        return self.create_user(username, password, **extra_fields)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+class Login(AbstractBaseUser):
     UID = models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
     MID = models.ForeignKey(memberInfo, related_name='memberInfo', null=True, blank=True, on_delete=models.CASCADE)
     GID = models.ForeignKey(User_Group, null=True, blank=True , on_delete=models.CASCADE)
-    username = models.CharField(max_length=150)
-    password = models.CharField(max_length=150)
+    username = models.CharField(max_length=150, unique=True)
     nameL = models.CharField(max_length=150)
     nameE = models.CharField(max_length=150)
     surnameL = models.CharField(max_length=150)
     surnameE = models.CharField(max_length=150)
-    insertDate = models.DateTimeField(auto_now_add=True, auto_now=False, blank=True)
-    updateDate = models.DateTimeField(auto_now_add=True, auto_now=False, blank=True)
+    insertDate = models.DateTimeField(auto_now_add=True, blank=True)
+    updateDate = models.DateTimeField(auto_now=True, blank=True)
     is_active = models.BooleanField(default=True)
-    
+
+    objects = UserManager()
+
+    USERNAME_FIELD = 'username'
+
+    def __str__(self):
+        return self.username
+
     
 class bank_bnk(models.Model):
     bnk_sys_id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
@@ -541,7 +609,6 @@ class B1_Monthly(models.Model):
     lon_applied_date = models.DateTimeField(blank=True)
     is_disputed = models.BigIntegerField(default=0, null=True)
     
-    
 class B1_Yearly(models.Model):
     lcicID = models.CharField(max_length=25,null=True)
     period = models.CharField(max_length=150)
@@ -571,25 +638,53 @@ class B1_Yearly(models.Model):
     lon_applied_date = models.DateTimeField(blank=True)
     is_disputed = models.BigIntegerField(default=0, null=True)
     
+# class EnterpriseInfo(models.Model):
+#     LCICID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+#     EnterpriseID = models.CharField(max_length=50,blank=True,null=True)
+#     enterpriseNameLao = models.CharField(max_length=255,blank=True,null=True)
+#     eneterpriseNameEnglish = models.CharField(max_length=255,blank=True,null=True)
+#     regisCertificateNumber = models.CharField(max_length=50,blank=True,null=True)
+#     regisDate = models.DateTimeField(blank=True, null=True)
+#     enLocation = models.CharField(max_length=50,blank=True,null=True)
+#     regisStrationOfficeType = models.CharField(max_length=50,blank=True,null=True)
+#     regisStationOfficeCode = models.CharField(max_length=50,blank=True,null=True)
+#     enLegalStrature = models.CharField(max_length=500,blank=True,null=True)
+#     foreigninvestorFlag = models.CharField(max_length=500,blank=True,null=True)
+#     investmentAmount = models.FloatField(null=True, blank=True)
+#     investmentCurrency = models.CharField(max_length=50,blank=True,null=True)
+#     representativeNationality = models.CharField(max_length=50,blank=True,null=True)
+#     LastUpdate = models.DateTimeField(blank=True,null=True)
+#     CancellationDate = models.DateTimeField(blank=True,null=True)
+#     InsertDate = models.DateTimeField(blank=True, null=True,auto_now_add=True)
+#     UpdateDate = models.DateTimeField(blank=True, null=True)
+
+# lcicHome/models.py
+
+from django.db import models
+
 class EnterpriseInfo(models.Model):
     LCICID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
-    EnterpriseID = models.CharField(max_length=50,blank=True,null=True)
-    enterpriseNameLao = models.CharField(max_length=255,blank=True,null=True)
-    eneterpriseNameEnglish = models.CharField(max_length=255,blank=True,null=True)
-    regisCertificateNumber = models.CharField(max_length=50,blank=True,null=True)
+    EnterpriseID = models.CharField(max_length=50, blank=True, null=True)
+    enterpriseNameLao = models.CharField(max_length=255, blank=True, null=True)
+    eneterpriseNameEnglish = models.CharField(max_length=255, blank=True, null=True)
+    regisCertificateNumber = models.CharField(max_length=50, blank=True, null=True)
     regisDate = models.DateTimeField(blank=True, null=True)
-    enLocation = models.CharField(max_length=50,blank=True,null=True)
-    regisStrationOfficeType = models.CharField(max_length=50,blank=True,null=True)
-    regisStationOfficeCode = models.CharField(max_length=50,blank=True,null=True)
-    enLegalStrature = models.CharField(max_length=500,blank=True,null=True)
-    foreigninvestorFlag = models.CharField(max_length=500,blank=True,null=True)
+    enLocation = models.CharField(max_length=50, blank=True, null=True)
+    regisStrationOfficeType = models.CharField(max_length=50, blank=True, null=True)
+    regisStationOfficeCode = models.CharField(max_length=50, blank=True, null=True)
+    enLegalStrature = models.CharField(max_length=500, blank=True, null=True)
+    foreigninvestorFlag = models.CharField(max_length=500, blank=True, null=True)
     investmentAmount = models.FloatField(null=True, blank=True)
-    investmentCurrency = models.CharField(max_length=50,blank=True,null=True)
-    representativeNationality = models.CharField(max_length=50,blank=True,null=True)
-    LastUpdate = models.DateTimeField(blank=True,null=True)
-    CancellationDate = models.DateTimeField(blank=True,null=True)
-    InsertDate = models.DateTimeField(blank=True, null=True,auto_now_add=True)
+    investmentCurrency = models.CharField(max_length=50, blank=True, null=True)
+    representativeNationality = models.CharField(max_length=50, blank=True, null=True)
+    LastUpdate = models.DateTimeField(blank=True, null=True)
+    CancellationDate = models.DateTimeField(blank=True, null=True)
+    InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
     UpdateDate = models.DateTimeField(blank=True, null=True)
+
+    def __str__(self):
+        return f"EnterpriseInfo {self.LCICID} - {self.enterpriseNameLao}"
+
 
 class InvestorInfo(models.Model):
     ID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False,verbose_name='ID')
@@ -601,6 +696,10 @@ class InvestorInfo(models.Model):
     investorMobile = models.CharField(max_length=50,blank=True,null=True)
     InsertDate = models.DateTimeField(blank=True,null=True,auto_now_add=True)
     UpdateDate = models.DateTimeField(blank=True,null=True)
+    def __str__(self):
+        return f"InvestorInfo {self.ID} - {self.investorName}"
+    
+    
     
 class ISISCode(models.Model):
     ID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False,verbose_name='ID')
@@ -609,3 +708,54 @@ class ISISCode(models.Model):
     IsisName = models.CharField(max_length=4000,blank=True,null=True)
     InsertDate = models.DateTimeField(blank=True,null=True,auto_now_add=True)
     UpdateDate = models.DateTimeField(blank=True,null=True)
+    
+class user_logged(models.Model):
+    ID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False,verbose_name='ID')
+    user = models.ForeignKey(Login, on_delete = models.CASCADE)
+    ip_address = models.GenericIPAddressField()
+    login_time = models.DateTimeField(auto_now_add=True)
+
+class Rp_type(models.Model):
+    ID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False,verbose_name='ID')
+    Rp_NameL = models.CharField(max_length=255, blank=True, null=True)
+    Rp_NameE = models.CharField(max_length=255, blank=True, null=True)
+
+class searchLog(models.Model):
+    search_ID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False,verbose_name='ID')
+    enterprise_ID = models.CharField(max_length=50,blank=True,null=True)
+    LCIC_ID = models.CharField(max_length=50,blank=True,null=True)
+    bnk_code = models.CharField(max_length=255, blank=True, null=True)
+    cus_ID = models.CharField(max_length=255, blank=True, null=True)
+    credit_type = models.CharField(max_length=255, blank=True, null=True)
+    inquiry_date = models.DateTimeField(blank=True,null=True,auto_now_add=True)
+    inquiry_month = models.DateField(blank=True,null=True)
+    inquiry_time = models.DateTimeField(blank=True,null=True,auto_now_add=True)
+    com_tel = models.CharField(max_length=255, blank=True, null=True)
+    com_location = models.CharField(max_length=255, blank=True, null=True)
+    rec_loan_amount = models.FloatField(default=0, null=True)
+    rec_loan_amount_currency = models.CharField(max_length=255, blank=True, null=True)
+    rec_loan_purpose = models.CharField(max_length=255, blank=True, null=True)
+    rec_enquiry_type = models.CharField(max_length=255, blank=True, null=True)
+    cusType = models.CharField(max_length=255, blank=True, null=True)
+    branch = models.CharField(max_length=255, blank=True, null=True)
+ 
+class request_charge(models.Model):
+    rec_charge_ID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False,verbose_name='ID')
+    bnk_code = models.CharField(max_length=255, blank=True, null=True)
+    chg_amount = models.FloatField(max_length=255, blank=True,null=True)
+    chg_code = models.CharField(max_length=255, blank=True, null=True)
+    status = models.CharField(max_length=255, blank=True, null=True)
+    insert_date = models.DateTimeField(blank=True,null=True,auto_now_add=True)
+    update_date = models.DateTimeField(blank=True,null=True,auto_now_add=True)
+    rtp_code = models.CharField(max_length=255, blank=True, null=True)
+    chg_unit = models.CharField(max_length=255, blank=True, null=True)
+    user_sys_id = models.CharField(max_length=255, blank=True, null=True)
+    LCIC_ID = models.CharField(max_length=255, blank=True, null=True)
+    cusType = models.CharField(max_length=255, blank=True, null=True)
+    user_session_id = models.CharField(max_length=255, blank=True, null=True)
+    rec_reference_code = models.CharField(max_length=255, blank=True, null=True)
+    rec_insert_date = models.DateTimeField(blank=True,null=True,auto_now_add=True)
+    
+       
+
+    

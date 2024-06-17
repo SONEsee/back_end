@@ -125,7 +125,7 @@
 </br>
 <div class="container-fluid p-5">
   <div class="p-5 bg-light shadow p-3 mb-5 bg-body rounded">
-    <form method="post" action="{% url 'lcicHome:searchListConfirm' object_id=listfee.EnterpriseID %}">
+    <form method="post" name="rec_charge" action="{% url 'lcicHome:searchListConfirm' object_id=listfee.EnterpriseID %}">
       {% csrf_token %}
       <h5 class="text-center m-4 fontlao fw-bold mb-2">ຄົ້ນຫາຂໍ້ມູນນິຕິບຸກຄົນ</h5>
 
@@ -190,7 +190,7 @@
               </div>
               <div class="container d-flex justify-content-center p-2">
                 <input onclick="goBack()" value="ກັບຄືນ" class="btn btn-secondary mx-2">
-                <input  onclick="showConfirmation()" value="ຕໍ່ໄປ" class="btn" style="background-color: #020FBB; color:white;">
+                <input  onclick="showConfirmation()" value="ຕໍ່ໄປ" name="btn_rec_charge" class="btn" style="background-color: #020FBB; color:white;">
                 {% comment %} <button class="btn btn-primary w-15 mx-2" onclick="window.location.href='/searchListConfirm';">Next pages</button> {% endcomment %}
               </div>
             </div>

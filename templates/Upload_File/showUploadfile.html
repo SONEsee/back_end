@@ -4,7 +4,18 @@
 {% block content %}
 </br>
 </br>
-</br>
+{% comment %} <div class="User">
+  <div class="UserInfo">
+
+    ຍິນດີຕ້ອນຮັບ, 
+    </br><span>ພາກສ່ວນ:</span>{% if check_UserGroup == 1 or check_UserGroup == 2 or check_UserGroup == 3 or check_UserGroup == 4 or check_UserGroup == 5 %}
+    ຂສລ, ບໍລິສັດ ຂໍ້ມູນຂ່າວສານສິນເຊື່ອແຫ່ງ ສ.ປ.ລາວ
+  </div>
+</div> {% endcomment %}
+
+{% for u in uname %} {{u.nameL}} {% endfor%}
+{{check_UserGroup}}
+
 </br>
 <div style="display:flex; font-size:12px" class="col m-1">
 <div class="accordion accordion-flush col-2" id="accordionFlushExample">
