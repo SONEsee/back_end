@@ -520,8 +520,40 @@ class Customer_Info_IND_ERRORS(models.Model):
     blk_sys_id = models.IntegerField(default=0)
     mm_status = models.CharField(max_length=1, null=True)
     
+# class B1(models.Model):
+#     lcicID = models.CharField(max_length=25,null=True)
+#     com_enterprise_code = models.CharField(max_length=25)
+#     segmentType = models.CharField(max_length=10)
+#     bnk_code = models.CharField(max_length=10)
+#     customer_id = models.CharField(max_length=30)
+#     branch_id = models.CharField(max_length=30)
+#     lon_sys_id = models.CharField(max_length=30)
+#     loan_id = models.CharField(max_length=30)
+#     lon_open_date = models.DateField(blank=True)
+#     lon_exp_date = models.DateField(blank=True)
+#     lon_ext_date = models.DateField(blank=True, null=True)
+#     lon_int_rate = models.FloatField(default=0, null=True)
+#     lon_purpose_code = models.CharField(max_length=30)
+#     lon_credit_line = models.BigIntegerField(default=0, null=True)
+#     lon_currency_code = models.CharField(max_length=10)
+#     lon_outstanding_balance = models.BigIntegerField(default=0,null=True)
+#     lon_account_no = models.CharField(max_length=30)
+#     lon_no_days_slow = models.CharField(max_length=30)
+#     lon_class = models.CharField(max_length=10)
+#     lon_type = models.CharField(max_length=10)
+#     lon_term = models.CharField(max_length=25)
+#     lon_status = models.CharField(max_length=10)
+#     lon_insert_date = models.DateTimeField(blank=True)
+#     lon_update_date = models.DateTimeField(blank=True)
+#     lon_applied_date = models.DateTimeField(blank=True)
+#     is_disputed = models.BigIntegerField(default=0, null=True)
+  
+  
+  
+from django.db import models
+
 class B1(models.Model):
-    lcicID = models.CharField(max_length=25,null=True)
+    lcicID = models.CharField(max_length=25, null=True)
     com_enterprise_code = models.CharField(max_length=25)
     segmentType = models.CharField(max_length=10)
     bnk_code = models.CharField(max_length=10)
@@ -536,7 +568,7 @@ class B1(models.Model):
     lon_purpose_code = models.CharField(max_length=30)
     lon_credit_line = models.BigIntegerField(default=0, null=True)
     lon_currency_code = models.CharField(max_length=10)
-    lon_outstanding_balance = models.BigIntegerField(default=0,null=True)
+    lon_outstanding_balance = models.BigIntegerField(default=0, null=True)
     lon_account_no = models.CharField(max_length=30)
     lon_no_days_slow = models.CharField(max_length=30)
     lon_class = models.CharField(max_length=10)
@@ -547,6 +579,8 @@ class B1(models.Model):
     lon_update_date = models.DateTimeField(blank=True)
     lon_applied_date = models.DateTimeField(blank=True)
     is_disputed = models.BigIntegerField(default=0, null=True)
+
+  
     
     
 class B1_Daily(models.Model):
@@ -580,8 +614,41 @@ class B1_Daily(models.Model):
     is_disputed = models.BigIntegerField(default=0, null=True)
     
     
+# class B1_Monthly(models.Model):
+#     lcicID = models.CharField(max_length=25,null=True)
+#     period = models.CharField(max_length=150)
+#     com_enterprise_code = models.CharField(max_length=25)
+#     segmentType = models.CharField(max_length=10)
+#     bnk_code = models.CharField(max_length=10)
+#     customer_id = models.CharField(max_length=30)
+#     branch_id = models.CharField(max_length=30)
+#     lon_sys_id = models.CharField(max_length=30)
+#     loan_id = models.CharField(max_length=30)
+#     lon_open_date = models.DateField(blank=True)
+#     lon_exp_date = models.DateField(blank=True)
+#     lon_ext_date = models.DateField(blank=True, null=True)
+#     lon_int_rate = models.FloatField(default=0, null=True)
+#     lon_purpose_code = models.CharField(max_length=30)
+#     lon_credit_line = models.BigIntegerField(default=0, null=True)
+#     lon_currency_code = models.CharField(max_length=10)
+#     lon_outstanding_balance = models.BigIntegerField(default=0,null=True)
+#     lon_account_no = models.CharField(max_length=30)
+#     lon_no_days_slow = models.CharField(max_length=30)
+#     lon_class = models.CharField(max_length=10)
+#     lon_type = models.CharField(max_length=10)
+#     lon_term = models.CharField(max_length=25)
+#     lon_status = models.CharField(max_length=10)
+#     lon_insert_date = models.DateTimeField(blank=True)
+#     lon_update_date = models.DateTimeField(blank=True)
+#     lon_applied_date = models.DateTimeField(blank=True)
+#     is_disputed = models.BigIntegerField(default=0, null=True)
+
+
+from django.db import models
+from django.core.exceptions import ValidationError
+
 class B1_Monthly(models.Model):
-    lcicID = models.CharField(max_length=25,null=True)
+    lcicID = models.CharField(max_length=25, null=True)
     period = models.CharField(max_length=150)
     com_enterprise_code = models.CharField(max_length=25)
     segmentType = models.CharField(max_length=10)
@@ -597,7 +664,7 @@ class B1_Monthly(models.Model):
     lon_purpose_code = models.CharField(max_length=30)
     lon_credit_line = models.BigIntegerField(default=0, null=True)
     lon_currency_code = models.CharField(max_length=10)
-    lon_outstanding_balance = models.BigIntegerField(default=0,null=True)
+    lon_outstanding_balance = models.BigIntegerField(default=0, null=True)
     lon_account_no = models.CharField(max_length=30)
     lon_no_days_slow = models.CharField(max_length=30)
     lon_class = models.CharField(max_length=10)
@@ -608,6 +675,18 @@ class B1_Monthly(models.Model):
     lon_update_date = models.DateTimeField(blank=True)
     lon_applied_date = models.DateTimeField(blank=True)
     is_disputed = models.BigIntegerField(default=0, null=True)
+
+    def clean(self):
+        if not self.lcicID:
+            raise ValidationError({'lcicID': 'This field cannot be blank.'})
+        if not self.customer_id:
+            raise ValidationError({'customer_id': 'This field cannot be blank.'})
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super(B1_Monthly, self).save(*args, **kwargs)
+
+
     
 class B1_Yearly(models.Model):
     lcicID = models.CharField(max_length=25,null=True)
@@ -758,4 +837,12 @@ class request_charge(models.Model):
     
        
 
-    
+from django.db import models
+from django.contrib.auth.models import User
+
+class UploadedFile(models.Model):
+    name = models.CharField(max_length=255)
+    file = models.FileField(upload_to='uploads/')
+    size = models.FloatField()
+    uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    uploaded_at = models.DateTimeField(auto_now_add=True)

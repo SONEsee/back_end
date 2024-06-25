@@ -2404,3 +2404,253 @@ class EnterpriseInfoViewSet(viewsets.ModelViewSet):
 class InvestorInfoViewSet(viewsets.ModelViewSet):
     queryset = InvestorInfo.objects.all()
     serializer_class = InvestorInfoSerializer
+
+
+
+# get ທຳມະດາ
+from django.http import JsonResponse
+from .models import H_productInfo
+
+def get_product_info(request):
+    products = H_productInfo.objects.all().values('code', 'slug', 'nameL', 'nameE', 'descE', 'descL', 'price', 'proType', 'pimage', 'pFiles', 'published', 'insertDate', 'updateDate')
+    products_list = list(products)
+    return JsonResponse(products_list, safe=False)
+
+
+# get ຕາມໄອດີ
+
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from .models import H_productInfo
+
+# def get_product_info(request):
+#     products = H_productInfo.objects.all().values('code', 'slug', 'nameL', 'nameE', 'descE', 'descL', 'price', 'proType', 'pimage', 'pFiles', 'published', 'insertDate', 'updateDate')
+#     products_list = list(products)
+#     return JsonResponse(products_list, safe=False)
+
+def get_product_detail(request, id):
+    product = get_object_or_404(H_productInfo, pk=id)
+    data = {
+        'code': product.code,
+        'slug': product.slug,
+        'nameL': product.nameL,
+        'nameE': product.nameE,
+        'descE': product.descE,
+        'descL': product.descL,
+        'price': product.price,
+        'proType': product.proType_id,
+        'pimage': product.pimage.url if product.pimage else '',
+        'pFiles': product.pFiles.url if product.pFiles else '',
+        'published': product.published,
+        'insertDate': product.insertDate,
+        'updateDate': product.updateDate,
+    }
+    return JsonResponse(data)
+
+
+# from django.shortcuts import get_object_or_404
+# from django.http import JsonResponse
+# from .models import H_productInfo
+
+def get_product_info_by_id(request, id):
+    product = get_object_or_404(H_productInfo, id=id)
+    data = {
+        'code': product.code,
+        'slug': product.slug,
+        'nameL': product.nameL,
+        'nameE': product.nameE,
+        'descE': product.descE,
+        'descL': product.descL,
+        'price': product.price,
+        'proType': product.proType_id,
+        'pimage': product.pimage.url if product.pimage else None,
+        'pFiles': product.pFiles.url if product.pFiles else None,
+        'published': product.published,
+        'insertDate': product.insertDate,
+        'updateDate': product.updateDate,
+    }
+    return JsonResponse(data)
+
+
+from django.http import JsonResponse
+from .models import H_productInfo
+
+def get_product_infocode(request):
+    code = request.GET.get('code', None)
+    if code:
+        products = H_productInfo.objects.filter(code=code).values('code', 'slug', 'nameL', 'nameE', 'descE', 'descL', 'price', 'proType', 'pimage', 'pFiles', 'published', 'insertDate', 'updateDate')
+    else:
+        products = H_productInfo.objects.all().values('code', 'slug', 'nameL', 'nameE', 'descE', 'descL', 'price', 'proType', 'pimage', 'pFiles', 'published', 'insertDate', 'updateDate')
+    products_list = list(products)
+    return JsonResponse(products_list, safe=False)
+
+
+
+#UpLoad 
+# views.py
+# from django.http import JsonResponse, HttpResponse
+# from django.views.decorators.csrf import csrf_exempt
+# import json
+# from .models import B1
+# from django.core.exceptions import ValidationError
+
+# @csrf_exempt
+# def upload_files(request):
+#     if request.method == 'POST':
+#         try:
+#             files = request.FILES.getlist('files')
+#             for file in files:
+#                 if file.name.endswith('.json'):
+#                     data = json.load(file)
+#                     data = sorted(data, key=lambda x: x.get('loan_id', ''))  # Sort by loan_id
+                    
+#                     # Validate and save each entry
+#                     for item in data:
+#                         try:
+#                             b1 = B1(
+#                                 lcicID=item.get('lcicID'),
+#                                 com_enterprise_code=item.get('com_enterprise_code'),
+#                                 segmentType=item.get('segmentType'),
+#                                 bnk_code=item.get('bnk_code'),
+#                                 customer_id=item.get('customer_id'),
+#                                 branch_id=item.get('branch_id'),
+#                                 lon_sys_id=item.get('lon_sys_id'),
+#                                 loan_id=item.get('loan_id'),
+#                                 lon_open_date=item.get('lon_open_date'),
+#                                 lon_exp_date=item.get('lon_exp_date'),
+#                                 lon_ext_date=item.get('lon_ext_date'),
+#                                 lon_int_rate=item.get('lon_int_rate', 0),
+#                                 lon_purpose_code=item.get('lon_purpose_code'),
+#                                 lon_credit_line=item.get('lon_credit_line', 0),
+#                                 lon_currency_code=item.get('lon_currency_code'),
+#                                 lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
+#                                 lon_account_no=item.get('lon_account_no'),
+#                                 lon_no_days_slow=item.get('lon_no_days_slow'),
+#                                 lon_class=item.get('lon_class'),
+#                                 lon_type=item.get('lon_type'),
+#                                 lon_term=item.get('lon_term'),
+#                                 lon_status=item.get('lon_status'),
+#                                 lon_insert_date=item.get('lon_insert_date'),
+#                                 lon_update_date=item.get('lon_update_date'),
+#                                 lon_applied_date=item.get('lon_applied_date'),
+#                                 is_disputed=item.get('is_disputed', 0),
+#                             )
+#                             b1.full_clean()  # Validate the model instance
+#                             b1.save()
+#                         except ValidationError as e:
+#                             return JsonResponse({'error': f'Validation error for loan_id {item.get("loan_id")}: {e.message_dict}'}, status=400)
+                    
+#             return JsonResponse({'message': 'Files uploaded and processed successfully'}, status=200)
+#         except Exception as e:
+#             return JsonResponse({'error': str(e)}, status=400)
+#     return JsonResponse({'error': 'Invalid request method'}, status=400)
+
+
+
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
+# from .models import B1_Monthly
+# from .serializers import B1MonthlySerializer
+# import json
+
+# class B1MonthlyUploadView(APIView):
+#     parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+#     def post(self, request, *args, **kwargs):
+#         try:
+#             file = request.FILES['file']
+#         except KeyError:
+#             return Response({"error": "No file part in the request"}, status=400)
+
+#         try:
+#             data = json.load(file)
+#         except json.JSONDecodeError:
+#             return Response({"error": "Invalid JSON file"}, status=400)
+        
+#         for item in data:
+#             serializer = B1MonthlySerializer(data=item)
+#             if serializer.is_valid():
+#                 serializer.save()
+#             else:
+#                 return Response(serializer.errors, status=400)
+        
+#         return Response({"status": "success"}, status=200)
+
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+import json
+from .models import B1_Monthly
+from datetime import datetime
+
+@csrf_exempt
+def upload_files(request):
+    if request.method == 'POST':
+        try:
+            files = request.FILES.getlist('files')
+            for file in files:
+                if file.name.endswith('.json'):
+                    data = json.load(file)
+                    for item in data:
+                        # Convert date strings to date objects if necessary
+                        lon_open_date = datetime.strptime(item.get('lon_open_date'), '%Y-%m-%d').date() if item.get('lon_open_date') else None
+                        lon_exp_date = datetime.strptime(item.get('lon_exp_date'), '%Y-%m-%d').date() if item.get('lon_exp_date') else None
+                        lon_ext_date = datetime.strptime(item.get('lon_ext_date'), '%Y-%m-%d').date() if item.get('lon_ext_date') else None
+                        lon_insert_date = datetime.strptime(item.get('lon_insert_date'), '%Y-%m-%d %H:%M:%S') if item.get('lon_insert_date') else None
+                        lon_update_date = datetime.strptime(item.get('lon_update_date'), '%Y-%m-%d %H:%M:%S') if item.get('lon_update_date') else None
+                        lon_applied_date = datetime.strptime(item.get('lon_applied_date'), '%Y-%m-%d %H:%M:%S') if item.get('lon_applied_date') else None
+
+                        B1_Monthly.objects.create(
+                            lcicID=item.get('lcicID', ''),
+                            period=item.get('period', ''),
+                            com_enterprise_code=item.get('com_enterprise_code'),
+                            segmentType=item.get('segmentType'),
+                            bnk_code=item.get('bnk_code'),
+                            customer_id=item.get('customer_id'),
+                            branch_id=item.get('branch_id'),
+                            lon_sys_id=item.get('lon_sys_id'),
+                            loan_id=item.get('loan_id'),
+                            lon_open_date=lon_open_date,
+                            lon_exp_date=lon_exp_date,
+                            lon_ext_date=lon_ext_date,
+                            lon_int_rate=item.get('lon_int_rate', 0),
+                            lon_purpose_code=item.get('lon_purpose_code'),
+                            lon_credit_line=item.get('lon_credit_line', 0),
+                            lon_currency_code=item.get('lon_currency_code'),
+                            lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
+                            lon_account_no=item.get('lon_account_no'),
+                            lon_no_days_slow=item.get('lon_no_days_slow'),
+                            lon_class=item.get('lon_class'),
+                            lon_type=item.get('lon_type'),
+                            lon_term=item.get('lon_term'),
+                            lon_status=item.get('lon_status'),
+                            lon_insert_date=lon_insert_date,
+                            lon_update_date=lon_update_date,
+                            lon_applied_date=lon_applied_date,
+                            is_disputed=item.get('is_disputed', 0),
+                        )
+            return JsonResponse({'message': 'ການອັບໂຫຼດສຳເລັດ'}, status=200)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+    return JsonResponse({'error': 'Invalid request method'}, status=400)
+
+
+
+
+# views.py
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from .models import UploadedFile
+from .serializers import UploadedFileSerializer
+
+class FileUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, format=None):
+        serializer = UploadedFileSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

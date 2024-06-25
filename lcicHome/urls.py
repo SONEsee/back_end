@@ -24,6 +24,13 @@ from .views import Search
 from .views import EnterpriseInfoSearch
 from .views import EnterpriseInfoViewSet, InvestorInfoViewSet
 from rest_framework.routers import DefaultRouter
+from .views import get_product_info
+from .views import get_product_infocode
+from .views import get_product_info, get_product_detail
+from .views import get_product_info_by_id
+from .views import upload_files
+from .views import FileUploadView
+# from .views import upload_files
 # from .views import enterprise_info_search
 # router = DefaultRouter()
 # router.register(r'enterpriseinfo', EnterpriseInfoViewSet)
@@ -91,11 +98,20 @@ urlpatterns = [
    # path('api/v2/enterprise-info/search/', enterprise_info_search),
    
    path('enter', include(router.urls)),
-     
-
-
-
-
-
+   
+   path('productinfo1/', get_product_info, name='get_product_info'),
+   path('productinfo2/', get_product_infocode, name='get_product_info'),
+   
+   # path('productinfo/', get_product_info, name='get_product_info'),
+   # path('productinfo/<int:id>/', get_product_detail, name='get_product_detail'),  
+   path('productinfo/<int:id>/', get_product_info_by_id, name='get_product_info_by_id'),
+# Upload
+   # path('upload/', upload_files, name='upload_files'),
+   path('upload_files/', upload_files, name='upload_files'),
+   
+   
+   # path('upload/', upload_files.as_view(), name='b1monthly-upload'),
+  
+   path('api/upload/', FileUploadView.as_view(), name='file-upload'),
 
 ]

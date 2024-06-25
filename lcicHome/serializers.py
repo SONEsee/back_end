@@ -113,3 +113,35 @@ class InvestorInfoSerializer(serializers.ModelSerializer):
     class Meta:
         model = InvestorInfo
         fields = '__all__'
+
+from .models import H_productInfo
+class H_productInfoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = H_productInfo
+        fields = '__all__'
+        
+        
+
+
+from .models import B1_Monthly
+
+class B1_MonthlySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = B1_Monthly
+        fields = '__all__'
+        
+        
+# serializers.py
+from rest_framework import serializers
+from .models import UploadedFile
+
+class UploadedFileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UploadedFile
+        fields = ['name', 'file', 'size', 'uploaded_by', 'uploaded_at']
+
+    def create(self, validated_data):
+        request = self.context.get('request', None)
+        if request:
+            validated_data['uploaded_by'] = request.user
+        return super().create(validated_data)
