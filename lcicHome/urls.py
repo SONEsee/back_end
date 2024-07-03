@@ -30,6 +30,7 @@ from .views import get_product_info, get_product_detail
 from .views import get_product_info_by_id
 from .views import upload_files
 from .views import FileUploadView
+# from .views import FileUploadView, FileDeleteView
 # from .views import upload_files
 # from .views import enterprise_info_search
 # router = DefaultRouter()
@@ -88,30 +89,27 @@ urlpatterns = [
    path('login/', LoginView.as_view(), name='login'),
    path('api2/login/', LoginView.as_view(), name='login'),
    
-   # path('test1', include(router.urls)),
+  
    path('api2/', include(router.urls)),
    
    
-   # Search Enterprise 
-   # path('api/search/', Search.as_view(), name='search'),
+  
      path('api/v1/enterprise-info/search/', EnterpriseInfoSearch.as_view(), name='enterprise-info-search'),
-   # path('api/v2/enterprise-info/search/', enterprise_info_search),
+   
    
    path('enter', include(router.urls)),
    
    path('productinfo1/', get_product_info, name='get_product_info'),
    path('productinfo2/', get_product_infocode, name='get_product_info'),
    
-   # path('productinfo/', get_product_info, name='get_product_info'),
-   # path('productinfo/<int:id>/', get_product_detail, name='get_product_detail'),  
+    
    path('productinfo/<int:id>/', get_product_info_by_id, name='get_product_info_by_id'),
-# Upload
-   # path('upload/', upload_files, name='upload_files'),
+
    path('upload_files/', upload_files, name='upload_files'),
    
    
-   # path('upload/', upload_files.as_view(), name='b1monthly-upload'),
   
-   path('api/upload/', FileUploadView.as_view(), name='file-upload'),
+   path('api/upload_files1', FileUploadView.as_view(), name='file-upload'),
+  
 
 ]

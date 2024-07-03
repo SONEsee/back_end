@@ -2203,9 +2203,6 @@ class UserGroupView(APIView):
         serializer = UserGroupSerializer(user_groups, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-
-
-# views.py
 from django.contrib.auth import authenticate
 from django.http import JsonResponse
 from rest_framework.decorators import api_view
@@ -2577,11 +2574,77 @@ def get_product_infocode(request):
         
 #         return Response({"status": "success"}, status=200)
 
+
+
+
+
+
+
+# from django.http import JsonResponse
+# from django.views.decorators.csrf import csrf_exempt
+# import json
+# from .models import B1_Monthly
+# from datetime import datetime
+
+# @csrf_exempt
+# def upload_files(request):
+#     if request.method == 'POST':
+#         try:
+#             files = request.FILES.getlist('files')
+#             for file in files:
+#                 if file.name.endswith('.json'):
+#                     data = json.load(file)
+#                     for item in data:
+#                         # Convert date strings to date objects if necessary
+#                         lon_open_date = datetime.strptime(item.get('lon_open_date'), '%Y-%m-%d').date() if item.get('lon_open_date') else None
+#                         lon_exp_date = datetime.strptime(item.get('lon_exp_date'), '%Y-%m-%d').date() if item.get('lon_exp_date') else None
+#                         lon_ext_date = datetime.strptime(item.get('lon_ext_date'), '%Y-%m-%d').date() if item.get('lon_ext_date') else None
+#                         lon_insert_date = datetime.strptime(item.get('lon_insert_date'), '%Y-%m-%d %H:%M:%S') if item.get('lon_insert_date') else None
+#                         lon_update_date = datetime.strptime(item.get('lon_update_date'), '%Y-%m-%d %H:%M:%S') if item.get('lon_update_date') else None
+#                         lon_applied_date = datetime.strptime(item.get('lon_applied_date'), '%Y-%m-%d %H:%M:%S') if item.get('lon_applied_date') else None
+
+#                         B1_Monthly.objects.create(
+#                             lcicID=item.get('lcicID', ''),
+#                             period=item.get('period', ''),
+#                             com_enterprise_code=item.get('com_enterprise_code'),
+#                             segmentType=item.get('segmentType'),
+#                             bnk_code=item.get('bnk_code'),
+#                             customer_id=item.get('customer_id'),
+#                             branch_id=item.get('branch_id'),
+#                             lon_sys_id=item.get('lon_sys_id'),
+#                             loan_id=item.get('loan_id'),
+#                             lon_open_date=lon_open_date,
+#                             lon_exp_date=lon_exp_date,
+#                             lon_ext_date=lon_ext_date,
+#                             lon_int_rate=item.get('lon_int_rate', 0),
+#                             lon_purpose_code=item.get('lon_purpose_code'),
+#                             lon_credit_line=item.get('lon_credit_line', 0),
+#                             lon_currency_code=item.get('lon_currency_code'),
+#                             lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
+#                             lon_account_no=item.get('lon_account_no'),
+#                             lon_no_days_slow=item.get('lon_no_days_slow'),
+#                             lon_class=item.get('lon_class'),
+#                             lon_type=item.get('lon_type'),
+#                             lon_term=item.get('lon_term'),
+#                             lon_status=item.get('lon_status'),
+#                             lon_insert_date=lon_insert_date,
+#                             lon_update_date=lon_update_date,
+#                             lon_applied_date=lon_applied_date,
+#                             is_disputed=item.get('is_disputed', 0),
+#                         ),
+         
+#             # ກວດເບິ່ງວ່າຂໍ້ມູນຂອງ B1_Monthly ແລະ B1 ຂອງ  bnk_code(B_Monthly)= bnk_code(B1),  branch_id(B_Monthly)= branch_id(B1),  customer_id(B_Monthly)= customer_id(B1),  loan_id(B_Monthly)= loan_id(B1) ຖ້າວ່າມັນຖືກກັນແມ່ນໃຫ້ອແັບເດດຂໍ້ມູນໂຕເກົ່າ ຖ້າວ່າມັນບໍ່ຖືກກັນແມ່ນໃຫ້ເພີ່ມເປັນຂໍ້ມູນໃໝ່ ຈາກຕາຕະລາງ B_Monthly ຫາ B1
+
+#             return JsonResponse({'message': 'ການອັບໂຫຼດສຳເລັດ'}, status=200)
+    
+#         except Exception as e:
+#             return JsonResponse({'error': str(e)}, status=400)
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import json
-from .models import B1_Monthly
+from .models import B1, B1_Monthly
 from datetime import datetime
+from django.utils import timezone
 
 @csrf_exempt
 def upload_files(request):
@@ -2592,17 +2655,23 @@ def upload_files(request):
                 if file.name.endswith('.json'):
                     data = json.load(file)
                     for item in data:
-                        # Convert date strings to date objects if necessary
-                        lon_open_date = datetime.strptime(item.get('lon_open_date'), '%Y-%m-%d').date() if item.get('lon_open_date') else None
-                        lon_exp_date = datetime.strptime(item.get('lon_exp_date'), '%Y-%m-%d').date() if item.get('lon_exp_date') else None
-                        lon_ext_date = datetime.strptime(item.get('lon_ext_date'), '%Y-%m-%d').date() if item.get('lon_ext_date') else None
-                        lon_insert_date = datetime.strptime(item.get('lon_insert_date'), '%Y-%m-%d %H:%M:%S') if item.get('lon_insert_date') else None
-                        lon_update_date = datetime.strptime(item.get('lon_update_date'), '%Y-%m-%d %H:%M:%S') if item.get('lon_update_date') else None
-                        lon_applied_date = datetime.strptime(item.get('lon_applied_date'), '%Y-%m-%d %H:%M:%S') if item.get('lon_applied_date') else None
+                        lon_open_date = timezone.make_aware(datetime.strptime(item.get('lon_open_date'), '%Y-%m-%d'), timezone.get_current_timezone()) if item.get('lon_open_date') else None
+                        lon_exp_date = timezone.make_aware(datetime.strptime(item.get('lon_exp_date'), '%Y-%m-%d'), timezone.get_current_timezone()) if item.get('lon_exp_date') else None
+                        lon_ext_date = timezone.make_aware(datetime.strptime(item.get('lon_ext_date'), '%Y-%m-%d'), timezone.get_current_timezone()) if item.get('lon_ext_date') else None
+                        lon_insert_date = timezone.make_aware(datetime.strptime(item.get('lon_insert_date'), '%Y-%m-%d %H:%M:%S'), timezone.get_current_timezone()) if item.get('lon_insert_date') else None
+                        lon_update_date = timezone.make_aware(datetime.strptime(item.get('lon_update_date'), '%Y-%m-%d %H:%M:%S'), timezone.get_current_timezone()) if item.get('lon_update_date') else None
+                        lon_applied_date = timezone.make_aware(datetime.strptime(item.get('lon_applied_date'), '%Y-%m-%d %H:%M:%S'), timezone.get_current_timezone()) if item.get('lon_applied_date') else None
+
+                        is_disputed = 1 if item.get('is_disputed', 0) else 0
+
+                        # Remove id if present
+                        if 'id' in item:
+                            del item['id']
+
+                        # print("ການສ້າງ B1_Monthly ໃໝ່:", item)
 
                         B1_Monthly.objects.create(
-                            lcicID=item.get('lcicID', ''),
-                            period=item.get('period', ''),
+                            lcicID=item.get('lcicID', ),
                             com_enterprise_code=item.get('com_enterprise_code'),
                             segmentType=item.get('segmentType'),
                             bnk_code=item.get('bnk_code'),
@@ -2627,12 +2696,78 @@ def upload_files(request):
                             lon_insert_date=lon_insert_date,
                             lon_update_date=lon_update_date,
                             lon_applied_date=lon_applied_date,
-                            is_disputed=item.get('is_disputed', 0),
+                            is_disputed=is_disputed,
                         )
-            return JsonResponse({'message': 'ການອັບໂຫຼດສຳເລັດ'}, status=200)
+
+                        existing_record = B1.objects.filter(
+                            bnk_code=item.get('bnk_code'),
+                            branch_id=item.get('branch_id'),
+                            customer_id=item.get('customer_id'),
+                            loan_id=item.get('loan_id')
+                        ).first()
+
+                        if existing_record:
+                            existing_record.lcicID = item.get('lcicID', existing_record.lcicID)
+                            existing_record.com_enterprise_code = item.get('com_enterprise_code', existing_record.com_enterprise_code)
+                            existing_record.segmentType = item.get('segmentType', existing_record.segmentType)
+                            existing_record.lon_sys_id = item.get('lon_sys_id', existing_record.lon_sys_id)
+                            existing_record.lon_open_date = lon_open_date or existing_record.lon_open_date
+                            existing_record.lon_exp_date = lon_exp_date or existing_record.lon_exp_date
+                            existing_record.lon_ext_date = lon_ext_date or existing_record.lon_ext_date
+                            existing_record.lon_int_rate = item.get('lon_int_rate', existing_record.lon_int_rate)
+                            existing_record.lon_purpose_code = item.get('lon_purpose_code', existing_record.lon_purpose_code)
+                            existing_record.lon_credit_line = item.get('lon_credit_line', existing_record.lon_credit_line)
+                            existing_record.lon_currency_code = item.get('lon_currency_code', existing_record.lon_currency_code)
+                            existing_record.lon_outstanding_balance = item.get('lon_outstanding_balance', existing_record.lon_outstanding_balance)
+                            existing_record.lon_account_no = item.get('lon_account_no', existing_record.lon_account_no)
+                            existing_record.lon_no_days_slow = item.get('lon_no_days_slow', existing_record.lon_no_days_slow)
+                            existing_record.lon_class = item.get('lon_class', existing_record.lon_class)
+                            existing_record.lon_type = item.get('lon_type', existing_record.lon_type)
+                            existing_record.lon_term = item.get('lon_term', existing_record.lon_term)
+                            existing_record.lon_status = item.get('lon_status', existing_record.lon_status)
+                            existing_record.lon_insert_date = lon_insert_date or existing_record.lon_insert_date
+                            existing_record.lon_update_date = lon_update_date or existing_record.lon_update_date
+                            existing_record.lon_applied_date = lon_applied_date or existing_record.lon_applied_date
+                            existing_record.is_disputed = is_disputed
+                            existing_record.save()
+                        else:
+                            # print("ການສ້າງ B1 ໃໝ່:", item)
+                            B1.objects.create(
+                                lcicID=item.get('lcicID', ''),
+                                com_enterprise_code=item.get('com_enterprise_code'),
+                                segmentType=item.get('segmentType'),
+                                bnk_code=item.get('bnk_code'),
+                                customer_id=item.get('customer_id'),
+                                branch_id=item.get('branch_id'),
+                                lon_sys_id=item.get('lon_sys_id'),
+                                loan_id=item.get('loan_id'),
+                                lon_open_date=lon_open_date,
+                                lon_exp_date=lon_exp_date,
+                                lon_ext_date=lon_ext_date,
+                                lon_int_rate=item.get('lon_int_rate', 0),
+                                lon_purpose_code=item.get('lon_purpose_code'),
+                                lon_credit_line=item.get('lon_credit_line', 0),
+                                lon_currency_code=item.get('lon_currency_code'),
+                                lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
+                                lon_account_no=item.get('lon_account_no'),
+                                lon_no_days_slow=item.get('lon_no_days_slow'),
+                                lon_class=item.get('lon_class'),
+                                lon_type=item.get('lon_type'),
+                                lon_term=item.get('lon_term'),
+                                lon_status=item.get('lon_status'),
+                                lon_insert_date=lon_insert_date,
+                                lon_update_date=lon_update_date,
+                                lon_applied_date=lon_applied_date,
+                                is_disputed=is_disputed,
+                            )
+
+            return JsonResponse({'message': 'Upload successful'}, status=200)
+
         except Exception as e:
+            # print("Errorບອນໃດຫະ:", e)
             return JsonResponse({'error': str(e)}, status=400)
     return JsonResponse({'error': 'Invalid request method'}, status=400)
+
 
 
 
@@ -2654,3 +2789,38 @@ class FileUploadView(APIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.views import APIView
+from .models import UploadedFile
+from .serializers import UploadedFileSerializer
+
+class FileUploadView(APIView):
+    parser_classes = (MultiPartParser, FormParser)
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        files = request.FILES.getlist('files')
+        uploaded_files = []
+
+        for file in files:
+            uploaded_file = UploadedFile(
+                name=file.name,
+                file=file,
+                size=file.size,
+                uploaded_by=request.user
+            )
+            uploaded_file.save()
+            uploaded_files.append(uploaded_file)
+
+        serializer = UploadedFileSerializer(uploaded_files, many=True)
+        return Response({
+            'message': 'Files successfully uploaded!',
+            'uploadedFiles': serializer.data
+        }, status=status.HTTP_201_CREATED)

@@ -118,8 +118,8 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'lcicwebsitedb',
         'USER': 'postgres',
-        'PASSWORD': 'sone',
-        'HOST': 'localhost',
+        'PASSWORD': 'Lcic@123',
+        'HOST': '192.168.45.230',
         'PORT': '5432',
     }
 }

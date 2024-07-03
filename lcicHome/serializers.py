@@ -132,16 +132,25 @@ class B1_MonthlySerializer(serializers.ModelSerializer):
         
         
 # serializers.py
+# from rest_framework import serializers
+# from .models import UploadedFile
+
+# class UploadedFileSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = UploadedFile
+#         fields = ['name', 'file', 'size', 'uploaded_by', 'uploaded_at']
+
+#     def create(self, validated_data):
+#         request = self.context.get('request', None)
+#         if request:
+#             validated_data['uploaded_by'] = request.user
+#         return super().create(validated_data)
+
+
 from rest_framework import serializers
 from .models import UploadedFile
 
 class UploadedFileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UploadedFile
-        fields = ['name', 'file', 'size', 'uploaded_by', 'uploaded_at']
-
-    def create(self, validated_data):
-        request = self.context.get('request', None)
-        if request:
-            validated_data['uploaded_by'] = request.user
-        return super().create(validated_data)
+        fields = '__all__'
