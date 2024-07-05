@@ -2233,6 +2233,23 @@ def get_csrf_token(request):
     return JsonResponse({'csrfToken': token})
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 from django.shortcuts import get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -2483,108 +2500,12 @@ def get_product_infocode(request):
 
 
 
-#UpLoad 
-# views.py
-# from django.http import JsonResponse, HttpResponse
-# from django.views.decorators.csrf import csrf_exempt
-# import json
-# from .models import B1
-# from django.core.exceptions import ValidationError
-
-# @csrf_exempt
-# def upload_files(request):
-#     if request.method == 'POST':
-#         try:
-#             files = request.FILES.getlist('files')
-#             for file in files:
-#                 if file.name.endswith('.json'):
-#                     data = json.load(file)
-#                     data = sorted(data, key=lambda x: x.get('loan_id', ''))  # Sort by loan_id
-                    
-#                     # Validate and save each entry
-#                     for item in data:
-#                         try:
-#                             b1 = B1(
-#                                 lcicID=item.get('lcicID'),
-#                                 com_enterprise_code=item.get('com_enterprise_code'),
-#                                 segmentType=item.get('segmentType'),
-#                                 bnk_code=item.get('bnk_code'),
-#                                 customer_id=item.get('customer_id'),
-#                                 branch_id=item.get('branch_id'),
-#                                 lon_sys_id=item.get('lon_sys_id'),
-#                                 loan_id=item.get('loan_id'),
-#                                 lon_open_date=item.get('lon_open_date'),
-#                                 lon_exp_date=item.get('lon_exp_date'),
-#                                 lon_ext_date=item.get('lon_ext_date'),
-#                                 lon_int_rate=item.get('lon_int_rate', 0),
-#                                 lon_purpose_code=item.get('lon_purpose_code'),
-#                                 lon_credit_line=item.get('lon_credit_line', 0),
-#                                 lon_currency_code=item.get('lon_currency_code'),
-#                                 lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
-#                                 lon_account_no=item.get('lon_account_no'),
-#                                 lon_no_days_slow=item.get('lon_no_days_slow'),
-#                                 lon_class=item.get('lon_class'),
-#                                 lon_type=item.get('lon_type'),
-#                                 lon_term=item.get('lon_term'),
-#                                 lon_status=item.get('lon_status'),
-#                                 lon_insert_date=item.get('lon_insert_date'),
-#                                 lon_update_date=item.get('lon_update_date'),
-#                                 lon_applied_date=item.get('lon_applied_date'),
-#                                 is_disputed=item.get('is_disputed', 0),
-#                             )
-#                             b1.full_clean()  # Validate the model instance
-#                             b1.save()
-#                         except ValidationError as e:
-#                             return JsonResponse({'error': f'Validation error for loan_id {item.get("loan_id")}: {e.message_dict}'}, status=400)
-                    
-#             return JsonResponse({'message': 'Files uploaded and processed successfully'}, status=200)
-#         except Exception as e:
-#             return JsonResponse({'error': str(e)}, status=400)
-#     return JsonResponse({'error': 'Invalid request method'}, status=400)
-
-
-
-# from rest_framework.views import APIView
-# from rest_framework.response import Response
-# from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
-# from .models import B1_Monthly
-# from .serializers import B1MonthlySerializer
-# import json
-
-# class B1MonthlyUploadView(APIView):
-#     parser_classes = (MultiPartParser, FormParser, JSONParser)
-
-#     def post(self, request, *args, **kwargs):
-#         try:
-#             file = request.FILES['file']
-#         except KeyError:
-#             return Response({"error": "No file part in the request"}, status=400)
-
-#         try:
-#             data = json.load(file)
-#         except json.JSONDecodeError:
-#             return Response({"error": "Invalid JSON file"}, status=400)
-        
-#         for item in data:
-#             serializer = B1MonthlySerializer(data=item)
-#             if serializer.is_valid():
-#                 serializer.save()
-#             else:
-#                 return Response(serializer.errors, status=400)
-        
-#         return Response({"status": "success"}, status=200)
-
-
-
-
-
-
-
 # from django.http import JsonResponse
 # from django.views.decorators.csrf import csrf_exempt
 # import json
-# from .models import B1_Monthly
+# from .models import B1, B1_Monthly
 # from datetime import datetime
+# from django.utils import timezone
 
 # @csrf_exempt
 # def upload_files(request):
@@ -2595,17 +2516,23 @@ def get_product_infocode(request):
 #                 if file.name.endswith('.json'):
 #                     data = json.load(file)
 #                     for item in data:
-#                         # Convert date strings to date objects if necessary
-#                         lon_open_date = datetime.strptime(item.get('lon_open_date'), '%Y-%m-%d').date() if item.get('lon_open_date') else None
-#                         lon_exp_date = datetime.strptime(item.get('lon_exp_date'), '%Y-%m-%d').date() if item.get('lon_exp_date') else None
-#                         lon_ext_date = datetime.strptime(item.get('lon_ext_date'), '%Y-%m-%d').date() if item.get('lon_ext_date') else None
-#                         lon_insert_date = datetime.strptime(item.get('lon_insert_date'), '%Y-%m-%d %H:%M:%S') if item.get('lon_insert_date') else None
-#                         lon_update_date = datetime.strptime(item.get('lon_update_date'), '%Y-%m-%d %H:%M:%S') if item.get('lon_update_date') else None
-#                         lon_applied_date = datetime.strptime(item.get('lon_applied_date'), '%Y-%m-%d %H:%M:%S') if item.get('lon_applied_date') else None
+#                         lon_open_date = timezone.make_aware(datetime.strptime(item.get('lon_open_date'), '%Y-%m-%d'), timezone.get_current_timezone()) if item.get('lon_open_date') else None
+#                         lon_exp_date = timezone.make_aware(datetime.strptime(item.get('lon_exp_date'), '%Y-%m-%d'), timezone.get_current_timezone()) if item.get('lon_exp_date') else None
+#                         lon_ext_date = timezone.make_aware(datetime.strptime(item.get('lon_ext_date'), '%Y-%m-%d'), timezone.get_current_timezone()) if item.get('lon_ext_date') else None
+#                         lon_insert_date = timezone.make_aware(datetime.strptime(item.get('lon_insert_date'), '%Y-%m-%d %H:%M:%S'), timezone.get_current_timezone()) if item.get('lon_insert_date') else None
+#                         lon_update_date = timezone.make_aware(datetime.strptime(item.get('lon_update_date'), '%Y-%m-%d %H:%M:%S'), timezone.get_current_timezone()) if item.get('lon_update_date') else None
+#                         lon_applied_date = timezone.make_aware(datetime.strptime(item.get('lon_applied_date'), '%Y-%m-%d %H:%M:%S'), timezone.get_current_timezone()) if item.get('lon_applied_date') else None
+
+#                         is_disputed = 1 if item.get('is_disputed', 0) else 0
+
+#                         # Remove id if present
+#                         if 'id' in item:
+#                             del item['id']
+
+#                         # print("ການສ້າງ B1_Monthly ໃໝ່:", item)
 
 #                         B1_Monthly.objects.create(
-#                             lcicID=item.get('lcicID', ''),
-#                             period=item.get('period', ''),
+#                             lcicID=item.get('lcicID', ),
 #                             com_enterprise_code=item.get('com_enterprise_code'),
 #                             segmentType=item.get('segmentType'),
 #                             bnk_code=item.get('bnk_code'),
@@ -2630,19 +2557,85 @@ def get_product_infocode(request):
 #                             lon_insert_date=lon_insert_date,
 #                             lon_update_date=lon_update_date,
 #                             lon_applied_date=lon_applied_date,
-#                             is_disputed=item.get('is_disputed', 0),
-#                         ),
-         
-#             # ກວດເບິ່ງວ່າຂໍ້ມູນຂອງ B1_Monthly ແລະ B1 ຂອງ  bnk_code(B_Monthly)= bnk_code(B1),  branch_id(B_Monthly)= branch_id(B1),  customer_id(B_Monthly)= customer_id(B1),  loan_id(B_Monthly)= loan_id(B1) ຖ້າວ່າມັນຖືກກັນແມ່ນໃຫ້ອແັບເດດຂໍ້ມູນໂຕເກົ່າ ຖ້າວ່າມັນບໍ່ຖືກກັນແມ່ນໃຫ້ເພີ່ມເປັນຂໍ້ມູນໃໝ່ ຈາກຕາຕະລາງ B_Monthly ຫາ B1
+#                             is_disputed=is_disputed,
+#                         )
 
-#             return JsonResponse({'message': 'ການອັບໂຫຼດສຳເລັດ'}, status=200)
-    
+#                         existing_record = B1.objects.filter(
+#                             bnk_code=item.get('bnk_code'),
+#                             branch_id=item.get('branch_id'),
+#                             customer_id=item.get('customer_id'),
+#                             loan_id=item.get('loan_id')
+#                         ).first()
+
+#                         if existing_record:
+#                             existing_record.lcicID = item.get('lcicID', existing_record.lcicID)
+#                             existing_record.com_enterprise_code = item.get('com_enterprise_code', existing_record.com_enterprise_code)
+#                             existing_record.segmentType = item.get('segmentType', existing_record.segmentType)
+#                             existing_record.lon_sys_id = item.get('lon_sys_id', existing_record.lon_sys_id)
+#                             existing_record.lon_open_date = lon_open_date or existing_record.lon_open_date
+#                             existing_record.lon_exp_date = lon_exp_date or existing_record.lon_exp_date
+#                             existing_record.lon_ext_date = lon_ext_date or existing_record.lon_ext_date
+#                             existing_record.lon_int_rate = item.get('lon_int_rate', existing_record.lon_int_rate)
+#                             existing_record.lon_purpose_code = item.get('lon_purpose_code', existing_record.lon_purpose_code)
+#                             existing_record.lon_credit_line = item.get('lon_credit_line', existing_record.lon_credit_line)
+#                             existing_record.lon_currency_code = item.get('lon_currency_code', existing_record.lon_currency_code)
+#                             existing_record.lon_outstanding_balance = item.get('lon_outstanding_balance', existing_record.lon_outstanding_balance)
+#                             existing_record.lon_account_no = item.get('lon_account_no', existing_record.lon_account_no)
+#                             existing_record.lon_no_days_slow = item.get('lon_no_days_slow', existing_record.lon_no_days_slow)
+#                             existing_record.lon_class = item.get('lon_class', existing_record.lon_class)
+#                             existing_record.lon_type = item.get('lon_type', existing_record.lon_type)
+#                             existing_record.lon_term = item.get('lon_term', existing_record.lon_term)
+#                             existing_record.lon_status = item.get('lon_status', existing_record.lon_status)
+#                             existing_record.lon_insert_date = lon_insert_date or existing_record.lon_insert_date
+#                             existing_record.lon_update_date = lon_update_date or existing_record.lon_update_date
+#                             existing_record.lon_applied_date = lon_applied_date or existing_record.lon_applied_date
+#                             existing_record.is_disputed = is_disputed
+#                             existing_record.save()
+#                         else:
+#                             # print("ການສ້າງ B1 ໃໝ່:", item)
+#                             B1.objects.create(
+#                                 lcicID=item.get('lcicID', ''),
+#                                 com_enterprise_code=item.get('com_enterprise_code'),
+#                                 segmentType=item.get('segmentType'),
+#                                 bnk_code=item.get('bnk_code'),
+#                                 customer_id=item.get('customer_id'),
+#                                 branch_id=item.get('branch_id'),
+#                                 lon_sys_id=item.get('lon_sys_id'),
+#                                 loan_id=item.get('loan_id'),
+#                                 lon_open_date=lon_open_date,
+#                                 lon_exp_date=lon_exp_date,
+#                                 lon_ext_date=lon_ext_date,
+#                                 lon_int_rate=item.get('lon_int_rate', 0),
+#                                 lon_purpose_code=item.get('lon_purpose_code'),
+#                                 lon_credit_line=item.get('lon_credit_line', 0),
+#                                 lon_currency_code=item.get('lon_currency_code'),
+#                                 lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
+#                                 lon_account_no=item.get('lon_account_no'),
+#                                 lon_no_days_slow=item.get('lon_no_days_slow'),
+#                                 lon_class=item.get('lon_class'),
+#                                 lon_type=item.get('lon_type'),
+#                                 lon_term=item.get('lon_term'),
+#                                 lon_status=item.get('lon_status'),
+#                                 lon_insert_date=lon_insert_date,
+#                                 lon_update_date=lon_update_date,
+#                                 lon_applied_date=lon_applied_date,
+#                                 is_disputed=is_disputed,
+#                             )
+
+#             return JsonResponse({'message': 'Upload successful'}, status=200)
+
 #         except Exception as e:
+#             # print("Errorບອນໃດຫະ:", e)
 #             return JsonResponse({'error': str(e)}, status=400)
+#     return JsonResponse({'error': 'Invalid request method'}, status=400)
+
+
+
+
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import json
-from .models import B1, B1_Monthly
+from .models import B1, B1_Monthly, Upload_File, memberInfo, User_Group, SType, Upload_Type
 from datetime import datetime
 from django.utils import timezone
 
@@ -2650,10 +2643,31 @@ from django.utils import timezone
 def upload_files(request):
     if request.method == 'POST':
         try:
+            user = request.user
             files = request.FILES.getlist('files')
             for file in files:
                 if file.name.endswith('.json'):
                     data = json.load(file)
+                    file_size = file.size
+                    file_size_kb = file.size / 1024
+
+                  # ບັນທຶກຂໍ້ມູນການອັບໂຫລດໄຟລ໌
+                    upload_file = Upload_File.objects.create(
+                        fileName=file.name,
+                        fileSize=file_size,
+                        path="uploadFiles/" + file.name,
+                        insertDate=timezone.now(),
+                        updateDate=timezone.now(),
+                        period="period_value",  # ປັບຕາມຄ່າທີ່ຕ້ອງການ
+                        status="status_value",  # ປັບຕາມຄ່າທີ່ຕ້ອງການ
+                        status_upload="status_upload_value",  # ປັບຕາມຄ່າທີ່ຕ້ອງການ
+                        FileType="json",  # ປັບຕາມຄ່າທີ່ຕ້ອງການ
+                        MID=user.memberinfo if hasattr(user, 'memberinfo') else None,
+                        GID=user.user_group if hasattr(user, 'user_group') else None,
+                        SType=user.stype if hasattr(user, 'stype') else None,
+                        UType=user.upload_type if hasattr(user, 'upload_type') else None,
+                    )
+
                     for item in data:
                         lon_open_date = timezone.make_aware(datetime.strptime(item.get('lon_open_date'), '%Y-%m-%d'), timezone.get_current_timezone()) if item.get('lon_open_date') else None
                         lon_exp_date = timezone.make_aware(datetime.strptime(item.get('lon_exp_date'), '%Y-%m-%d'), timezone.get_current_timezone()) if item.get('lon_exp_date') else None
@@ -2662,16 +2676,13 @@ def upload_files(request):
                         lon_update_date = timezone.make_aware(datetime.strptime(item.get('lon_update_date'), '%Y-%m-%d %H:%M:%S'), timezone.get_current_timezone()) if item.get('lon_update_date') else None
                         lon_applied_date = timezone.make_aware(datetime.strptime(item.get('lon_applied_date'), '%Y-%m-%d %H:%M:%S'), timezone.get_current_timezone()) if item.get('lon_applied_date') else None
 
+                        # ປ່ຽນຄ່າ is_disputed ເປັນຈໍານວນເຕັມ (0 ສໍາລັບ False, 1 ສໍາລັບ True)
                         is_disputed = 1 if item.get('is_disputed', 0) else 0
 
-                        # Remove id if present
-                        if 'id' in item:
-                            del item['id']
-
-                        # print("ການສ້າງ B1_Monthly ໃໝ່:", item)
-
+                        # ສ້າງບັນທຶກໃນ B1_Monthly
                         B1_Monthly.objects.create(
-                            lcicID=item.get('lcicID', ),
+                            lcicID=item.get('lcicID', ''),
+                            # period=item.get('period', ''),
                             com_enterprise_code=item.get('com_enterprise_code'),
                             segmentType=item.get('segmentType'),
                             bnk_code=item.get('bnk_code'),
@@ -2699,6 +2710,7 @@ def upload_files(request):
                             is_disputed=is_disputed,
                         )
 
+                        # ກວດເບິ່ງແລະປັບປຸງຫຼືສ້າງບັນທຶກໃນ B1
                         existing_record = B1.objects.filter(
                             bnk_code=item.get('bnk_code'),
                             branch_id=item.get('branch_id'),
@@ -2708,6 +2720,7 @@ def upload_files(request):
 
                         if existing_record:
                             existing_record.lcicID = item.get('lcicID', existing_record.lcicID)
+                            # existing_record.period = item.get('period', existing_record.period)
                             existing_record.com_enterprise_code = item.get('com_enterprise_code', existing_record.com_enterprise_code)
                             existing_record.segmentType = item.get('segmentType', existing_record.segmentType)
                             existing_record.lon_sys_id = item.get('lon_sys_id', existing_record.lon_sys_id)
@@ -2731,9 +2744,9 @@ def upload_files(request):
                             existing_record.is_disputed = is_disputed
                             existing_record.save()
                         else:
-                            # print("ການສ້າງ B1 ໃໝ່:", item)
                             B1.objects.create(
                                 lcicID=item.get('lcicID', ''),
+                                # period=item.get('period', ''),
                                 com_enterprise_code=item.get('com_enterprise_code'),
                                 segmentType=item.get('segmentType'),
                                 bnk_code=item.get('bnk_code'),
@@ -2764,11 +2777,8 @@ def upload_files(request):
             return JsonResponse({'message': 'Upload successful'}, status=200)
 
         except Exception as e:
-            # print("Errorບອນໃດຫະ:", e)
             return JsonResponse({'error': str(e)}, status=400)
     return JsonResponse({'error': 'Invalid request method'}, status=400)
-
-
 
 
 
@@ -2824,3 +2834,50 @@ class FileUploadView(APIView):
             'message': 'Files successfully uploaded!',
             'uploadedFiles': serializer.data
         }, status=status.HTTP_201_CREATED)
+
+
+
+
+
+
+# views.py
+from django.contrib.auth import authenticate
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework import status
+
+class LoginView1(APIView):
+    def post(self, request):
+        username = request.data.get("username")
+        password = request.data.get("password")
+        
+        if not username or not password:
+            return Response({"error": "Username and password are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = authenticate(username=username, password=password)
+        
+        if user is not None:
+            if user.is_active:
+                refresh = RefreshToken.for_user(user)
+                return Response({
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                })
+            return Response({"error": "ບັນຊີຜູ້ໃຊ້ຖືກປິດໃຊ້ງານ"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "ຂໍ້ມູນບໍ່ຖືກຕ້ອງ"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+from rest_framework import generics
+from .models import Upload_File
+from .serializers import UploadFileSerializer
+
+class UploadFileList(generics.ListAPIView):
+    queryset = Upload_File.objects.all()
+    serializer_class = UploadFileSerializer
+
+
+# kaftka
+
+

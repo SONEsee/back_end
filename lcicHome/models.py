@@ -418,7 +418,8 @@ class Upload_Type(models.Model):
         return self.nameL
 
 class Upload_File(models.Model):
-    FID = models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+    # FID = models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+    FID = models.AutoField(primary_key=True)
     MID = models.ForeignKey(memberInfo, null=True, blank=True, on_delete=models.CASCADE)
     GID = models.ForeignKey(User_Group, null=True, blank=True , on_delete=models.CASCADE)
     SType = models.ForeignKey(SType, null=True, blank=True , on_delete=models.CASCADE)

@@ -36,8 +36,16 @@ DEBUG = True
 # ALLOWED_HOSTS = ['192.168.45.230','localhost']
 ALLOWED_HOSTS = ['*']
 
-# Application definition
-
+# kaftka
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('127.0.0.1', 6379)],
+        },
+    },
+}
+ASGI_APPLICATION = 'lcicHome.asgi.application'
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -49,6 +57,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'lcicHome',
     'lcicNews',
+    'channels',
     "crispy_forms",
     "crispy_bootstrap5",
 ]

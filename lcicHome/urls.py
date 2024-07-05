@@ -16,6 +16,7 @@ from .views import get_csrf_token, login_view
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.http import JsonResponse
 from .views import LoginView
+from .views import LoginView1
 from rest_framework.routers import DefaultRouter
 from .views import EnterpriseInfoViewSet
 from rest_framework.routers import DefaultRouter
@@ -30,6 +31,8 @@ from .views import get_product_info, get_product_detail
 from .views import get_product_info_by_id
 from .views import upload_files
 from .views import FileUploadView
+from .views import UploadFileList
+
 # from .views import FileUploadView, FileDeleteView
 # from .views import upload_files
 # from .views import enterprise_info_search
@@ -87,6 +90,7 @@ urlpatterns = [
    path('api1/login1/', login_view1, name='login'),
    path('get-csrf-token/', get_csrf_token, name='get_csrf_token'),
    path('login/', LoginView.as_view(), name='login'),
+   path('login1/', LoginView1.as_view(), name='login'),
    path('api2/login/', LoginView.as_view(), name='login'),
    
   
@@ -110,6 +114,9 @@ urlpatterns = [
    
   
    path('api/upload_files1', FileUploadView.as_view(), name='file-upload'),
+
+
+    path('api/upload-files2/', UploadFileList.as_view(), name='upload-file-list'),
   
 
 ]
