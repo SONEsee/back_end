@@ -6,6 +6,14 @@ from django.db import models
 from django.utils.html import format_html
 from lcicNews.models import*
 from .validators import validate_file_extension
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.utils import timezone
+from datetime import timedelta
+import logging
+import binascii
+import os
+from django.db import models
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 
 
 class H_imageBar(models.Model):
@@ -205,7 +213,32 @@ class GroupSubMenu(models.Model):
 #     is_active = models.BooleanField(default=True)
     
     
-    from django.db import models
+#     from django.db import models
+# from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
+
+# class UserManager(BaseUserManager):
+#     def create_user(self, username, password=None, **extra_fields):
+#         if not username:
+#             raise ValueError('The Username field must be set')
+#         user = self.model(username=username, **extra_fields)
+#         user.set_password(password)
+#         user.save(using=self._db)
+#         return user
+
+#     def create_superuser(self, username, password=None, **extra_fields):
+#         extra_fields.setdefault('is_staff', True)
+#         extra_fields.setdefault('is_superuser', True)
+#         return self.create_user(username, password, **extra_fields)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 
 class UserManager(BaseUserManager):
@@ -215,42 +248,13 @@ class UserManager(BaseUserManager):
         user = self.model(username=username, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
-        return user
+        return 
 
     def create_superuser(self, username, password=None, **extra_fields):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         return self.create_user(username, password, **extra_fields)
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+     
 
 class Login(AbstractBaseUser):
     UID = models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
@@ -264,13 +268,65 @@ class Login(AbstractBaseUser):
     insertDate = models.DateTimeField(auto_now_add=True, blank=True)
     updateDate = models.DateTimeField(auto_now=True, blank=True)
     is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
+    is_superuser = models.BooleanField(default=False)
+    last_login = models.DateTimeField(null=True, blank=True)
 
     objects = UserManager()
+    
+    def create_user(self, username, password=None, **extra_fields):
+        if not username:
+            raise ValueError('The Username must be set')
+        user = self.model(username=username, **extra_fields)
+        user.set_password(password)  # Hashes the password
+        user.save(using=self._db)
+        return user
 
     USERNAME_FIELD = 'username'
 
-    def __str__(self):
+    def _str_(self):
         return self.username
+    
+
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+# class Login(AbstractBaseUser):
+#     UID = models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+#     MID = models.ForeignKey(memberInfo, related_name='memberInfo', null=True, blank=True, on_delete=models.CASCADE)
+#     GID = models.ForeignKey(User_Group, null=True, blank=True , on_delete=models.CASCADE)
+#     username = models.CharField(max_length=150, unique=True)
+#     nameL = models.CharField(max_length=150)
+#     nameE = models.CharField(max_length=150)
+#     surnameL = models.CharField(max_length=150)
+#     surnameE = models.CharField(max_length=150)
+#     insertDate = models.DateTimeField(auto_now_add=True, blank=True)
+#     updateDate = models.DateTimeField(auto_now=True, blank=True)
+#     is_active = models.BooleanField(default=True)
+
+#     objects = UserManager()
+
+#     USERNAME_FIELD = 'username'
+
+#     def __str__(self):
+#         return self.username
 
     
 class bank_bnk(models.Model):
@@ -418,7 +474,7 @@ class Upload_Type(models.Model):
         return self.nameL
 
 class Upload_File(models.Model):
-    # FID = models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+    # FID = models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')  id = models.AutoField(primary_key=True)
     FID = models.AutoField(primary_key=True)
     MID = models.ForeignKey(memberInfo, null=True, blank=True, on_delete=models.CASCADE)
     GID = models.ForeignKey(User_Group, null=True, blank=True , on_delete=models.CASCADE)
@@ -431,9 +487,13 @@ class Upload_File(models.Model):
     insertDate = models.DateTimeField(auto_now_add=True, blank=True)
     updateDate = models.DateTimeField(auto_now_add=True, blank=True)
     period = models.CharField(max_length=150)
-    status = models.CharField(max_length=150)
+    status = models.CharField(max_length=150)     
+    statussubmit = models.CharField(max_length=150)     
     status_upload = models.CharField(max_length=150)
-    FileType = models.CharField(max_length=10)
+    FileType = models.CharField(max_length=10)  
+    percentage = models.FloatField(default=0.0)   
+    def __str__(self):
+        return self.title    
 
 
 
@@ -524,10 +584,102 @@ class Customer_Info_IND_ERRORS(models.Model):
 
   
   
-  
-from django.db import models
+from django.core.exceptions import ValidationError
+
 class B1_Monthly(models.Model):
     id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
+    lcicID = models.CharField(max_length=100)
+    period = models.CharField(max_length=100)
+    com_enterprise_code = models.CharField(max_length=100)
+    segmentType = models.CharField(max_length=100)
+    bnk_code = models.CharField(max_length=100)
+    customer_id = models.CharField(max_length=100)
+    branch_id = models.CharField(max_length=100)
+    lon_sys_id = models.CharField(max_length=100)
+    loan_id = models.CharField(max_length=100)
+    lon_open_date = models.DateField(null=True)
+    lon_exp_date = models.DateField(null=True)
+    lon_ext_date = models.DateField(null=True)
+    lon_int_rate = models.FloatField(default=0)
+    lon_purpose_code = models.CharField(max_length=100)
+    lon_credit_line = models.FloatField(default=0)
+    lon_currency_code = models.CharField(max_length=100)
+    lon_outstanding_balance = models.FloatField(default=0)
+    lon_account_no = models.CharField(max_length=100)
+    lon_no_days_slow = models.IntegerField(default=0)
+    lon_class = models.CharField(max_length=100)
+    lon_type = models.CharField(max_length=100)
+    lon_term = models.CharField(max_length=100)
+    lon_status = models.CharField(max_length=100)
+    lon_insert_date = models.DateTimeField(null=True)
+    lon_update_date = models.DateTimeField(null=True)
+    lon_applied_date = models.DateTimeField(null=True)
+    is_disputed = models.BigIntegerField(default=0, null=True)
+    # status_customer = models.CharField(max_length=100)
+
+    def save(self, *args, **kwargs):
+        self.lon_no_days_slow = self.lon_no_days_slow or 0
+        self.is_disputed = self.is_disputed or 0
+        
+        if not isinstance(self.lon_no_days_slow, int):
+            raise ValidationError("lon_no_days_slow must be an integer")
+        if not isinstance(self.is_disputed, int):
+            raise ValidationError("is_disputed must be an integer")
+            
+        super().save(*args, **kwargs)
+
+class B_Data_is_damaged(models.Model):
+    id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
+    lcicID = models.CharField(max_length=100)
+    com_enterprise_code_get = models.CharField(max_length=100)
+    lcicID_get = models.CharField(max_length=100)
+    period = models.CharField(max_length=100)
+    lcicID_error = models.CharField(max_length=100)
+    com_enterprise_code_error = models.CharField(max_length=100)
+    com_enterprise_code = models.CharField(max_length=100)
+    segmentType = models.CharField(max_length=100)
+    bnk_code = models.CharField(max_length=100)
+    customer_id = models.CharField(max_length=100)
+    branch_id = models.CharField(max_length=100)
+    lon_sys_id = models.CharField(max_length=100)
+    loan_id = models.CharField(max_length=100)
+    lon_open_date = models.DateField(null=True)
+    lon_exp_date = models.DateField(null=True)
+    lon_ext_date = models.DateField(null=True)
+    lon_int_rate = models.FloatField(default=0)
+    lon_purpose_code = models.CharField(max_length=100)
+    lon_credit_line = models.FloatField(default=0)
+    lon_currency_code = models.CharField(max_length=100)
+    lon_outstanding_balance = models.FloatField(default=0)
+    lon_account_no = models.CharField(max_length=100)
+    lon_no_days_slow = models.IntegerField(default=0)
+    lon_class = models.CharField(max_length=100)
+    lon_type = models.CharField(max_length=100)
+    lon_term = models.CharField(max_length=100)
+    lon_status = models.CharField(max_length=100)
+    lon_insert_date = models.DateTimeField(null=True)
+    lon_update_date = models.DateTimeField(null=True)
+    lon_applied_date = models.DateTimeField(null=True)
+    is_disputed = models.BigIntegerField(default=0, null=True)
+    # status_customer = models.CharField(max_length=100)
+
+
+    def save(self, *args, **kwargs):
+        self.lon_no_days_slow = self.lon_no_days_slow or 0
+        self.is_disputed = self.is_disputed or 0
+        
+        if not isinstance(self.lon_no_days_slow, int):
+            raise ValidationError("lon_no_days_slow must be an integer")
+        if not isinstance(self.is_disputed, int):
+            raise ValidationError("is_disputed must be an integer")
+            
+        super().save(*args, **kwargs)
+
+class data_edit(models.Model):
+    id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
     lcicID = models.CharField(max_length=100)
     period = models.CharField(max_length=100)
     com_enterprise_code = models.CharField(max_length=100)
@@ -556,13 +708,23 @@ class B1_Monthly(models.Model):
     lon_applied_date = models.DateTimeField(null=True)
     is_disputed = models.BigIntegerField(default=0, null=True)
 
-    
-
+    def save(self, *args, **kwargs):
+        self.lon_no_days_slow = self.lon_no_days_slow or 0
+        self.is_disputed = self.is_disputed or 0
+        
+        if not isinstance(self.lon_no_days_slow, int):
+            raise ValidationError("lon_no_days_slow must be an integer")
+        if not isinstance(self.is_disputed, int):
+            raise ValidationError("is_disputed must be an integer")
+            
+        super().save(*args, **kwargs)
 
 class B1(models.Model):
     id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
     lcicID = models.CharField(max_length=255, blank=True, null=True)
     com_enterprise_code = models.CharField(max_length=255, blank=True, null=True)
+    period = models.CharField(max_length=100)
     segmentType = models.CharField(max_length=255, blank=True, null=True)
     bnk_code = models.CharField(max_length=255)
     customer_id = models.CharField(max_length=255)
@@ -587,6 +749,17 @@ class B1(models.Model):
     lon_update_date = models.DateTimeField(blank=True, null=True)
     lon_applied_date = models.DateTimeField(blank=True, null=True)
     is_disputed = models.BigIntegerField(default=0, null=True)
+    status_customer = models.CharField(max_length=100)
+    def save(self, *args, **kwargs):
+        self.lon_no_days_slow = self.lon_no_days_slow or 0
+        self.is_disputed = self.is_disputed or 0
+        
+        if not isinstance(self.lon_no_days_slow, int):
+            raise ValidationError("lon_no_days_slow must be an integer")
+        if not isinstance(self.is_disputed, int):
+            raise ValidationError("is_disputed must be an integer")
+            
+        super().save(*args, **kwargs)
 
     class Meta:
         unique_together = ('bnk_code', 'branch_id', 'customer_id', 'loan_id')
@@ -620,7 +793,36 @@ class B1_Daily(models.Model):
     lon_applied_date = models.DateTimeField(blank=True)
     is_disputed = models.BigIntegerField(default=0, null=True)
  
-
+class disputes(models.Model):
+    id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
+    lcicID = models.CharField(max_length=100)
+    period = models.CharField(max_length=100)
+    com_enterprise_code = models.CharField(max_length=100)
+    segmentType = models.CharField(max_length=100)
+    bnk_code = models.CharField(max_length=100)
+    customer_id = models.CharField(max_length=100)
+    branch_id = models.CharField(max_length=100)
+    lon_sys_id = models.CharField(max_length=100)
+    loan_id = models.CharField(max_length=100)
+    lon_open_date = models.DateField(null=True)
+    lon_exp_date = models.DateField(null=True)
+    lon_ext_date = models.DateField(null=True)
+    lon_int_rate = models.FloatField(default=0)
+    lon_purpose_code = models.CharField(max_length=100)
+    lon_credit_line = models.FloatField(default=0)
+    lon_currency_code = models.CharField(max_length=100)
+    lon_outstanding_balance = models.FloatField(default=0)
+    lon_account_no = models.CharField(max_length=100)
+    lon_no_days_slow = models.IntegerField(default=0)
+    lon_class = models.CharField(max_length=100)
+    lon_type = models.CharField(max_length=100)
+    lon_term = models.CharField(max_length=100)
+    lon_status = models.CharField(max_length=100)
+    lon_insert_date = models.DateTimeField(null=True)
+    lon_update_date = models.DateTimeField(null=True)
+    lon_applied_date = models.DateTimeField(null=True)
+    is_disputed = models.BigIntegerField(default=0, null=True)
 
     
 class B1_Yearly(models.Model):
@@ -651,6 +853,17 @@ class B1_Yearly(models.Model):
     lon_update_date = models.DateTimeField(blank=True)
     lon_applied_date = models.DateTimeField(blank=True)
     is_disputed = models.BigIntegerField(default=0, null=True)
+
+class C1 (models.Model):
+    bnk_code = models.CharField(max_length=30)
+    bank_branch_id = models.CharField(max_length=30)
+    customer_id = models.CharField(max_length=50)
+    loan_id = models.CharField(max_length=50)
+    collateral_id = models.CharField(max_length=30) 
+    collateral_type = models.CharField(max_length=30)
+    collateral_status = models.CharField(max_length=30)
+    collateral_insert_date = models.DateTimeField(blank=True)
+    collateral_update_date = models.DateTimeField(blank=True)
     
 # class EnterpriseInfo(models.Model):
 #     LCICID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
@@ -781,3 +994,42 @@ class UploadedFile(models.Model):
     size = models.FloatField()
     uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE)
     uploaded_at = models.DateTimeField(auto_now_add=True)
+
+
+
+   
+from django.db import models
+
+class UploadedJSONFile(models.Model):
+    file_name = models.CharField(max_length=255)
+    upload_date = models.DateTimeField(auto_now_add=True)
+    file_path = models.CharField(max_length=500)
+
+    def __str__(self):
+        return self.file_name
+
+
+
+from django.db import models
+
+class File(models.Model):
+    id = models.AutoField(primary_key=True)
+    title = models.CharField(max_length=100)
+    file = models.FileField(upload_to='uploadFiles/')
+
+    def __str__(self):
+        return self.title
+from django.db import models
+
+class Collateral(models.Model):
+    bank_id = models.CharField(max_length=100, blank=True, null=True)
+    branch_id = models.CharField(max_length=100, blank=True, null=True)
+    filename = models.CharField(max_length=255)
+    image = models.ImageField(upload_to='collateral_images/')
+    user = models.CharField(max_length=100, blank=True, null=True)
+    insertdate = models.DateTimeField(auto_now_add=True)
+    pathfile = models.CharField(max_length=255, blank=True, null=True)
+    status = models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.filename

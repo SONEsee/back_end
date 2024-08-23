@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 
 
 import os
+from datetime import timedelta
 #
 # from pathlib import Path
 
@@ -20,6 +21,24 @@ import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # TEMPLATE_DIR = os.path.join(BASE_DIR,'templates')
 
+# LOGGING = {
+#     'version': 1,
+#     'disable_existing_loggers': False,
+#     'handlers': {
+#         'file': {
+#             'level': 'DEBUG',
+#             'class': 'logging.FileHandler',
+#             'filename': 'debug.log',
+#         },
+#     },
+#     'loggers': {
+#         'django': {
+#             'handlers': ['file'],
+#             'level': 'DEBUG',
+#             'propagate': True,
+#         },
+#     },
+# }
 
 
 # Quick-start development settings - unsuitable for production
@@ -45,6 +64,7 @@ CHANNEL_LAYERS = {
         },
     },
 }
+
 ASGI_APPLICATION = 'lcicHome.asgi.application'
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -60,7 +80,29 @@ INSTALLED_APPS = [
     'channels',
     "crispy_forms",
     "crispy_bootstrap5",
+    'rest_framework_simplejwt',
+    'rest_framework',
+    'rest_framework.authtoken',
+    
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ),
+    
+    
+}
+
+SIMPLE_JWT = {
+    'USER_ID_FIELD': 'UID',  # Use 'UID' as the primary key field
+    'USER_ID_CLAIM': 'user_id',  # This is how the user ID will be stored in the token payload
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=3),  # Access token expiry time
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),    # Refresh token expiry time
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+}
 
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 
@@ -183,8 +225,8 @@ USE_TZ = True
 #STATICFILES_DIRS = [ (os.path.join(BASE_DIR, 'static') )]
 #STATICFILES_DIRS = (os.path.join(BASE_DIR, "static"), )
 
-#MEDIA_URL = '/media/'
-#MEDIA_ROOT = os.path.join(BASE_DIR,'media')
+# MEDIA_URL = '/media/'
+# MEDIA_ROOT = os.path.join(BASE_DIR,'media')
 STATIC_URL = '/static/'
 
 # MEDIA_URL = '/media/'
@@ -230,3 +272,23 @@ CSRF_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SECURE = False
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
+
+LOGIN_URL = '/accounts/login/'
+
+
+
+# Celery settings
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+
+CORS_ALLOW_CREDENTIALS = True
+
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5 MB ຫຼືຕາມທີ່ຕ້ອງການ
+FILE_UPLOAD_HANDLERS = [
+    'django.core.files.uploadhandler.MemoryFileUploadHandler',
+    'django.core.files.uploadhandler.TemporaryFileUploadHandler',
+]

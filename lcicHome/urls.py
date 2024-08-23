@@ -29,10 +29,24 @@ from .views import get_product_info
 from .views import get_product_infocode
 from .views import get_product_info, get_product_detail
 from .views import get_product_info_by_id
-from .views import upload_files
+# from .views import upload_files
 from .views import FileUploadView
 from .views import UploadFileList
-
+from .views import upload_file_view
+from .views import FileUploadView3
+from .views import FileUploadView3, upload_files
+from .views import get_data3
+from .views import get_data_by_id_file
+from .views import update_statussubmit
+from .views import confirm_upload
+from .views import upload_image
+from .views import get_collaterals
+from .views import get_login3
+from .views import get_last_lcicid
+from .views import confirm_image
+from .views import UserLoginView
+from django.contrib.auth import views as auth_views
+from .views import UserProfileView
 # from .views import FileUploadView, FileDeleteView
 # from .views import upload_files
 # from .views import enterprise_info_search
@@ -89,7 +103,8 @@ urlpatterns = [
    path('api1/login/', login_view, name='login'),
    path('api1/login1/', login_view1, name='login'),
    path('get-csrf-token/', get_csrf_token, name='get_csrf_token'),
-   path('login/', LoginView.as_view(), name='login'),
+  #  path('login/', LoginView.as_view(), name='login'),
+  path('login/', UserLoginView.as_view(), name='login'),
    path('login1/', LoginView1.as_view(), name='login'),
    path('api2/login/', LoginView.as_view(), name='login'),
    
@@ -105,11 +120,13 @@ urlpatterns = [
    
    path('productinfo1/', get_product_info, name='get_product_info'),
    path('productinfo2/', get_product_infocode, name='get_product_info'),
+   path('productinfo3/', get_product_info_by_id, name='get_product_info_by_id'),
    
     
    path('productinfo/<int:id>/', get_product_info_by_id, name='get_product_info_by_id'),
+  #  update-models
 
-   path('upload_files/', upload_files, name='upload_files'),
+  #  path('upload_files/', upload_files, name='upload_files'),
    
    
   
@@ -117,6 +134,23 @@ urlpatterns = [
 
 
     path('api/upload-files2/', UploadFileList.as_view(), name='upload-file-list'),
-  
+    path('api/productinfo3/', get_data3, name='get_data_by_id_file_and_period'),
+    path('api/productinfo4/', get_data_by_id_file, name='get_data_by_id_file'),
+    path('confirm_upload/', views.confirm_upload, name='confirm_upload'),
 
+    # path('upload333/', FileUploadView3.as_view(), name='file-upload'),
+    path('upload-files/', FileUploadView3.as_view(), name='upload_files_view'),
+    path('process-files/', upload_files, name='upload_files'),
+    path('api/update-statussubmit/', update_statussubmit, name='update_statussubmit'),
+    path('api/upload_image/', upload_image, name='collateral-update'),
+    path('api/get_collaterals/', get_collaterals, name='get_collaterals'),
+     path('api/get_login3/', get_login3, name='get_login3'),
+  
+    path('api/enterprise-info/', views.create_enterprise_info, name='create_enterprise_info'),
+    path('api/last-lcicid/', get_last_lcicid, name='get_last_lcicid'),
+    # path('api/confirm_image/', confirm_image, name='confirm_image'),
+    path('api/get_csrf_token/', views.get_csrf_token, name='get_csrf_token'),
+    path('api/confirm_image/<int:id>/', views.confirm_image, name='confirm_image'),
+    path('api/user-profile/', UserProfileView.as_view(), name='user-profile'),
 ]
+     
