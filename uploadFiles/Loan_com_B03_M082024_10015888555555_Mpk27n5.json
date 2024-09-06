@@ -1,0 +1,30 @@
+[
+	{
+		"lcicID" : "0",
+		"com_enterprise_code" : "01B030000206",
+		"segmentType" : "A2",
+		"lon_sys_id" : "2840637",
+		"bnk_code" : "02",
+		"customer_id" : "000957058",
+		"branch_id" : "010",
+		"loan_id" : "010RT2100002503",
+		"lon_open_date" : "2021-02-04",
+		"lon_exp_date" : "2022-02-04",
+		"lon_ext_date" : "0000-00-00",
+		"lon_int_rate" : "9.2500",
+		"lon_purpose_code" : "BU",
+		"lon_credit_line" : "500000000.00",
+		"lon_currency_code" : "LAK",
+		"lon_outstanding_balance" : "0.00",
+		"lon_account_no" : "LN_010_003_2021",
+		"lon_no_days_slow" : "0",
+		"lon_class" : "A",
+		"lon_type" : "RL",
+		"lon_term" : "ST",
+		"lon_status" : "INACTIVE",
+		"lon_insert_date" : "2021-09-22 10:50:01",
+		"lon_update_date" : "2023-02-13 00:02:00",
+		"lon_applied_date" : "2023-02-16 16:33:51",
+		"is_disputed" : 0
+	}
+]

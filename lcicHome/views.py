@@ -3529,26 +3529,24 @@ def upload_file_view(request):
 
      
 
+from rest_framework import generics
+from rest_framework.parsers import MultiPartParser, FormParser
+from django.http import JsonResponse
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
+from django.utils import timezone
+import json
+from django.utils.encoding import smart_str
+from .models import Upload_File_C, col_money_mia, col_real_estates,  col_equipment_eqi, col_project_prj ,col_vechicle_veh, col_guarantor_gua,col_goldsilver_gold, C_error
+from .serializers import FileSerializer
 
-# from rest_framework import generics
-# from rest_framework.parsers import MultiPartParser, FormParser
-# from django.urls import reverse
-# from django.http import JsonResponse, HttpResponse
-# from django.views.decorators.csrf import ensure_csrf_cookie
-# from django.utils.decorators import method_decorator
-# import requests
-
-# from .models import File
-# from .serializers import FileSerializer
-
-# class FileUploadView3(generics.CreateAPIView):
-#     queryset = File.objects.all()
+# class FileUploadViewC(generics.CreateAPIView):
+#     queryset = Upload_File_C.objects.all()
 #     serializer_class = FileSerializer
 #     parser_classes = (MultiPartParser, FormParser)
 
 #     @method_decorator(ensure_csrf_cookie)
 #     def post(self, request, *args, **kwargs):
-#         response = super().post(request, *args, **kwargs)
 #         files = request.FILES.getlist('file')
 #         csrf_token = request.META.get('CSRF_COOKIE', '')
 
@@ -3561,179 +3559,399 @@ def upload_file_view(request):
 #                     else:
 #                         return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
 
-#                     # Create the File instance and get its id
-#                     file_instance = File.objects.create(file=file)
-#                     file_id = file_instance.id
+#                     file_instance = Upload_File_C.objects.create(
+#                         fileUpload=file,
+#                         fileName=file.name,
+#                         fileSize=str(file.size),
+#                         path="uploadFilesC/" + file.name,
+#                         period=period,
+#                         status='new',
+#                         statussubmit='pending',
+#                         status_upload='in_progress',
+#                         FileType='json',
+#                         percentage=0.0
+#                     )
 
-#                     upload_url = request.build_absolute_uri(reverse('upload_files'))
-#                     with file.open('rb') as f:
-#                         files_data = {'file': f}
-#                         headers = {'X-CSRFToken': csrf_token}
-#                         response = requests.post(upload_url, files=files_data, headers=headers, data={'period': period, 'file_id': file_id})
-#                         if response.status_code != 200:
-#                             return JsonResponse({'status': 'error', 'message': 'Failed to process file'}, status=500)
+#                     result = process_uploaded_file(file_instance)
+
+#                     if result['status'] == 'error':
+#                         return JsonResponse(result, status=400)
 
 #                 except IndexError:
 #                     return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
 
-#         http_response = HttpResponse(response.content, status=response.status_code)
-#         http_response.set_cookie('csrftoken', csrf_token)
-#         return http_response
+#         response = JsonResponse({'status': 'success', 'message': 'All files processed successfully'})
+#         response.set_cookie('csrftoken', csrf_token)
+#         return response
 
-# from django.http import JsonResponse
-# from django.views.decorators.csrf import csrf_exempt
-# import json
-# import math
-# from .models import B1, B1_Monthly, Upload_File, memberInfo, User_Group, SType, Upload_Type, EnterpriseInfo, B_Data_is_damaged, data_edit
-# from datetime import datetime
-# from django.utils import timezone
-# import logging
 
-# def human_readable_size(size_bytes):
-#     if size_bytes == 0:
-#         return "0B"
-#     size_name = ("B", "KB", "MB", "GB", "TB")
-#     i = int(math.floor(math.log(size_bytes, 1024)))
-#     p = math.pow(1024, i)
-#     s = round(size_bytes / p, 2)
-#     return f"{s} {size_name[i]}"
+class FileUploadViewC(generics.CreateAPIView):
+    queryset = Upload_File_C.objects.all()
+    serializer_class = FileSerializer
+    parser_classes = (MultiPartParser, FormParser)
 
-# logger = logging.getLogger(__name__)
+    @method_decorator(ensure_csrf_cookie)
+    def post(self, request, *args, **kwargs):
+        files = request.FILES.getlist('file')
+        csrf_token = request.META.get('CSRF_COOKIE', '')
 
-# @csrf_exempt
-# def upload_files(request):
-#     if request.method == 'POST':
-#         try:
-#             user = request.user
-#             file = request.FILES.get('file')
-#             warnings = []
-#             period = request.POST.get('period')
-#             FID = request.POST.get('file_id')
+        for file in files:
+            if file.name.endswith('.json'):
+                try:
+                    period_parts = file.name.split('_,.json')[0].split('_')
+                    if len(period_parts) >= 4:
+                        period = period_parts[2] + "_" + period_parts[3]
+                    else:
+                        return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
 
-#             if file and file.name.endswith('.json'):
-#                 data = json.load(file)
-#                 file_size = file.size
-#                 file_size_hr = human_readable_size(file.size)
+                    file_instance = Upload_File_C.objects.create(
+                        fileUpload=file,
+                        fileName=file.name,
+                        fileSize=str(file.size),
+                        path="uploadFilesC/" + file.name,
+                        period=period,
+                        status='new',
+                        statussubmit='pending',
+                        status_upload='in_progress',  
+                        FileType='json',
+                        percentage=0.0
+                    )
 
-#                 upload_file = Upload_File.objects.create(
-#                     FID=FID,
-#                     fileName=file.name,
-#                     fileSize=file_size_hr,
-#                     path="uploadFiles/" + file.name,
-#                     insertDate=timezone.now(),
-#                     updateDate=timezone.now(),
-#                     period=period,
-#                     status="status_value",
-#                     status_upload="status_upload_value",
-#                     FileType="json",
-#                     MID=user.memberinfo if hasattr(user, 'memberinfo') else None,
-#                     GID=user.user_group if hasattr(user, 'user_group') else None,
-#                     SType=user.stype if hasattr(user, 'stype') else None,
-#                     UType=user.upload_type if hasattr(user, 'upload_type') else None,
-#                 )
+                    result = process_uploaded_file(file_instance)
 
-#                 total_items = len(data)
-#                 erroneous_items = 0 
+                    if result['status'] == '400':
+                        
+                        file_instance.status_upload = 'failed'
+                        file_instance.save()
+                        return JsonResponse(result, status=400)  
+                    else:
+                        
+                        file_instance.status_upload = 'completed'   
+                        file_instance.save()
 
-#                 for item in data:
-#                     try:
-#                         com_enterprise_code = item.get('com_enterprise_code', '')
-#                         lcicID = item.get('lcicID', '')
+                except IndexError:
+                    return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
 
-#                         enterprise_info = EnterpriseInfo.objects.filter(EnterpriseID=com_enterprise_code).first()
-#                         if not enterprise_info:
-#                             warnings.append(f'EnterpriseInfo with EnterpriseID {com_enterprise_code} not found')
-#                             lcicID_error_status = 1 if lcicID != '01' else 10
-#                             com_enterprise_code_error_status = 0 if com_enterprise_code != '04' else '02'
+        response = JsonResponse({'status': 'success', 'message': 'All files processed successfully'})
+        response.set_cookie('csrftoken', csrf_token)
+        return response
 
-#                             B_Data_is_damaged.objects.create(
-#                                 lcicID=lcicID,
-#                                 period=period,
-#                                 com_enterprise_code=com_enterprise_code,
-#                                 segmentType=item.get('segmentType', ''),
-#                                 bnk_code=item.get('bnk_code', ''),
-#                                 customer_id=item.get('customer_id', ''),
-#                                 branch_id=item.get('branch_id', ''),
-#                                 lon_sys_id=item.get('lon_sys_id', ''),
-#                                 loan_id=item.get('loan_id', ''),
-#                                 lon_open_date=item.get('lon_open_date', None),
-#                                 lon_exp_date=item.get('lon_exp_date', None),
-#                                 lon_ext_date=item.get('lon_ext_date', None),
-#                                 lon_int_rate=item.get('lon_int_rate', 0),
-#                                 lon_purpose_code=item.get('lon_purpose_code', ''),
-#                                 lon_credit_line=item.get('lon_credit_line', 0),
-#                                 lon_currency_code=item.get('lon_currency_code', ''),
-#                                 lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
-#                                 lon_account_no=item.get('lon_account_no', ''),
-#                                 lon_no_days_slow=item.get('lon_no_days_slow', 0),
-#                                 lon_class=item.get('lon_class', ''),
-#                                 lon_type=item.get('lon_type', ''),
-#                                 lon_term=item.get('lon_term', ''),
-#                                 lon_status=item.get('lon_status', ''),
-#                                 lon_insert_date=item.get('lon_insert_date', None),
-#                                 lon_update_date=item.get('lon_update_date', None),
-#                                 lon_applied_date=item.get('lon_applied_date', None),
-#                                 is_disputed=item.get('is_disputed', 0),
-#                                 lcicID_error=lcicID_error_status,
-#                                 com_enterprise_code_error=com_enterprise_code_error_status,
-#                                 id_file=FID
-#                             )
-#                             erroneous_items += 1
-#                             continue
 
-#                         if lcicID != enterprise_info.LCICID:
-#                             lcicID = enterprise_info.LCICID
+import json
+from django.utils.encoding import smart_str
+from django.utils import timezone
+from .models import EnterpriseInfo, C_error,C1_disptes
 
-#                         data_edit.objects.create(
-#                             lcicID=lcicID,
-#                             period=period,
-#                             com_enterprise_code=com_enterprise_code,
-#                             segmentType=item.get('segmentType', ''),
-#                             bnk_code=item.get('bnk_code', ''),
-#                             customer_id=item.get('customer_id', ''),
-#                             branch_id=item.get('branch_id', ''),
-#                             lon_sys_id=item.get('lon_sys_id', ''),
-#                             loan_id=item.get('loan_id', ''),
-#                             lon_open_date=item.get('lon_open_date', None),
-#                             lon_exp_date=item.get('lon_exp_date', None),
-#                             lon_ext_date=item.get('lon_ext_date', None),
-#                             lon_int_rate=item.get('lon_int_rate', 0),
-#                             lon_purpose_code=item.get('lon_purpose_code', ''),
-#                             lon_credit_line=item.get('lon_credit_line', 0),
-#                             lon_currency_code=item.get('lon_currency_code', ''),
-#                             lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
-#                             lon_account_no=item.get('lon_account_no', ''),
-#                             lon_no_days_slow=item.get('lon_no_days_slow', 0),
-#                             lon_class=item.get('lon_class', ''),
-#                             lon_type=item.get('lon_type', ''),
-#                             lon_term=item.get('lon_term', ''),
-#                             lon_status=item.get('lon_status', ''),
-#                             lon_insert_date=item.get('lon_insert_date', None),
-#                             lon_update_date=item.get('lon_update_date', None),
-#                             lon_applied_date=item.get('lon_applied_date', None),
-#                             is_disputed=item.get('is_disputed', 0),
-#                             id_file=FID  
-#                         )
+def process_uploaded_file(uploaded_data):
+    
+    try:
+        total_records = 0
+        error_records = 0
+        
+        with uploaded_data.fileUpload.open('rb') as file:
+            file_content = file.read()
+            json_content = json.loads(smart_str(file_content))
 
-#                     except Exception as e:
-#                         logger.error(f"Error processing item: {e}")
-#                         warnings.append(f"Error processing item: {e}")
+        result = {'status': 'success'}
 
-#                 error_percentage = (erroneous_items / total_items) * 100 if total_items > 0 else 0
-#                 upload_file.percentage = error_percentage
-#                 upload_file.save()
-#                 print("total_items", total_items)
-#                 print("erroneous_items", erroneous_items)
-#                 print("error_percentage", error_percentage)
+        for item in json_content:
+            lcicID = item.get('lcicID', None)
+            if lcicID == '':
+                lcicID = None
 
-#                 return JsonResponse({"message": "File processed successfully", "warnings": warnings, "error_percentage": error_percentage})
+            com_enterprise_code = item.get('com_enterprise_code', '')
+            cid = uploaded_data.CID
 
-#             else:
-#                 return JsonResponse({"error": "Invalid file format"}, status=400)
-#         except Exception as e:
-#             logger.error(f"Error in upload_files: {e}")
-#             return JsonResponse({"error": f"An error occurred: {e}"}, status=500)
-#     return JsonResponse({"error": "Invalid request method"}, status=405)
+            lcic_exists = EnterpriseInfo.objects.filter(LCICID=lcicID).exists()
+            enterprise_code_exists = EnterpriseInfo.objects.filter(EnterpriseID=com_enterprise_code).exists()
+
+            # Applying the business logic based on lcicID and com_enterprise_code values
+            if not lcicID and not com_enterprise_code:
+                collateral_status = '33'
+                datamatch = ''
+            elif not lcicID:
+                if enterprise_code_exists:
+                    collateral_status = '01'
+                    datamatch = EnterpriseInfo.objects.filter(EnterpriseID=com_enterprise_code).first().LCICID
+                else:
+                    collateral_status = '03'
+                    datamatch = ''
+            elif not com_enterprise_code:
+                if lcic_exists:
+                    collateral_status = '10'
+                    datamatch = EnterpriseInfo.objects.filter(LCICID=lcicID).first().EnterpriseID
+                else:
+                    collateral_status = '30'
+                    datamatch = ''
+            elif lcic_exists and not enterprise_code_exists:
+                collateral_status = '31'
+                datamatch = EnterpriseInfo.objects.filter(LCICID=lcicID).first().EnterpriseID
+            elif not lcic_exists and enterprise_code_exists:
+                collateral_status = '13'
+                datamatch = EnterpriseInfo.objects.filter(EnterpriseID=com_enterprise_code).first().LCICID
+            elif not lcic_exists and not enterprise_code_exists:
+                collateral_status = '11'
+                datamatch = ''
+            elif lcic_exists and enterprise_code_exists:
+                collateral_status = '00'
+                datamatch = ''  # Adjust as needed
+
+            # Check if both lcicID and com_enterprise_code are correct
+            if collateral_status != '00':
+                # If not correct, record in C_error
+                C_error.objects.create(
+                    id_file=cid,
+                    lcicID=lcicID,
+                    com_enterprise_code=com_enterprise_code,
+                    bnk_code=item.get('bnk_code', ''),
+                    branch_id_code=item.get('branch_id_code', ''),
+                    bank_customer_ID=item.get('bank_customer_ID', ''),
+                    loan_id=item.get('loan_id', ''),
+                    collateral_id=item.get('collateral_id', ''),
+                    collateral_type=item.get('collateral_type', ''),
+                    collateral_status=collateral_status,
+                    datamatch=datamatch,
+                    collateral_insert_date=timezone.now(),
+                    collateral_update_date=timezone.now()
+                )
+                error_records += 1
+                # Skip processing for col_money_mia if the data is incorrect
+                continue
+            bank_customer_ID = item.get('bank_customer_ID', '')
+            c1_record = C1.objects.filter(lcicID=lcicID, com_enterprise_code=com_enterprise_code).first()
+            if c1_record and c1_record.bank_customer_ID != bank_customer_ID:
+                C1_disptes.objects.create(
+                    lcicID=lcicID,
+                    id_file=cid,
+                    com_enterprise_code=com_enterprise_code,
+                    bank_customer_ID=bank_customer_ID,
+                    bnk_code=item.get('bnk_code', ''),
+                    branch_id_code=item.get('branch_id_code', ''),
+                    loan_id=item.get('loan_id', ''),
+                    collateral_id=item.get('collateral_id', ''),
+                    collateral_type=item.get('collateral_type', ''),
+                    # dispute_reason="Bank customer ID mismatch",
+                    insert_date=timezone.now(),
+                    update_date=timezone.now()
+                    )
+                continue
+
+            # Process for col_money_mia only if lcicID and com_enterprise_code are both correct
+            collateral_type = item.get('collateral_type', '').lower()
+            if collateral_type == "money":
+                col_money_mia.objects.create(
+                    id_file=cid,
+                    lcicID=lcicID,
+                    com_enterprise_code=com_enterprise_code,
+                    bnk_code=item.get('bnk_code', ''),
+                    bank_customer_ID=item.get('bank_customer_ID', ''),
+                    branch_id_code=item.get('branch_id_code', ''),
+                    loan_id=item.get('loan_id', ''),
+                    collateral_id=item.get('collateral_id', ''),
+                    account_no=item.get('account_no', ''),
+                    account_type=item.get('account_type', ''),
+                    collateral_type=collateral_type,
+                    value=item.get('value', ''),
+                    insert_date=timezone.now().date(),
+                    update_date=timezone.now().date()
+                )
+
+            
+            elif collateral_type == "estates":
+                 col_real_estates.objects.create(
+                    lcicID=item.get('lcicID', ''),
+                    bnk_code=item.get('bnk_code', ''),
+                    collateral_type=collateral_type,
+                    com_enterprise_code=item.get('com_enterprise_code', ''),
+                    bank_customer_ID=item.get('bank_customer_ID', ''),
+                    branch_id_code=item.get('branch_id_code', ''),
+                    loan_id=item.get('loan_id', ''),
+                    col_provin=item.get('col_provin', ''),
+                    col_district=item.get('col_district', ''),
+                    col_village=item.get('col_village', ''),
+                    col_unit=item.get('col_unit', ''),
+                    col_no=item.get('col_no', ''),
+                    col_out_time=item.get('col_out_time', ''),
+                    col_type=item.get('col_type', ''),
+                    col_area=item.get('col_area', ''),
+                    col_land_registry_book_no=item.get('col_land_registry_book_no', ''),
+                    col_document_no=item.get('col_document_no', ''),
+                    col_land_map_no=item.get('col_land_map_no', ''),
+                    col_land_plot_no=item.get('col_land_plot_no', ''),
+                    col_land_area=item.get('col_land_area', ''),
+                    col_land_unit=item.get('col_land_unit', ''),
+                    owner_name=item.get('owner_name', ''),
+                    owner_birth_date=item.get('owner_birth_date', ''),
+                    owner_nationality=item.get('owner_nationality', ''),
+                    owner_occupation=item.get('owner_occupation', ''),
+                    current_unit=item.get('current_unit', ''),
+                    current_village=item.get('current_village', ''),
+                    current_district=item.get('current_district', ''),
+                    current_provin=item.get('current_provin', ''),
+                    spouse_name=item.get('spouse_name', ''),
+                    spouse_birth_date=item.get('spouse_birth_date', None),
+                    spouse_nationality=item.get('spouse_nationality', ''),
+                    spouse_occupation=item.get('spouse_occupation', ''),
+                    land_acquisition=item.get('land_acquisition', ''),
+                    ownership_status=item.get('ownership_status', ''),
+                    id_file=cid,
+                    insert_date=timezone.now().date(),
+                    update_date=timezone.now().date()
+                    
+                )
+            elif collateral_type == "eqi":
+                 col_equipment_eqi.objects.create(
+                    bank_customer_ID=item.get('bank_customer_ID', ''),
+                    lcicID=item.get('lcicID', ''),
+                    bnk_code=item.get('bnk_code', ''),
+                    com_enterprise_code=item.get('com_enterprise_code', ''),
+                    collateral_type=collateral_type,
+                    branch_id_code=item.get('branch_id_code', ''),
+                    loan_id=item.get('loan_id', ''),
+                    collateral_id=item.get('collateral_id', ''),
+                    machine_type=item.get('machine_type', ''),
+                    machine_no=item.get('machine_no', ''),
+                    value=item.get('value', ''),
+                    id_file=cid,
+                    insert_date=timezone.now().date(),
+                    update_date=timezone.now().date()
+                )
+            elif collateral_type == "prj":
+                 col_project_prj.objects.create(
+                    bank_customer_ID=item.get('bank_customer_ID', ''),
+                    lcicID=item.get('lcicID', ''),
+                    bnk_code=item.get('bnk_code', ''),
+                    com_enterprise_code=item.get('com_enterprise_code', ''),
+                    collateral_type=collateral_type,
+                    branch_id_code=item.get('branch_id_code', ''),
+                    loan_id=item.get('loan_id', ''),
+                    project_type=item.get('project_type', ''),
+                    collateral_id=item.get('collateral_id', ''),
+                    project_name_en=item.get('project_name_en', ''),
+                    ministry=item.get('ministry', ''),
+                    project_namber=item.get('project_namber', ''),
+                    project_name_la=item.get('project_name_la', ''),
+                    value=item.get('value', ''),
+                    id_file=cid,
+                    insert_date=timezone.now().date(),
+                    update_date=timezone.now().date()
+                )
+            elif collateral_type == "veh":
+                 col_vechicle_veh.objects.create(
+                    lcicID=item.get('lcicID', ''),
+                    com_enterprise_code=item.get('com_enterprise_code', ''),
+                    collateral_type=collateral_type,
+                    bnk_code=item.get('bnk_code', ''),
+                    bank_customer_ID = item.get('bank_customer_ID', ''),
+                    branch_id_code=item.get('branch_id_code', ''),
+                    loan_id=item.get('loan_id', ''),
+                    collateral_id=item.get('collateral_id', ''),
+                    name_owner = item.get('name_owner', ''),
+                    plate_number = item.get('plate_number', ''),
+                    engine_number = item.get('engine_number', ''),
+                    body_numbe = item.get('body_numbe', ''),
+                    model = item.get('model', ''),
+                    value = item.get('value', ''),
+                    id_file=cid,
+                    insert_date=timezone.now().date(),
+                    update_date=timezone.now().date()
+                )
+            elif collateral_type == "gua":
+                 col_guarantor_gua.objects.create(
+                    lcicID=item.get('lcicID', ''),
+                    com_enterprise_code=item.get('com_enterprise_code', ''),
+                    collateral_type=collateral_type,
+                    bnk_code=item.get('bnk_code', ''),
+                    bank_customer_ID = item.get('bank_customer_ID', ''),
+                    branch_id_code=item.get('branch_id_code', ''),
+                    loan_id=item.get('loan_id', ''),
+                    collateral_id=item.get('collateral_id', ''),
+                    # guarantor_name = item.get('guarantor_name', ''),
+                    guarantor_nationality = item.get('guarantor_nationality', ''),
+                    national_id = item.get('national_id', ''),
+                    national_expiry_date = item.get('national_expiry_date', ''),
+                    passport = item.get('passport', ''),
+                    passport_expiry_date = item.get('passport_expiry_date', ''),
+                    familybook = item.get('familybook', ''),
+                    familybook_province_code_of_issue = item.get('familybook_province_code_of_issue', ''),
+                    familybook_issue_date = item.get('familybook_issue_date', ''),
+                    birthdate = item.get('birthdate', ''),
+                    gender = item.get('gender', ''),
+                    ist_name_english = item.get('ist_name_english', ''),
+                    ist_name_lao = item.get('ist_name_lao', ''),
+                    nickname_english = item.get('nickname_english', ''),
+                    nickname_lao = item.get('nickname_lao', ''),
+                    surname_english = item.get('surname_english', ''),
+                    surname_lao = item.get('surname_lao', ''),
+                    address_number_street_english = item.get('address_number_street_english', ''),
+                    address_number_street_lao = item.get('address_number_street_lao', ''),
+                    address_village_english = item.get('address_village_english', ''),
+                    address_village_lao = item.get('address_village_lao', ''),
+                    address_sub_district_english = item.get('address_sub_district_english', ''),
+                    address_sub_district_lao = item.get('address_sub_district_lao', ''),
+                    address_district_english = item.get('address_district_english', ''),
+                    address_district_lao = item.get('address_district_lao', ''),
+                    address_province_code = item.get('address_province_code', ''),
+                    enterprise_code = item.get('enterprise_code', ''),
+                    registration_date_of_issue = item.get('registration_date_of_issue', ''),
+                    registration_place_issue = item.get('registration_place_issue', ''),
+                    company_name_english = item.get('company_name_english', ''),
+                    company_name_lao = item.get('company_name_lao', ''),
+                    category = item.get('category', ''),
+                    insert_date=timezone.now().date(),
+                    id_file=cid,
+                    update_date=timezone.now().date()
+                )
+            elif collateral_type == "gold":
+                 col_goldsilver_gold.objects.create(
+                    lcicID=item.get('lcicID', ''),
+                    com_enterprise_code=item.get('com_enterprise_code', ''),
+                    collateral_type=collateral_type,
+                    bnk_code=item.get('bnk_code', ''),
+                    bank_customer_ID = item.get('bank_customer_ID', ''),
+                    branch_id_code=item.get('branch_id_code', ''),
+                    loan_id=item.get('loan_id', ''),
+                    collateral_id=item.get('collateral_id', ''),
+                    weight = item.get('weight', ''),
+                    unit = item.get('unit', ''),
+                    # collateral_id=item.get('collateral_id', ''),
+                    value=item.get('value', ''),
+                    id_file=cid,
+                    insert_date=timezone.now().date(),
+                    update_date=timezone.now().date()
+                )
+            C1.objects.create(
+                lcicID=lcicID,
+                com_enterprise_code=com_enterprise_code,
+                bnk_code=item.get('bnk_code', ''),
+                bank_customer_ID=item.get('bank_customer_ID', ''),
+                branch_id_code=item.get('branch_id_code', ''),
+                loan_id=item.get('loan_id', ''),
+                collateral_id=item.get('collateral_id', ''),
+                collateral_type=collateral_type,
+                id_file=cid,
+                # value=item.get('value', ''),
+                insert_date=timezone.now().date(),
+                update_date=timezone.now().date()
+            )
+        if total_records > 0:
+             percentage = (100 * (total_records - error_records)) / total_records
+             print("percentage",percentage)
+             print("tota",total_records)
+        else:
+            percentage = 0
+        uploaded_data.percentage = percentage
+        uploaded_data.save()
+        return result
+
+    except Exception as e:
+        
+        print(f"An error occurred: {e}")
+        return {'status': 'error', 'message': str(e)}
+
+
+
+
 
 from datetime import datetime
 import pytz
@@ -3807,663 +4025,6 @@ class FileUploadView3(generics.CreateAPIView):
     
 
     
-# from django.views.decorators.csrf import csrf_exempt
-# from django.http import JsonResponse
-# import json
-# from .models import Upload_File, data_edit, B_Data_is_damaged, EnterpriseInfo, B1, B1_Monthly
-# from django.utils import timezone
-# import logging
-
-# logger = logging.getLogger(__name__)
-
-# def human_readable_size(size):
-#     for unit in ['B', 'KB', 'MB', 'GB']:
-#         if size < 1024.0:
-#             return f"{size:.2f} {unit}"
-#         size /= 1024.0
-#     return f"{size:.2f} TB"
-
-# @csrf_exempt
-# def upload_files(request):
-#     if request.method == 'POST':
-#         try:
-#             user = request.user
-#             file = request.FILES.get('file')
-#             warnings = []
-#             period = request.POST.get('period')
-#             FID = request.POST.get('file_id')
-
-#             if file and file.name.endswith('.json'):
-#                 data = json.load(file)
-#                 file_size = file.size
-#                 file_size_hr = human_readable_size(file.size)
-
-#                 upload_file = Upload_File.objects.create(
-#                     FID=FID,
-#                     fileName=file.name,
-#                     fileSize=file_size_hr,
-#                     path="uploadFiles/" + file.name,
-#                     insertDate=timezone.now(),
-#                     updateDate=timezone.now(),
-#                     period=period,
-#                     status="Processing",
-#                     status_upload="Pending",
-#                     statussubmit="Pending",
-#                     FileType="json",
-#                     MID=user.memberinfo if hasattr(user, 'memberinfo') else None,
-#                     GID=user.user_group if hasattr(user, 'user_group') else None,
-#                     SType=user.stype if hasattr(user, 'stype') else None,
-#                     UType=user.upload_type if hasattr(user, 'upload_type') else None,
-#                 )
-
-#                 total_items = len(data)
-#                 erroneous_items = 0
-
-#                 for item in data:
-#                     try:
-#                         com_enterprise_code = item.get('com_enterprise_code', '')
-#                         lcicID = item.get('lcicID', '')
-#                         lcicID_get = None
-#                         lcicID_error_status = '33'
-
-#                         if com_enterprise_code and lcicID:
-#                             enterprise_info_by_code = EnterpriseInfo.objects.filter(EnterpriseID=com_enterprise_code).first()
-#                             enterprise_info_by_id = EnterpriseInfo.objects.filter(LCICID=lcicID).first()
-
-#                             if enterprise_info_by_code and enterprise_info_by_id:
-#                                 # ກວດສອບຂໍ້ມູນໃນ B1 ແລະ B1_Monthly
-#                                 b1_entry = B1.objects.filter(
-#                                     bnk_code=item.get('bnk_code', ''),
-#                                     branch_id=item.get('branch_id', ''),
-#                                     customer_id=item.get('customer_id', ''),
-#                                     loan_id=item.get('loan_id', '')
-#                                 ).first()
-
-#                                 b1_monthly_entry = B1_Monthly.objects.filter(
-#                                     bnk_code=item.get('bnk_code', ''),
-#                                     branch_id=item.get('branch_id', ''),
-#                                     customer_id=item.get('customer_id', ''),
-#                                     loan_id=item.get('loan_id', '')
-#                                 ).first()
-
-#                                 if (b1_entry or b1_monthly_entry) and (
-#                                     (b1_entry and b1_entry.customer_id == item.get('customer_id')) or 
-#                                     (b1_monthly_entry and b1_monthly_entry.customer_id == item.get('customer_id'))
-#                                 ):
-#                                     # ເກັບໃນ data_edit
-#                                     data_edit.objects.create(
-#                                         lcicID=lcicID,
-#                                         period=period,
-#                                         com_enterprise_code=com_enterprise_code,
-#                                         segmentType=item.get('segmentType', ''),
-#                                         bnk_code=item.get('bnk_code', ''),
-#                                         customer_id=item.get('customer_id', ''),
-#                                         branch_id=item.get('branch_id', ''),
-#                                         lon_sys_id=item.get('lon_sys_id', ''),
-#                                         loan_id=item.get('loan_id', ''),
-#                                         lon_open_date=item.get('lon_open_date', None),
-#                                         lon_exp_date=item.get('lon_exp_date', None),
-#                                         lon_ext_date=item.get('lon_ext_date', None),
-#                                         lon_int_rate=item.get('lon_int_rate', 0),
-#                                         lon_purpose_code=item.get('lon_purpose_code', ''),
-#                                         lon_credit_line=item.get('lon_credit_line', 0),
-#                                         lon_currency_code=item.get('lon_currency_code', ''),
-#                                         lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
-#                                         lon_account_no=item.get('lon_account_no', ''),
-#                                         lon_no_days_slow=item.get('lon_no_days_slow', 0),
-#                                         lon_class=item.get('lon_class', ''),
-#                                         lon_type=item.get('lon_type', ''),
-#                                         lon_term=item.get('lon_term', ''),
-#                                         lon_status=item.get('lon_status', ''),
-#                                         lon_insert_date=item.get('lon_insert_date', None),
-#                                         lon_update_date=item.get('lon_update_date', None),
-#                                         lon_applied_date=item.get('lon_applied_date', None),
-#                                         is_disputed=item.get('is_disputed', 0),
-#                                         id_file=FID
-#                                     )
-#                                     continue
-#                                 else:
-#                                     # ບໍ່ຄືກັນແມ່ນເກັບໃນ disputes
-#                                     disputes.objects.create(
-#                                         lcicID=lcicID,
-#                                         period=period,
-#                                         com_enterprise_code=com_enterprise_code,
-#                                         segmentType=item.get('segmentType', ''),
-#                                         bnk_code=item.get('bnk_code', ''),
-#                                         customer_id=item.get('customer_id', ''),
-#                                         branch_id=item.get('branch_id', ''),
-#                                         lon_sys_id=item.get('lon_sys_id', ''),
-#                                         loan_id=item.get('loan_id', ''),
-#                                         lon_open_date=item.get('lon_open_date', None),
-#                                         lon_exp_date=item.get('lon_exp_date', None),
-#                                         lon_ext_date=item.get('lon_ext_date', None),
-#                                         lon_int_rate=item.get('lon_int_rate', 0),
-#                                         lon_purpose_code=item.get('lon_purpose_code', ''),
-#                                         lon_credit_line=item.get('lon_credit_line', 0),
-#                                         lon_currency_code=item.get('lon_currency_code', ''),
-#                                         lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
-#                                         lon_account_no=item.get('lon_account_no', ''),
-#                                         lon_no_days_slow=item.get('lon_no_days_slow', 0),
-#                                         lon_class=item.get('lon_class', ''),
-#                                         lon_type=item.get('lon_type', ''),
-#                                         lon_term=item.get('lon_term', ''),
-#                                         lon_status=item.get('lon_status', ''),
-#                                         lon_insert_date=item.get('lon_insert_date', None),
-#                                         lon_update_date=item.get('lon_update_date', None),
-#                                         lon_applied_date=item.get('lon_applied_date', None),
-#                                         is_disputed=item.get('is_disputed', 0),
-#                                         id_file=FID
-#                                     )
-#                                     continue
-#                                     erroneous_items += 1
-#                             else:
-#                                 if enterprise_info_by_code:   #ມີ enterprise code ແຕ່ບໍ່ມີ lcicID 
-#                                     lcicID_get = enterprise_info_by_code.LCICID
-#                                     lcicID_error_status = '01'
-                                    
-#                                 elif enterprise_info_by_id:  #ມີ lcicID ແຕ່ບໍ່ມີ enterprise code
-#                                     lcicID_get = enterprise_info_by_id.EnterpriseID
-#                                     lcicID_error_status = '10'
-#                         elif com_enterprise_code:
-#                             enterprise_info_by_code = EnterpriseInfo.objects.filter(EnterpriseID=com_enterprise_code).first() #ມີ enterprise code ແຕ່ lcicID ຜິດ
-#                             if enterprise_info_by_code:
-#                                 lcicID_get = enterprise_info_by_code.LCICID
-#                                 lcicID_error_status = '31'
-#                             else:
-#                                 lcicID_error_status = '31'
-#                         elif lcicID:
-#                             enterprise_info_by_id = EnterpriseInfo.objects.filter(LCICID=lcicID).first() #ມີ lcicID ແຕ່ enterprise code ຜິດ
-#                             if enterprise_info_by_id:
-#                                 lcicID_get = enterprise_info_by_id.EnterpriseID
-#                                 lcicID_error_status = '13'
-#                             else:
-#                                 lcicID_error_status = '13'
-                        
-
-
-
-
-#                         B_Data_is_damaged.objects.create(
-#                             lcicID=lcicID,
-#                             period=period,
-#                             com_enterprise_code=com_enterprise_code,
-#                             segmentType=item.get('segmentType', ''),
-#                             bnk_code=item.get('bnk_code', ''),
-#                             customer_id=item.get('customer_id', ''),
-#                             branch_id=item.get('branch_id', ''),
-#                             lon_sys_id=item.get('lon_sys_id', ''),
-#                             loan_id=item.get('loan_id', ''),
-#                             lon_open_date=item.get('lon_open_date', None),
-#                             lon_exp_date=item.get('lon_exp_date', None),
-#                             lon_ext_date=item.get('lon_ext_date', None),
-#                             lon_int_rate=item.get('lon_int_rate', 0),
-#                             lon_purpose_code=item.get('lon_purpose_code', ''),
-#                             lon_credit_line=item.get('lon_credit_line', 0),
-#                             lon_currency_code=item.get('lon_currency_code', ''),
-#                             lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
-#                             lon_account_no=item.get('lon_account_no', ''),
-#                             lon_no_days_slow=item.get('lon_no_days_slow', 0),
-#                             lon_class=item.get('lon_class', ''),
-#                             lon_type=item.get('lon_type', ''),
-#                             lon_term=item.get('lon_term', ''),
-#                             lon_status=item.get('lon_status', ''),
-#                             lon_insert_date=item.get('lon_insert_date', None),
-#                             lon_update_date=item.get('lon_update_date', None),
-#                             lon_applied_date=item.get('lon_applied_date', None),
-#                             is_disputed=item.get('is_disputed', 0),
-#                             lcicID_error=lcicID_error_status,
-#                             lcicID_get=lcicID_get,
-#                             id_file=FID
-#                         )
-#                         existing_dispute = disputes.objects.filter(lcicID=lcicID, period=period,com_enterprise_code=com_enterprise_code,).exists()
-
-#                         if not existing_dispute :
-#                             erroneous_items += 1
-
-#                     except Exception as e:
-#                         B_Data_is_damaged.objects.create(
-#                             lcicID=item.get('lcicID', ''),
-#                             period=period,
-#                             com_enterprise_code=item.get('com_enterprise_code', ''),
-#                             segmentType=item.get('segmentType', ''),
-#                             bnk_code=item.get('bnk_code', ''),
-#                             customer_id=item.get('customer_id', ''),
-#                             branch_id=item.get('branch_id', ''),
-#                             lon_sys_id=item.get('lon_sys_id', ''),
-#                             loan_id=item.get('loan_id', ''),
-#                             lon_open_date=item.get('lon_open_date', None),
-#                             lon_exp_date=item.get('lon_exp_date', None),
-#                             lon_ext_date=item.get('lon_ext_date', None),
-#                             lon_int_rate=item.get('lon_int_rate', 0),
-#                             lon_purpose_code=item.get('lon_purpose_code', ''),
-#                             lon_credit_line=item.get('lon_credit_line', 0),
-#                             lon_currency_code=item.get('lon_currency_code', ''),
-#                             lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
-#                             lon_account_no=item.get('lon_account_no', ''),
-#                             lon_no_days_slow=item.get('lon_no_days_slow', 0),
-#                             lon_class=item.get('lon_class', ''),
-#                             lon_type=item.get('lon_type', ''),
-#                             lon_term=item.get('lon_term', ''),
-#                             lon_status=item.get('lon_status', ''),
-#                             lon_insert_date=item.get('lon_insert_date', None),
-#                             lon_update_date=item.get('lon_update_date', None),
-#                             lon_applied_date=item.get('lon_applied_date', None),
-#                             is_disputed=item.get('is_disputed', 0),
-#                             lcicID_error='33',
-#                             id_file=FID
-#                         )
-#                         erroneous_items += 1
-
-#                 error_percentage = (erroneous_items / total_items) * 100 if total_items > 0 else 0
-
-#                 upload_file.percentage = error_percentage
-#                 upload_file.statussubmit = "2" if error_percentage > 15 else "1"
-#                 upload_file.save()
-#                 return JsonResponse({
-#                     'status': 'success',
-#                     'message': 'File uploaded and processed successfully',
-#                     'warnings': warnings,
-#                     'error_percentage': error_percentage
-#                 }, status=200)
-
-#             else:
-#                 return JsonResponse({'status': 'error', 'message': 'Invalid file format'}, status=400)
-
-#         except Exception as e:
-#             logger.error(f"File upload failed: {str(e)}")
-#             return JsonResponse({'status': 'error', 'message': f'File upload failed: {str(e)}'}, status=500)
-
-#     else:
-#         return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=400)
-# from django.views.decorators.csrf import csrf_exempt
-# from django.http import JsonResponse
-# import json
-# from .models import Upload_File, data_edit, B_Data_is_damaged, EnterpriseInfo, B1, B1_Monthly
-# from django.utils import timezone
-# import logging
-
-# logger = logging.getLogger(__name__)
-
-# def human_readable_size(size):
-#     for unit in ['B', 'KB', 'MB', 'GB']:
-#         if size < 1024.0:
-#             return f"{size:.2f} {unit}"
-#         size /= 1024.0
-#     return f"{size:.2f} TB"
-
-# @csrf_exempt
-# def upload_files(request):
-#     if request.method == 'POST':
-#         try:
-#             user = request.user
-#             file = request.FILES.get('file')
-#             warnings = []
-#             period = request.POST.get('period')
-#             FID = request.POST.get('file_id')
-
-#             if file and file.name.endswith('.json'):
-#                 data = json.load(file)
-#                 file_size = file.size
-#                 file_size_hr = human_readable_size(file.size)
-
-#                 upload_file = Upload_File.objects.create(
-#                     FID=FID,
-#                     fileName=file.name,
-#                     fileSize=file_size_hr,
-#                     path="uploadFiles/" + file.name,
-#                     insertDate=timezone.now(),
-#                     updateDate=timezone.now(),
-#                     period=period,
-#                     status="Processing",
-#                     status_upload="Pending",
-#                     statussubmit="Pending",
-#                     FileType="json",
-#                     MID=user.memberinfo if hasattr(user, 'memberinfo') else None,
-#                     GID=user.user_group if hasattr(user, 'user_group') else None,
-#                     SType=user.stype if hasattr(user, 'stype') else None,
-#                     UType=user.upload_type if hasattr(user, 'upload_type') else None,
-#                 )
-
-#                 total_items = len(data)
-#                 erroneous_items = 0
-
-#                 for item in data:
-#                     try:
-#                         com_enterprise_code = item.get('com_enterprise_code', '')
-#                         lcicID = item.get('lcicID', '')
-#                         lcicID_get = None
-#                         lcicID_error_status = '33'
-
-#                         if com_enterprise_code and lcicID:
-#                             enterprise_info_by_code = EnterpriseInfo.objects.filter(EnterpriseID=com_enterprise_code).first()
-#                             enterprise_info_by_id = EnterpriseInfo.objects.filter(LCICID=lcicID).first()
-
-#                             if enterprise_info_by_code and enterprise_info_by_id:
-#                                 # ກວດສອບຂໍ້ມູນໃນ B1 ແລະ B1_Monthly
-#                                 b1_entry = B1.objects.filter(
-#                                     bnk_code=item.get('bnk_code', ''),
-#                                     branch_id=item.get('branch_id', ''),
-#                                     customer_id=item.get('customer_id', ''),
-#                                     loan_id=item.get('loan_id', '')
-#                                 ).first()
-
-#                                 b1_monthly_entry = B1_Monthly.objects.filter(
-#                                     bnk_code=item.get('bnk_code', ''),
-#                                     branch_id=item.get('branch_id', ''),
-#                                     customer_id=item.get('customer_id', ''),
-#                                     loan_id=item.get('loan_id', '')
-#                                 ).first()
-
-#                                 if (b1_entry or b1_monthly_entry) and (
-#                                     (b1_entry and b1_entry.customer_id == item.get('customer_id')) or 
-#                                     (b1_monthly_entry and b1_monthly_entry.customer_id == item.get('customer_id'))
-#                                 ):
-#                                     # ເກັບໃນ data_edit
-#                                     data_edit.objects.create(
-#                                         lcicID=lcicID,
-#                                         period=period,
-#                                         com_enterprise_code=com_enterprise_code,
-#                                         segmentType=item.get('segmentType', ''),
-#                                         bnk_code=item.get('bnk_code', ''),
-#                                         customer_id=item.get('customer_id', ''),
-#                                         branch_id=item.get('branch_id', ''),
-#                                         lon_sys_id=item.get('lon_sys_id', ''),
-#                                         loan_id=item.get('loan_id', ''),
-#                                         lon_open_date=item.get('lon_open_date', None),
-#                                         lon_exp_date=item.get('lon_exp_date', None),
-#                                         lon_ext_date=item.get('lon_ext_date', None),
-#                                         lon_int_rate=item.get('lon_int_rate', 0),
-#                                         lon_purpose_code=item.get('lon_purpose_code', ''),
-#                                         lon_credit_line=item.get('lon_credit_line', 0),
-#                                         lon_currency_code=item.get('lon_currency_code', ''),
-#                                         lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
-#                                         lon_account_no=item.get('lon_account_no', ''),
-#                                         lon_no_days_slow=item.get('lon_no_days_slow', 0),
-#                                         lon_class=item.get('lon_class', ''),
-#                                         lon_type=item.get('lon_type', ''),
-#                                         lon_term=item.get('lon_term', ''),
-#                                         lon_status=item.get('lon_status', ''),
-#                                         lon_insert_date=item.get('lon_insert_date', None),
-#                                         lon_update_date=item.get('lon_update_date', None),
-#                                         lon_applied_date=item.get('lon_applied_date', None),
-#                                         is_disputed=item.get('is_disputed', 0),
-#                                         id_file=FID
-#                                     )
-                                    
-#                                 else:
-#                                     # ບໍ່ຄືກັນແມ່ນເກັບໃນ disputes
-#                                     disputes.objects.create(
-#                                         lcicID=lcicID,
-#                                         period=period,
-#                                         com_enterprise_code=com_enterprise_code,
-#                                         segmentType=item.get('segmentType', ''),
-#                                         bnk_code=item.get('bnk_code', ''),
-#                                         customer_id=item.get('customer_id', ''),
-#                                         branch_id=item.get('branch_id', ''),
-#                                         lon_sys_id=item.get('lon_sys_id', ''),
-#                                         loan_id=item.get('loan_id', ''),
-#                                         lon_open_date=item.get('lon_open_date', None),
-#                                         lon_exp_date=item.get('lon_exp_date', None),
-#                                         lon_ext_date=item.get('lon_ext_date', None),
-#                                         lon_int_rate=item.get('lon_int_rate', 0),
-#                                         lon_purpose_code=item.get('lon_purpose_code', ''),
-#                                         lon_credit_line=item.get('lon_credit_line', 0),
-#                                         lon_currency_code=item.get('lon_currency_code', ''),
-#                                         lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
-#                                         lon_account_no=item.get('lon_account_no', ''),
-#                                         lon_no_days_slow=item.get('lon_no_days_slow', 0),
-#                                         lon_class=item.get('lon_class', ''),
-#                                         lon_type=item.get('lon_type', ''),
-#                                         lon_term=item.get('lon_term', ''),
-#                                         lon_status=item.get('lon_status', ''),
-#                                         lon_insert_date=item.get('lon_insert_date', None),
-#                                         lon_update_date=item.get('lon_update_date', None),
-#                                         lon_applied_date=item.get('lon_applied_date', None),
-#                                         is_disputed=item.get('is_disputed', 0),
-#                                         id_file=FID
-#                                     )
-                                   
-#                                     erroneous_items += 1
-#                             else:
-#                                 if enterprise_info_by_code:   #ມີ enterprise code ແຕ່ບໍ່ມີ lcicID 
-#                                     lcicID_get = enterprise_info_by_code.LCICID
-#                                     b1_entry = B1.objects.filter(
-#                                         com_enterprise_code=com_enterprise_code,
-#                                         customer_id=item.get('customer_id', '')
-#                                     )
-#                                     b1_monthly_entry = B1_Monthly.objects.filter(
-#                                         com_enterprise_code=com_enterprise_code,
-#                                         customer_id=item.get('customer_id', '')
-#                                     )
-#                                     if b1_entry and b1_monthly_entry: 
-#                                         lcicID_error_status = '01'
-#                                     else:
-#                                         disputes.objects.create(
-#                                             lcicID=lcicID,
-#                                             period=period,
-#                                             com_enterprise_code=com_enterprise_code,
-#                                             segmentType=item.get('segmentType', ''),
-#                                             bnk_code=item.get('bnk_code', ''),
-#                                             customer_id=item.get('customer_id', ''),
-#                                             branch_id=item.get('branch_id', ''),
-#                                             lon_sys_id=item.get('lon_sys_id', ''),
-#                                             loan_id=item.get('loan_id', ''),
-#                                             lon_open_date=item.get('lon_open_date', None),
-#                                             lon_exp_date=item.get('lon_exp_date', None),
-#                                             lon_ext_date=item.get('lon_ext_date', None),
-#                                             lon_int_rate=item.get('lon_int_rate', 0),
-#                                             lon_purpose_code=item.get('lon_purpose_code', ''),
-#                                             lon_credit_line=item.get('lon_credit_line', 0),
-#                                             lon_currency_code=item.get('lon_currency_code', ''),
-#                                             lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
-#                                             lon_account_no=item.get('lon_account_no', ''),
-#                                             lon_no_days_slow=item.get('lon_no_days_slow', 0),
-#                                             lon_class=item.get('lon_class', ''),
-#                                             lon_type=item.get('lon_type', ''),
-#                                             lon_term=item.get('lon_term', ''),
-#                                             lon_status=item.get('lon_status', ''),
-#                                             lon_insert_date=item.get('lon_insert_date',0),
-#                                             lon_update_date=item.get('lon_update_date',0),
-#                                             lon_applied_date=item.get('lon_applied_date',0),
-#                                             is_disputed=item.get('is_disputed', 0),
-#                                             id_file=FID
-#                                         )
-#                                     lcicID_error_status = '01'
-                                
-                                
-                                   
-                                    
-#                                 elif enterprise_info_by_id:  #ມີ lcicID ແຕ່ບໍ່ມີ enterprise code
-#                                     lcicID_get = enterprise_info_by_id.EnterpriseID
-#                                     b1_entry = B1.objects.filter(
-#                                          lcicID=lcicID,
-#                                          customer_id=item.get('customer_id', '')
-#                                      ).first()
-#                                     b1_monthly_entry = B1_Monthly.objects.filter(
-#                                         lcicID=lcicID,
-#                                         customer_id=item.get('customer_id', '')
-#                                     ).first()
-#                                     if b1_entry and b1_monthly_entry: 
-#                                         disputes.objects.create(
-#                                             lcicID=lcicID,
-#                                             period=period,
-#                                             com_enterprise_code=com_enterprise_code,
-#                                             segmentType=item.get('segmentType', ''),
-#                                             bnk_code=item.get('bnk_code', ''),
-#                                             customer_id=item.get('customer_id', ''),
-#                                             branch_id=item.get('branch_id', ''),
-#                                             lon_sys_id=item.get('lon_sys_id', ''),
-#                                             loan_id=item.get('loan_id', ''),
-#                                             lon_open_date=item.get('lon_open_date', None),
-#                                             lon_exp_date=item.get('lon_exp_date', None),
-#                                             lon_ext_date=item.get('lon_ext_date', None),
-#                                             lon_int_rate=item.get('lon_int_rate', 0),
-#                                             lon_purpose_code=item.get('lon_purpose_code', ''),
-#                                             lon_credit_line=item.get('lon_credit_line', 0),
-#                                             lon_currency_code=item.get('lon_currency_code', ''),
-#                                             lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
-#                                             lon_account_no=item.get('lon_account_no', ''),
-#                                             lon_no_days_slow=item.get('lon_no_days_slow', 0),
-#                                             lon_class=item.get('lon_class', ''),
-#                                             lon_type=item.get('lon_type', ''),
-#                                             lon_term=item.get('lon_term', ''),
-#                                             lon_status=item.get('lon_status', ''),
-#                                             lon_insert_date=item.get('lon_insert_date', None),
-#                                             lon_update_date=item.get('lon_update_date', None),
-#                                             lon_applied_date=item.get('lon_applied_date', None),
-#                                             is_disputed=item.get('is_disputed', 0),
-#                                             id_file=FID
-#                                         )
-#                                     else:
-#                                         lcicID_error_status = '10'
-#                                         B_Data_is_damaged.objects.create(
-#                                             lcicID=lcicID,
-#                                             period=period,
-#                                             com_enterprise_code=com_enterprise_code,
-#                                             segmentType=item.get('segmentType', ''),
-#                                             bnk_code=item.get('bnk_code', ''),
-#                                             customer_id=item.get('customer_id', ''),
-#                                             branch_id=item.get('branch_id', ''),
-#                                             lon_sys_id=item.get('lon_sys_id', ''),
-#                                             loan_id=item.get('loan_id', ''),
-#                                             lon_open_date=item.get('lon_open_date', None),
-#                                             lon_exp_date=item.get('lon_exp_date', None),
-#                                             lon_ext_date=item.get('lon_ext_date', None),
-#                                             lon_int_rate=item.get('lon_int_rate', 0),
-#                                             lon_purpose_code=item.get('lon_purpose_code', ''),
-#                                             lon_credit_line=item.get('lon_credit_line', 0),
-#                                             lon_currency_code=item.get('lon_currency_code', ''),
-#                                             lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
-#                                             lon_account_no=item.get('lon_account_no', ''),
-#                                             lon_no_days_slow=item.get('lon_no_days_slow', 0),
-#                                             lon_class=item.get('lon_class', ''),
-#                                             lon_type=item.get('lon_type', ''),
-#                                             lon_term=item.get('lon_term', ''),
-#                                             lon_status=item.get('lon_status', ''),
-#                                             lon_insert_date=item.get('lon_insert_date', None),
-#                                             lon_update_date=item.get('lon_update_date', None),
-#                                             lon_applied_date=item.get('lon_applied_date', None),
-#                                             is_disputed=item.get('is_disputed', 0),
-#                                             lcicID_get=lcicID_get,
-#                                             lcicID_error='33',
-#                                             id_file=FID
-
-#                                         )
-                                        
-
-#                                     # ມີ lcicID ແຕ່ບໍ່ມີ  com_enterprise_code ແມ່ນໃຫ້ເອົາ  lcicID ໄປກວດສອບກ່ອນວ່າເລກ lcicID ມີຂໍ້ມູນທີ່ມີ  customer_id ຖືກກັບ  B1, B1_Monthly ຖ້າມີ lcicID ຄືກັນແຕ່ customer_id ຜິດແມ່ນໃຫ້ບັນທືກລົງໃນ  disputes ແລະ ຖ້າບໍ່ມີຂໍມູນ ຫຼື ມີແຕ່ຖືກກັນ ແມ່ນໃຫ້ໃສ່ lcicID_error_status = '10' ແລ້ວບັນທືກລົງ B_Data_is_damaged
-                                    
-#                         elif com_enterprise_code:
-#                             enterprise_info_by_code = EnterpriseInfo.objects.filter(EnterpriseID=com_enterprise_code).first() #ມີ enterprise code ແຕ່ lcicID ຜິດ
-#                             if enterprise_info_by_code:
-#                                 lcicID_get = enterprise_info_by_code.LCICID
-#                                 lcicID_error_status = '31'
-#                             else:
-#                                 lcicID_error_status = '31'
-#                         elif lcicID:
-#                             enterprise_info_by_id = EnterpriseInfo.objects.filter(LCICID=lcicID).first() #ມີ lcicID ແຕ່ enterprise code ຜິດ
-#                             if enterprise_info_by_id:
-#                                 lcicID_get = enterprise_info_by_id.EnterpriseID
-#                                 lcicID_error_status = '13'
-#                             else:
-#                                 lcicID_error_status = '13'
-                        
-
-
-                        
-                                
-#                         B_Data_is_damaged.objects.create(
-#                             lcicID=lcicID,
-#                             period=period,
-#                             com_enterprise_code=com_enterprise_code,
-#                             segmentType=item.get('segmentType', ''),
-#                             bnk_code=item.get('bnk_code', ''),
-#                             customer_id=item.get('customer_id', ''),
-#                             branch_id=item.get('branch_id', ''),
-#                             lon_sys_id=item.get('lon_sys_id', ''),
-#                             loan_id=item.get('loan_id', ''),
-#                             lon_open_date=item.get('lon_open_date', None),
-#                             lon_exp_date=item.get('lon_exp_date', None),
-#                             lon_ext_date=item.get('lon_ext_date', None),
-#                             lon_int_rate=item.get('lon_int_rate', 0),
-#                             lon_purpose_code=item.get('lon_purpose_code', ''),
-#                             lon_credit_line=item.get('lon_credit_line', 0),
-#                             lon_currency_code=item.get('lon_currency_code', ''),
-#                             lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
-#                             lon_account_no=item.get('lon_account_no', ''),
-#                             lon_no_days_slow=item.get('lon_no_days_slow', 0),
-#                             lon_class=item.get('lon_class', ''),
-#                             lon_type=item.get('lon_type', ''),
-#                             lon_term=item.get('lon_term', ''),
-#                             lon_status=item.get('lon_status', ''),
-#                             lon_insert_date=item.get('lon_insert_date', None),
-#                             lon_update_date=item.get('lon_update_date', None),
-#                             lon_applied_date=item.get('lon_applied_date', None),
-#                             is_disputed=item.get('is_disputed', 0),
-#                             lcicID_error=lcicID_error_status,
-#                             lcicID_get=lcicID_get,
-#                             id_file=FID
-#                         )
-#                         existing_dispute = disputes.objects.filter(lcicID=lcicID, period=period,com_enterprise_code=com_enterprise_code,).exists()
-
-#                         if not existing_dispute :
-#                             erroneous_items += 1
-
-#                     except Exception as e:
-#                         B_Data_is_damaged.objects.create(
-#                             lcicID=item.get('lcicID', ''),
-#                             period=period,
-#                             com_enterprise_code=item.get('com_enterprise_code', ''),
-#                             segmentType=item.get('segmentType', ''),
-#                             bnk_code=item.get('bnk_code', ''),
-#                             customer_id=item.get('customer_id', ''),
-#                             branch_id=item.get('branch_id', ''),
-#                             lon_sys_id=item.get('lon_sys_id', ''),
-#                             loan_id=item.get('loan_id', ''),
-#                             lon_open_date=item.get('lon_open_date', None),
-#                             lon_exp_date=item.get('lon_exp_date', None),
-#                             lon_ext_date=item.get('lon_ext_date', None),
-#                             lon_int_rate=item.get('lon_int_rate', 0),
-#                             lon_purpose_code=item.get('lon_purpose_code', ''),
-#                             lon_credit_line=item.get('lon_credit_line', 0),
-#                             lon_currency_code=item.get('lon_currency_code', ''),
-#                             lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
-#                             lon_account_no=item.get('lon_account_no', ''),
-#                             lon_no_days_slow=item.get('lon_no_days_slow', 0),
-#                             lon_class=item.get('lon_class', ''),
-#                             lon_type=item.get('lon_type', ''),
-#                             lon_term=item.get('lon_term', ''),
-#                             lon_status=item.get('lon_status', ''),
-#                             lon_insert_date=item.get('lon_insert_date', None),
-#                             lon_update_date=item.get('lon_update_date', None),
-#                             lon_applied_date=item.get('lon_applied_date', None),
-#                             is_disputed=item.get('is_disputed', 0),
-#                             lcicID_error='33',
-#                             id_file=FID
-#                         )
-#                         erroneous_items += 1
-
-#                 error_percentage = (erroneous_items / total_items) * 100 if total_items > 0 else 0
-
-#                 upload_file.percentage = error_percentage
-#                 upload_file.statussubmit = "2" if error_percentage > 15 else "1"
-#                 upload_file.save()
-#                 return JsonResponse({
-#                     'status': 'success',
-#                     'message': 'File uploaded and processed successfully',
-#                     'warnings': warnings,
-#                     'error_percentage': error_percentage
-#                 }, status=200)
-
-#             else:
-#                 return JsonResponse({'status': 'error', 'message': 'Invalid file format'}, status=400)
-
-#         except Exception as e:
-#             logger.error(f"File upload failed: {str(e)}")
-#             return JsonResponse({'status': 'error', 'message': f'File upload failed: {str(e)}'}, status=500)
-
-#     else:
-#         return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=400)
 
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
@@ -5428,6 +4989,14 @@ class UploadFileList(generics.ListAPIView):
     queryset = Upload_File.objects.all()
     serializer_class = UploadFileSerializer
 
+from rest_framework import generics
+from .models import Upload_File_C
+from .serializers import UploadFilecSerializer
+
+class UploadFilecList(generics.ListAPIView):
+    queryset = Upload_File_C.objects.all()
+    serializer_class = UploadFilecSerializer
+
 
 # kaftka
 
@@ -5610,6 +5179,82 @@ def get_data3(request):
 
 
 
+import logging
+from rest_framework.decorators import api_view
+from django.http import JsonResponse
+from .models import  Upload_File_C, C1, C_error ,col_real_estates, col_money_mia, col_equipment_eqi , col_project_prj, col_vechicle_veh, col_guarantor_gua, col_goldsilver_gold,C_error
+from .serializers import UploadFilecSerializer, C1Serializer, C_errorSerializer,col_real_estatesSerializer, col_money_miaSerializer, col_equipment_eqiSerializer, col_project_prjSerializer, col_vechicle_vehSerializer, col_guarantor_guaSerializer, col_goldsilver_goldSerializer,C_errorSerializer
+
+logger = logging.getLogger(__name__)
+
+@api_view(['GET'])
+def get_data4(request):
+    try:
+        cid = request.GET.get('CID')
+
+        logger.debug(f"Received CID: {cid}")
+
+        if not cid:
+            return JsonResponse({'error': 'CID is required'}, status=400)
+
+        c1_data = C1.objects.filter(id_file=cid)
+        c1_serializer = C1Serializer( c1_data, many=True)
+
+        c_error_data= C_error.objects.filter(id_file=cid)
+        c_errorSerializer = C_errorSerializer(c_error_data, many=True)
+
+        col_real_estates_data = col_real_estates.objects.filter(id_file=cid)
+        col_real_estates_serializer = col_real_estatesSerializer(col_real_estates_data, many=True)
+
+        col_money_mia_data = col_money_mia.objects.filter(id_file=cid)
+        col_money_mia_serializer = col_money_miaSerializer(col_money_mia_data, many=True)
+
+        col_equipment_eqi_data = col_equipment_eqi.objects.filter(id_file=cid)
+        col_equipment_eqi_serializer = col_equipment_eqiSerializer(col_equipment_eqi_data, many=True)
+
+        col_project_prj_data = col_project_prj.objects.filter(id_file=cid)
+        col_project_prj_serializer = col_project_prjSerializer(col_project_prj_data, many=True)
+
+        col_vechicle_veh_data = col_vechicle_veh.objects.filter(id_file=cid)
+        col_vechicle_veh_serializer = col_vechicle_vehSerializer(col_vechicle_veh_data, many=True)
+
+        col_guarantor_gua_data = col_guarantor_gua.objects.filter(id_file=cid)
+        col_guarantor_gua_serializer = col_guarantor_guaSerializer(col_guarantor_gua_data, many=True)
+
+        col_goldsilver_gold_data = col_goldsilver_gold.objects.filter(id_file=cid)
+        col_goldsilver_gold_serializer = col_goldsilver_goldSerializer(col_goldsilver_gold_data, many=True)
+
+        c1_disptes = C1_disptes.objects.filter(id_file=cid)
+        c1_disptes_serializer = C1Serializer(c1_disptes, many=True)
+
+        uploadfilec_data = Upload_File_C.objects.filter(CID=cid)
+        uploadfilec_serializer = UploadFilecSerializer(uploadfilec_data, many=True)
+
+
+
+
+        data = {
+            'C1': c1_serializer.data,
+            'C_error': c_errorSerializer.data,
+            'col_real_estates': col_real_estates_serializer.data,
+            'col_money_mia': col_money_mia_serializer.data,
+            'col_equipment_eqi': col_equipment_eqi_serializer.data,
+            'col_project_prj': col_project_prj_serializer.data,
+            'col_vechicle_veh': col_vechicle_veh_serializer.data,
+            'col_guarantor_gua': col_guarantor_gua_serializer.data,
+            'col_goldsilver_gold': col_goldsilver_gold_serializer.data,
+            'C1_disptes': c1_disptes_serializer.data,
+            'uploadfile': uploadfilec_serializer.data
+           
+        }
+
+        return JsonResponse(data)
+    except Exception as e:
+        logger.error(f"Error fetching data: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
 
 # views.py
 from django.http import JsonResponse
@@ -5703,10 +5348,13 @@ def get_collaterals(request):
     collaterals = Collateral.objects.filter(status=1).values('id', 'filename', 'image', 'pathfile', 'status')
     return JsonResponse(list(collaterals), safe=False)
 
-from .models import Login 
+from django.http import JsonResponse
+from .models import C1
+
 def get_login3(request):
-    login = Login.objects.all().values('username', 'nameL', 'surnameE','GID_id','MID_id')
-    return JsonResponse(list(login), safe=False)
+    c1_records = C1.objects.all().values()
+    return JsonResponse(list(c1_records), safe=False)
+
 
 # views.py
 # from django.http import JsonResponse

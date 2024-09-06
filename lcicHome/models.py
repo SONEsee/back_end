@@ -494,6 +494,30 @@ class Upload_File(models.Model):
     percentage = models.FloatField(default=0.0)   
     def __str__(self):
         return self.title    
+    
+class Upload_File_C(models.Model):
+    # ID field is automatically handled by Django when 'primary_key=True' is used.
+    CID = models.AutoField(primary_key=True)
+    MID = models.ForeignKey(memberInfo, null=True, blank=True, on_delete=models.CASCADE)
+    GID = models.ForeignKey(User_Group, null=True, blank=True, on_delete=models.CASCADE)
+    SType = models.ForeignKey(SType, null=True, blank=True, on_delete=models.CASCADE)
+    UType = models.ForeignKey(Upload_Type, null=True, blank=True, on_delete=models.CASCADE)
+    fileName = models.CharField(max_length=255)
+    fileUpload = models.FileField(upload_to="uploadFilesC/")
+    fileSize = models.CharField(max_length=255)
+    path = models.CharField(max_length=255)
+    insertDate = models.DateTimeField(auto_now_add=True, blank=True)
+    updateDate = models.DateTimeField(auto_now_add=True, blank=True)
+    period = models.CharField(max_length=150)
+    status = models.CharField(max_length=150)     
+    statussubmit = models.CharField(max_length=150)     
+    status_upload = models.CharField(max_length=150)
+    FileType = models.CharField(max_length=10)  
+    percentage = models.FloatField(default=0.0)   
+
+    def __str__(self):
+        return self.fileName  # or self.period
+  
 
 
 
@@ -855,16 +879,280 @@ class B1_Yearly(models.Model):
     is_disputed = models.BigIntegerField(default=0, null=True)
 
 class C1 (models.Model):
+    id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
     bnk_code = models.CharField(max_length=30)
-    bank_branch_id = models.CharField(max_length=30)
-    customer_id = models.CharField(max_length=50)
+    branch_id_code = models.CharField(max_length=30)
+    bank_customer_ID = models.CharField(max_length=50)
     loan_id = models.CharField(max_length=50)
     collateral_id = models.CharField(max_length=30) 
     collateral_type = models.CharField(max_length=30)
     collateral_status = models.CharField(max_length=30)
+    insert_date = models.DateTimeField(blank=True)
+    update_date = models.DateTimeField(blank=True)
+    lcicID = models.CharField(max_length=30)
+    com_enterprise_code = models.CharField(max_length=25)
+class C1_disptes (models.Model):
+    id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
+    bnk_code = models.CharField(max_length=30)
+    branch_id_code = models.CharField(max_length=30)
+    bank_customer_ID = models.CharField(max_length=50)
+    loan_id = models.CharField(max_length=50)
+    collateral_id = models.CharField(max_length=30) 
+    collateral_type = models.CharField(max_length=30)
+    collateral_status = models.CharField(max_length=30)
+    insert_date = models.DateTimeField(blank=True)
+    update_date = models.DateTimeField(blank=True)
+    lcicID = models.CharField(max_length=30)
+    com_enterprise_code = models.CharField(max_length=25)
+
+from django.db import models
+from django.utils import timezone
+
+class C_error(models.Model):
+    id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
+    branch_id_code = models.CharField(max_length=30)
+    bnk_code = models.CharField(max_length=30)
+    bank_customer_ID = models.CharField(max_length=50)
+    loan_id = models.CharField(max_length=50)
+    collateral_id = models.CharField(max_length=30) 
+    collateral_type = models.CharField(max_length=30)
+    datamatch = models.CharField(max_length=30)  
+    collateral_status = models.CharField(max_length=30)
     collateral_insert_date = models.DateTimeField(blank=True)
     collateral_update_date = models.DateTimeField(blank=True)
+    lcicID = models.CharField(max_length=30)
+    com_enterprise_code = models.CharField(max_length=25)
+
+    def __str__(self):
+        return f"{self.lcicID} - {self.com_enterprise_code} - {self.collateral_status}"
+
     
+
+#Model C2.1 Real Estate
+class col_real_estates(models.Model):
+    id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
+    lcicID = models.CharField(max_length=30)
+    bnk_code = models.CharField(max_length=30)
+    bank_customer_ID = models.CharField(max_length=50)
+    branch_id_code = models.CharField(max_length=30)
+    loan_id = models.CharField(max_length=30)
+    collateral_type = models.CharField(max_length=30)
+    com_enterprise_code = models.CharField(max_length=25)
+    col_provin = models.CharField(max_length=30)  # ແຂວງ
+    col_district = models.CharField(max_length=30)  # ເມືອງ
+    col_village = models.CharField(max_length=30)  # ບ້ານ
+    col_unit = models.CharField(max_length=30)  # ໜວ່ຍ
+    col_no = models.CharField(max_length=30)  # ເລກທີ
+    col_out_time = models.CharField(max_length=30)  # ອອກຄັ້ງທີ
+    col_type = models.CharField(max_length=30)  # ປະເພດດິນ
+    col_area = models.CharField(max_length=30)  # ເຂດ
+    col_land_registry_book_no = models.CharField(max_length=30)  # ປື້ມທະບຽນທີ່ດີນເຫຼັ້ມທີ່
+    col_document_no = models.CharField(max_length=30)  # ໃບທີ
+    col_land_map_no = models.CharField(max_length=30)  # ແຜນທີ່ຕາດິນເລກທີ່
+    col_land_plot_no = models.CharField(max_length=30)  # ຕອນດີນເລກທີ່
+    col_land_area = models.DecimalField(max_digits=10, decimal_places=2)  # ເນື້ອທີ
+    col_land_unit = models.CharField(max_length=30)  # ມາດຕາສວນ
+    owner_name = models.CharField(max_length=100)  # ອອກໃຫ້ແກ່
+    owner_birth_date = models.DateField()  # ວັນ.ເດືອນ.ປີເກີດ
+    owner_nationality = models.CharField(max_length=30)  # ສັນຊາດ
+    owner_occupation = models.CharField(max_length=50)  # ອາຊີບ
+    current_unit = models.CharField(max_length=30)  # ໜວ່ຍ ປະຈຸບັນ
+    current_village = models.CharField(max_length=30)  # ບ້ານ ປະຈຸບັນ
+    current_district = models.CharField(max_length=30)  # ເມືອງ ປະຈຸບັນ
+    current_provin = models.CharField(max_length=30)  # ແຂວງ ປະຈຸບັນ
+    spouse_name = models.CharField(max_length=100, blank=True, null=True)  # ຊື່ຜົວ ຫຼື ເມຍ
+    spouse_birth_date = models.DateField(blank=True, null=True)  # ວັນ.ເດືອນ.ປີເກີດ (ຊື່ຜົວ ຫຼື ເມຍ)
+    spouse_nationality = models.CharField(max_length=30, blank=True, null=True)  # ສັນຊາດ (ຊື່ຜົວ ຫຼື ເມຍ)
+    spouse_occupation = models.CharField(max_length=50, blank=True, null=True)  # ອາຊີບ (ຊື່ຜົວ ຫຼື ເມຍ)
+    land_acquisition = models.CharField(max_length=100)  # ການໄດ້ມາຂອງສິດນຳໃຊ້ດິນ
+    ownership_status = models.CharField(max_length=50)  # ສະຖານະເປັນເຈົ້າຂອງ
+    insert_date = models.DateField()
+    update_date = models.DateField()
+
+    def __str__(self):
+        return f"{self.col_provin} - {self.col_district} - {self.col_village}"
+
+    class Meta:
+        db_table = "col_real_estate"
+
+
+class col_money_mia (models.Model):  #ເອກະສານມີຄ່າ C2.2
+    id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
+    lcicID = models.CharField(max_length=30)
+    bnk_code = models.CharField(max_length=30)
+    com_enterprise_code = models.CharField(max_length=30)
+    collateral_type = models.CharField(max_length=30)
+    collateral_type = models.CharField(max_length=30)
+    bank_customer_ID = models.CharField(max_length=30)
+    branch_id_code = models.CharField(max_length=30)
+    loan_id = models.CharField(max_length=30)
+    collateral_id = models.CharField(max_length=30)
+    account_no = models.CharField(max_length=30)
+    account_type = models.CharField(max_length=30)
+    value = models.CharField(max_length=30)
+    insert_date = models.DateField()
+    update_date = models.DateField()
+
+    def __str__(self):
+        return f"{self.id} - {self.com_enterprise_code}"
+
+    class Meta:
+        db_table = "col_money_mia"
+
+class col_equipment_eqi (models.Model):  # ເຄື່ອງຈັກ ແລະ ອຸປະກອນຕ່າງໆ C2.3\
+    id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
+    bank_customer_ID = models.CharField(max_length=30)
+    bnk_code = models.CharField(max_length=30)
+    lcicID = models.CharField(max_length=30)
+    com_enterprise_code = models.CharField(max_length=30)
+    collateral_type = models.CharField(max_length=30)
+    branch_id_code = models.CharField(max_length=30)
+    loan_id = models.CharField(max_length=30)
+    collateral_id = models.CharField(max_length=30)
+    machine_type = models.CharField(max_length=30)
+    machine_no = models.CharField(max_length=30)
+    value = models.CharField(max_length=30)
+    insert_date = models.DateField()
+    update_date = models.DateField()
+
+    def __str__(self):
+        return f"{self.id} - {self.com_enterprise_code}"
+
+    class Meta:
+        db_table = "col_equipment_eqi"
+
+class col_project_prj (models.Model):  # ເຄື່ອງຈັກ ແລະ ອຸປະກອນຕ່າງໆ C2.4
+    id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
+    bank_customer_ID = models.CharField(max_length=30)
+    bnk_code = models.CharField(max_length=30)
+    lcicID = models.CharField(max_length=30)
+    com_enterprise_code = models.CharField(max_length=30)
+    collateral_type = models.CharField(max_length=30)
+    branch_id_code = models.CharField(max_length=30)
+    loan_id = models.CharField(max_length=30)
+    project_type = models.CharField(max_length=30)
+    collateral_id = models.CharField(max_length=30)
+    project_name_en = models.CharField(max_length=30)
+    ministry = models.CharField(max_length=30)
+    project_namber = models.CharField(max_length=30)
+    project_name_la = models.CharField(max_length=30)
+    value = models.CharField(max_length=30)
+    insert_date = models.DateField()
+    update_date = models.DateField()
+
+    def __str__(self):
+        return f"{self.id} - {self.com_enterprise_code}"
+
+    class Meta:
+        db_table = "col_project_prj"
+class col_vechicle_veh (models.Model):  # ຂໍ້ມູນຍານພາຫະນະ C2.5
+    id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
+    lcicID = models.CharField(max_length=30)
+    bnk_code = models.CharField(max_length=30)
+    com_enterprise_code = models.CharField(max_length=30)
+    collateral_type = models.CharField(max_length=30)
+    bank_customer_ID = models.CharField(max_length=30)
+    branch_id_code = models.CharField(max_length=30)
+    loan_id = models.CharField(max_length=30)
+    collateral_id = models.CharField(max_length=30)
+    name_owner = models.CharField(max_length=30)
+    plate_number = models.CharField(max_length=30)
+    engine_number = models.CharField(max_length=30)
+    body_numbe = models.CharField(max_length=30)
+    model = models.CharField(max_length=30)
+    value = models.CharField(max_length=30)
+    insert_date = models.DateField()
+    update_date = models.DateField()
+    
+
+    def __str__(self):
+        return f"{self.id} - {self.com_enterprise_code}"
+
+    class Meta:
+        db_table = "col_vechicle_veh"
+
+class col_guarantor_gua (models.Model):  # ຂໍ້ມູນຜູ້ຄໍ້າ C2.6
+    id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
+    lcicID = models.CharField(max_length=30)
+    bnk_code = models.CharField(max_length=30)
+    com_enterprise_code = models.CharField(max_length=30)
+    collateral_type = models.CharField(max_length=30)
+    bank_customer_ID = models.CharField(max_length=30)
+    branch_id_code = models.CharField(max_length=30)
+    loan_id = models.CharField(max_length=30)
+    collateral_id = models.CharField(max_length=30)
+    guarantor_type = models.CharField(max_length=30)
+    guarantor_nationality = models.CharField(max_length=30)
+    national_id = models.CharField(max_length=30)
+    national_expiry_date = models.CharField(max_length=30)
+    passport = models.CharField(max_length=30)
+    passport_expiry_date = models.CharField(max_length=30)
+    familybook = models.CharField(max_length=30)
+    familybook_province_code_of_issue = models.CharField(max_length=30)
+    familybook_issue_date = models.CharField(max_length=30)
+    birthdate = models.CharField(max_length=30)
+    gender = models.CharField(max_length=30)
+    ist_name_english = models.CharField(max_length=30)
+    ist_name_lao = models.CharField(max_length=30)
+    nickname_english = models.CharField(max_length=30)
+    nickname_lao = models.CharField(max_length=30)
+    surname_english = models.CharField(max_length=30)
+    surname_lao = models.CharField(max_length=30)
+    address_number_street_english = models.CharField(max_length=30)
+    address_number_street_lao = models.CharField(max_length=30)
+    address_village_english = models.CharField(max_length=30)
+    address_village_lao = models.CharField(max_length=30)
+    address_sub_district_english = models.CharField(max_length=30)
+    address_sub_district_lao = models.CharField(max_length=30)
+    address_district_english = models.CharField(max_length=30)
+    address_district_lao = models.CharField(max_length=30)
+    address_province_code = models.CharField(max_length=30)
+    enterprise_code = models.CharField(max_length=30)
+    registration_date_of_issue = models.CharField(max_length=30)
+    registration_place_issue = models.CharField(max_length=30)
+    company_name_english = models.CharField(max_length=30)
+    company_name_lao = models.CharField(max_length=30)
+    category = models.CharField(max_length=30)
+    insert_date = models.DateField()
+    update_date = models.DateField()
+    def __str__(self):
+        return f"{self.id} - {self.com_enterprise_code}"
+
+    class Meta:
+        db_table = "col_guarantor_gua"
+
+class col_goldsilver_gold (models.Model):  # ເງິນ ແລະ ຄຳ C2.7
+    id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
+    lcicID = models.CharField(max_length=30)
+    bnk_code = models.CharField(max_length=30)
+    com_enterprise_code = models.CharField(max_length=30)
+    collateral_type = models.CharField(max_length=30)
+    bank_customer_ID = models.CharField(max_length=30)
+    branch_id_code = models.CharField(max_length=30)
+    loan_id = models.CharField(max_length=30)
+    collateral_id = models.CharField(max_length=30)
+    weight = models.CharField(max_length=30)
+    unit = models.CharField(max_length=30)
+    value = models.CharField(max_length=30)
+    insert_date = models.DateField()
+    update_date = models.DateField()
+    def __str__(self):
+        return f"{self.id} - {self.com_enterprise_code}"
+
+    class Meta:
+        db_table = "col_goldsilver_gold"
+
+
 # class EnterpriseInfo(models.Model):
 #     LCICID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
 #     EnterpriseID = models.CharField(max_length=50,blank=True,null=True)

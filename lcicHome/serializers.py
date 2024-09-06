@@ -233,7 +233,57 @@ class UploadFileSerializer(serializers.ModelSerializer):
         model = Upload_File
         fields = '__all__'
 
+from rest_framework import serializers
+from .models import  Upload_File_C ,C1, C_error,col_real_estates,col_money_mia, col_equipment_eqi,col_project_prj,col_vechicle_veh,col_guarantor_gua,col_goldsilver_gold,C_error
 
+class col_goldsilver_goldSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = col_goldsilver_gold
+        fields = '__all__'
+class C_errorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = C_error
+        fields = '__all__'
+class col_guarantor_guaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = col_guarantor_gua
+        fields = '__all__'
+class col_equipment_eqiSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = col_equipment_eqi
+        fields = '__all__'
+
+class col_vechicle_vehSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = col_vechicle_veh
+        fields = '__all__'
+class col_project_prjSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = col_project_prj
+        fields = '__all__'
+
+class col_money_miaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = col_money_mia
+        fields = '__all__'
+class UploadFilecSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Upload_File_C
+        fields = '__all__'
+
+
+class C1Serializer(serializers.ModelSerializer):
+    class Meta:
+        model = C1
+        fields = '__all__'
+class C_errorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = C_error
+        fields = '__all__'
+class col_real_estatesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = col_real_estates
+        fields = '__all__'
 
 from rest_framework import serializers
 from .models import File

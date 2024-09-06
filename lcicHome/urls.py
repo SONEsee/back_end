@@ -32,10 +32,11 @@ from .views import get_product_info_by_id
 # from .views import upload_files
 from .views import FileUploadView
 from .views import UploadFileList
+from .views import UploadFilecList
 from .views import upload_file_view
-from .views import FileUploadView3
+from .views import FileUploadViewC, process_uploaded_file
 from .views import FileUploadView3, upload_files
-from .views import get_data3
+from .views import get_data3,get_data4
 from .views import get_data_by_id_file
 from .views import update_statussubmit
 from .views import confirm_upload
@@ -134,13 +135,24 @@ urlpatterns = [
 
 
     path('api/upload-files2/', UploadFileList.as_view(), name='upload-file-list'),
+    path('api/upload-filesc2/', UploadFilecList.as_view(), name='upload-file-list'),
+
     path('api/productinfo3/', get_data3, name='get_data_by_id_file_and_period'),
+    path('api/productinfoc3/', get_data4, name='get_data_by_id_file_and_period'),
     path('api/productinfo4/', get_data_by_id_file, name='get_data_by_id_file'),
     path('confirm_upload/', views.confirm_upload, name='confirm_upload'),
 
     # path('upload333/', FileUploadView3.as_view(), name='file-upload'),
     path('upload-files/', FileUploadView3.as_view(), name='upload_files_view'),
     path('process-files/', upload_files, name='upload_files'),
+
+
+
+    path('upload-filesC/', FileUploadViewC.as_view(), name='upload_files_view'),
+    path('process-filesC/', process_uploaded_file, name='process_uploaded_file'),
+
+
+
     path('api/update-statussubmit/', update_statussubmit, name='update_statussubmit'),
     path('api/upload_image/', upload_image, name='collateral-update'),
     path('api/get_collaterals/', get_collaterals, name='get_collaterals'),

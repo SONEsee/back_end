@@ -1,0 +1,19 @@
+[{
+  "bank_customer_id": "CUST002",
+  "lcicID": "LCIC789101",
+  "com_enterprise_code": "ENT456",
+  "collateral_type":"prj",
+  "branch_id_code": "BR002",
+  "loan_id": "LOAN002",
+  "project_type": "TypeA",
+  "collateral_id": "COLL002",
+  "project_name_en": "Project Alpha",
+  "ministry": "Ministry of Finance",
+  "project_namber": "PN12345",
+  "project_name_la": "ໂຄງການອາບປາ",
+  "value": "100000",
+  "insert_date": "2024-08-28",
+  "update_date": "2024-08-28"
+  }
+  
+  ]
