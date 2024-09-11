@@ -7,6 +7,8 @@ from .models import Login, memberInfo, User_Group
 from django.core.validators import MaxValueValidator, MinLengthValidator
 
 
+
+
 class CustomerInfoINDSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer_Info_IND
@@ -41,51 +43,51 @@ from rest_framework import serializers
 #         fields = '__all__'
 
 # paylay Backend
-class UserLoginSerializer(serializers.Serializer):
-    username = serializers.CharField(required=True)
-    password = serializers.CharField(required=True, write_only=True)
+# class UserLoginSerializer(serializers.Serializer):
+#     username = serializers.CharField(required=True)
+#     password = serializers.CharField(required=True, write_only=True)
 
-    class Meta:
-        model = Login
-        fields = ['UID', 'MID', 'GID', 'username', 'nameL', 'nameE', 'surnameL', 'surnameE', 'is_active', 'is_staff', 'is_superuser']
+#     class Meta:
+#         model = Login
+#         fields = ['UID', 'MID', 'GID', 'username', 'nameL', 'nameE', 'surnameL', 'surnameE', 'is_active', 'is_staff', 'is_superuser']
 
-    def validate(self, data):
-        username = data.get('username')
-        password = data.get('password')
+#     def validate(self, data):
+#         username = data.get('username')
+#         password = data.get('password')
 
-        try:
-            user = Login.objects.get(username=username)
-        except Login.DoesNotExist:
-            raise serializers.ValidationError('Invalid username or password.')
+#         try:
+#             user = Login.objects.get(username=username)
+#         except Login.DoesNotExist:
+#             raise serializers.ValidationError('Invalid username or password.')
 
-        if not user.check_password(password):
-            raise serializers.ValidationError('Invalid username or password.')
+#         if not user.check_password(password):
+#             raise serializers.ValidationError('Invalid username or password.')
 
-        if not user.is_active:
-            raise serializers.ValidationError('User is deactivated.')
+#         if not user.is_active:
+#             raise serializers.ValidationError('User is deactivated.')
 
-        data['user'] = user
-        return data
+#         data['user'] = user
+#         return data
     
-    def to_representation(self, user):
-        """
-        This method is used to control how the data is represented in the response.
-        """
-        # user = instance['user']  # Get the validated user object
+#     def to_representation(self, user):
+#         """
+#         This method is used to control how the data is represented in the response.
+#         """
+#         # user = instance['user']  # Get the validated user object
 
-        return {
-            'UID': user.UID,
-            'MID': user.MID.id,
-            'GID': user.GID.GID,
-            'username': user.username,
-            'nameL': user.nameL,
-            'nameE': user.nameE,
-            'surnameL': user.surnameL,
-            'surnameE': user.surnameE,
-            'is_active': user.is_active,
-            'is_staff': user.is_staff,
-            'is_superuser': user.is_superuser,
-        }
+#         return {
+#             'UID': user.UID,
+#             'MID': user.MID.id,
+#             'GID': user.GID.GID,
+#             'username': user.username,
+#             'nameL': user.nameL,
+#             'nameE': user.nameE,
+#             'surnameL': user.surnameL,
+#             'surnameE': user.surnameE,
+#             'is_active': user.is_active,
+#             'is_staff': user.is_staff,
+#             'is_superuser': user.is_superuser,
+#         }
 
         
 from rest_framework import serializers
@@ -353,3 +355,150 @@ class LoginSerializer(serializers.ModelSerializer):
     class Meta:
         model = Login
         fields = ['username', 'nameL', 'nameE', 'surnameL', 'surnameE', 'GID', 'MID', 'is_active']
+
+
+# Paylay Pherm 
+class UserLoginSerializer(serializers.Serializer):
+    username = serializers.CharField(required=True)
+    password = serializers.CharField(required=True, write_only=True)
+    MID = serializers.PrimaryKeyRelatedField(queryset=memberInfo.objects.all(), allow_null=True, required=False)
+    GID = serializers.PrimaryKeyRelatedField(queryset=User_Group.objects.all(), allow_null=True, required=False)
+
+    class Meta:
+        model = Login
+        fields = ['UID', 'MID', 'GID', 'username', 'nameL', 'nameE', 'surnameL', 'surnameE', 'is_active', 'is_staff', 'is_superuser']
+
+    def validate(self, data):
+        username = data.get('username')
+        password = data.get('password')
+
+        try:
+            user = Login.objects.get(username=username)
+        except Login.DoesNotExist:
+            raise serializers.ValidationError('Invalid username or password.')
+
+        if not user.check_password(password):
+            raise serializers.ValidationError('Invalid username or password.')
+
+        if not user.is_active:
+            raise serializers.ValidationError('User is deactivated.')
+
+        data['user'] = user
+        return data
+    
+    def to_representation(self, user):
+        """
+        This method is used to control how the data is represented in the response.
+        """
+        # user = instance['user']  # Get the validated user object
+
+        return {
+            'UID': user.UID,
+
+            'MID': {
+                'id': user.MID.id,
+                'code': user.MID.code
+            } if user.MID else None,
+            'GID': {
+                'GID': user.GID.GID,
+                'nameL': user.GID.nameL
+            } if user.GID else None,
+            'username': user.username,
+            'nameL': user.nameL,
+            'nameE': user.nameE,
+            'surnameL': user.surnameL,
+            'surnameE': user.surnameE,
+            'is_active': user.is_active,
+            'is_staff': user.is_staff,
+            'is_superuser': user.is_superuser,
+        }
+    
+from rest_framework import serializers
+from django.contrib.auth import authenticate
+from django.contrib.auth.hashers import check_password
+from .models import Login, memberInfo, User_Group
+
+class LoginSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, validators=[MinLengthValidator(8)])
+    MID = serializers.PrimaryKeyRelatedField(queryset=memberInfo.objects.all(), allow_null=True, required=False)
+    GID = serializers.PrimaryKeyRelatedField(queryset=User_Group.objects.all(), allow_null=True, required=False)
+
+    class Meta:
+        model = Login
+        fields = ['UID', 'MID', 'GID', 'username', 'nameL', 'nameE', 'surnameL', 'surnameE', 'insertDate', 'updateDate', 'is_active', 'is_staff', 'is_superuser', 'password']
+        extra_kwargs = {'password': {'write_only': True}}
+
+    def create(self, validated_data):
+        
+        user = Login.objects.create_user(
+            username=validated_data['username'],
+            password=validated_data['password'],  
+            MID=validated_data.get('MID', None),
+            GID=validated_data.get('GID', None),
+            nameL=validated_data['nameL'],
+            nameE=validated_data['nameE'],
+            surnameL=validated_data['surnameL'],
+            surnameE=validated_data['surnameE'],
+            is_active=validated_data.get('is_active', True),
+            is_staff=validated_data.get('is_staff', False),
+            is_superuser=validated_data.get('is_superuser', False),
+        )
+        print("AddUser: ", user)
+        return user
+    
+
+from rest_framework import serializers
+from .models import memberInfo
+
+class MemberInfoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = memberInfo
+        fields = ['code', 'nameL','nameE']  
+        
+        
+
+from .models import SidebarItem, SidebarSubItem, Role
+
+class RoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Role
+        fields = ['id', 'name']
+
+
+class SidebarItemSerializer(serializers.ModelSerializer):
+    roles = RoleSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SidebarItem
+        fields = ['id', 'name', 'url', 'roles']
+
+class SidebarSubItemSerializer(serializers.ModelSerializer):
+    parent = SidebarItemSerializer(read_only=True)
+    roles = RoleSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SidebarSubItem
+        fields = ['id', 'name', 'url', 'parent', 'roles']
+
+from .models import Customer_Info_IND,EnterpriseInfo, InvestorInfo, bank_bnk, B1_Yearly, B1
+from django.core.validators import MinLengthValidator
+
+class CustomerInfoINDSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Customer_Info_IND
+        fields = '_all_'
+        
+class Bank_InfoINDSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = bank_bnk
+        fields = '_all_'
+        
+class EnterpriseInfoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EnterpriseInfo
+        fields = '_all_'
+        
+class B1_YearlySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = B1_Yearly
+        fields = '_all_'

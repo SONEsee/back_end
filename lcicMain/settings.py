@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 
 import os
 from datetime import timedelta
+from corsheaders.defaults import default_headers
 #
 # from pathlib import Path
 
@@ -254,6 +255,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  
 ]
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'X-User-Roles',  # Add your custom headers here
+]
+
 # CORS_ORIGIN_ALLOW_ALL = True
 
 # AUTH_USER_MODEL = 'lcicMain.MyUser'

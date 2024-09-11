@@ -48,6 +48,7 @@ from .views import confirm_image
 from .views import UserLoginView
 from django.contrib.auth import views as auth_views
 from .views import UserProfileView
+from .views import UserManagementView, FCR_reportView, SidebarItemsView, RoleListView, SidebarItemListView, SidebarSubItemListView, AssignRoleView, ManageUserView
 # from .views import FileUploadView, FileDeleteView
 # from .views import upload_files
 # from .views import enterprise_info_search
@@ -95,6 +96,8 @@ urlpatterns = [
    path('render_pdf_view/<slug:object_id>', render_pdf_view, name='render_pdf_view'),
    path('progress/<slug:object_id>', views.progress, name='progress'),
    path('tax_invoice', views.tax, name='tax'),
+
+  
    
 # new urls 
    path('customers/', CustomerInfoINDView.as_view(), name='customer-info-ind'),
@@ -108,13 +111,19 @@ urlpatterns = [
   path('login/', UserLoginView.as_view(), name='login'),
    path('login1/', LoginView1.as_view(), name='login'),
    path('api2/login/', LoginView.as_view(), name='login'),
-   
-  
+  #  paylay Pherm
+   path('sidebar_items/' ,SidebarItemsView.as_view(), name='sidebar_items'),    
+   path('roles/', RoleListView.as_view(), name='roles'),
+   path('sidebar-items/', SidebarItemListView.as_view(), name='sidebar-items'),
+   path('sidebar-sub-items/', SidebarSubItemListView.as_view(), name='sidebar-sub-items'),
+   path('assign-role/', AssignRoleView.as_view(), name='assign-role'),
+   path('userList/', ManageUserView.as_view(), name='mangeuser'),
+   path('create_user/',UserManagementView.as_view(), name='create_user'),
    path('api2/', include(router.urls)),
    
    
   
-     path('api/v1/enterprise-info/search/', EnterpriseInfoSearch.as_view(), name='enterprise-info-search'),
+  path('api/v1/enterprise-info/search/', EnterpriseInfoSearch.as_view(), name='enterprise-info-search'),
    
    
    path('enter', include(router.urls)),
