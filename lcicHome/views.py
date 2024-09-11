@@ -4527,6 +4527,67 @@ from .models import File, Upload_File
 from .serializers import FileSerializer
 import requests
 
+# class FileUploadView3(generics.CreateAPIView):
+#     queryset = File.objects.all()
+#     serializer_class = FileSerializer
+#     parser_classes = (MultiPartParser, FormParser)
+
+#     @method_decorator(ensure_csrf_cookie)
+#     def post(self, request, *args, **kwargs):
+#         response = super().post(request, *args, **kwargs)
+#         files = request.FILES.getlist('file')
+#         csrf_token = request.META.get('CSRF_COOKIE', '')
+
+#         bangkok_tz = pytz.timezone('Asia/Bangkok')
+#         current_time = datetime.now(bangkok_tz)
+
+#         for file in files:
+#             if file.name.endswith('.json'):
+#                 try:
+#                     period_parts = file.name.split('_,.json')[0].split('_')
+#                     if len(period_parts) >= 4:
+#                         period_str = period_parts[2] + "_" + period_parts[3]
+#                         period_month = int(period_parts[3][1:3])
+#                         period_year = int(period_parts[3][3:])
+                        
+#                         file_period_date = datetime(period_year, period_month, 1, tzinfo=bangkok_tz)
+
+                       
+#                         if file_period_date < current_time.replace(day=1) and not (
+#                             file_period_date.year == current_time.year and file_period_date.month == current_time.month
+#                         ):
+#                             return JsonResponse({'status': 'error', 'message': 'Cannot upload data for a previous period'}, status=400)
+
+                       
+#                         if Upload_File.objects.filter(fileName=file.name).exists():
+#                             return JsonResponse({'status': 'error', 'message': 'File with this name already exists'}, status=400)
+
+#                     else:
+#                         return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
+
+#                     file_instance = File.objects.create(file=file)
+#                     file_id = file_instance.id
+
+#                     upload_url = request.build_absolute_uri(reverse('upload_files'))
+#                     with file.open('rb') as f:
+#                         files_data = {'file': f}
+#                         headers = {'X-CSRFToken': csrf_token}
+#                         response = requests.post(upload_url, files=files_data, headers=headers, data={'period': period_str, 'file_id': file_id})
+#                         if response.status_code != 200:
+#                             return JsonResponse({'status': 'error', 'message': 'Failed to process file'}, status=500)
+
+#                 except IndexError:
+#                     return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
+
+#         http_response = HttpResponse(response.content, status=response.status_code)
+#         http_response.set_cookie('csrftoken', csrf_token)
+#         return http_response
+
+
+import json
+
+import json
+
 class FileUploadView3(generics.CreateAPIView):
     queryset = File.objects.all()
     serializer_class = FileSerializer
@@ -4534,7 +4595,10 @@ class FileUploadView3(generics.CreateAPIView):
 
     @method_decorator(ensure_csrf_cookie)
     def post(self, request, *args, **kwargs):
-        response = super().post(request, *args, **kwargs)
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return JsonResponse({'status': 'error', 'message': 'User ID is required'}, status=400)
+
         files = request.FILES.getlist('file')
         csrf_token = request.META.get('CSRF_COOKIE', '')
 
@@ -4544,28 +4608,43 @@ class FileUploadView3(generics.CreateAPIView):
         for file in files:
             if file.name.endswith('.json'):
                 try:
+                    # ເປີດຟາຍແລະອ່ານເນື້ອໃນ json
+                    file_data = json.load(file)
+                    
+                    # ເຊັກກໍລະນີ json ເປັນ list
+                    if isinstance(file_data, list):
+                        file_data = file_data[0]  # ເອົາລາຍການທຳອິດຈາກລາຍການ list
+                    
+                    # ເຊັກວ່າ json ມີຄ່າ bnk_code ຫຼືບໍ່
+                    bnk_code = file_data.get('bnk_code', None)
+                    if bnk_code is None:
+                        return JsonResponse({'status': 'error', 'message': 'bnk_code not found in the file'}, status=400)
+                    
+                    # ເຊັກວ່າ bnk_code ກົງກັບ user_id ຫຼືບໍ່
+                    if str(user_id) != str(bnk_code):
+                        return JsonResponse({'status': 'error', 'message': 'User ID does not match bnk_code'}, status=400)
+
+                    # ປະມວນຜົນການຕ່າງໆຕາມປົກກະຕິ
                     period_parts = file.name.split('_,.json')[0].split('_')
                     if len(period_parts) >= 4:
                         period_str = period_parts[2] + "_" + period_parts[3]
                         period_month = int(period_parts[3][1:3])
                         period_year = int(period_parts[3][3:])
-                        
+
                         file_period_date = datetime(period_year, period_month, 1, tzinfo=bangkok_tz)
 
-                       
                         if file_period_date < current_time.replace(day=1) and not (
                             file_period_date.year == current_time.year and file_period_date.month == current_time.month
                         ):
                             return JsonResponse({'status': 'error', 'message': 'Cannot upload data for a previous period'}, status=400)
 
-                       
                         if Upload_File.objects.filter(fileName=file.name).exists():
                             return JsonResponse({'status': 'error', 'message': 'File with this name already exists'}, status=400)
 
                     else:
                         return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
 
-                    file_instance = File.objects.create(file=file)
+                    file_instance = File.objects.create(file=file, user_id=user_id)
                     file_id = file_instance.id
 
                     upload_url = request.build_absolute_uri(reverse('upload_files'))
@@ -4578,15 +4657,15 @@ class FileUploadView3(generics.CreateAPIView):
 
                 except IndexError:
                     return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
+                except json.JSONDecodeError:
+                    return JsonResponse({'status': 'error', 'message': 'Invalid JSON format'}, status=400)
 
         http_response = HttpResponse(response.content, status=response.status_code)
         http_response.set_cookie('csrftoken', csrf_token)
         return http_response
 
 
-    
 
-    
 
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
@@ -6265,7 +6344,7 @@ class UserLoginView(APIView):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid(raise_exception=True):
             user = serializer.validated_data['user']
-            print("User_info: ", user)
+            # print("User_info: ", user)
             
             # Generate JWT tokens
             refresh = RefreshToken.for_user(user)
@@ -6273,6 +6352,7 @@ class UserLoginView(APIView):
 
             # user_role = user.GID
             user_data = UserLoginSerializer(user).data
+            print("user_data: ", user_data)
             
             return Response({
                 'detail': 'Successfully logged in.',
@@ -6280,6 +6360,7 @@ class UserLoginView(APIView):
                 'refresh': str(refresh),
                 'user':user_data,
             }, status=status.HTTP_200_OK)
+     
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

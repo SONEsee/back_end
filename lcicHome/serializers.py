@@ -358,15 +358,65 @@ class LoginSerializer(serializers.ModelSerializer):
 
 
 # Paylay Pherm 
+# class UserLoginSerializer(serializers.Serializer):
+#     username = serializers.CharField(required=True)
+#     password = serializers.CharField(required=True, write_only=True)
+#     MID = serializers.PrimaryKeyRelatedField(queryset=memberInfo.objects.all(), allow_null=True, required=False)
+#     GID = serializers.PrimaryKeyRelatedField(queryset=User_Group.objects.all(), allow_null=True, required=False)
+
+#     class Meta:
+#         model = Login
+#         fields = ['UID', 'MID', 'GID', 'username', 'nameL', 'nameE', 'surnameL', 'surnameE', 'is_active', 'is_staff', 'is_superuser']
+
+#     def validate(self, data):
+#         username = data.get('username')
+#         password = data.get('password')
+
+#         try:
+#             user = Login.objects.get(username=username)
+#         except Login.DoesNotExist:
+#             raise serializers.ValidationError('Invalid username or password.')
+
+#         if not user.check_password(password):
+#             raise serializers.ValidationError('Invalid username or password.')
+
+#         if not user.is_active:
+#             raise serializers.ValidationError('User is deactivated.')
+
+#         data['user'] = user
+#         return data
+    
+#     def to_representation(self, user):
+#         """
+#         This method is used to control how the data is represented in the response.
+#         """
+#         # user = instance['user']  # Get the validated user object
+
+#         return {
+#             'UID': user.UID,
+
+#             'MID': {
+#                 'id': user.MID.id,
+#                 'code': user.MID.code
+#             } if user.MID else None,
+#             'GID': {
+#                 'GID': user.GID.GID,
+#                 'nameL': user.GID.nameL
+#             } if user.GID else None,
+#             'username': user.username,
+#             'nameL': user.nameL,
+#             'nameE': user.nameE,
+#             'surnameL': user.surnameL,
+#             'surnameE': user.surnameE,
+#             'is_active': user.is_active,
+#             'is_staff': user.is_staff,
+#             'is_superuser': user.is_superuser,
+#         }
 class UserLoginSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
     password = serializers.CharField(required=True, write_only=True)
     MID = serializers.PrimaryKeyRelatedField(queryset=memberInfo.objects.all(), allow_null=True, required=False)
     GID = serializers.PrimaryKeyRelatedField(queryset=User_Group.objects.all(), allow_null=True, required=False)
-
-    class Meta:
-        model = Login
-        fields = ['UID', 'MID', 'GID', 'username', 'nameL', 'nameE', 'surnameL', 'surnameE', 'is_active', 'is_staff', 'is_superuser']
 
     def validate(self, data):
         username = data.get('username')
@@ -385,16 +435,10 @@ class UserLoginSerializer(serializers.Serializer):
 
         data['user'] = user
         return data
-    
-    def to_representation(self, user):
-        """
-        This method is used to control how the data is represented in the response.
-        """
-        # user = instance['user']  # Get the validated user object
 
+    def to_representation(self, user):
         return {
             'UID': user.UID,
-
             'MID': {
                 'id': user.MID.id,
                 'code': user.MID.code
@@ -412,7 +456,7 @@ class UserLoginSerializer(serializers.Serializer):
             'is_staff': user.is_staff,
             'is_superuser': user.is_superuser,
         }
-    
+
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import check_password
