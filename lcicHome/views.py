@@ -4586,7 +4586,6 @@ import requests
 
 import json
 
-import json
 
 class FileUploadView3(generics.CreateAPIView):
     queryset = File.objects.all()
@@ -4638,7 +4637,7 @@ class FileUploadView3(generics.CreateAPIView):
                         ):
                             return JsonResponse({'status': 'error', 'message': 'Cannot upload data for a previous period'}, status=400)
 
-                        if Upload_File.objects.filter(fileName=file.name).exists():
+                        if Upload_File.objects.filter(fileName=file.name ).exists():
                             return JsonResponse({'status': 'error', 'message': 'File with this name already exists'}, status=400)
 
                     else:
@@ -4646,12 +4645,13 @@ class FileUploadView3(generics.CreateAPIView):
 
                     file_instance = File.objects.create(file=file, user_id=user_id)
                     file_id = file_instance.id
+                    
 
                     upload_url = request.build_absolute_uri(reverse('upload_files'))
                     with file.open('rb') as f:
                         files_data = {'file': f}
                         headers = {'X-CSRFToken': csrf_token}
-                        response = requests.post(upload_url, files=files_data, headers=headers, data={'period': period_str, 'file_id': file_id})
+                        response = requests.post(upload_url, files=files_data, headers=headers, data={'period': period_str, 'file_id': file_id, 'user_id': user_id})
                         if response.status_code != 200:
                             return JsonResponse({'status': 'error', 'message': 'Failed to process file'}, status=500)
 
@@ -4687,26 +4687,33 @@ def human_readable_size(size):
 @csrf_exempt
 def upload_files(request):
     if request.method == 'POST':
+    
         try:
             user = request.user
+            user_id = request.POST.get('user_id')
+            print("user_id",user_id)
             file = request.FILES.get('file')
             warnings = []
             period = request.POST.get('period')
             FID = request.POST.get('file_id')
+            
 
             if file and file.name.endswith('.json'):
+                
                 data = json.load(file)
                 file_size = file.size
                 file_size_hr = human_readable_size(file.size)
 
                 upload_file = Upload_File.objects.create(
                     FID=FID,
+                    
                     fileName=file.name,
                     fileSize=file_size_hr,
                     path="uploadFiles/" + file.name,
                     insertDate=timezone.now(),
                     updateDate=timezone.now(),
                     period=period,
+                    user_id=user_id,
                     status="Processing",
                     status_upload="Pending",
                     statussubmit="Pending",
@@ -4757,6 +4764,7 @@ def upload_files(request):
                                     lon_class=item.get('lon_class', ''),
                                     lon_type=item.get('lon_type', ''),
                                     lon_term=item.get('lon_term', ''),
+                                    user_id=item.get('user_id', ''),
                                     lon_status=item.get('lon_status', ''),
                                     lon_insert_date=item.get('lon_insert_date', None),
                                     lon_update_date=item.get('lon_update_date', None),
@@ -4814,6 +4822,7 @@ def upload_files(request):
                             lon_type=item.get('lon_type', ''),
                             lon_term=item.get('lon_term', ''),
                             lon_status=item.get('lon_status', ''),
+                            user_id=item.get('user_id', ''),
                             lon_insert_date=item.get('lon_insert_date', None),
                             lon_update_date=item.get('lon_update_date', None),
                             lon_applied_date=item.get('lon_applied_date', None),
@@ -4850,6 +4859,7 @@ def upload_files(request):
                             lon_class=item.get('lon_class', ''),
                             lon_type=item.get('lon_type', ''),
                             lon_term=item.get('lon_term', ''),
+                            user_id=item.get('user_id', ''),
                             lon_status=item.get('lon_status', ''),
                             lon_insert_date=item.get('lon_insert_date', None),
                             lon_update_date=item.get('lon_update_date', None),

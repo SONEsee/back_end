@@ -474,12 +474,13 @@ class Upload_Type(models.Model):
         return self.nameL
 
 class Upload_File(models.Model):
-    # FID = models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')  id = models.AutoField(primary_key=True)
     FID = models.AutoField(primary_key=True)
     MID = models.ForeignKey(memberInfo, null=True, blank=True, on_delete=models.CASCADE)
-    GID = models.ForeignKey(User_Group, null=True, blank=True , on_delete=models.CASCADE)
-    SType = models.ForeignKey(SType, null=True, blank=True , on_delete=models.CASCADE)
+    GID = models.ForeignKey(User_Group, null=True, blank=True, on_delete=models.CASCADE)
+    SType = models.ForeignKey(SType, null=True, blank=True, on_delete=models.CASCADE)
     UType = models.ForeignKey(Upload_Type, null=True, blank=True, on_delete=models.CASCADE)
+    user_id = models.CharField(max_length=255)  # ເພີ່ມ user_id ເປັນຕ່າງປະເພດ ForeignKey
+    file_id = models.CharField(max_length=255)
     fileName = models.CharField(max_length=255)
     fileUpload = models.FileField(upload_to="uploadFiles/")
     fileSize = models.CharField(max_length=255)
@@ -487,11 +488,12 @@ class Upload_File(models.Model):
     insertDate = models.DateTimeField(auto_now_add=True, blank=True)
     updateDate = models.DateTimeField(auto_now_add=True, blank=True)
     period = models.CharField(max_length=150)
-    status = models.CharField(max_length=150)     
-    statussubmit = models.CharField(max_length=150)     
+    status = models.CharField(max_length=150)
+    statussubmit = models.CharField(max_length=150)
     status_upload = models.CharField(max_length=150)
-    FileType = models.CharField(max_length=10)  
-    percentage = models.FloatField(default=0.0)   
+    FileType = models.CharField(max_length=10)
+    percentage = models.FloatField(default=0.0)
+
     def __str__(self):
         return self.title    
     
@@ -639,6 +641,7 @@ class B1_Monthly(models.Model):
     lon_insert_date = models.DateTimeField(null=True)
     lon_update_date = models.DateTimeField(null=True)
     lon_applied_date = models.DateTimeField(null=True)
+    user_id = models.CharField(max_length=100)
     is_disputed = models.BigIntegerField(default=0, null=True)
     # status_customer = models.CharField(max_length=100)
 
@@ -686,6 +689,7 @@ class B_Data_is_damaged(models.Model):
     lon_insert_date = models.DateTimeField(null=True)
     lon_update_date = models.DateTimeField(null=True)
     lon_applied_date = models.DateTimeField(null=True)
+    user_id = models.CharField(max_length=100)
     is_disputed = models.BigIntegerField(default=0, null=True)
     # status_customer = models.CharField(max_length=100)
 
@@ -730,6 +734,7 @@ class data_edit(models.Model):
     lon_insert_date = models.DateTimeField(null=True)
     lon_update_date = models.DateTimeField(null=True)
     lon_applied_date = models.DateTimeField(null=True)
+    user_id = models.CharField(max_length=100)
     is_disputed = models.BigIntegerField(default=0, null=True)
 
     def save(self, *args, **kwargs):
@@ -773,6 +778,7 @@ class B1(models.Model):
     lon_update_date = models.DateTimeField(blank=True, null=True)
     lon_applied_date = models.DateTimeField(blank=True, null=True)
     is_disputed = models.BigIntegerField(default=0, null=True)
+    user_id = models.CharField(max_length=100)
     status_customer = models.CharField(max_length=100)
     def save(self, *args, **kwargs):
         self.lon_no_days_slow = self.lon_no_days_slow or 0
@@ -846,6 +852,7 @@ class disputes(models.Model):
     lon_insert_date = models.DateTimeField(null=True)
     lon_update_date = models.DateTimeField(null=True)
     lon_applied_date = models.DateTimeField(null=True)
+    user_id = models.CharField(max_length=100)
     is_disputed = models.BigIntegerField(default=0, null=True)
 
     
@@ -1356,6 +1363,7 @@ class File(models.Model):
     id = models.AutoField(primary_key=True)
     title = models.CharField(max_length=100)
     file = models.FileField(upload_to='uploadFiles/')
+    user_id = models.CharField(max_length=100)
 
     def __str__(self):
         return self.title
