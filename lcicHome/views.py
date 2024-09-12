@@ -4584,7 +4584,88 @@ import requests
 #         return http_response
 
 
-import json
+# import json
+
+
+# class FileUploadView3(generics.CreateAPIView):
+#     queryset = File.objects.all()
+#     serializer_class = FileSerializer
+#     parser_classes = (MultiPartParser, FormParser)
+
+#     @method_decorator(ensure_csrf_cookie)
+#     def post(self, request, *args, **kwargs):
+#         user_id = request.data.get('user_id')
+#         if not user_id:
+#             return JsonResponse({'status': 'error', 'message': 'User ID is required'}, status=400)
+
+#         files = request.FILES.getlist('file')
+#         csrf_token = request.META.get('CSRF_COOKIE', '')
+
+#         bangkok_tz = pytz.timezone('Asia/Bangkok')
+#         current_time = datetime.now(bangkok_tz)
+
+#         for file in files:
+#             if file.name.endswith('.json'):
+#                 try:
+#                     # ເປີດຟາຍແລະອ່ານເນື້ອໃນ json
+#                     file_data = json.load(file)
+                    
+#                     # ເຊັກກໍລະນີ json ເປັນ list
+#                     if isinstance(file_data, list):
+#                         file_data = file_data[0]  # ເອົາລາຍການທຳອິດຈາກລາຍການ list
+                    
+#                     # ເຊັກວ່າ json ມີຄ່າ bnk_code ຫຼືບໍ່
+#                     bnk_code = file_data.get('bnk_code', None)
+#                     if bnk_code is None:
+#                         return JsonResponse({'status': 'error', 'message': 'bnk_code not found in the file'}, status=400)
+                    
+#                     # ເຊັກວ່າ bnk_code ກົງກັບ user_id ຫຼືບໍ່
+#                     if str(user_id) != str(bnk_code):
+#                         return JsonResponse({'status': 'error', 'message': 'User ID does not match bnk_code'}, status=400)
+
+#                     # ປະມວນຜົນການຕ່າງໆຕາມປົກກະຕິ
+#                     period_parts = file.name.split('_,.json')[0].split('_')
+#                     if len(period_parts) >= 4:
+#                         period_str = period_parts[2] + "_" + period_parts[3]
+#                         period_month = int(period_parts[3][1:3])
+#                         period_year = int(period_parts[3][3:])
+#                         print("period_month",period_month)
+
+#                         file_period_date = datetime(period_year, period_month, 1, tzinfo=bangkok_tz)
+#                         print("file_period_date",file_period_date)
+
+#                         if file_period_date < current_time.replace(day=1) and not (
+#                             file_period_date.year == current_time.year and file_period_date.month == current_time.month
+#                         ):
+#                             return JsonResponse({'status': 'error', 'message': 'Cannot upload data for a previous period'}, status=400)
+
+#                         if Upload_File.objects.filter(fileName=file.name ).exists():
+#                             return JsonResponse({'status': 'error', 'message': 'File with this name already exists'}, status=400)
+
+#                     else:
+#                         return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
+
+#                     file_instance = File.objects.create(file=file, user_id=user_id)
+#                     file_id = file_instance.id
+                    
+
+#                     upload_url = request.build_absolute_uri(reverse('upload_files'))
+#                     with file.open('rb') as f:
+#                         files_data = {'file': f}
+#                         headers = {'X-CSRFToken': csrf_token}
+#                         response = requests.post(upload_url, files=files_data, headers=headers, data={'period': period_str, 'file_id': file_id, 'user_id': user_id})
+#                         if response.status_code != 200:
+#                             return JsonResponse({'status': 'error', 'message': 'Failed to process file'}, status=500)
+
+#                 except IndexError:
+#                     return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
+#                 except json.JSONDecodeError:
+#                     return JsonResponse({'status': 'error', 'message': 'Invalid JSON format'}, status=400)
+
+#         http_response = HttpResponse(response.content, status=response.status_code)
+#         http_response.set_cookie('csrftoken', csrf_token)
+#         return http_response
+
 
 
 class FileUploadView3(generics.CreateAPIView):
@@ -4594,6 +4675,9 @@ class FileUploadView3(generics.CreateAPIView):
 
     @method_decorator(ensure_csrf_cookie)
     def post(self, request, *args, **kwargs):
+        print("Request Data:", request.data)
+        print("Request Files:", request.FILES)
+        
         user_id = request.data.get('user_id')
         if not user_id:
             return JsonResponse({'status': 'error', 'message': 'User ID is required'}, status=400)
@@ -4601,68 +4685,83 @@ class FileUploadView3(generics.CreateAPIView):
         files = request.FILES.getlist('file')
         csrf_token = request.META.get('CSRF_COOKIE', '')
 
-        bangkok_tz = pytz.timezone('Asia/Bangkok')
-        current_time = datetime.now(bangkok_tz)
-
         for file in files:
             if file.name.endswith('.json'):
                 try:
-                    # ເປີດຟາຍແລະອ່ານເນື້ອໃນ json
-                    file_data = json.load(file)
-                    
-                    # ເຊັກກໍລະນີ json ເປັນ list
+                    # Try reading and parsing the JSON file
+                    file_content = file.read().decode('utf-8')
+                    print("File Content:", file_content)  # Debugging line
+                    file_data = json.loads(file_content)
+
                     if isinstance(file_data, list):
-                        file_data = file_data[0]  # ເອົາລາຍການທຳອິດຈາກລາຍການ list
+                        file_data = file_data[0]
                     
-                    # ເຊັກວ່າ json ມີຄ່າ bnk_code ຫຼືບໍ່
                     bnk_code = file_data.get('bnk_code', None)
+                    print("Bank Code:", bnk_code)  # Debugging line
                     if bnk_code is None:
                         return JsonResponse({'status': 'error', 'message': 'bnk_code not found in the file'}, status=400)
-                    
-                    # ເຊັກວ່າ bnk_code ກົງກັບ user_id ຫຼືບໍ່
-                    if str(user_id) != str(bnk_code):
-                        return JsonResponse({'status': 'error', 'message': 'User ID does not match bnk_code'}, status=400)
 
-                    # ປະມວນຜົນການຕ່າງໆຕາມປົກກະຕິ
-                    period_parts = file.name.split('_,.json')[0].split('_')
-                    if len(period_parts) >= 4:
-                        period_str = period_parts[2] + "_" + period_parts[3]
-                        period_month = int(period_parts[3][1:3])
-                        period_year = int(period_parts[3][3:])
+                    # Extract period from file name
+                    file_name_parts = file.name.split('_')
+                    print("File Name Parts:", file_name_parts)  # Debugging line
+                    if len(file_name_parts) >= 4:
+                        period_str = file_name_parts[3]  # Extract M122026
+                        try:
+                            period_month = int(period_str[1:3])
+                            period_year = int(period_str[3:])
+                            file_period = int(period_str[1:])
+                            print("File Period:", file_period)  # Debugging line
+                            print("Period Month:", period_month)  # Debugging line
+                            print("Period Year:", period_year)  # Debugging line
+                            
+                            b1_entry = B1.objects.filter(bnk_code=bnk_code).first()
+                            print("B1 Entry:", b1_entry)  # Debugging line
+                            if not b1_entry:
+                                return JsonResponse({'status': 'error', 'message': 'No matching bnk_code found in B1'}, status=400)
+                            b1_period = int(b1_entry.period)
+                            print("B1 Period:", b1_period)  # Debugging line
 
-                        file_period_date = datetime(period_year, period_month, 1, tzinfo=bangkok_tz)
+                            # Compare periods
+                            if str(user_id) == str(bnk_code):
+                                if file_period < b1_period:
+                                    return JsonResponse({'status': 'error', 'message': 'Cannot upload data for a previous period'}, status=400)
+                            else:
+                                if file_period < b1_period:
+                                    return JsonResponse({'status': 'error', 'message': 'bnk_code mismatch, but the period is too early'}, status=400)
 
-                        if file_period_date < current_time.replace(day=1) and not (
-                            file_period_date.year == current_time.year and file_period_date.month == current_time.month
-                        ):
-                            return JsonResponse({'status': 'error', 'message': 'Cannot upload data for a previous period'}, status=400)
+                            # Check if file already exists
+                            if Upload_File.objects.filter(fileName=file.name).exists():
+                                return JsonResponse({'status': 'error', 'message': 'File with this name already exists'}, status=400)
 
-                        if Upload_File.objects.filter(fileName=file.name ).exists():
-                            return JsonResponse({'status': 'error', 'message': 'File with this name already exists'}, status=400)
-
+                        except ValueError as e:
+                            print("ValueError:", str(e))  # Debugging line
+                            return JsonResponse({'status': 'error', 'message': 'Invalid period format in file name'}, status=400)
                     else:
                         return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
 
+                    # Save the file instance in the File model
                     file_instance = File.objects.create(file=file, user_id=user_id)
                     file_id = file_instance.id
+                    print("File saved with ID:", file_id)  # Debugging line
                     
-
+                    # Send file to upload URL
                     upload_url = request.build_absolute_uri(reverse('upload_files'))
                     with file.open('rb') as f:
                         files_data = {'file': f}
                         headers = {'X-CSRFToken': csrf_token}
                         response = requests.post(upload_url, files=files_data, headers=headers, data={'period': period_str, 'file_id': file_id, 'user_id': user_id})
+                        print("Upload Response:", response.status_code, response.text)  # Debugging line
                         if response.status_code != 200:
                             return JsonResponse({'status': 'error', 'message': 'Failed to process file'}, status=500)
 
-                except IndexError:
-                    return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
-                except json.JSONDecodeError:
-                    return JsonResponse({'status': 'error', 'message': 'Invalid JSON format'}, status=400)
+                except json.JSONDecodeError as e:
+                    print("JSONDecodeError:", str(e))  # Debugging line
+                    return JsonResponse({'status': 'error', 'message': 'Invalid JSON format in file'}, status=400)
 
-        http_response = HttpResponse(response.content, status=response.status_code)
-        http_response.set_cookie('csrftoken', csrf_token)
-        return http_response
+        return JsonResponse({'status': 'success', 'message': 'File uploaded successfully'})
+
+
+
 
 
 
@@ -4751,6 +4850,7 @@ def upload_files(request):
                                     branch_id=item.get('branch_id', ''),
                                     lon_sys_id=item.get('lon_sys_id', ''),
                                     loan_id=item.get('loan_id', ''),
+                                    user_id=user_id,
                                     lon_open_date=item.get('lon_open_date', None),
                                     lon_exp_date=item.get('lon_exp_date', None),
                                     lon_ext_date=item.get('lon_ext_date', None),
@@ -4764,7 +4864,7 @@ def upload_files(request):
                                     lon_class=item.get('lon_class', ''),
                                     lon_type=item.get('lon_type', ''),
                                     lon_term=item.get('lon_term', ''),
-                                    user_id=item.get('user_id', ''),
+                                    # user_id=item.get('user_id', ''),
                                     lon_status=item.get('lon_status', ''),
                                     lon_insert_date=item.get('lon_insert_date', None),
                                     lon_update_date=item.get('lon_update_date', None),
@@ -4801,6 +4901,7 @@ def upload_files(request):
                         B_Data_is_damaged.objects.create(
                             lcicID=lcicID,
                             period=period,
+                            user_id=user_id,
                             com_enterprise_code=com_enterprise_code,
                             segmentType=item.get('segmentType', ''),
                             bnk_code=item.get('bnk_code', ''),
@@ -4822,7 +4923,7 @@ def upload_files(request):
                             lon_type=item.get('lon_type', ''),
                             lon_term=item.get('lon_term', ''),
                             lon_status=item.get('lon_status', ''),
-                            user_id=item.get('user_id', ''),
+                            
                             lon_insert_date=item.get('lon_insert_date', None),
                             lon_update_date=item.get('lon_update_date', None),
                             lon_applied_date=item.get('lon_applied_date', None),
@@ -4839,6 +4940,7 @@ def upload_files(request):
                         B_Data_is_damaged.objects.create(
                             lcicID=item.get('lcicID', ''),
                             period=period,
+                            user_id=user_id,
                             com_enterprise_code=item.get('com_enterprise_code', ''),
                             segmentType=item.get('segmentType', ''),
                             bnk_code=item.get('bnk_code', ''),
@@ -4859,7 +4961,7 @@ def upload_files(request):
                             lon_class=item.get('lon_class', ''),
                             lon_type=item.get('lon_type', ''),
                             lon_term=item.get('lon_term', ''),
-                            user_id=item.get('user_id', ''),
+                            
                             lon_status=item.get('lon_status', ''),
                             lon_insert_date=item.get('lon_insert_date', None),
                             lon_update_date=item.get('lon_update_date', None),
@@ -5262,7 +5364,7 @@ def confirm_upload(request):
                         disputes.objects.create(
                             id_file=FID,
                             lcicID=item.lcicID,
-                            
+                            user_id=item.user_id,
                             com_enterprise_code=item.com_enterprise_code,
                             segmentType=item.segmentType,
                             bnk_code=item.bnk_code,
@@ -5303,6 +5405,7 @@ def confirm_upload(request):
                         'bnk_code': item.bnk_code,
                         'customer_id': item.customer_id,
                         'branch_id': item.branch_id,
+                        'user_id': item.user_id,
                         'period': item.period,
                         'lon_sys_id': item.lon_sys_id,
                         'loan_id': item.loan_id,
@@ -5338,6 +5441,7 @@ def confirm_upload(request):
                         'com_enterprise_code': item.com_enterprise_code,
                         'segmentType': item.segmentType,
                         'bnk_code': item.bnk_code,
+                        'user_id': item.user_id,
                         'customer_id': item.customer_id,
                         'branch_id': item.branch_id,
                         'lon_sys_id': item.lon_sys_id,
