@@ -3584,6 +3584,96 @@ from .serializers import FileSerializer
 #         response.set_cookie('csrftoken', csrf_token)
 #         return response
 
+# class FileUploadViewC(generics.CreateAPIView):
+#     queryset = Upload_File_C.objects.all()
+    
+#     serializer_class = FileSerializer
+#     parser_classes = (MultiPartParser, FormParser)
+
+#     @method_decorator(ensure_csrf_cookie)
+    
+#     def post(self, request, *args, **kwargs):
+#         user_id = request.data.get('user_id')
+#         print("user_id:", user_id)
+#         if not user_id:
+#             return JsonResponse({'status': 'error', 'message': 'User ID is required'}, status=400)
+#         files = request.FILES.getlist('file')
+#         print("files:", files)
+#         csrf_token = request.META.get('CSRF_COOKIE', '')
+
+#         for file in files:
+#             if file.name.endswith('.json'):
+#                 try:
+#                 # ອ່ານໄຟລ໌ JSON
+#                     file_content = file.read().decode('utf-8')
+#                     file_data = json.loads(file_content)
+#                     print("data:", file_data)
+
+#                 # ເຊັກວ່າ file_data ແມ່ນ list ຫຼື dictionary
+#                     if isinstance(file_data, list):
+#                     # ຖ້າຫາກແມ່ນ list, ດຶງຂໍ້ມູນອັນທີ່ຕ້ອງການຈາກອອບເຈັກອັນໃນ
+#                         file_data = file_data[0]  # ດຶງອັນທຳອິດຈາກ list ແຕ່ຖ້າມີຫຼາຍອັນເຈົ້າອາດຕ້ອງແກ້ໄຂໃຫ້ເໝາະສົມ
+#                     elif not isinstance(file_data, dict):
+#                         return JsonResponse({'status': 'error', 'message': 'Invalid JSON structure'}, status=400)
+
+#                     file_name_parts = file.name.split('_')
+#                     if len(file_name_parts) >= 4:
+#                         period = file_name_parts[3][1:]
+#                         print("period:", period)
+#                     else:
+#                         return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
+                
+#                     bnk_code = file_data.get('bnk_code')
+#                     print("bnk_code:", bnk_code)
+#                     if bnk_code is None:
+#                         return JsonResponse({'status': 'error', 'message': 'bnk_code is required'}, status=400)
+#                     if str(bnk_code) != user_id != str(bnk_code):
+#                         return JsonResponse({'status': 'error', 'message': 'User ID does not match bnk_code'}, status=405)
+#                     if Upload_File_C.objects.filter(fileName=file.name, user_id=user_id).exists():
+#                         return JsonResponse({'status': 'error', 'message': 'File already exists'}, status=404)
+                    
+#                     file_name_parts = file.name.split('_')
+#                     if len(file_name_parts) >= 4:
+#                         period_str = file_name_parts[3]
+#                         period_month = int(period_str[1:3])
+#                         # print("period_month:", period_month)
+#                         period_year = int(period_str[3:])
+                        
+#                         file_period = int(f"{period_year:04d}{period_month:02d}")
+#                         print("file_period:", file_period)
+
+#                     file_instance = Upload_File_C.objects.create(
+#                         fileUpload=file,
+#                         user_id=user_id,
+#                         fileName=file.name,
+#                         fileSize=str(file.size),
+#                         path="uploadFilesC/" + file.name,
+#                         period=period,
+#                         status='new',
+#                         statussubmit='pending',
+#                         status_upload='in_progress',
+#                         FileType='json',
+#                         percentage=0.0
+#                     )
+
+#                     result = process_uploaded_file(file_instance)
+
+#                     status_value = result.get('status', None)
+
+#                     if status_value == '400':
+#                         file_instance.status_upload = 'failed'
+#                         file_instance.save()
+#                         return JsonResponse(result, status=400)
+#                     else:
+#                         file_instance.status_upload = 'completed'
+#                     file_instance.save()
+
+#                 except IndexError:
+#                     return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
+
+#         response = JsonResponse({'status': 'success', 'message': 'All files processed successfully'})
+#         response.set_cookie('csrftoken', csrf_token)
+#         return response
 
 class FileUploadViewC(generics.CreateAPIView):
     queryset = Upload_File_C.objects.all()
@@ -3592,49 +3682,160 @@ class FileUploadViewC(generics.CreateAPIView):
 
     @method_decorator(ensure_csrf_cookie)
     def post(self, request, *args, **kwargs):
-        files = request.FILES.getlist('file')
-        csrf_token = request.META.get('CSRF_COOKIE', '')
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return JsonResponse({'status': 'error', 'message': 'User ID is required'}, status=400)
 
+        files = request.FILES.getlist('file')
+        if not files:
+            return JsonResponse({'status': 'error', 'message': 'No files uploaded'}, status=401)
+
+        csrf_token = request.META.get('CSRF_COOKIE', '')
         for file in files:
             if file.name.endswith('.json'):
                 try:
-                    period_parts = file.name.split('_,.json')[0].split('_')
-                    if len(period_parts) >= 4:
-                        period = period_parts[2] + "_" + period_parts[3]
+                    file_content = file.read().decode('utf-8')
+                    file_data = json.loads(file_content)
+                    if isinstance(file_data, list):
+                        file_data = file_data[0]
+
+                    bnk_code = file_data.get('bnk_code')
+                    if bnk_code is None:
+                        return JsonResponse({'status': 'error', 'message': 'bnk_code is required'}, status=400)
+                    if str(user_id)  != str(bnk_code):
+                        return JsonResponse({'status': 'error', 'message': 'User ID does not match bnk_code'}, status=405)
+                    
+                    file_name_parts = file.name.split('_')
+                    if len(file_name_parts) >= 4:
+                        period = file_name_parts[3][1:]
                     else:
                         return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
+                    
+                    if Upload_File_C.objects.filter(fileName=file.name, user_id=user_id).exists():
+                        return JsonResponse({'status': 'error', 'message': 'File already exists'}, status=404)
+                    file_name_parts = file.name.split('_')
+                    if len(file_name_parts) >= 4:
+                        period_str = file_name_parts[3]
+                        period_month = int(period_str[1:3])
+                        
+                        period_year = int(period_str[3:])
+                        
+                        
+                        file_period = int(f"{period_year:04d}{period_month:02d}")
+                        
 
+                        c1_entries = C1.objects.filter(bnk_code=bnk_code)
+                        
+                        if c1_entries.exists():
+                            latest_c1 = c1_entries.order_by('-period').first()
+                            
+                            c1_period_str = str(latest_c1.period)
+                            
+                            
+                            if len(c1_period_str) == 6:
+                                c1_period_month = c1_period_str[:2]
+                                
+                                c1_period_year = c1_period_str[2:]
+                                
+                                c1_period = int(f"{c1_period_year}{c1_period_month}")
+                                
+                            else:
+                                return JsonResponse({'status': 'error', 'message': 'Invalid C1 period format'}, status=406)
+                            
+                            if file_period < c1_period:
+                                return JsonResponse({'status': 'error', 'message': 'File period is greater than C1 period'}, status=407)
+                            else:
+                                pass
+                        else:
+                            return JsonResponse({'status': 'error', 'message': 'C1 data not found'}, status=408)
+                    
+                            
                     file_instance = Upload_File_C.objects.create(
                         fileUpload=file,
+                        user_id=user_id,
                         fileName=file.name,
                         fileSize=str(file.size),
                         path="uploadFilesC/" + file.name,
                         period=period,
                         status='new',
                         statussubmit='pending',
-                        status_upload='in_progress',  
+                        status_upload='in_progress',
                         FileType='json',
                         percentage=0.0
                     )
 
-                    result = process_uploaded_file(file_instance)
+                    
+                    result = process_uploaded_file(file_instance, user_id, period)
 
                     status_value = result.get('status', None)
-
                     if status_value == '400':
-                     file_instance.status_upload = 'failed'
-                     file_instance.save()
-                     return JsonResponse(result, status=400)
+                        file_instance.status_upload = 'failed'
                     else:
-                     file_instance.status_upload = 'completed'
+                        file_instance.status_upload = 'completed'
+
                     file_instance.save()
 
-                except IndexError:
-                    return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
+                except Exception as e:
+                   
+                    return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+                
 
         response = JsonResponse({'status': 'success', 'message': 'All files processed successfully'})
         response.set_cookie('csrftoken', csrf_token)
         return response
+
+
+# class FileUploadViewC(generics.CreateAPIView):
+#     queryset = Upload_File_C.objects.all()
+#     serializer_class = FileSerializer
+#     parser_classes = (MultiPartParser, FormParser)
+
+#     @method_decorator(ensure_csrf_cookie)
+#     def post(self, request, *args, **kwargs):
+#         files = request.FILES.getlist('file')
+#         csrf_token = request.META.get('CSRF_COOKIE', '')
+
+#         for file in files:
+#             if file.name.endswith('.json'):
+#                 try:
+#                     period_parts = file.name.split('_,.json')[0].split('_')
+#                     if len(period_parts) >= 4:
+#                         period = period_parts[2] + "_" + period_parts[3]
+#                         print("period",period)
+#                     else:
+#                         return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
+
+#                     file_instance = Upload_File_C.objects.create(
+#                         fileUpload=file,
+#                         fileName=file.name,
+#                         fileSize=str(file.size),
+#                         path="uploadFilesC/" + file.name,
+#                         period=period,
+#                         status='new',
+#                         statussubmit='pending',
+#                         status_upload='in_progress',  
+#                         FileType='json',
+#                         percentage=0.0
+#                     )
+
+#                     result = process_uploaded_file(file_instance)
+
+#                     status_value = result.get('status', None)
+
+#                     if status_value == '400':
+#                      file_instance.status_upload = 'failed'
+#                      file_instance.save()
+#                      return JsonResponse(result, status=400)
+#                     else:
+#                      file_instance.status_upload = 'completed'
+#                     file_instance.save()
+
+#                 except IndexError:
+#                     return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
+
+#         response = JsonResponse({'status': 'success', 'message': 'All files processed successfully'})
+#         response.set_cookie('csrftoken', csrf_token)
+#         return response
 
 
 import json
@@ -3962,7 +4163,7 @@ from .models import EnterpriseInfo, C_error,C1_disptes
 #         print(f"An error occurred: {e}")
 #         return {'status': 'error', 'message': str(e)}
 
-def process_uploaded_file(uploaded_data):
+def process_uploaded_file(uploaded_data,  user_id, period):
     try:
         total_records = 0
         error_records = 0
@@ -4033,6 +4234,8 @@ def process_uploaded_file(uploaded_data):
                     col_type=item.get('col_type', ''),
                     collateral_status=collateral_status,
                     datamatch=datamatch,
+                    user_id=user_id,
+                    period = period,
                     collateral_insert_date=timezone.now(),
                     collateral_update_date=timezone.now()
                 )
@@ -4045,6 +4248,8 @@ def process_uploaded_file(uploaded_data):
                 C1_disptes.objects.create(
                     lcicID=lcicID,
                     id_file=cid,
+                    user_id=user_id,
+                    period=period,
                     com_enterprise_code=com_enterprise_code,
                     bank_customer_ID=bank_customer_ID,
                     bnk_code=item.get('bnk_code', ''),
@@ -4070,6 +4275,8 @@ def process_uploaded_file(uploaded_data):
                     col_id=item.get('col_id', ''),
                     defaults={
                         'account_no': item.get('account_no', ''),
+                        'period': period,
+                        'user_id': user_id,
                         'col_type': item.get('col_type', ''),
                         'account_type': item.get('account_type', ''),
                         'segmentType': item.get('segmentType', ''),
@@ -4128,6 +4335,8 @@ def process_uploaded_file(uploaded_data):
                         'spouse_occupation': item.get('spouse_occupation', ''),
                         'land_acquisition': item.get('land_acquisition', ''),
                         'ownership_status': item.get('ownership_status', ''),
+                        'user_id': user_id,
+                        'period': period,
                         'id_file': cid,
                         'insert_date': timezone.now().date(),
                         'update_date': timezone.now().date()
@@ -4147,7 +4356,8 @@ def process_uploaded_file(uploaded_data):
                         'machine_type': item.get('machine_type', ''),
                         'col_type': item.get('col_type', ''),
                         'segmentType': item.get('segmentType', ''),
-
+                        'period': period,
+                        'user_id': user_id,
                         'machine_no': item.get('machine_no', ''),
                         'value_unit': item.get('value_unit', ''),
                         'id_file': cid,
@@ -4175,6 +4385,8 @@ def process_uploaded_file(uploaded_data):
                         'project_name_en': item.get('project_name_en', ''),
                         'segmentType': item.get('segmentType', ''),
                         'col_type': item.get('col_type', ''),
+                        'period': period,
+                        'user_id': user_id,
                         'ministry': item.get('ministry', ''),
                         'project_namber': item.get('project_namber', ''),
                         'value_unit': item.get('value_unit', ''),
@@ -4209,6 +4421,8 @@ def process_uploaded_file(uploaded_data):
                         'col_type': item.get('col_type', ''),
                         'value': item.get('value', ''),
                         'value_unit': item.get('value_unit', ''),
+                        'user_id': user_id,
+                        'period': period,
                         # 'vehicle_value_unit': item.get('vehicle_value_unit', ''),
                         'vehicle_status': item.get('vehicle_status', ''),
                         'owner_gender': item.get('owner_gender', ''),
@@ -4234,6 +4448,8 @@ def process_uploaded_file(uploaded_data):
                     defaults={
                         'guarantor_name': item.get('guarantor_name', ''),
                         'segmentType': item.get('segmentType', ''),
+                        'user_id': user_id,
+                        'period': period,
                         'col_type': item.get('col_type', ''),
                         'guarantor_type': item.get('guarantor_type', ''),
                         'guarantor_no': item.get('guarantor_no', ''),
@@ -4259,6 +4475,8 @@ def process_uploaded_file(uploaded_data):
                         'gold_weight': item.get('gold_weight', ''),
                         'segmentType': item.get('segmentType', ''),
                         'col_type': item.get('col_type', ''),
+                        'user_id': user_id,
+                        'period': period,
                         'gold_purity': item.get('gold_purity', ''),
                         'value': item.get('value', ''),
                         'id_file': cid,
@@ -4289,6 +4507,8 @@ def process_uploaded_file(uploaded_data):
                     # 'loan_id': item.get('loan_id', ''),
                     # 'col_id': item.get('col_id', ''),
                     'col_type': col_type,
+                    'user_id': user_id,
+                    'period': period,
                     'id_file': cid,
                     'insert_date': timezone.now().date(),
                     'update_date': timezone.now().date()
@@ -5508,14 +5728,17 @@ def confirm_upload(request):
                     bnk_code=item.bnk_code,
                     branch_id=item.branch_id,
                     customer_id=item.customer_id,
-                    loan_id=item.loan_id
+                    loan_id=item.loan_id,
+                    period=item.period
+                    
                 ).exists()
                 
                 b1_match = B1.objects.filter(
                     bnk_code=item.bnk_code,
                     branch_id=item.branch_id,
                     customer_id=item.customer_id,
-                    loan_id=item.loan_id
+                    loan_id=item.loan_id,
+                    period=item.period
                 ).exists()
 
                 if b1_monthly_match or b1_match:
@@ -5523,7 +5746,8 @@ def confirm_upload(request):
                         bnk_code=item.bnk_code,
                         branch_id=item.branch_id,
                         customer_id=item.customer_id,
-                        loan_id=item.loan_id
+                        loan_id=item.loan_id,
+                        period=item.period
                     ).exclude(
                         com_enterprise_code=item.com_enterprise_code,
                         lcicID=item.lcicID
@@ -5533,7 +5757,8 @@ def confirm_upload(request):
                         bnk_code=item.bnk_code,
                         branch_id=item.branch_id,
                         customer_id=item.customer_id,
-                        loan_id=item.loan_id
+                        loan_id=item.loan_id,
+                        period=item.period
                     ).exclude(
                         com_enterprise_code=item.com_enterprise_code,
                         lcicID=item.lcicID
@@ -5578,6 +5803,7 @@ def confirm_upload(request):
                     branch_id=item.branch_id,
                     customer_id=item.customer_id,
                     loan_id=item.loan_id,
+                    period=item.period,
                     defaults={
                         'lcicID': item.lcicID,
                         'com_enterprise_code': item.com_enterprise_code,
@@ -5628,7 +5854,7 @@ def confirm_upload(request):
                         'lon_sys_id': item.lon_sys_id,
                         'loan_id': item.loan_id,
                         'period': item.period,
-                        'product_type': item.product_type,
+                        'product_type': item.product_type,    
                         'lon_open_date': item.lon_open_date,
                         'lon_exp_date': item.lon_exp_date,
                         'lon_ext_date': item.lon_ext_date,

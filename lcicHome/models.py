@@ -511,7 +511,8 @@ class Upload_File_C(models.Model):
     insertDate = models.DateTimeField(auto_now_add=True, blank=True)
     updateDate = models.DateTimeField(auto_now_add=True, blank=True)
     period = models.CharField(max_length=150)
-    status = models.CharField(max_length=150)     
+    status = models.CharField(max_length=150)   
+    user_id = models.CharField(max_length=100)  
     statussubmit = models.CharField(max_length=150)     
     status_upload = models.CharField(max_length=150)
     FileType = models.CharField(max_length=10)  
@@ -894,6 +895,7 @@ class C1 (models.Model):
     id = models.AutoField(primary_key=True)
     id_file = models.CharField(max_length=100)
     bnk_code = models.CharField(max_length=30)
+    period = models.CharField(max_length=150)
     segmentType = models.CharField(max_length=10)
     branch_id_code = models.CharField(max_length=30)
     bank_customer_ID = models.CharField(max_length=50)
@@ -904,10 +906,55 @@ class C1 (models.Model):
     insert_date = models.DateTimeField(blank=True)
     update_date = models.DateTimeField(blank=True)
     lcicID = models.CharField(max_length=30)
+    user_id = models.CharField(max_length=100)
     com_enterprise_code = models.CharField(max_length=50)
+
+class CDL (models.Model):
+    id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
+    c1 = models.CharField(max_length=100)
+    c2 = models.CharField(max_length=100)
+    c3 = models.CharField(max_length=100)
+    c4 = models.CharField(max_length=100)
+    c5 = models.CharField(max_length=100)
+    c6 = models.CharField(max_length=100)
+    c7 = models.CharField(max_length=100)
+    c8 = models.CharField(max_length=100)
+    c9 = models.CharField(max_length=100)
+    c10 = models.CharField(max_length=100)
+    c11 = models.CharField(max_length=100)
+    c12 = models.CharField(max_length=100)
+    c13 = models.CharField(max_length=100)
+    c14 = models.CharField(max_length=100)
+    c15 = models.CharField(max_length=100)
+    c16 = models.CharField(max_length=100)
+    c17 = models.CharField(max_length=100)
+    c18 = models.CharField(max_length=100)
+    c19 = models.CharField(max_length=100)
+    c20 = models.CharField(max_length=100)
+    c21 = models.CharField(max_length=100)
+    c22 = models.CharField(max_length=100)
+    c23 = models.CharField(max_length=100)
+    c24 = models.CharField(max_length=100)
+    c25 = models.CharField(max_length=100)
+    c26 = models.CharField(max_length=100)
+    c27 = models.CharField(max_length=100)
+    c28 = models.CharField(max_length=100)
+    c29 = models.CharField(max_length=100)
+    c30 = models.CharField(max_length=100)
+    c31 = models.CharField(max_length=100)
+    c32 = models.CharField(max_length=100)
+    c33 = models.CharField(max_length=100)
+    c34 = models.CharField(max_length=100)
+    c35 = models.CharField(max_length=100)
+    c36 = models.CharField(max_length=100)
+    c37 = models.CharField(max_length=100)
+    c38 = models.CharField(max_length=100)
+    col_type = models.CharField(max_length=30)
 class C1_disptes (models.Model):
     id = models.AutoField(primary_key=True)
     id_file = models.CharField(max_length=100)
+    period = models.CharField(max_length=150)
     bnk_code = models.CharField(max_length=30)
     segmentType = models.CharField(max_length=10)
     branch_id_code = models.CharField(max_length=30)
@@ -919,6 +966,7 @@ class C1_disptes (models.Model):
     insert_date = models.DateTimeField(blank=True)
     update_date = models.DateTimeField(blank=True)
     lcicID = models.CharField(max_length=30)
+    user_id = models.CharField(max_length=100)
     com_enterprise_code = models.CharField(max_length=50)
 
 from django.db import models
@@ -927,6 +975,7 @@ from django.utils import timezone
 class C_error(models.Model):
     id = models.AutoField(primary_key=True)
     id_file = models.CharField(max_length=100)
+    period = models.CharField(max_length=150)
     branch_id_code = models.CharField(max_length=30)
     segmentType = models.CharField(max_length=10)
     bnk_code = models.CharField(max_length=30)
@@ -939,6 +988,7 @@ class C_error(models.Model):
     collateral_insert_date = models.DateTimeField(blank=True)
     collateral_update_date = models.DateTimeField(blank=True)
     lcicID = models.CharField(max_length=30)
+    user_id = models.CharField(max_length=100)
     com_enterprise_code = models.CharField(max_length=50)
 
     def __str__(self):
@@ -950,6 +1000,7 @@ class C_error(models.Model):
 class col_real_estates(models.Model):
     id = models.AutoField(primary_key=True)
     id_file = models.CharField(max_length=100)
+    period = models.CharField(max_length=150)
     lcicID = models.CharField(max_length=30)
     bnk_code = models.CharField(max_length=30)
     bank_customer_ID = models.CharField(max_length=50)
@@ -990,6 +1041,7 @@ class col_real_estates(models.Model):
     spouse_occupation = models.CharField(max_length=50, blank=True, null=True)  # ອາຊີບ (ຊື່ຜົວ ຫຼື ເມຍ)
     land_acquisition = models.CharField(max_length=100)  # ການໄດ້ມາຂອງສິດນຳໃຊ້ດິນ
     ownership_status = models.CharField(max_length=50)  # ສະຖານະເປັນເຈົ້າຂອງ
+    user_id = models.CharField(max_length=100)
     insert_date = models.DateField()
     update_date = models.DateField()
 
@@ -1003,6 +1055,7 @@ class col_real_estates(models.Model):
 class col_money_mia (models.Model):  #ເອກະສານມີຄ່າ C2.2
     id = models.AutoField(primary_key=True)
     id_file = models.CharField(max_length=100)
+    period = models.CharField(max_length=150)
     lcicID = models.CharField(max_length=30)
     bnk_code = models.CharField(max_length=30)
     com_enterprise_code = models.CharField(max_length=30)
@@ -1023,6 +1076,7 @@ class col_money_mia (models.Model):  #ເອກະສານມີຄ່າ C2.2
     owner_lao_name = models.CharField(max_length=30)
     owner_lao_surname = models.CharField(max_length=30)
     value = models.CharField(max_length=30)
+    user_id = models.CharField(max_length=100)
     insert_date = models.DateField()
     update_date = models.DateField()
 
@@ -1035,6 +1089,7 @@ class col_money_mia (models.Model):  #ເອກະສານມີຄ່າ C2.2
 class col_equipment_eqi (models.Model):  # ເຄື່ອງຈັກ ແລະ ອຸປະກອນຕ່າງໆ C2.3
     id = models.AutoField(primary_key=True)
     id_file = models.CharField(max_length=100)
+    period = models.CharField(max_length=150)
     bank_customer_ID = models.CharField(max_length=30)
     bnk_code = models.CharField(max_length=30)
     lcicID = models.CharField(max_length=30)
@@ -1054,6 +1109,7 @@ class col_equipment_eqi (models.Model):  # ເຄື່ອງຈັກ ແລະ
     owner_surname = models.CharField(max_length=30)
     owner_lao_name = models.CharField(max_length=30)
     owner_lao_surname = models.CharField(max_length=30)
+    user_id = models.CharField(max_length=100)
     insert_date = models.DateField()
     update_date = models.DateField()
 
@@ -1066,6 +1122,7 @@ class col_equipment_eqi (models.Model):  # ເຄື່ອງຈັກ ແລະ
 class col_project_prj (models.Model):  # ເຄື່ອງຈັກ ແລະ ອຸປະກອນຕ່າງໆ C2.4
     id = models.AutoField(primary_key=True)
     id_file = models.CharField(max_length=100)
+    period = models.CharField(max_length=150)
     bank_customer_ID = models.CharField(max_length=30)
     bnk_code = models.CharField(max_length=30)
     lcicID = models.CharField(max_length=30)
@@ -1088,6 +1145,7 @@ class col_project_prj (models.Model):  # ເຄື່ອງຈັກ ແລະ �
     owner_lao_name = models.CharField(max_length=30)
     owner_lao_surname = models.CharField(max_length=30)
     value = models.CharField(max_length=30)
+    user_id = models.CharField(max_length=100)
     insert_date = models.DateField()
     update_date = models.DateField()
 
@@ -1099,6 +1157,7 @@ class col_project_prj (models.Model):  # ເຄື່ອງຈັກ ແລະ �
 class col_vechicle_veh (models.Model):  # ຂໍ້ມູນຍານພາຫະນະ C2.5
     id = models.AutoField(primary_key=True)
     id_file = models.CharField(max_length=100)
+    period = models.CharField(max_length=150)
     lcicID = models.CharField(max_length=30)
     bnk_code = models.CharField(max_length=30)
     com_enterprise_code = models.CharField(max_length=30)
@@ -1122,6 +1181,7 @@ class col_vechicle_veh (models.Model):  # ຂໍ້ມູນຍານພາຫ�
     owner_lao_surname = models.CharField(max_length=30)
     model = models.CharField(max_length=30)
     value = models.CharField(max_length=30)
+    user_id = models.CharField(max_length=100)
     insert_date = models.DateField()
     update_date = models.DateField()
     
@@ -1135,6 +1195,7 @@ class col_vechicle_veh (models.Model):  # ຂໍ້ມູນຍານພາຫ�
 class col_guarantor_gua (models.Model):  # ຂໍ້ມູນຜູ້ຄໍ້າ C2.6
     id = models.AutoField(primary_key=True)
     id_file = models.CharField(max_length=100)
+    period = models.CharField(max_length=150)
     lcicID = models.CharField(max_length=30)
     bnk_code = models.CharField(max_length=30)
     com_enterprise_code = models.CharField(max_length=30)
@@ -1178,6 +1239,7 @@ class col_guarantor_gua (models.Model):  # ຂໍ້ມູນຜູ້ຄໍ້�
     company_name_english = models.CharField(max_length=30)
     company_name_lao = models.CharField(max_length=30)
     category = models.CharField(max_length=30)
+    user_id = models.CharField(max_length=100)
     insert_date = models.DateField()
     update_date = models.DateField()
     def __str__(self):
@@ -1189,6 +1251,7 @@ class col_guarantor_gua (models.Model):  # ຂໍ້ມູນຜູ້ຄໍ້�
 class col_goldsilver_gold (models.Model):  # ເງິນ ແລະ ຄຳ C2.7
     id = models.AutoField(primary_key=True)
     id_file = models.CharField(max_length=100)
+    period = models.CharField(max_length=150)
     lcicID = models.CharField(max_length=30)
     bnk_code = models.CharField(max_length=30)
     segmentType = models.CharField(max_length=10)
@@ -1208,6 +1271,7 @@ class col_goldsilver_gold (models.Model):  # ເງິນ ແລະ ຄຳ C2.7
     owner_lao_name = models.CharField(max_length=30)
     owner_lao_surname = models.CharField(max_length=30)
     value = models.CharField(max_length=30)
+    user_id = models.CharField(max_length=100)
     insert_date = models.DateField()
     update_date = models.DateField()
     def __str__(self):

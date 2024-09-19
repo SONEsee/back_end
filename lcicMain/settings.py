@@ -97,10 +97,10 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'USER_ID_FIELD': 'UID',  # Use 'UID' as the primary key field
-    'USER_ID_CLAIM': 'user_id',  # This is how the user ID will be stored in the token payload
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=3),  # Access token expiry time
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),    # Refresh token expiry time
+    'USER_ID_FIELD': 'UID',  
+    'USER_ID_CLAIM': 'user_id',  
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=3), 
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),    
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
 }
