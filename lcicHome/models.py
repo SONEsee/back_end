@@ -950,6 +950,9 @@ class CDL (models.Model):
     c36 = models.CharField(max_length=100)
     c37 = models.CharField(max_length=100)
     c38 = models.CharField(max_length=100)
+    c39 = models.CharField(max_length=100)
+    c40 = models.CharField(max_length=100)
+    c41 = models.CharField(max_length=100)
     col_type = models.CharField(max_length=30)
 class C1_disptes (models.Model):
     id = models.AutoField(primary_key=True)
@@ -996,7 +999,7 @@ class C_error(models.Model):
 
     
 
-#Model C2.1 Real Estate
+
 class col_real_estates(models.Model):
     id = models.AutoField(primary_key=True)
     id_file = models.CharField(max_length=100)
@@ -1042,6 +1045,9 @@ class col_real_estates(models.Model):
     land_acquisition = models.CharField(max_length=100)  # ການໄດ້ມາຂອງສິດນຳໃຊ້ດິນ
     ownership_status = models.CharField(max_length=50)  # ສະຖານະເປັນເຈົ້າຂອງ
     user_id = models.CharField(max_length=100)
+    rel_status = models.CharField(max_length=100)
+    owner_name_lao = models.CharField(max_length=100)
+    owner_surname_lao = models.CharField(max_length=100)
     insert_date = models.DateField()
     update_date = models.DateField()
 
@@ -1192,61 +1198,49 @@ class col_vechicle_veh (models.Model):  # ຂໍ້ມູນຍານພາຫ�
     class Meta:
         db_table = "col_vechicle_veh"
 
-class col_guarantor_gua (models.Model):  # ຂໍ້ມູນຜູ້ຄໍ້າ C2.6
-    id = models.AutoField(primary_key=True)
-    id_file = models.CharField(max_length=100)
-    period = models.CharField(max_length=150)
-    lcicID = models.CharField(max_length=30)
-    bnk_code = models.CharField(max_length=30)
-    com_enterprise_code = models.CharField(max_length=30)
+class col_guarantor_gua (models.Model):  # ຂໍ້ມູນຜູ້ຄໍ້າ C2.6 1
+    id = models.AutoField(primary_key=True) #1
+    id_file = models.CharField(max_length=100) #1
+    period = models.CharField(max_length=150) #1
+    lcicID = models.CharField(max_length=100) #1
+    bnk_code = models.CharField(max_length=100)#1
+    com_enterprise_code = models.CharField(max_length=100)#1
     segmentType = models.CharField(max_length=10)
-    col_type = models.CharField(max_length=30)
-    bank_customer_ID = models.CharField(max_length=30)
-    branch_id_code = models.CharField(max_length=30)
-    loan_id = models.CharField(max_length=30)
-    col_id = models.CharField(max_length=30)
-    guarantor_type = models.CharField(max_length=30)
-    guarantor_nationality = models.CharField(max_length=30)
-    national_id = models.CharField(max_length=30)
-    national_expiry_date = models.CharField(max_length=30)
-    passport = models.CharField(max_length=30)
-    passport_expiry_date = models.CharField(max_length=30)
-    familybook = models.CharField(max_length=30)
-    familybook_province_code_of_issue = models.CharField(max_length=30)
-    familybook_issue_date = models.CharField(max_length=30)
-    birthdate = models.CharField(max_length=30)
-    gender = models.CharField(max_length=30)
-    ist_name_english = models.CharField(max_length=30)
-    ist_name_lao = models.CharField(max_length=30)
-    nickname_english = models.CharField(max_length=30)
-    nickname_lao = models.CharField(max_length=30)
-    surname_english = models.CharField(max_length=30)
-    surname_lao = models.CharField(max_length=30)
-    address_number_street_english = models.CharField(max_length=30)
-    address_number_street_lao = models.CharField(max_length=30)
-    address_village_english = models.CharField(max_length=30)
-    address_village_lao = models.CharField(max_length=30)
-    address_sub_district_english = models.CharField(max_length=30)
-    address_sub_district_lao = models.CharField(max_length=30)
-    value_unit = models.CharField(max_length=30)
-    address_district_english = models.CharField(max_length=30)
-    address_district_lao = models.CharField(max_length=30)
-    address_province_code = models.CharField(max_length=30)
-    owner_gender = models.CharField(max_length=30)
-    enterprise_code = models.CharField(max_length=30)
-    registration_date_of_issue = models.CharField(max_length=30)
-    registration_place_issue = models.CharField(max_length=30)
-    company_name_english = models.CharField(max_length=30)
-    company_name_lao = models.CharField(max_length=30)
-    category = models.CharField(max_length=30)
-    user_id = models.CharField(max_length=100)
-    insert_date = models.DateField()
-    update_date = models.DateField()
-    def __str__(self):
-        return f"{self.id} - {self.com_enterprise_code}"
+    col_type = models.CharField(max_length=100)#1
+    bank_customer_ID = models.CharField(max_length=100)#1
+    branch_id_code = models.CharField(max_length=100)#1
+    loan_id = models.CharField(max_length=100)#1
+    col_id = models.CharField(max_length=100)#1
+    value = models.CharField(max_length=100)#1
+    value_unit = models.CharField(max_length=100)#1
+    gua_ind_status = models.CharField(max_length=100)#1
+    gua_ind_insert_date = models.CharField(max_length=100)#1
+    guarantor_nationality = models.CharField(max_length=100)#1
+    gua_national_id = models.CharField(max_length=100)#1
+    national_id_expiry_date = models.CharField(max_length=100)#1
+    gua_passport = models.CharField(max_length=100)#1
+    passport_expiry_date = models.CharField(max_length=100)#1
+    gua_familybook_id = models.CharField(max_length=100)#1
+    familybook_provision_code = models.CharField(max_length=100)#1
+    familybook_issue_date = models.CharField(max_length=100)#1
+    gua_birthday = models.CharField(max_length=100)#1
+    gua_gender = models.CharField(max_length=100)#1
+    gua_surname = models.CharField(max_length=100)#1
+    gua_lao_name = models.CharField(max_length=100)#1
+    gua_lao_surname = models.CharField(max_length=100)#1
+    address_number_street_eng = models.CharField(max_length=100)#1
+    address_vill_eng = models.CharField(max_length=100)#1
+    address_district_eng = models.CharField(max_length=100)#1
+    address_number_street_la = models.CharField(max_length=50)#1
+    address_vill_la = models.CharField(max_length=100)#1
+    address_district_la = models.CharField(max_length=100)#1
+    address_province_code = models.CharField(max_length=100)#1
+    owner_name = models.CharField(max_length=50)#1
+    owner_surname = models.CharField(max_length=50)#1
+    owner_lao_name = models.CharField(max_length=50)#1
+    owner_lao_surname = models.CharField(max_length=50)#1
 
-    class Meta:
-        db_table = "col_guarantor_gua"
+
 
 class col_goldsilver_gold (models.Model):  # ເງິນ ແລະ ຄຳ C2.7
     id = models.AutoField(primary_key=True)
