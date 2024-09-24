@@ -3703,7 +3703,7 @@ class FileUploadViewC(generics.CreateAPIView):
                     if bnk_code is None:
                         return JsonResponse({'status': 'error', 'message': 'bnk_code is required'}, status=400)
                     if str(user_id)  != str(bnk_code):
-                        return JsonResponse({'status': 'error', 'message': 'User ID does not match bnk_code'}, status=405)
+                        return JsonResponse({'status': 'error', 'message': 'User ID does not match bnk_code'}, status=401)
                     
                     file_name_parts = file.name.split('_')
                     if len(file_name_parts) >= 4:
@@ -3722,6 +3722,7 @@ class FileUploadViewC(generics.CreateAPIView):
                         
                         
                         file_period = int(f"{period_year:04d}{period_month:02d}")
+                        print("file_period:", file_period)
                         
 
                         c1_entries = C1.objects.filter(bnk_code=bnk_code)
@@ -3729,25 +3730,28 @@ class FileUploadViewC(generics.CreateAPIView):
                         if c1_entries.exists():
                             latest_c1 = c1_entries.order_by('-period').first()
                             
-                            c1_period_str = str(latest_c1.period)
+                            c1_period = latest_c1.period
                             
                             
-                            if len(c1_period_str) == 6:
-                                c1_period_month = c1_period_str[:2]
+                            if len(c1_period) == 6:
+                                c1_period_month = c1_period[:2]
                                 
-                                c1_period_year = c1_period_str[2:]
+                                c1_period_year = c1_period[2:]
                                 
                                 c1_period = int(f"{c1_period_year}{c1_period_month}")
+                                print("c1_period:", c1_period)
                                 
                             else:
                                 return JsonResponse({'status': 'error', 'message': 'Invalid C1 period format'}, status=406)
                             
                             if file_period < c1_period:
-                                return JsonResponse({'status': 'error', 'message': 'File period is greater than C1 period'}, status=407)
-                            else:
-                                pass
+                             return JsonResponse({'status': 'error', 'message': 'File period is less than C1 period'}, status=408)
+
+                                # return JsonResponse({'status': 'error', 'message': 'File period is less than C1 period'}, status=408)
                         else:
-                            return JsonResponse({'status': 'error', 'message': 'C1 data not found'}, status=408)
+                                pass
+                    else:
+                        return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
                     
                             
                     file_instance = Upload_File_C.objects.create(
