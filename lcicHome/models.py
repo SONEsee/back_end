@@ -912,47 +912,50 @@ class C1 (models.Model):
 class CDL (models.Model):
     id = models.AutoField(primary_key=True)
     id_file = models.CharField(max_length=100)
-    c1 = models.CharField(max_length=100)
-    c2 = models.CharField(max_length=100)
-    c3 = models.CharField(max_length=100)
-    c4 = models.CharField(max_length=100)
-    c5 = models.CharField(max_length=100)
-    c6 = models.CharField(max_length=100)
-    c7 = models.CharField(max_length=100)
-    c8 = models.CharField(max_length=100)
-    c9 = models.CharField(max_length=100)
-    c10 = models.CharField(max_length=100)
-    c11 = models.CharField(max_length=100)
-    c12 = models.CharField(max_length=100)
-    c13 = models.CharField(max_length=100)
-    c14 = models.CharField(max_length=100)
-    c15 = models.CharField(max_length=100)
-    c16 = models.CharField(max_length=100)
-    c17 = models.CharField(max_length=100)
-    c18 = models.CharField(max_length=100)
-    c19 = models.CharField(max_length=100)
-    c20 = models.CharField(max_length=100)
-    c21 = models.CharField(max_length=100)
-    c22 = models.CharField(max_length=100)
-    c23 = models.CharField(max_length=100)
-    c24 = models.CharField(max_length=100)
-    c25 = models.CharField(max_length=100)
-    c26 = models.CharField(max_length=100)
-    c27 = models.CharField(max_length=100)
-    c28 = models.CharField(max_length=100)
-    c29 = models.CharField(max_length=100)
-    c30 = models.CharField(max_length=100)
-    c31 = models.CharField(max_length=100)
-    c32 = models.CharField(max_length=100)
-    c33 = models.CharField(max_length=100)
-    c34 = models.CharField(max_length=100)
-    c35 = models.CharField(max_length=100)
-    c36 = models.CharField(max_length=100)
-    c37 = models.CharField(max_length=100)
-    c38 = models.CharField(max_length=100)
-    c39 = models.CharField(max_length=100)
-    c40 = models.CharField(max_length=100)
-    c41 = models.CharField(max_length=100)
+    c2 = models.CharField(max_length=255)
+    c1 = models.CharField(max_length=255)
+    c3 = models.CharField(max_length=255)
+    c4 = models.CharField(max_length=255)
+    c5 = models.CharField(max_length=255)
+    c6 = models.CharField(max_length=255)
+    c7 = models.CharField(max_length=255)
+    c8 = models.CharField(max_length=255)
+    c9 = models.CharField(max_length=255)
+    c10 = models.CharField(max_length=255)
+    c11 = models.CharField(max_length=255)
+    c12 = models.CharField(max_length=255)
+    c13 = models.CharField(max_length=255)
+    c14 = models.CharField(max_length=255)
+    c15 = models.CharField(max_length=255)
+    c16 = models.CharField(max_length=255)
+    c17 = models.CharField(max_length=255)
+    c18 = models.CharField(max_length=255)
+    c19 = models.CharField(max_length=255)
+    c20 = models.CharField(max_length=255)
+    c21 = models.CharField(max_length=255)
+    c22 = models.CharField(max_length=255)
+    c23 = models.CharField(max_length=255)
+    c24 = models.CharField(max_length=255)
+    c25 = models.CharField(max_length=255)
+    c26 = models.CharField(max_length=255)
+    c27 = models.CharField(max_length=255)
+    c28 = models.CharField(max_length=255)
+    c29 = models.CharField(max_length=255)
+    c30 = models.CharField(max_length=255)
+    c31 = models.CharField(max_length=255)
+    c32 = models.CharField(max_length=255)
+    c33 = models.CharField(max_length=255)
+    c34 = models.CharField(max_length=255)
+    c35 = models.CharField(max_length=255)
+    c36 = models.CharField(max_length=255)
+    c37 = models.CharField(max_length=255)
+    c38 = models.CharField(max_length=255)
+    c39 = models.CharField(max_length=255)
+    c40 = models.CharField(max_length=255)
+    c41 = models.CharField(max_length=255)
+    c42 = models.CharField(max_length=255)
+    user_id = models.CharField(max_length=255)
+    period = models.CharField(max_length=255)
     col_type = models.CharField(max_length=30)
 class C1_disptes (models.Model):
     id = models.AutoField(primary_key=True)
@@ -1002,54 +1005,55 @@ class C_error(models.Model):
 
 class col_real_estates(models.Model):
     id = models.AutoField(primary_key=True)
-    id_file = models.CharField(max_length=100)
+    id_file = models.CharField(max_length=255)
     period = models.CharField(max_length=150)
-    lcicID = models.CharField(max_length=30)
-    bnk_code = models.CharField(max_length=30)
+    lcicID = models.CharField(max_length=255)
+    bnk_code = models.CharField(max_length=255)
     bank_customer_ID = models.CharField(max_length=50)
-    segmentType = models.CharField(max_length=10)
-    branch_id_code = models.CharField(max_length=30)
-    loan_id = models.CharField(max_length=30)
-    col_type = models.CharField(max_length=30)
-    value_unit = models.CharField(max_length=30)
+    segmentType = models.CharField(max_length=255)
+    branch_id_code = models.CharField(max_length=255)
+    loan_id = models.CharField(max_length=255)
+    col_type = models.CharField(max_length=255)
+    value_unit = models.CharField(max_length=255)
     com_enterprise_code = models.CharField(max_length=255)
-    plot_vilid = models.CharField(max_length=30)  # ລະຫັດບ້ານທີ່ຕັ້ງຂອງດິນ
-    plot_unit = models.CharField(max_length=30)  # ໜວ່ຍ
-    col_id = models.CharField(max_length=30)  # ລະຫັດຫຼັກຊັບ 
-    col_value = models.CharField(max_length=50)  # ລາຄາ
-    land_no = models.CharField(max_length=30)  # ເລກທີດິນ
-    place_regist_land = models.CharField(max_length=30)  
-    land_map_no = models.CharField(max_length=30)  
-    land_out_time = models.CharField(max_length=30)  # ອອກຄັ້ງທີ
-    col_area = models.CharField(max_length=30)  # ເຂດ
-    land_registry_book_no = models.CharField(max_length=30)  # ປື້ມທະບຽນທີ່ດີນເຫຼັ້ມທີ່
-    land_plot_no = models.CharField(max_length=30)  # ຕອນດີນເລກທີ່
-    land_document_no = models.CharField(max_length=30)  # ໃບທີ່ດີນເລກທີ່
-    land_out_time = models.CharField(max_length=30)  # ອອກຄັ້ງທີ່ດີນເລກທີ່
+    plot_vilid = models.CharField(max_length=255)  # ລະຫັດບ້ານທີ່ຕັ້ງຂອງດິນ
+    plot_unit = models.CharField(max_length=255)  # ໜວ່ຍ
+    col_id = models.CharField(max_length=255)  # ລະຫັດຫຼັກຊັບ 
+    col_value = models.CharField(max_length=255)  # ລາຄາ
+    land_no = models.CharField(max_length=255)  # ເລກທີດິນ
+    place_regist_land = models.CharField(max_length=255)  
+    land_map_no = models.CharField(max_length=255)  
+    land_out_time = models.CharField(max_length=255)  # ອອກຄັ້ງທີ
+    col_area = models.CharField(max_length=50)  # ເຂດ
+    land_registry_book_no = models.CharField(max_length=50)  # ປື້ມທະບຽນທີ່ດີນເຫຼັ້ມທີ່
+    land_plot_no = models.CharField(max_length=50)  # ຕອນດີນເລກທີ່
+    land_document_no = models.CharField(max_length=50)  # ໃບທີ່ດີນເລກທີ່
+    land_out_time = models.CharField(max_length=50)  # ອອກຄັ້ງທີ່ດີນເລກທີ່
     land_area = models.DecimalField(max_digits=10, decimal_places=2)  # ເນື້ອທີ
     land_regis_date = models.CharField()  # ວັນທີອອກໃບຕທດິນ
-    land_type = models.CharField(max_length=30)  # ປະເພດດິນ
-    land_unit = models.CharField(max_length=30)  # ມາດຕາສວນ
-    place_regist_no = models.CharField(max_length=30)  # ສະຖານທີ່ອອກໃບຕາດິນ
-    owner_name = models.CharField(max_length=100)  # ອອກໃຫ້ແກ່
+    land_type = models.CharField(max_length=255)  # ປະເພດດິນ
+    land_unit = models.CharField(max_length=255)  # ມາດຕາສວນ
+    land_insert_date = models.CharField(max_length=255)
+    place_regist_no = models.CharField(max_length=255)  # ສະຖານທີ່ອອກໃບຕາດິນ
+    owner_name = models.CharField(max_length=255)  # ອອກໃຫ້ແກ່
     owner_birth_date = models.CharField()  # ວັນ.ເດືອນ.ປີເກີດ
-    owner_gender = models.CharField(max_length=30)
-    owner_nationality = models.CharField(max_length=30)  # ສັນຊາດ
-    owner_occupation = models.CharField(max_length=50)  # ອາຊີບ
-    current_unit = models.CharField(max_length=30)  # ໜວ່ຍ ປະຈຸບັນ
-    current_vilid = models.CharField(max_length=30)  # ລະຫັດບ້ານ ປະຈຸບັນ
-    spouse_name = models.CharField(max_length=100, blank=True, null=True)  # ຊື່ຜົວ ຫຼື ເມຍ
+    owner_gender = models.CharField(max_length=255)
+    owner_nationality = models.CharField(max_length=255)  # ສັນຊາດ
+    owner_occupation = models.CharField(max_length=255)  # ອາຊີບ
+    current_unit = models.CharField(max_length=50)  # ໜວ່ຍ ປະຈຸບັນ
+    current_vilid = models.CharField(max_length=50)  # ລະຫັດບ້ານ ປະຈຸບັນ
+    spouse_name = models.CharField(max_length=255, blank=True, null=True)  # ຊື່ຜົວ ຫຼື ເມຍ
     spouse_birth_date = models.CharField(blank=True, null=True)  # ວັນ.ເດືອນ.ປີເກີດ (ຊື່ຜົວ ຫຼື ເມຍ)
     spouse_nationality = models.CharField(max_length=30, blank=True, null=True)  # ສັນຊາດ (ຊື່ຜົວ ຫຼື ເມຍ)
-    spouse_occupation = models.CharField(max_length=50, blank=True, null=True)  # ອາຊີບ (ຊື່ຜົວ ຫຼື ເມຍ)
-    land_acquisition = models.CharField(max_length=100)  # ການໄດ້ມາຂອງສິດນຳໃຊ້ດິນ
-    ownership_status = models.CharField(max_length=50)  # ສະຖານະເປັນເຈົ້າຂອງ
-    user_id = models.CharField(max_length=100)
-    rel_status = models.CharField(max_length=100)
-    owner_name_lao = models.CharField(max_length=100)
-    owner_surname_lao = models.CharField(max_length=100)
-    insert_date = models.DateField()
-    update_date = models.DateField()
+    spouse_occupation = models.CharField(max_length=255, blank=True, null=True)  # ອາຊີບ (ຊື່ຜົວ ຫຼື ເມຍ)
+    land_acquisition = models.CharField(max_length=255)  # ການໄດ້ມາຂອງສິດນຳໃຊ້ດິນ
+    ownership_status = models.CharField(max_length=255)  # ສະຖານະເປັນເຈົ້າຂອງ
+    user_id = models.CharField(max_length=255)
+    rel_status = models.CharField(max_length=255)
+    owner_name_lao = models.CharField(max_length=255)
+    owner_surname_lao = models.CharField(max_length=255)
+    insert_date = models.CharField()
+    update_date = models.CharField()
 
     def __str__(self):
         return f"{self.col_provin} - {self.col_district} - {self.col_village}"
@@ -1060,31 +1064,32 @@ class col_real_estates(models.Model):
 
 class col_money_mia (models.Model):  #ເອກະສານມີຄ່າ C2.2
     id = models.AutoField(primary_key=True)
-    id_file = models.CharField(max_length=100)
-    period = models.CharField(max_length=150)
-    lcicID = models.CharField(max_length=30)
-    bnk_code = models.CharField(max_length=30)
-    com_enterprise_code = models.CharField(max_length=30)
-    segmentType = models.CharField(max_length=10)
+    id_file = models.CharField(max_length=255)
+    period = models.CharField(max_length=255)
+    lcicID = models.CharField(max_length=255)
+    bnk_code = models.CharField(max_length=255)
+    com_enterprise_code = models.CharField(max_length=255)
+    segmentType = models.CharField(max_length=250)
     # col_id = models.CharField(max_length=30)
-    col_type = models.CharField(max_length=30)
-    bank_customer_ID = models.CharField(max_length=30)
-    branch_id_code = models.CharField(max_length=30)
-    loan_id = models.CharField(max_length=30)
-    col_id = models.CharField(max_length=30)
-    account_no = models.CharField(max_length=30)
-    account_type = models.CharField(max_length=30)
-    value_unit = models.CharField(max_length=30)
-    status = models.CharField(max_length=30)
-    owner_gender = models.CharField(max_length=30)
-    owner_name = models.CharField(max_length=30)
-    owner_surname = models.CharField(max_length=30)
-    owner_lao_name = models.CharField(max_length=30)
-    owner_lao_surname = models.CharField(max_length=30)
-    value = models.CharField(max_length=30)
-    user_id = models.CharField(max_length=100)
-    insert_date = models.DateField()
-    update_date = models.DateField()
+    col_type = models.CharField(max_length=255)
+    bank_customer_ID = models.CharField(max_length=255)
+    branch_id_code = models.CharField(max_length=255)
+    loan_id = models.CharField(max_length=255)
+    col_id = models.CharField(max_length=255)
+    account_no = models.CharField(max_length=255)
+    account_type = models.CharField(max_length=255)
+    value_unit = models.CharField(max_length=255)
+    mia_status = models.CharField(max_length=255)
+    mia_insert_date = models.CharField(max_length=255)
+    owner_gender = models.CharField(max_length=255)
+    owner_name = models.CharField(max_length=255)
+    owner_surname = models.CharField(max_length=255)
+    owner_lao_name = models.CharField(max_length=255)
+    owner_lao_surname = models.CharField(max_length=255)
+    value = models.CharField(max_length=255)
+    user_id = models.CharField(max_length=255)
+    insert_date = models.CharField()
+    update_date = models.CharField()
 
     def __str__(self):
         return f"{self.id} - {self.com_enterprise_code}"
@@ -1094,28 +1099,30 @@ class col_money_mia (models.Model):  #ເອກະສານມີຄ່າ C2.2
 
 class col_equipment_eqi (models.Model):  # ເຄື່ອງຈັກ ແລະ ອຸປະກອນຕ່າງໆ C2.3
     id = models.AutoField(primary_key=True)
-    id_file = models.CharField(max_length=100)
-    period = models.CharField(max_length=150)
-    bank_customer_ID = models.CharField(max_length=30)
-    bnk_code = models.CharField(max_length=30)
-    lcicID = models.CharField(max_length=30)
-    com_enterprise_code = models.CharField(max_length=30)
+    id_file = models.CharField(max_length=255)
+    period = models.CharField(max_length=255)
+    bank_customer_ID = models.CharField(max_length=255)
+    bnk_code = models.CharField(max_length=255)
+    lcicID = models.CharField(max_length=255)
+    com_enterprise_code = models.CharField(max_length=255)
     segmentType = models.CharField(max_length=10)
-    col_type = models.CharField(max_length=30)
-    branch_id_code = models.CharField(max_length=30)
-    loan_id = models.CharField(max_length=30)
-    col_id = models.CharField(max_length=30)
-    machine_type = models.CharField(max_length=30)
-    machine_no = models.CharField(max_length=30)
-    value = models.CharField(max_length=30)
-    machine_status = models.CharField(max_length=30)
-    value_unit = models.CharField(max_length=30)
-    owner_gender = models.CharField(max_length=30)
-    owner_name = models.CharField(max_length=30)
-    owner_surname = models.CharField(max_length=30)
-    owner_lao_name = models.CharField(max_length=30)
-    owner_lao_surname = models.CharField(max_length=30)
-    user_id = models.CharField(max_length=100)
+    col_type = models.CharField(max_length=255)
+    branch_id_code = models.CharField(max_length=255)
+    loan_id = models.CharField(max_length=255)
+    col_id = models.CharField(max_length=100)
+    machine_type = models.CharField(max_length=255)
+    machine_no = models.CharField(max_length=255)
+    value = models.CharField(max_length=255)
+    machine_status = models.CharField(max_length=255)
+    machine_insert_date = models.CharField(max_length=255)
+    value_unit = models.CharField(max_length=255)
+    owner_gender = models.CharField(max_length=255)
+    owner_name = models.CharField(max_length=255)
+    owner_surname = models.CharField(max_length=255)
+    owner_lao_name = models.CharField(max_length=255)
+    owner_lao_surname = models.CharField(max_length=255)
+    user_id = models.CharField(max_length=255)
+
     insert_date = models.DateField()
     update_date = models.DateField()
 
@@ -1127,31 +1134,32 @@ class col_equipment_eqi (models.Model):  # ເຄື່ອງຈັກ ແລະ
 
 class col_project_prj (models.Model):  # ເຄື່ອງຈັກ ແລະ ອຸປະກອນຕ່າງໆ C2.4
     id = models.AutoField(primary_key=True)
-    id_file = models.CharField(max_length=100)
-    period = models.CharField(max_length=150)
-    bank_customer_ID = models.CharField(max_length=30)
-    bnk_code = models.CharField(max_length=30)
-    lcicID = models.CharField(max_length=30)
-    com_enterprise_code = models.CharField(max_length=30)
-    segmentType = models.CharField(max_length=10)
-    col_type = models.CharField(max_length=30)
-    branch_id_code = models.CharField(max_length=30)
-    loan_id = models.CharField(max_length=30)
-    project_type = models.CharField(max_length=30)
-    col_id = models.CharField(max_length=30)
-    project_name_en = models.CharField(max_length=30)
-    ministry = models.CharField(max_length=30)
-    project_number = models.CharField(max_length=30)
-    project_status = models.CharField(max_length=30)
-    value_unit = models.CharField(max_length=30)
-    owner_gender = models.CharField(max_length=30)
-    project_name_la = models.CharField(max_length=30)
-    owner_name = models.CharField(max_length=30)
-    owner_surname = models.CharField(max_length=30)
-    owner_lao_name = models.CharField(max_length=30)
-    owner_lao_surname = models.CharField(max_length=30)
-    value = models.CharField(max_length=30)
-    user_id = models.CharField(max_length=100)
+    id_file = models.CharField(max_length=50)
+    period = models.CharField(max_length=255)
+    bank_customer_ID = models.CharField(max_length=255)
+    bnk_code = models.CharField(max_length=255)
+    lcicID = models.CharField(max_length=150)
+    com_enterprise_code = models.CharField(max_length=255)
+    segmentType = models.CharField(max_length=50)
+    col_type = models.CharField(max_length=255)
+    branch_id_code = models.CharField(max_length=255)
+    loan_id = models.CharField(max_length=255)
+    project_type = models.CharField(max_length=255)
+    col_id = models.CharField(max_length=255)
+    project_name_en = models.CharField(max_length=255)
+    ministry = models.CharField(max_length=255)
+    project_number = models.CharField(max_length=255)
+    project_status = models.CharField(max_length=255)
+    project_insert_date = models.CharField(max_length=255)
+    value_unit = models.CharField(max_length=255)
+    owner_gender = models.CharField(max_length=255)
+    project_name_la = models.CharField(max_length=255)
+    owner_name = models.CharField(max_length=255)
+    owner_surname = models.CharField(max_length=255)
+    owner_lao_name = models.CharField(max_length=255)
+    owner_lao_surname = models.CharField(max_length=255)
+    value = models.CharField(max_length=255)
+    user_id = models.CharField(max_length=255)
     insert_date = models.DateField()
     update_date = models.DateField()
 
@@ -1162,32 +1170,33 @@ class col_project_prj (models.Model):  # ເຄື່ອງຈັກ ແລະ �
         db_table = "col_project_prj"
 class col_vechicle_veh (models.Model):  # ຂໍ້ມູນຍານພາຫະນະ C2.5
     id = models.AutoField(primary_key=True)
-    id_file = models.CharField(max_length=100)
-    period = models.CharField(max_length=150)
-    lcicID = models.CharField(max_length=30)
-    bnk_code = models.CharField(max_length=30)
-    com_enterprise_code = models.CharField(max_length=30)
+    id_file = models.CharField(max_length=255)
+    period = models.CharField(max_length=255)
+    lcicID = models.CharField(max_length=255)
+    bnk_code = models.CharField(max_length=255)
+    com_enterprise_code = models.CharField(max_length=255)
     segmentType = models.CharField(max_length=10)
-    col_type = models.CharField(max_length=30)
-    bank_customer_ID = models.CharField(max_length=30)
-    branch_id_code = models.CharField(max_length=30)
-    loan_id = models.CharField(max_length=30)
-    col_id = models.CharField(max_length=30)
-    name_owner = models.CharField(max_length=30)
-    plate_number = models.CharField(max_length=30)
-    engine_number = models.CharField(max_length=30)
-    body_number = models.CharField(max_length=30)
-    value_unit = models.CharField(max_length=30)
+    col_type = models.CharField(max_length=255)
+    bank_customer_ID = models.CharField(max_length=255)
+    branch_id_code = models.CharField(max_length=255)
+    loan_id = models.CharField(max_length=255)
+    col_id = models.CharField(max_length=255)
+    name_owner = models.CharField(max_length=255)
+    plate_number = models.CharField(max_length=255)
+    engine_number = models.CharField(max_length=255)
+    body_number = models.CharField(max_length=255)
+    value_unit = models.CharField(max_length=255)
     # vehicle_value_unit = models.CharField(max_length=30)
-    vehicle_status = models.CharField(max_length=30)
-    owner_gender = models.CharField(max_length=30)
-    owner_name = models.CharField(max_length=30)
-    owner_surname = models.CharField(max_length=30)
-    owner_lao_name = models.CharField(max_length=30)
-    owner_lao_surname = models.CharField(max_length=30)
-    model = models.CharField(max_length=30)
-    value = models.CharField(max_length=30)
-    user_id = models.CharField(max_length=100)
+    vehicle_status = models.CharField(max_length=255)
+    vehicle_insert_date = models.CharField(max_length=255)
+    owner_gender = models.CharField(max_length=255)
+    owner_name = models.CharField(max_length=255)
+    owner_surname = models.CharField(max_length=255)
+    owner_lao_name = models.CharField(max_length=255)
+    owner_lao_surname = models.CharField(max_length=255)
+    model = models.CharField(max_length=255)
+    value = models.CharField(max_length=255)
+    user_id = models.CharField(max_length=255)
     insert_date = models.DateField()
     update_date = models.DateField()
     
@@ -1199,73 +1208,74 @@ class col_vechicle_veh (models.Model):  # ຂໍ້ມູນຍານພາຫ�
         db_table = "col_vechicle_veh"
 
 class col_guarantor_gua (models.Model):  # ຂໍ້ມູນຜູ້ຄໍ້າ C2.6 1
-    id = models.AutoField(primary_key=True) #1
-    id_file = models.CharField(max_length=100) #1
-    period = models.CharField(max_length=150) #1
-    lcicID = models.CharField(max_length=100) #1
-    bnk_code = models.CharField(max_length=100)#1
-    com_enterprise_code = models.CharField(max_length=100)#1
+    id = models.AutoField(primary_key=True) #1 
+    id_file = models.CharField(max_length=255) #1
+    period = models.CharField(max_length=255) #1
+    lcicID = models.CharField(max_length=255) #1
+    bnk_code = models.CharField(max_length=255)#1
+    com_enterprise_code = models.CharField(max_length=255)#1
     segmentType = models.CharField(max_length=10)
-    col_type = models.CharField(max_length=100)#1
-    bank_customer_ID = models.CharField(max_length=100)#1
-    branch_id_code = models.CharField(max_length=100)#1
-    loan_id = models.CharField(max_length=100)#1
-    col_id = models.CharField(max_length=100)#1
-    value = models.CharField(max_length=100)#1
-    value_unit = models.CharField(max_length=100)#1
-    gua_ind_status = models.CharField(max_length=100)#1
-    gua_ind_insert_date = models.CharField(max_length=100)#1
-    guarantor_nationality = models.CharField(max_length=100)#1
-    gua_national_id = models.CharField(max_length=100)#1
-    national_id_expiry_date = models.CharField(max_length=100)#1
-    gua_passport = models.CharField(max_length=100)#1
-    passport_expiry_date = models.CharField(max_length=100)#1
-    gua_familybook_id = models.CharField(max_length=100)#1
-    familybook_provision_code = models.CharField(max_length=100)#1
-    familybook_issue_date = models.CharField(max_length=100)#1
-    gua_birthday = models.CharField(max_length=100)#1
-    gua_gender = models.CharField(max_length=100)#1
-    gua_surname = models.CharField(max_length=100)#1
-    gua_lao_name = models.CharField(max_length=100)#1
-    gua_lao_surname = models.CharField(max_length=100)#1
-    address_number_street_eng = models.CharField(max_length=100)#1
-    address_vill_eng = models.CharField(max_length=100)#1
-    address_district_eng = models.CharField(max_length=100)#1
+    col_type = models.CharField(max_length=255)#1
+    bank_customer_ID = models.CharField(max_length=255)#1
+    branch_id_code = models.CharField(max_length=255)#1
+    loan_id = models.CharField(max_length=255)#1
+    col_id = models.CharField(max_length=255)#1
+    value = models.CharField(max_length=255)#1
+    value_unit = models.CharField(max_length=255)#1
+    gua_ind_status = models.CharField(max_length=255)#1
+    gua_ind_insert_date = models.CharField(max_length=255)#1
+    guarantor_nationality = models.CharField(max_length=255)#1
+    gua_national_id = models.CharField(max_length=255)#1
+    national_id_expiry_date = models.CharField(max_length=255)#1
+    gua_passport = models.CharField(max_length=255)#1
+    passport_expiry_date = models.CharField(max_length=255)#1
+    gua_familybook_id = models.CharField(max_length=255)#1
+    familybook_provision_code = models.CharField(max_length=255)#1
+    familybook_issue_date = models.CharField(max_length=255)#1
+    gua_birthday = models.CharField(max_length=255)#1
+    gua_gender = models.CharField(max_length=255)#1
+    gua_surname = models.CharField(max_length=255)#1
+    gua_lao_name = models.CharField(max_length=255)#1
+    gua_lao_surname = models.CharField(max_length=255)#1
+    address_number_street_eng = models.CharField(max_length=255)#1
+    address_vill_eng = models.CharField(max_length=255)#1
+    address_district_eng = models.CharField(max_length=255)#1
     address_number_street_la = models.CharField(max_length=50)#1
-    address_vill_la = models.CharField(max_length=100)#1
-    address_district_la = models.CharField(max_length=100)#1
-    address_province_code = models.CharField(max_length=100)#1
-    owner_name = models.CharField(max_length=50)#1
-    owner_surname = models.CharField(max_length=50)#1
-    owner_lao_name = models.CharField(max_length=50)#1
-    owner_lao_surname = models.CharField(max_length=50)#1
+    address_vill_la = models.CharField(max_length=255)#1
+    address_district_la = models.CharField(max_length=255)#1
+    address_province_code = models.CharField(max_length=255)#1
+    owner_name = models.CharField(max_length=255)#1
+    owner_surname = models.CharField(max_length=255)#1
+    owner_lao_name = models.CharField(max_length=255)#1
+    owner_lao_surname = models.CharField(max_length=255)
 
 
 
 class col_goldsilver_gold (models.Model):  # ເງິນ ແລະ ຄຳ C2.7
     id = models.AutoField(primary_key=True)
-    id_file = models.CharField(max_length=100)
-    period = models.CharField(max_length=150)
-    lcicID = models.CharField(max_length=30)
-    bnk_code = models.CharField(max_length=30)
+    id_file = models.CharField(max_length=255)
+    period = models.CharField(max_length=255)
+    lcicID = models.CharField(max_length=255)
+    bnk_code = models.CharField(max_length=255)
     segmentType = models.CharField(max_length=10)
-    com_enterprise_code = models.CharField(max_length=30)
-    col_type = models.CharField(max_length=30)
-    bank_customer_ID = models.CharField(max_length=30)
-    branch_id_code = models.CharField(max_length=30)
-    loan_id = models.CharField(max_length=30)
-    col_id = models.CharField(max_length=30)
-    weight = models.CharField(max_length=30)
-    unit = models.CharField(max_length=30)
-    gld_status = models.CharField(max_length=30)
-    owner_gender = models.CharField(max_length=30)
-    owner_name = models.CharField(max_length=30)
-    owner_surname = models.CharField(max_length=30)
-    value_unit = models.CharField(max_length=30)
-    owner_lao_name = models.CharField(max_length=30)
-    owner_lao_surname = models.CharField(max_length=30)
-    value = models.CharField(max_length=30)
-    user_id = models.CharField(max_length=100)
+    com_enterprise_code = models.CharField(max_length=255)
+    col_type = models.CharField(max_length=255)
+    bank_customer_ID = models.CharField(max_length=255)
+    branch_id_code = models.CharField(max_length=255)
+    loan_id = models.CharField(max_length=255)
+    col_id = models.CharField(max_length=255)
+    weight = models.CharField(max_length=255)
+    unit = models.CharField(max_length=255)
+    gld_status = models.CharField(max_length=255)
+    gld_insert_date = models.CharField(max_length=255)
+    owner_gender = models.CharField(max_length=255)
+    owner_name = models.CharField(max_length=255)
+    owner_surname = models.CharField(max_length=255)
+    value_unit = models.CharField(max_length=255)
+    owner_lao_name = models.CharField(max_length=255)
+    owner_lao_surname = models.CharField(max_length=255)
+    value = models.CharField(max_length=255)
+    user_id = models.CharField(max_length=255)
     insert_date = models.DateField()
     update_date = models.DateField()
     def __str__(self):
@@ -1273,6 +1283,41 @@ class col_goldsilver_gold (models.Model):  # ເງິນ ແລະ ຄຳ C2.7
 
     class Meta:
         db_table = "col_goldsilver_gold"
+class col_guarantor_com (models.Model):  # ຜູ້ຄໍ້າ C2.8
+    id = models.AutoField(primary_key=True) #1
+    id_file = models.CharField(max_length=255) #1
+    period = models.CharField(max_length=255) #1
+    lcicID = models.CharField(max_length=30) #1
+    com_enterprise_code = models.CharField(max_length=255) #1
+    bnk_code = models.CharField(max_length=255) #1
+    col_type = models.CharField(max_length=255) #1
+    bank_customer_ID = models.CharField(max_length=255) #1
+    branch_id_code = models.CharField(max_length=255) #1
+    loan_id = models.CharField(max_length=255) #1
+    col_id = models.CharField(max_length=255) #1
+    value = models.CharField(max_length=255) #1
+    value_unit = models.CharField(max_length=255) #1
+    gua_com_status = models.CharField(max_length=255) #1
+    gua_com_insert_date = models.CharField(max_length=255) #1
+    gua_enterprise_code = models.CharField(max_length=255) #1
+    enterprise_regist_date = models.CharField(max_length=255) #1
+    enterprise_regist_place = models.CharField(max_length=255) #1
+    company_name = models.CharField(max_length=255) #1
+    company_lao_name = models.CharField(max_length=255) #1
+    enterprise_category = models.CharField(max_length=255) #1
+    owner_name = models.CharField(max_length=255) #1
+    owner_surname = models.CharField(max_length=255) #1
+    owner_lao_name = models.CharField(max_length=255) #1
+    owner_gender = models.CharField(max_length=255)
+    segmentType = models.CharField(max_length=10)
+    owner_lao_surname = models.CharField(max_length=255) #1
+    user_id = models.CharField(max_length=255) #1
+    insert_date = models.DateField() #1
+    update_date = models.DateField() #1
+    def __str__(self):
+        return f"{self.id} - {self.com_enterprise_code}"
+    class Meta:
+        db_table = "col_guarantor_com"
 
 
 # class EnterpriseInfo(models.Model):

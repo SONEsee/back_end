@@ -1,0 +1,24 @@
+[
+	{
+		"lcicID" : "25793",
+		"com_enterprise_code" : "0700003610",
+		"segmentType" : "A2",
+		"bnk_code" : "02",
+		"col_type" : "C2.2",
+		"bank_customer_ID" : "000981702",
+		"branch_id_code" : "010",
+		"loan_id" : "010FJ2302305734",
+		"col_id" : "128547",
+		"weight" : 788.00,
+		"unit" : "LAK",
+		"value" : 192000000000.00,
+		"value_unit" : "LAK",
+		"gld_status" : "ACTIVE",
+		"gld_insert_date" : "2024-03-14",
+		"owner_name" : "ບໍລິສັດ ຍອດຈະເລີນກໍ່ສ້າງ ຈໍາກັດຜູ້ດຽວ",
+		"owner_surname" : "",
+		"owner_gender" : "",
+		"owner_lao_name" : "",
+		"owner_lao_surname" : ""
+	}
+]

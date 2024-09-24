@@ -3584,64 +3584,172 @@ from .serializers import FileSerializer
 #         response.set_cookie('csrftoken', csrf_token)
 #         return response
 
+# class FileUploadViewC(generics.CreateAPIView):
+#     queryset = Upload_File_C.objects.all()
+    
+#     serializer_class = FileSerializer
+#     parser_classes = (MultiPartParser, FormParser)
+
+#     @method_decorator(ensure_csrf_cookie)
+    
+#     def post(self, request, *args, **kwargs):
+#         user_id = request.data.get('user_id')
+#         print("user_id:", user_id)
+#         if not user_id:
+#             return JsonResponse({'status': 'error', 'message': 'User ID is required'}, status=400)
+#         files = request.FILES.getlist('file')
+#         print("files:", files)
+#         csrf_token = request.META.get('CSRF_COOKIE', '')
+
+#         for file in files:
+#             if file.name.endswith('.json'):
+#                 try:
+#                 # ອ່ານໄຟລ໌ JSON
+#                     file_content = file.read().decode('utf-8')
+#                     file_data = json.loads(file_content)
+#                     print("data:", file_data)
+
+#                 # ເຊັກວ່າ file_data ແມ່ນ list ຫຼື dictionary
+#                     if isinstance(file_data, list):
+#                     # ຖ້າຫາກແມ່ນ list, ດຶງຂໍ້ມູນອັນທີ່ຕ້ອງການຈາກອອບເຈັກອັນໃນ
+#                         file_data = file_data[0]  # ດຶງອັນທຳອິດຈາກ list ແຕ່ຖ້າມີຫຼາຍອັນເຈົ້າອາດຕ້ອງແກ້ໄຂໃຫ້ເໝາະສົມ
+#                     elif not isinstance(file_data, dict):
+#                         return JsonResponse({'status': 'error', 'message': 'Invalid JSON structure'}, status=400)
+
+#                     file_name_parts = file.name.split('_')
+#                     if len(file_name_parts) >= 4:
+#                         period = file_name_parts[3][1:]
+#                         print("period:", period)
+#                     else:
+#                         return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
+                
+#                     bnk_code = file_data.get('bnk_code')
+#                     print("bnk_code:", bnk_code)
+#                     if bnk_code is None:
+#                         return JsonResponse({'status': 'error', 'message': 'bnk_code is required'}, status=400)
+#                     if str(bnk_code) != user_id != str(bnk_code):
+#                         return JsonResponse({'status': 'error', 'message': 'User ID does not match bnk_code'}, status=405)
+#                     if Upload_File_C.objects.filter(fileName=file.name, user_id=user_id).exists():
+#                         return JsonResponse({'status': 'error', 'message': 'File already exists'}, status=404)
+                    
+#                     file_name_parts = file.name.split('_')
+#                     if len(file_name_parts) >= 4:
+#                         period_str = file_name_parts[3]
+#                         period_month = int(period_str[1:3])
+#                         # print("period_month:", period_month)
+#                         period_year = int(period_str[3:])
+                        
+#                         file_period = int(f"{period_year:04d}{period_month:02d}")
+#                         print("file_period:", file_period)
+
+#                     file_instance = Upload_File_C.objects.create(
+#                         fileUpload=file,
+#                         user_id=user_id,
+#                         fileName=file.name,
+#                         fileSize=str(file.size),
+#                         path="uploadFilesC/" + file.name,
+#                         period=period,
+#                         status='new',
+#                         statussubmit='pending',
+#                         status_upload='in_progress',
+#                         FileType='json',
+#                         percentage=0.0
+#                     )
+
+#                     result = process_uploaded_file(file_instance)
+
+#                     status_value = result.get('status', None)
+
+#                     if status_value == '400':
+#                         file_instance.status_upload = 'failed'
+#                         file_instance.save()
+#                         return JsonResponse(result, status=400)
+#                     else:
+#                         file_instance.status_upload = 'completed'
+#                     file_instance.save()
+
+#                 except IndexError:
+#                     return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
+
+#         response = JsonResponse({'status': 'success', 'message': 'All files processed successfully'})
+#         response.set_cookie('csrftoken', csrf_token)
+#         return response
+
 class FileUploadViewC(generics.CreateAPIView):
     queryset = Upload_File_C.objects.all()
-    
     serializer_class = FileSerializer
     parser_classes = (MultiPartParser, FormParser)
 
     @method_decorator(ensure_csrf_cookie)
-    
     def post(self, request, *args, **kwargs):
         user_id = request.data.get('user_id')
-        print("user_id:", user_id)
         if not user_id:
             return JsonResponse({'status': 'error', 'message': 'User ID is required'}, status=400)
-        files = request.FILES.getlist('file')
-        print("files:", files)
-        csrf_token = request.META.get('CSRF_COOKIE', '')
 
+        files = request.FILES.getlist('file')
+        if not files:
+            return JsonResponse({'status': 'error', 'message': 'No files uploaded'}, status=401)
+
+        csrf_token = request.META.get('CSRF_COOKIE', '')
         for file in files:
             if file.name.endswith('.json'):
                 try:
-                # ອ່ານໄຟລ໌ JSON
                     file_content = file.read().decode('utf-8')
                     file_data = json.loads(file_content)
-                    print("data:", file_data)
-
-                # ເຊັກວ່າ file_data ແມ່ນ list ຫຼື dictionary
                     if isinstance(file_data, list):
-                    # ຖ້າຫາກແມ່ນ list, ດຶງຂໍ້ມູນອັນທີ່ຕ້ອງການຈາກອອບເຈັກອັນໃນ
-                        file_data = file_data[0]  # ດຶງອັນທຳອິດຈາກ list ແຕ່ຖ້າມີຫຼາຍອັນເຈົ້າອາດຕ້ອງແກ້ໄຂໃຫ້ເໝາະສົມ
-                    elif not isinstance(file_data, dict):
-                        return JsonResponse({'status': 'error', 'message': 'Invalid JSON structure'}, status=400)
+                        file_data = file_data[0]
 
+                    bnk_code = file_data.get('bnk_code')
+                    if bnk_code is None:
+                        return JsonResponse({'status': 'error', 'message': 'bnk_code is required'}, status=400)
+                    if str(user_id)  != str(bnk_code):
+                        return JsonResponse({'status': 'error', 'message': 'User ID does not match bnk_code'}, status=405)
+                    
                     file_name_parts = file.name.split('_')
                     if len(file_name_parts) >= 4:
                         period = file_name_parts[3][1:]
-                        print("period:", period)
                     else:
                         return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
-                
-                    bnk_code = file_data.get('bnk_code')
-                    print("bnk_code:", bnk_code)
-                    if bnk_code is None:
-                        return JsonResponse({'status': 'error', 'message': 'bnk_code is required'}, status=400)
-                    if str(bnk_code) != user_id != str(bnk_code):
-                        return JsonResponse({'status': 'error', 'message': 'User ID does not match bnk_code'}, status=405)
+                    
                     if Upload_File_C.objects.filter(fileName=file.name, user_id=user_id).exists():
                         return JsonResponse({'status': 'error', 'message': 'File already exists'}, status=404)
-                    
                     file_name_parts = file.name.split('_')
                     if len(file_name_parts) >= 4:
                         period_str = file_name_parts[3]
                         period_month = int(period_str[1:3])
-                        # print("period_month:", period_month)
+                        
                         period_year = int(period_str[3:])
                         
+                        
                         file_period = int(f"{period_year:04d}{period_month:02d}")
-                        print("file_period:", file_period)
+                        
 
+                        c1_entries = C1.objects.filter(bnk_code=bnk_code)
+                        
+                        if c1_entries.exists():
+                            latest_c1 = c1_entries.order_by('-period').first()
+                            
+                            c1_period_str = str(latest_c1.period)
+                            
+                            
+                            if len(c1_period_str) == 6:
+                                c1_period_month = c1_period_str[:2]
+                                
+                                c1_period_year = c1_period_str[2:]
+                                
+                                c1_period = int(f"{c1_period_year}{c1_period_month}")
+                                
+                            else:
+                                return JsonResponse({'status': 'error', 'message': 'Invalid C1 period format'}, status=406)
+                            
+                            if file_period < c1_period:
+                                return JsonResponse({'status': 'error', 'message': 'File period is greater than C1 period'}, status=407)
+                            else:
+                                pass
+                        else:
+                            return JsonResponse({'status': 'error', 'message': 'C1 data not found'}, status=408)
+                    
+                            
                     file_instance = Upload_File_C.objects.create(
                         fileUpload=file,
                         user_id=user_id,
@@ -3650,26 +3758,27 @@ class FileUploadViewC(generics.CreateAPIView):
                         path="uploadFilesC/" + file.name,
                         period=period,
                         status='new',
-                        statussubmit='pending',
+                        statussubmit='Pending',
                         status_upload='in_progress',
                         FileType='json',
                         percentage=0.0
                     )
 
-                    result = process_uploaded_file(file_instance)
+                    
+                    result = process_uploaded_file(file_instance, user_id, period)
 
                     status_value = result.get('status', None)
-
                     if status_value == '400':
                         file_instance.status_upload = 'failed'
-                        file_instance.save()
-                        return JsonResponse(result, status=400)
                     else:
                         file_instance.status_upload = 'completed'
-                    file_instance.save()
 
-                except IndexError:
-                    return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
+                  
+
+                except Exception as e:
+                   
+                    return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+                
 
         response = JsonResponse({'status': 'success', 'message': 'All files processed successfully'})
         response.set_cookie('csrftoken', csrf_token)
@@ -3791,7 +3900,7 @@ class FileUploadViewC(generics.CreateAPIView):
 import json
 from django.utils.encoding import smart_str
 from django.utils import timezone
-from .models import EnterpriseInfo, C_error,C1_disptes,CDL
+from .models import EnterpriseInfo, C_error,C1_disptes,CDL,col_guarantor_com
 
 # def process_uploaded_file(uploaded_data):
     
@@ -4116,9 +4225,14 @@ from .models import EnterpriseInfo, C_error,C1_disptes,CDL
 #         print(f"An error occurred: {e}")
 #         return {'status': 'error', 'message': str(e)}
     
-from datetime import datetime
-
-def process_uploaded_file(uploaded_data):
+# from datetime import datetime
+def human_readable_sizec(size):
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size < 1024.0:
+            return f"{size:.2f} {unit}"
+        size /= 1024.0
+        return f"{size:.2f} TB"
+def process_uploaded_file(uploaded_data,  user_id, period):
     try:
         total_records = 0
         error_records = 0
@@ -4126,13 +4240,20 @@ def process_uploaded_file(uploaded_data):
         with uploaded_data.fileUpload.open('rb') as file:
             file_content = file.read()
             json_content = json.loads(smart_str(file_content))
+        file_size = file.size
+        file_size_hrc = human_readable_sizec(file.size)
+
+        total_records = len(json_content)
+        print("total_records",total_records)
+
+       
 
         result = {'status': 'success'}
 
         for item in json_content:
             lcicID = item.get('lcicID', None)
             if lcicID == '':
-                lcicID = None
+                lcicID = None    
 
             com_enterprise_code = item.get('com_enterprise_code', '')
             cid = uploaded_data.CID
@@ -4140,7 +4261,6 @@ def process_uploaded_file(uploaded_data):
             lcic_exists = EnterpriseInfo.objects.filter(LCICID=lcicID).exists()
             enterprise_code_exists = EnterpriseInfo.objects.filter(EnterpriseID=com_enterprise_code).exists()
 
-         
             if not lcicID and not com_enterprise_code:
                 collateral_status = '33'
                 datamatch = ''
@@ -4158,15 +4278,27 @@ def process_uploaded_file(uploaded_data):
                 else:
                     collateral_status = '30'
                     datamatch = ''
-            else:
+            elif lcic_exists and not enterprise_code_exists:
+                collateral_status = '31'
+                datamatch = EnterpriseInfo.objects.filter(LCICID=lcicID).first().EnterpriseID
+            elif not lcic_exists and enterprise_code_exists:
+                collateral_status = '13'
+                datamatch = EnterpriseInfo.objects.filter(EnterpriseID=com_enterprise_code).first().LCICID
+            elif not lcic_exists and not enterprise_code_exists:
+                collateral_status = '11'
+                datamatch = ''
+            elif lcicID and com_enterprise_code:
                 matching_record = EnterpriseInfo.objects.filter(LCICID=lcicID, EnterpriseID=com_enterprise_code).exists()
                 if not matching_record:
-                    collateral_status = '44'
+                    collateral_status = '44'  # ບໍ່ມີຄູ່ກັນລະຫວ່າງ lcicID ແລະ com_enterprise_code
                 else:
                     collateral_status = '00'
-
-           
+            elif lcic_exists and enterprise_code_exists:
+                collateral_status = '00'
+                datamatch = '' 
             if collateral_status != '00':
+                # error_records += 1
+
                 C_error.objects.create(
                     id_file=cid,
                     lcicID=lcicID,
@@ -4179,11 +4311,37 @@ def process_uploaded_file(uploaded_data):
                     col_type=item.get('col_type', ''),
                     collateral_status=collateral_status,
                     datamatch=datamatch,
+                    user_id=user_id,
+                    period = period,
                     collateral_insert_date=timezone.now(),
                     collateral_update_date=timezone.now()
                 )
                 error_records += 1
+                
+                
+                print("error_records",error_records)
                 continue
+
+            bank_customer_ID = item.get('bank_customer_ID', '')
+            existing_c1_record = C1.objects.filter(lcicID=lcicID, com_enterprise_code=com_enterprise_code).first()
+            if existing_c1_record and existing_c1_record.bank_customer_ID != bank_customer_ID:
+                C1_disptes.objects.create(
+                    lcicID=lcicID,
+                    id_file=cid,
+                    user_id=user_id,
+                    period=period,
+                    com_enterprise_code=com_enterprise_code,
+                    bank_customer_ID=bank_customer_ID,
+                    bnk_code=item.get('bnk_code', ''),
+                    branch_id_code=item.get('branch_id_code', ''),
+                    loan_id=item.get('loan_id', ''),
+                    col_id=item.get('col_id', ''),
+                    col_type=item.get('col_type', ''),
+                    insert_date=timezone.now(),
+                    update_date=timezone.now()
+                )
+                continue
+
 
         
             try:
@@ -4215,6 +4373,8 @@ def process_uploaded_file(uploaded_data):
                     c17=item.get('owner_lao_name', ''),
                     c18=item.get('owner_lao_surname', ''),
                     c39=item.get('segmentType',''),
+                    period=period,
+                    user_id=user_id,
                     c40=timezone.now().date(),
                     c41=timezone.now().date()
                 )
@@ -4239,7 +4399,7 @@ def process_uploaded_file(uploaded_data):
                     c15=item.get('land_type', ''),
                     c16=item.get('land_no', ''),
                     c17=item.get('land_out_time', ''),
-                    c18=item.get('land_regist_date', ''),
+                    c18=item.get('land_regis_date', ''),
                     c19=item.get('place_regist', ''),
                     c20=item.get('plot_vilid', ''),
                     c21=item.get('plot_unit', ''),
@@ -4257,6 +4417,10 @@ def process_uploaded_file(uploaded_data):
                     c32=item.get('spous_occupation', ''),
                     c33=item.get('spous_acquisition', ''),
                     c39=item.get('segmentType',''),
+                    c42=item.get('rel_insert_date', ''),
+
+                    user_id=user_id,
+                    period=period,
                     c40=timezone.now().date(),
                     c41=timezone.now().date()
                 )
@@ -4283,6 +4447,8 @@ def process_uploaded_file(uploaded_data):
                     c17=item.get('owner_lao_name', ''),
                     c18=item.get('owner_lao_surname', ''),
                     c39=item.get('segmentType',''),
+                    user_id=user_id,
+                    period=period,
                     c40=timezone.now().date(),
                     c41=timezone.now().date()
                 )
@@ -4300,7 +4466,7 @@ def process_uploaded_file(uploaded_data):
                     c8=item.get('ministry', ''),
                     c9=item.get('project_name_en', ''),
                     c10=item.get('project_name_la', ''),
-                    c11=item.get('project_nuber', ''),
+                    c11=item.get('project_number', ''),
                     c12=item.get('value', ''),
                     c13=item.get('value_unit', ''),
                     c14=item.get('project_status', ''),
@@ -4311,6 +4477,8 @@ def process_uploaded_file(uploaded_data):
                     c19=item.get('owner_lao_name', ''),
                     c20=item.get('owner_lao_surname', ''),
                     c39=item.get('segmentType',''),
+                    user_id=user_id,
+                    period=period,
                     c40=timezone.now().date(),
                     c41=timezone.now().date()
 
@@ -4340,6 +4508,8 @@ def process_uploaded_file(uploaded_data):
                     c19=item.get('owner_lao_name', ''),
                     c20=item.get('owner_lao_surname', ''),
                     c39=item.get('segmentType',''),
+                    user_id=user_id,
+                    period=period,
                     c40=timezone.now().date(),
                     c41=timezone.now().date()
                 )
@@ -4385,6 +4555,8 @@ def process_uploaded_file(uploaded_data):
                     c36=item.get('owner_lao_name', ''),
                     c37=item.get('owner_lao_surname', ''),
                     c39=item.get('segmentType',''),
+                    user_id=user_id,
+                    period=period,
                     c40=timezone.now().date(),
                     c41=timezone.now().date()
                 )
@@ -4397,24 +4569,74 @@ def process_uploaded_file(uploaded_data):
                     c3=item.get('bnk_code', ''),
                     c4=item.get('bank_customer_ID', ''),
                     c5=item.get('branch_id_code', ''),
+                    c6=item.get('loan_id', ''),
+                    c7=item.get('col_id', ''),
+                    c8=item.get('weight', ''),
+                    c9=item.get('value', ''),
+                    c10=item.get('unit', ''),
+                    c11=item.get('value_unit', ''),
+                    c12=item.get('gld_status', ''),
+                    c13=item.get('gld_insert_date', ''),
+                    c14=item.get('owner_name', ''),
+                    c15=item.get('owner_surname', ''),
+                    c16=item.get('owner_gender', ''),
+                    c17=item.get('owner_lao_name', ''),
+                    c18=item.get('owner_lao_surname', ''),
+                    c39=item.get('segmentType',''),
+                    user_id=user_id,
+                    period=period,
+                    c40=timezone.now().date(),
+                    c41=timezone.now().date()
+
+                )
+            elif item.get('col_type', '').lower() == "c2.8":
+                CDL.objects.create(
+                    id_file=cid,
+                    c1=lcicID,
+                    col_type=item.get('col_type', ''),
+                    c2=com_enterprise_code,
+                    c3=item.get('bnk_code', ''),
+                    c4=item.get('bank_customer_ID', ''),
+                    c5=item.get('branch_id_code', ''),
+                    c6=item.get('loan_id', ''),
+                    c7=item.get('col_id', ''),
+                    c8=item.get('value', ''),
+                    c9=item.get('value_unit', ''),
+                    c10=item.get('gua_com_status', ''),
+                    c11=item.get('gua_com_insert_date', ''),
+                    c12=item.get('gua_enterprise_code', ''),
+                    c13=item.get('enterprise_regist_date', ''),
+                    c14=item.get('enterprise_regist_place', ''),
+                    c15=item.get('company_name', ''),
+                    c16=item.get('company_lao_name', ''),
+                    c17=item.get('enterprise_category', ''),
+                    c18=item.get('owner_name', ''),
+                    c19=item.get('owner_surname', ''),
+                    c20=item.get('owner_gender', ''),
+                    c21=item.get('owner_lao_name', ''),
+                    c22=item.get('owner_lao_surname', ''),
+                    c39=item.get('segmentType',''),
+                    user_id=user_id,
+                    period=period,
+                    c40=timezone.now().date(),
+                    c41=timezone.now().date()
 
                 )
 
-           
-            C1.objects.create(
-                lcicID=lcicID,
-                com_enterprise_code=com_enterprise_code,
-                bnk_code=item.get('bnk_code', ''),
-                bank_customer_ID=item.get('bank_customer_ID', ''),
-                branch_id_code=item.get('branch_id_code', ''),
-                col_id=item.get('col_id', ''),
-                loan_id=item.get('loan_id', ''),
-                col_type=item.get('col_type', '').lower(),
-                id_file=cid,
-                insert_date=timezone.now().date(),
-                update_date=timezone.now().date()
-            )
+            
+        t2 = (error_records/total_records)*100 
 
+
+        uploaded_data.percentage = t2
+        uploaded_data.statussubmit = "2" if t2> 15 else "1"
+        uploaded_data.save()
+        
+        print("t2",t2)
+        return JsonResponse({'status': 'success', 
+                            'message': 'File uploaded successfully',
+                            'warning': total_records,
+                            'error_records': error_records
+                            })
         return result
     
     
@@ -4422,6 +4644,506 @@ def process_uploaded_file(uploaded_data):
     except Exception as e:
         print(f"An error occurred: {e}")
         return {'status': 'error', 'message': str(e)}
+    
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from django.utils import timezone
+
+@csrf_exempt
+@require_POST
+def confirm_uploadc(request):
+    try:
+        # Retrieve 'CID' from the POST data instead of GET
+        CID = request.POST.get('CID')
+        if not CID:
+            return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
+
+        # Query the CDL model to find data associated with the provided CID
+        data_edits = CDL.objects.filter(id_file=CID)
+        if not data_edits.exists():
+            return JsonResponse({'status': 'error', 'message': 'No data found for the provided File ID'}, status=404)
+
+        # Process each item in the data
+        for item in data_edits:
+            col_type = item.col_type.lower()  # ບໍ່ໃຊ້ item.get()
+    
+            if col_type == "c2.2" or col_type == "C2.2":
+                obj, created = col_money_mia.objects.update_or_create(
+                    lcicID=item.c1,  # ບໍ່ໃຊ້ item.get('c1', '')
+                    com_enterprise_code=item.c2,
+                    bnk_code=item.c3,
+                    bank_customer_ID=item.c4,
+                    branch_id_code=item.c5,
+                    loan_id=item.c6,
+                    col_id=item.c7,
+                    defaults={
+                        'account_no': item.c8,
+                        'period': item.period,
+                        'user_id': item.user_id,
+                        'col_type': item.col_type,
+                        'account_type': item.c9,
+                        'segmentType': item.c39,
+                        'value_unit': item.c11,
+                        'value': item.c10,
+                        'mia_insert_date': item.c13,
+                        'mia_status': item.c12,
+                        'owner_gender': item.c16,
+                        'owner_name': item.c14,
+                        'owner_surname': item.c15,
+                        'owner_lao_name': item.c17,
+                        'owner_lao_surname': item.c18,
+                        'id_file': CID,
+                        
+                        'insert_date': timezone.now().date(),
+                        'update_date': timezone.now().date()
+                    }
+                )
+
+            elif col_type == "c2.1":
+                # Handle 'c2.1' case
+                obj, created = col_real_estates.objects.update_or_create(
+                    lcicID=item.c1,
+                    com_enterprise_code=item.c2,
+                    bnk_code=item.c3,
+                    bank_customer_ID=item.c4, 
+                    branch_id_code=item.c5,
+                    loan_id=item.c6,
+                    col_id=item.c7,
+                    defaults={
+                        'col_value': item.c8,
+                        'col_type': col_type,
+                        'plot_vilid': item.c20,  
+                        'segmentType': item.c39,
+                        'plot_unit': item.c21,
+                        'land_no': item.c16,
+                        'land_out_time': item.c17,
+                        'value_unit': item.c11,
+                        'land_type': item.c15,
+                        'col_area': item.c10,
+                        'land_registry_book_no': item.c14,
+                        'land_document_no': item.c13,
+                        'place_regist_land': item.c19,
+                        'land_map_no': item.c12,
+                        'land_plot_no': item.c9,
+                        'land_regis_date': item.c18,
+                        'land_area': item.c10,
+                        'land_unit': item.c11,
+                        'owner_name': item.c22,
+                        'owner_birth_date': item.c23,
+                        'owner_nationality': item.c24,
+                        'owner_occupation': item.c25,
+                        'current_unit': item.c27,
+                        'current_vilid': item.c26,
+                        'spouse_name': item.c29,
+                        'spouse_birth_date': item.c30,
+                        'spouse_nationality': item.c31,
+                        'spouse_occupation': item.c32,
+                        'land_acquisition': item.c33,
+                        'ownership_status': item.c28,
+                        'user_id': item.user_id,
+                    
+                        'user_id': item.user_id,
+                        'period': item.period,
+                        'id_file': CID,
+                        'insert_date': timezone.now(),
+                        'update_date': timezone.now()
+                    }
+                )
+            elif col_type == "c2.3":
+                obj, created = col_equipment_eqi.objects.update_or_create(
+                    lcicID=item.c1,  
+                    com_enterprise_code=item.c2,
+                    bnk_code=item.c3,
+                    bank_customer_ID=item.c4,
+                    branch_id_code=item.c5,
+                    loan_id=item.c6,
+                    col_id=item.c7,
+                    defaults={
+                        'machine_type': item.c8,
+                        'machine_no': item.c9,
+                        'value': item.c10,
+                        'value_unit': item.c11,
+                        'machine_status': item.c12,
+                        'machine_insert_date': item.c13,
+                        'owner_name': item.c14,
+                        'owner_surname': item.c15,
+                        'owner_gender': item.c16,
+                        'owner_lao_name': item.c17,
+                        'owner_lao_surname': item.c18,
+                        'segmentType': item.c39,
+                        'user_id': item.user_id,
+                        'period': item.period,
+                        'id_file': CID,
+                        'update_date': timezone.now(),
+                        'insert_date': timezone.now()
+                    }
+                )
+            elif col_type == "c2.4":
+                obj, created = col_project_prj.objects.update_or_create(
+                    lcicID=item.c1,  # ບໍ່ໃຊ້ item.get('c1', '')
+                    com_enterprise_code=item.c2,  # ບໍ່ໃຊ້ item.get('c2', '')
+                    bnk_code=item.c3,
+                    bank_customer_ID=item.c4,
+                    branch_id_code=item.c5,
+                    loan_id=item.c6,
+                    col_id=item.c7,
+                    defaults={
+                        'ministry': item.c8,  
+                        'project_name_en': item.c9, 
+                        'project_name_la': item.c10,
+                        'project_number': item.c11,
+                        'value': item.c12,
+                        'value_unit': item.c13,
+                        'project_status': item.c14,
+                        'project_insert_date': item.c15,
+                        'owner_name': item.c16,
+                        'owner_surname': item.c17,
+                        'owner_gender': item.c18,
+                        'owner_lao_name': item.c19,
+                        'owner_lao_surname': item.c20,
+                        'segmentType': item.c39,
+                        'user_id': item.user_id,
+                        'period': item.period,
+                        'id_file': CID,
+                        'insert_date': timezone.now(),
+                        'update_date': timezone.now()
+                    }
+                )
+            elif col_type == "c2.5":
+                 obj, created = col_vechicle_veh.objects.update_or_create(
+                     lcicID=item.c1,  
+                     com_enterprise_code=item.c2,
+                     bnk_code=item.c3,
+                     bank_customer_ID=item.c4,
+                     branch_id_code=item.c5,
+                     loan_id=item.c6,
+                     col_id=item.c7,
+                     defaults={
+                         'plate_number': item.c8,
+                         'engine_number': item.c9,
+                         'body_number': item.c10,
+                         'model': item.c11,
+                         'value': item.c12,
+                         'value_unit': item.c13,
+                         'vehicle_status': item.c14,
+                         'vehicle_insert_date': item.c15,
+                         'owner_name': item.c16,
+                         'owner_surname': item.c17,
+                         'owner_gender': item.c18,
+                         'owner_lao_name': item.c19,
+                         'owner_lao_surname': item.c20,
+                         'segmentType': item.c39,
+                         'user_id': item.user_id,
+                         'period': item.period,
+                         'id_file': CID,
+                         'insert_date': timezone.now(),
+                         'update_date': timezone.now()
+
+
+                     }
+                 )
+            elif col_type == "c2.6":
+                obj, created = col_guarantor_gua.objects.update_or_create(
+                    lcicID=item.c1,  
+                    com_enterprise_code=item.c2,
+                    bnk_code=item.c3,
+                    bank_customer_ID=item.c4,
+                    branch_id_code=item.c5,
+                    loan_id=item.c6,
+                    col_id=item.c7,
+                    defaults={
+                        'value': item.c8,
+                        'value_unit': item.c9,
+                        'gua_ind_status': item.c10,
+                        'gua_ind_insert_date': item.c11,
+                        'guarantor_nationality': item.c12,
+                        'gua_national_id': item.c13,
+                        'national_id_expiry_date': item.c14,
+                        'gua_passport_id': item.c15,
+                        'gua_passport_expiry_date': item.c16,
+                        'gua_familybook_id': item.c17,
+                        'familybook_province_code': item.c18,
+                        'familybook_issue_date': item.c19,
+                        'gua_birthdate': item.c20,
+                        'gua_gender': item.c21,
+                        'gua_name': item.c22,
+                        'gua_surname': item.c23,
+                        'gua_lao_name': item.c24,
+                        'gua_lao_surname': item.c25,
+                        'adress_number_street_eng': item.c26,
+                        'adress_vill_eng': item.c27,
+                        'adress_district_eng': item.c28,
+                        'adress_number_street_la': item.c29,
+                        'adress_vill_la': item.c30,
+                        'adress_district_la': item.c31,
+                        'adress_province_code': item.c32,
+                        'owner_name': item.c33,
+                        'owner_surname': item.c34,
+                        'owner_gender': item.c35,
+                        'owner_lao_name': item.c36,
+                        'owner_lao_surname': item.c37,
+                        'segmentType': item.c39,
+                        'user_id': item.user_id,
+                        'period': item.period,
+                        'id_file': CID,
+                        'insert_date': timezone.now(),
+                        'update_date': timezone.now()
+
+
+                    }
+                )
+            elif col_type == "c2.7":
+                obj, created = col_goldsilver_gold.objects.update_or_create(
+                    lcicID=item.c1,
+                    com_enterprise_code=item.c2,  
+                    bnk_code=item.c3,
+                    bank_customer_ID=item.c4,
+                    branch_id_code=item.c5,
+                    loan_id=item.c6,
+                    col_id=item.c7,
+                    defaults={
+                        'weight': item.c8,
+                        'value': item.c9,
+                        'unit': item.c10,
+                        'value_unit': item.c11,
+                        'gld_status': item.c12,
+                        'gld_insert_date': item.c13,
+                        'owner_name': item.c14,
+                        'owner_surname': item.c15,
+                        'owner_gender': item.c16,
+                        'owner_lao_name': item.c17,
+                        'owner_lao_surname': item.c18,
+                        'segmentType': item.c39,
+                        'user_id': item.user_id,
+                        'period': item.period,
+                        'id_file': CID,
+                        'insert_date': timezone.now(),
+                        'update_date': timezone.now
+
+                    }
+                )
+            elif col_type == "c2.8":
+                obj, created = col_guarantor_com.objects.update_or_create(
+                    lcicID=item.c1,
+                    com_enterprise_code=item.c2,
+                    bnk_code=item.c3,
+                    bank_customer_ID=item.c4,
+                    branch_id_code=item.c5,
+                    loan_id=item.c6,
+                    col_id=item.c7,
+                    defaults={
+                        'value': item.c8,
+                        'value_unit': item.c9,
+                        'gua_com_status': item.c10,
+                        'gua_com_insert_date': item.c11,
+                        'gua_enterprise_code': item.c12,
+                        'enterprise_regist_date': item.c13,
+                        'enterprise_regist_place': item.c14,
+                        'company_name': item.c15,
+                        'company_lao_name': item.c16,
+                        'enterprise_category': item.c17,
+                        'owner_name': item.c18,
+                        'owner_surname': item.c19,
+                        'owner_gender': item.c20,
+                        'owner_lao_name': item.c21,
+                        'owner_lao_surname': item.c22,
+                        'segmentType': item.c39,
+                        'user_id': item.user_id,
+                        'period': item.period,
+                        'insert_date': timezone.now(),
+                        'id_file': CID,
+                        'update_date': timezone.now()
+
+
+                    }
+                )
+            C1.objects.update_or_create(
+                lcicID=item.c1,
+                com_enterprise_code=item.c2,
+                bnk_code=item.c3,
+                bank_customer_ID=item.c4,
+                branch_id_code=item.c5,
+                loan_id=item.c6,
+                col_id=item.c7,
+                defaults={
+                    'segmentType': item.c39,
+                    'user_id': item.user_id,
+                    'period': item.period,
+                    'col_type': item.col_type,
+                    'id_file': CID
+
+                }
+
+            )
+
+
+        return JsonResponse({'status': 'success', 'message': 'File processed successfully'})
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+            
+            
+            
+
+            # elif col_type == "c2.4" or col_type == "C2.4":
+            #     obj, created = col_project_prj.objects.update_or_create(
+            #         bank_customer_ID=item.get('bank_customer_ID', ''),
+            #         lcicID=lcicID,
+            #         com_enterprise_code=com_enterprise_code,
+            #         bnk_code=item.get('bnk_code', ''),
+            #         branch_id_code=item.get('branch_id_code', ''),
+            #         loan_id=item.get('loan_id', ''),
+            #         col_id=item.get('col_id', ''),
+            #         defaults={
+            #             'project_type': item.get('project_type', ''),
+            #             'project_name_en': item.get('project_name_en', ''),
+            #             'segmentType': item.get('segmentType', ''),
+            #             'col_type': item.get('col_type', ''),
+            #             'period': item.get('period', ''),
+            #             'user_id': item.get('user_id', ''),
+            #             'ministry': item.get('ministry', ''),
+            #             'project_namber': item.get('project_namber', ''),
+            #             'value_unit': item.get('value_unit', ''),
+            #             'project_name_la': item.get('project_name_la', ''),
+            #             'value': item.get('value', ''),
+            #             'project_status': item.get('project_status', ''),
+            #             'owner_gender': item.get('owner_gender', ''),
+            #             'owner_name': item.get('owner_name', ''),
+            #             'owner_surname': item.get('owner_surname', ''),
+            #             'owner_lao_name': item.get('owner_lao_name', ''),
+            #             'owner_lao_surname': item.get('owner_lao_surname', ''),
+            #             'id_file': CID,
+
+            #             'insert_date': timezone.now().date(),
+            #             'update_date': timezone.now().date()
+            #         }
+            #     )
+            
+            # elif col_type == "c2.5" or col_type == "C2.5":
+            #     obj, created = col_vechicle_veh.objects.update_or_create(
+            #         bank_customer_ID=item.get('bank_customer_ID', ''),
+            #         lcicID=lcicID,
+            #         com_enterprise_code=com_enterprise_code,
+            #         bnk_code=item.get('bnk_code', ''),
+            #         branch_id_code=item.get('branch_id_code', ''),
+            #         loan_id=item.get('loan_id', ''),
+            #         col_id=item.get('col_id', ''),
+            #         defaults={
+            #             'vehicle_type': item.get('vehicle_type', ''),
+            #             'license_plate_no': item.get('license_plate_no', ''),
+            #             'segmentType': item.get('segmentType', ''),
+            #             'col_type': item.get('col_type', ''),
+            #             'value': item.get('value', ''),
+            #             'value_unit': item.get('value_unit', ''),
+            #             'user_id': item.get('user_id', ''),
+            #             'period': item.get('period', ''),
+            #             # 'vehicle_value_unit': item.get('vehicle_value_unit', ''),
+            #             'vehicle_status': item.get('vehicle_status', ''),
+            #             'owner_gender': item.get('owner_gender', ''),
+            #             'owner_name': item.get('owner_name', ''),
+            #             'owner_surname': item.get('owner_surname', ''),
+            #             'owner_lao_name': item.get('owner_lao_name', ''),
+            #             'owner_lao_surname': item.get('owner_lao_surname', ''),
+            #             'id_file': CID,
+            #             'insert_date': timezone.now().date(),
+            #             'update_date': timezone.now().date()
+            #         }
+            #     )
+            
+            # elif col_type == "c2.6" or col_type == "C2.6":
+            #     obj, created = col_guarantor_gua.objects.update_or_create(
+            #         bank_customer_ID=item.get('bank_customer_ID', ''),
+            #         lcicID=lcicID,
+            #         com_enterprise_code=com_enterprise_code,
+            #         bnk_code=item.get('bnk_code', ''),
+            #         branch_id_code=item.get('branch_id_code', ''),
+            #         loan_id=item.get('loan_id', ''),
+            #         col_id=item.get('col_id', ''),
+            #         defaults={
+            #             'guarantor_name': item.get('guarantor_name', ''),
+            #             'segmentType': item.get('segmentType', ''),
+            #             'user_id': item.get('user_id', ''),
+            #             'period': item.get('period', ''),
+            #             'col_type': item.get('col_type', ''),
+            #             'guarantor_type': item.get('guarantor_type', ''),
+            #             'guarantor_no': item.get('guarantor_no', ''),
+            #             'value_unit': item.get('value_unit', ''),   
+            #             'value': item.get('value', ''),
+            #             'id_file':CID,
+            #             'insert_date': timezone.now().date(),
+            #             'update_date': timezone.now().date()
+            #         }
+            #     )
+            
+            # elif col_type == "c2.8" or col_type == "C2.8":
+            #     obj, created = col_goldsilver_gold.objects.update_or_create(
+            #         bank_customer_ID=item.get('bank_customer_ID', ''),
+            #         lcicID=lcicID,
+            #         com_enterprise_code=com_enterprise_code,
+            #         bnk_code=item.get('bnk_code', ''),
+            #         branch_id_code=item.get('branch_id_code', ''),
+            #         loan_id=item.get('loan_id', ''),
+            #         col_id=item.get('col_id', ''),
+            #         defaults={
+            #             'gold_type': item.get('gold_type', ''),
+            #             'gold_weight': item.get('gold_weight', ''),
+            #             'segmentType': item.get('segmentType', ''),
+            #             'col_type': item.get('col_type', ''),
+            #             'user_id': item.get('user_id', ''),
+            #             'period':item.get('period', ''),
+            #             'gold_purity': item.get('gold_purity', ''),
+            #             'value': item.get('value', ''),
+            #             'id_file': CID,
+            #             'gold_status': item.get('gold_status', ''),
+            #             'owner_gender': item.get('owner_gender', ''),
+            #             'value_unit': item.get('value_unit', ''),
+            #             'owner_name': item.get('owner_name', ''),
+            #             'owner_surname': item.get('owner_surname', ''),
+            #             'owner_lao_name': item.get('owner_lao_name', ''),
+            #             'owner_lao_surname': item.get('owner_lao_surname', ''),
+            #             'insert_date': timezone.now().date(),
+            #             'update_date': timezone.now().date()
+            #         }
+            #     )
+            # C1.objects.update_or_create(
+            #     lcicID=lcicID,
+            #     com_enterprise_code=com_enterprise_code,
+            #     bnk_code=item.get('bnk_code', ''),
+            #     branch_id_code=item.get('branch_id_code', ''),
+            #     loan_id=item.get('loan_id', ''),
+            #     col_id=item.get('col_id', ''),
+            #     bank_customer_ID=item.get('bank_customer_ID', ''),
+                
+            #     defaults={
+            #         # 'bnk_code': item.get('bnk_code', ''),
+            #         # 'bank_customer_ID': item.get('bank_customer_ID', ''),
+            #         # 'branch_id_code': item.get('branch_id_code', ''),
+            #         # 'loan_id': item.get('loan_id', ''),
+            #         # 'col_id': item.get('col_id', ''),
+            #         'col_type': col_type,
+            #         'user_id': item.get('user_id', ''),
+            #         'period': item.get('period', ''),
+            #         'id_file': CID,
+            #         'insert_date': timezone.now().date(),
+            #         'update_date': timezone.now().date()
+            #     }
+            # )    
+            
+    #         total_records += 1
+
+    
+
+    # except Exception as e:
+    #     result['status'] = 'error'
+    #     result['message'] = str(e)
+    # print(e)
+
+    # return result
+
 
 
 # def process_uploaded_file(uploaded_data,  user_id, period):
@@ -5128,6 +5850,19 @@ def update_statussubmit(request):
         file.save()
         return JsonResponse({'status': 'success', 'message': 'statussubmit updated successfully'})
     except Upload_File.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'File not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+@csrf_exempt
+@require_POST
+def update_statussubmitc(request):
+    try:
+        CID = request.POST.get('CID')
+        file = Upload_File_C.objects.get(CID=CID)
+        file.statussubmit = "0"  
+        file.save()
+        return JsonResponse({'status': 'success', 'message': 'statussubmit updated successfully'})
+    except Upload_File_C.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'File not found'}, status=404)
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

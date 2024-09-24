@@ -48,7 +48,7 @@ from .views import confirm_image
 from .views import UserLoginView
 from django.contrib.auth import views as auth_views
 from .views import UserProfileView
-from .views import UserManagementView, FCR_reportView, SidebarItemsView, RoleListView, SidebarItemListView, SidebarSubItemListView, AssignRoleView, ManageUserView
+from .views import UserManagementView, FCR_reportView, SidebarItemsView, RoleListView, SidebarItemListView, SidebarSubItemListView, AssignRoleView, ManageUserView,  update_statussubmitc,confirm_uploadc
 # from .views import FileUploadView, FileDeleteView
 # from .views import upload_files
 # from .views import enterprise_info_search
@@ -150,6 +150,7 @@ urlpatterns = [
     path('api/productinfoc3/', get_data4, name='get_data_by_id_file_and_period'),
     path('api/productinfo4/', get_data_by_id_file, name='get_data_by_id_file'),
     path('confirm_upload/', views.confirm_upload, name='confirm_upload'),
+    path('confirm_uploadc/', views.confirm_uploadc, name='confirm_uploadc'),
 
     # path('upload333/', FileUploadView3.as_view(), name='file-upload'),
     path('upload-files/', FileUploadView3.as_view(), name='upload_files_view'),
@@ -163,6 +164,7 @@ urlpatterns = [
 
 
     path('api/update-statussubmit/', update_statussubmit, name='update_statussubmit'),
+    path('api/update-statussubmitc/',  update_statussubmitc, name=' update_statussubmitc'),
     path('api/upload_image/', upload_image, name='collateral-update'),
     path('api/get_collaterals/', get_collaterals, name='get_collaterals'),
      path('api/get_login3/', get_login3, name='get_login3'),
