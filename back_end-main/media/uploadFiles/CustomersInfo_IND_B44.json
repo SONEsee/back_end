@@ -1,0 +1,24 @@
+[
+	{
+		"mm_ind_sys_id" : 1107940,
+		"bnk_code" : "44",
+		"branchcode" : "0835",
+		"customerid" : "BBL-PSB-LN17/001",
+		"ind_birth_date" : "1959-04-02",
+		"ind_name" : "Viratha",
+		"ind_second_name" : "",
+		"ind_surname" : "Phonekeo",
+		"ind_lao_name" : "ວິລະຖາ",
+		"ind_lao_surname" : "ພອນແກ້ວ",
+		"ind_old_surname" : "",
+		"ind_lao_old_surname" : "",
+		"ind_nationality" : "LA",
+		"ind_gender" : "M",
+		"ind_civil_status" : "",
+		"ind_insert_date" : "2018-05-17 08:36:31",
+		"ind_update_date" : "2018-04-03 15:00:00",
+		"mm_action_date" : "2021-11-10 13:24:10",
+		"blk_sys_id" : 32847,
+		"mm_status" : "M"
+	}
+]

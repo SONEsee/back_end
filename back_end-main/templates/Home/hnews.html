@@ -1,0 +1,102 @@
+{% extends 'layouts/base.html' %}
+{% block title %}News Detail{%endblock%}
+{% load static %}
+{% block content %}
+
+
+ 
+<div id="important" class="important">
+      <div class="container">
+        <div class="titlepage"><br>
+         <h3>{% if Lang == "la" %}
+          {% for news in H_news %}
+          {{news.Trans_LA}}
+         {% endfor %}
+        {% elif Lang == "en" %}
+         {% for news in H_news %}
+          {{ news.Trans_EN}}
+         {% endfor %}
+    {% endif %}<strong class="yellow mt-4">
+      {% if Lang == "la" %}
+      {% for c in H_com %}
+       {{c.Trans_LA}}
+      {% endfor %}
+     {% elif Lang == "en" %}
+      {% for c in H_com %}
+       {{ c.Trans_EN}}
+      {% endfor %}
+ {% endif %}</strong></h3>         
+        </div>
+       <div class="row">           
+          <div class="col-sm-12">
+            <div class="row">
+              <div class="col-sm-12">
+                    <div class="card border-0">
+                        {%for p in H_newsInfo_v %}
+                            <div class="row">
+                            <div class="col-sm-2">                    
+                                {% if p.nimage %} 
+                                <a href="{{ p.nFiles.url }}"><img src="{{ p.nimage.url }}" alt="" class="card-img-top mt-2" max-width="20px"></a>
+                                {%endif%} 
+                            </div>
+                            <div class="col-sm-10">                     
+                              {% if Lang == "la" %}
+                              <a href="{{ p.nFiles.url }}"><h3><strong class="blue">{{p.nameL}} </strong> <span class="redblink"> {% for new in H_new %}
+                                {{new.Trans_LA}}
+                               {% endfor %} </span></h3></a>
+                              <span class="text-align:left!important">{{ p.descL }}</span><br>
+                              <a href="{% url 'lcicHome:newsdetail' %}?slug={{ p.id }}&Lang=la" class="btn btn-info mt-1">
+                                {% for more in H_more %}
+                                {{more.Trans_LA}}
+                               {% endfor %} </a>
+                              {% elif Lang == "en" %}
+                               <a href="{{ p.nFiles.url }}"><h3><strong class="blue">{{p.nameE}} </strong> <span class="redblink">{% for new in H_new %}
+                                {{new.Trans_EN}}
+                               {% endfor %} </span></h3></a>
+                              <span class="text-align:left!important">{{ p.descE }}</span><br>
+                              <a href="{% url 'lcicHome:newsdetail' %}?slug={{ p.id }}&Lang=en" class="btn btn-info mt-1">{% for more in H_more %}
+                                {{more.Trans_EN}}
+                               {% endfor %}</a>   
+                              {% endif %}         
+                            </div> 
+                            </div>                 
+                        {%endfor%}                   
+                        
+                    </div>
+                    <div class="box_text">
+                      {% if Lang == "la" %}
+                      <ul class="pagination" >                   
+                        {% if H_newsInfo_v.has_previous %}
+                            <li class="page-item"><a class="page-link" href="?page=H_newsInfo_v.previous_page_number&Lang=la">Previous</a></li>
+                        {% endif %}
+                        {% for i in H_newsInfo_v.paginator.page_range %}
+                            <li class="page-item {% if H_newsInfo_v == i %}active{%endif%}"><a class="page-link" href="?page={{ i }}&Lang=la">{{i}}</a></li>
+                        {% endfor %}
+                        {% if H_newsInfo_v.has_next %}
+                            <li class="page-item"><a class="page-link" href="?page=H_newsInfo_v.next_page_number&Lang=la">Next</a></li>
+                        {% endif %}
+                      </ul>
+
+                      {% elif Lang == "en" %}
+                      <ul class="pagination" >                   
+                        {% if H_newsInfo_v.has_previous %}
+                            <li class="page-item"><a class="page-link" href="?page=H_newsInfo_v.previous_page_number&Lang=en">Previous</a></li>
+                        {% endif %}
+                        {% for i in H_newsInfo_v.paginator.page_range %}
+                            <li class="page-item {% if H_newsInfo_v == i %}active{%endif%}"><a class="page-link" href="?page={{ i }}&Lang=en">{{i}}</a></li>
+                        {% endfor %}
+                        {% if H_newsInfo_v.has_next %}
+                            <li class="page-item"><a class="page-link" href="?page=H_newsInfo_v.next_page_number&Lang=en">Next</a></li>
+                        {% endif %}
+                      </ul>
+                      {% endif %}
+                    </div>        
+              </div>
+            </div>
+        
+          </div><!-- end image box-->
+        </div>
+      </div>        
+    </div>
+</div> <!-- end History -->
+{% endblock %}

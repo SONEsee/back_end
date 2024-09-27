@@ -1,0 +1,121 @@
+{% extends "Login/main.html" %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% block title %}LCIC{% endblock %}
+{% block content %}
+</br>
+</br>
+</br>
+</br>
+<!-- Message-->
+{% for message in messages %}
+        {% if message.tags == 'success'  %}
+         <!--Use SweetAlert-->
+        <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
+        <script>
+            var m = "{{ message }}";
+            swal("ນຳສົ່ງຂໍ້ມູນສຳເລັດ !", m,"success") 
+        </script>
+            {% comment %} <div class="alert alert-primary alert-dismissible fade show" role="alert">{{message}}
+                <a href="{% url 'lcicHome:manage_user' %}" type="button" class="btn btn-close" data-bs-dismiss="alert" aria-label="close"></a>
+            </div> {% endcomment %}
+
+        {% elif message.tags == 'error' %}
+            {% comment %} <div class="alert alert-danger alert-dismissible fade show" role="alert">{{message}}
+                <a href="{% url 'lcicHome:manage_user' %}" type="button" class="btn btn-close" data-bs-dismiss="alert" aria-label="close"></a>
+            </div> {% endcomment %}
+            <!--Use SweetAlert-->
+        <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
+        <script>
+            var m = "{{ message }}";
+            swal("ກະລຸນາເລືອກໄຟຣ໌ເພື່ອນຳສົ່ງຂໍ້ມູນ !", m,"error") 
+        </script>
+        {% endif %}
+{% endfor %}
+<!--Upload File--> 
+<div class = "container mt-3 mb-5" style="width: 55%; font-size: 16px">
+  <form action="{% url 'lcicHome:upload_file' %}" enctype="multipart/form-data"  method="POST" class="card p-3 mt-5" autocomplete="off" novalidate>
+      {% csrf_token %}
+      <div class="row">
+        <div class="form-group mt-3 ms-5 mb-0">
+            <div class="" style="width:700px" name="document">
+                {{ form.fileUpload|as_crispy_field }}
+            </div>
+        </div>
+          {% comment %} <div class="col-6">
+              {{ form.surnameL|as_crispy_field }}
+          </div>
+          <div class="col-6">
+              {{ form.nameE|as_crispy_field }}
+          </div>
+          <div class="col-6">
+              {{ form.surnameE|as_crispy_field }}
+          </div>
+          <div class="col-4">
+              {{ form.username|as_crispy_field }}
+          </div>
+          <div class="col-4">
+              {{ form.password|as_crispy_field }}
+          </div>
+          <div class="col-4">
+              {{ form.check_password|as_crispy_field }}
+          </div>
+          <div class="col-6">
+              {{ form.GID|as_crispy_field }}
+          </div> {% endcomment %}
+
+           {% comment %} <div class="col-6">
+              {{ form.MID|as_crispy_field }}
+          </div>
+          <div class="col-6">
+              {{ form.status|as_crispy_field }}
+          </div>
+          <div class="col-4">
+              {{ form.period|as_crispy_field }}
+          </div> {% endcomment %}
+          
+            {% comment %} <div class="form-group mt-3 ms-5">
+                <label for="formFile" class="form-label mb-3" style="">ການນຳສົ່ງຂໍ້ມູນ - ການນຳສົ່ງຂໍ້ມູນໃໝ່</label>
+                <input class="form-control" style="width:700px" type="file" id="formFile" name="document" required>
+            </div> {% endcomment %}
+        <!-- Checkbox -->
+        <fieldset class="form-group ms-5 mt-0">
+            {% comment %} <legend class="mt-0" style="font-size:17px">ກວດກາຄວາມຖືກຕ້ອງເທົ່ານັ້ນ</legend> {% endcomment %}
+            {% comment %} <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="" id="flexCheckDefault">
+              <label class="form-check-label" for="flexCheckDefault">
+                Default checkbox
+              </label>                                                               
+            </div> {% endcomment %}                                           
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="" id="flexCheckChecked" onclick="enable()" name="check">
+              <label class="form-check-label" for="flexCheckChecked">
+                ກວດກາຄວາມຖືກຕ້ອງເທົ່ານັ້ນ
+              </label>
+            </div>
+          </fieldset>
+      </div>
+          {% comment %} <div class="col-6">
+              <button type="submit" class="btn btn-primary mt-3" style="width:90px">ສະແດງ</button>
+          </div> {% endcomment %}
+          <!--Button--> 
+        <div class="col-4 mt-2 ms-4" >
+          <button type="submit" class="btn btn-primary  mb-0" style="width:90px" disabled="true" id="btn">ບັນທຶກ</button>
+          <a href="{% url 'lcicHome:show_uploadFile' %}" class="btn btn-secondary  mb-0" style="width:90px">ຍົກເລີກ</a>
+      </div>
+      <script>
+      function enable(){
+
+            var submitButton = document.getElementById("btn");
+            var check = document.getElementById("flexCheckChecked");
+            
+            if(check.checked == true){
+                submitButton.removeAttribute("disabled");
+            }else{
+                submitButton.disabled = "true"
+            }
+        }
+      </script>
+  </form>
+</div>
+{% endblock %}

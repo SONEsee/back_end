@@ -1,0 +1,203 @@
+[
+    {
+        "model": "lcichome.customerwater",
+        "pk": 1,
+        "fields":
+        {
+            "CustomerID": "1",
+            "CompanyName": null,
+            "Name": "ຄອນສະຫວາດ",
+            "Surname": "ຫຼ້າມະນີເງົາ",
+            "NationalID": "12181215",
+            "Passport": "1549845",
+            "Address": "ໜອງໜ່ຽງ",
+            "districtInfo": "ໄຊເສດຖາ",
+            "proInfo": "ນະຄອນຫຼວງວຽງຈັນ",
+            "Tel": "02055844515",
+            "Email": "Jack@gmail.com",
+            "ConsumerType": "Individual",
+            "RegisDate": "2005-01-12T07:11:40.000+07"
+        }
+    },
+    {
+        "model": "lcichome.customerwater",
+        "pk": 2,
+        "fields":
+        {
+            "CustomerID": "2",
+            "CompanyName": null,
+            "Name": "ອານັນ",
+            "Surname": "ແກ້ວແພງສີ",
+            "NationalID": "548446148",
+            "Passport": "49794666",
+            "Address": "ຄຳສະຫວາດ",
+            "districtInfo": "ໄຊເສດຖາ",
+            "proInfo": "ນະຄອນຫຼວງວຽງຈັນ",
+            "Tel": "02071518884",
+            "Email": "Anan@gmail.com",
+            "ConsumerType": "Individual",
+            "RegisDate": "2003-12-05T07:11:40.000+07"
+        }
+    },
+    {
+        "model": "lcichome.customerwater",
+        "pk": 3,
+        "fields":
+        {
+            "CustomerID": "3",
+            "CompanyName": null,
+            "Name": "ອານຸສິດ",
+            "Surname": "ວຽງສະຫວັນ",
+            "NationalID": "4444448411",
+            "Passport": "3838373737",
+            "Address": "ທົ່ງປົ່ງ",
+            "districtInfo": "ສີໂຄດຕະບອງ",
+            "proInfo": "ນະຄອນຫຼວງວຽງຈັນ",
+            "Tel": "02058754152",
+            "Email": "Anousit@gamil.com",
+            "ConsumerType": "Individual",
+            "RegisDate": "2002-03-15T07:11:40.000+07"
+        }
+    },
+    {
+        "model": "lcichome.customerwater",
+        "pk": 4,
+        "fields":
+        {
+            "CustomerID": "4",
+            "CompanyName": null,
+            "Name": "ມະນີສອນ",
+            "Surname": "ຫຼ້າຈັນທະບຸນ",
+            "NationalID": "548415166",
+            "Passport": "38373737",
+            "Address": "ໂພນໂຮງ",
+            "districtInfo": "ໂພນໂຮງ",
+            "proInfo": "ວຽງຈັນ",
+            "Tel": "02054846164",
+            "Email": "Manisone@gmail.com",
+            "ConsumerType": "Individual",
+            "RegisDate": "2000-02-08T07:11:40.000+07"
+        }
+    },
+    {
+        "model": "lcichome.customerwater",
+        "pk": 5,
+        "fields":
+        {
+            "CustomerID": "5",
+            "CompanyName": null,
+            "Name": "ດວງພະຈັນ",
+            "Surname": "ຣັຕະນະວິຈິດ",
+            "NationalID": "051616445",
+            "Passport": "237837837",
+            "Address": "ໂພນປ່າເປົ້າ",
+            "districtInfo": "ສີສັດຕະນາກ",
+            "proInfo": "ນະຄອນຫຼວງວຽງຈັນ",
+            "Tel": "02059731148",
+            "Email": "r.douangphachan1999@gmail.com",
+            "ConsumerType": "Individual",
+            "RegisDate": "2009-05-02T07:11:40.000+07"
+        }
+    },
+    {
+        "model": "lcichome.customerwater",
+        "pk": 6,
+        "fields":
+        {
+            "CustomerID": "6",
+            "CompanyName": "Bee Company.Co",
+            "Name": "ທົດສະກັນ",
+            "Surname": "ສີດາລາວິໄລ",
+            "NationalID": "14946162",
+            "Passport": "548411155",
+            "Address": "ໂພໄໍຊ",
+            "districtInfo": "ໄກສອນ",
+            "proInfo": "ສະຫວັນນະເຂດ",
+            "Tel": "0206549464ູ",
+            "Email": "thotsakan@gmail.com",
+            "ConsumerType": "Company",
+            "RegisDate": "2015-12-13T07:11:40.000+07"
+        }
+    },
+    {
+        "model": "lcichome.customerwater",
+        "pk": 7,
+        "fields":
+        {
+            "CustomerID": "7",
+            "CompanyName": "Phetnuvong Trading",
+            "Name": "ເພັດນຸວົງ",
+            "Surname": "ທິບຄຳພັນ",
+            "NationalID": "1449461184",
+            "Passport": "37378373",
+            "Address": "ເມືອງວາທົ່ງ",
+            "districtInfo": "ສີໂຄດຕະບອງ",
+            "proInfo": "ນະຄອນຫຼວງວຽງຈັນ",
+            "Tel": "02054848487",
+            "Email": "phetnuvong@gmail.com",
+            "ConsumerType": "Company",
+            "RegisDate": "2014-05-02T07:11:40.000+07"
+        }
+    },
+    {
+        "model": "lcichome.customerwater",
+        "pk": 8,
+        "fields":
+        {
+            "CustomerID": "8",
+            "CompanyName": null,
+            "Name": "ດອກແກ້ວ",
+            "Surname": "ແກ້ວວົງສາ",
+            "NationalID": "148441651",
+            "Passport": "877837837",
+            "Address": "ໂພນງາມ",
+            "districtInfo": "ປາກເຊ",
+            "proInfo": "ຈຳປາສັກ",
+            "Tel": "02025484515",
+            "Email": "dokkeo@gmail.com",
+            "ConsumerType": "Individual",
+            "RegisDate": "2007-09-24T07:11:40.000+07"
+        }
+        
+    },
+    {
+        "model": "lcichome.customerwater",
+        "pk": 9,
+        "fields":
+        {
+            "CustomerID": "9",
+            "CompanyName": "URASIA",
+            "Name": "ບຸນມີ",
+            "Surname": "ມີມາລາ",
+            "NationalID": "51484115",
+            "Passport": "54874616",
+            "Address": "ໜອງບົວທອງໃຕ້",
+            "districtInfo": "ຈັນທະບູລີ",
+            "proInfo": "ນະຄອນຫຼວງວຽງຈັນ",
+            "Tel": "02075541845",
+            "Email": "bounmi@gmail.com",
+            "ConsumerType": "Company",
+            "RegisDate": "2012-08-05T07:11:40.000+07"
+        }
+    },
+    {
+        "model": "lcichome.customerwater",
+        "pk": 10,
+        "fields":
+        {
+            "CustomerID": "10",
+            "CompanyName": null,
+            "Name": "ຄຳບາງ",
+            "Surname": "ຄູນລືຊາ",
+            "NationalID": "15484151545",
+            "Passport": "58461465",
+            "Address": "ຊຽງຍືນ",
+            "districtInfo": "ຈັນທະບູລີ",
+            "proInfo": "ນະຄອນຫຼວງວຽງຈັນ",
+            "Tel": "02058457845",
+            "Email": "khambang@gmail.com",
+            "ConsumerType": "Individual",
+            "RegisDate": "2010-05-04T07:11:40.000+07"
+        }
+    }
+]

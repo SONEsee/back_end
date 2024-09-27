@@ -1,0 +1,55 @@
+.User {
+    padding-right: 7px;
+  }
+.UserInfo {
+    float: right;
+    font-size: 15px;
+    width: 350px;
+    color: #fff;
+    padding: 0px 0px 0px 14px;
+    background: #020fbb;
+    border-radius: 0px 20px 0px 20px;
+    box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+  }
+/* a #Logout:hover {
+    color: red;
+  }
+a #Logout{
+  color: #ffff;
+  text-decoration: none;
+} */
+
+#filename:hover {
+  text-decoration-color: #020fbb;
+  text-decoration: underline;
+}
+
+
+
+/* CUSTOM SWEET ALERT */
+
+/* All texts 100% centered*/
+.swal-text{
+  text-align: center;
+}
+
+/* Icon Settings */
+.swal-icon--success:before,
+.swal-icon--success:after,
+.swal-icon--success__jide-corners {
+  background: none !important;
+}
+
+/* Button Settings*/
+.swal-button {
+  padding: 7px 19px;
+  border-radius: 5px;
+  background-color: #198754;
+  font-size: 12px;
+  border: #198754;
+}
+.swal-button:focus{
+  box-shadow: none;
+}
+
+  
