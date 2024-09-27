@@ -1,0 +1,325 @@
+[
+	{
+		"lcicID": "1750",
+		"bnk_code": "BNK001",
+		"com_enterprise_code": "0300002125",
+		"collateral_type":"estates",
+		"col_provin": "Vientiane",
+		"col_district": "Sikhottabong",
+		"col_village": "Ban Nongbuathong",
+		"col_unit": "1",
+		"col_no": "A123",
+		"col_out_time": "ຄັ້ງທີ່ 1",
+		"col_type": "ດິນວ່າເປົ່າ",
+		"col_area": "500",
+		"col_land_registry_book_no": "B123456",
+		"col_document_no": "D123456",
+		"col_land_map_no": "M123456",
+		"col_land_plot_no": "P123456",
+		"col_land_area": 100.25,
+		"col_land_unit": "ຕາລາງແມັດ",
+		"owner_name": "John Doe",
+		"owner_birth_date": "1980-01-01",
+		"owner_nationality": "Lao",
+		"owner_occupation": "ຊາວນາ",
+		"current_unit": "2",
+		"current_village": "Ban Xaysetha",
+		"current_district": "Chanthabuly",
+		"current_provin": "Vientiane",
+		"spouse_name": "Jane Doe",
+		"spouse_birth_date": "1985-02-01",
+		"spouse_nationality": "Lao",
+		"spouse_occupation": "7kjkj",
+		"land_acquisition": "ຊື້ຂາຍ",
+		"ownership_status": "ເຈົ້າຂອງ"
+		
+		
+	},
+	{
+		"lcicID": "123",
+		"com_enterprise_code": "ENT001",
+		"collateral_type":"gold",
+		"bank_customer_ID": "CUST0001",
+		"branch_id_code": "BR001",
+		"loan_id": "LOAN0001",
+		"collateral_id": "COLL001",
+		"weight": "1000",
+		"unit": "Kg",
+		"value": "50000"
+		
+		
+
+	  },
+	{
+		"lcicID": "123",
+		"com_enterprise_code": "ENT001",
+		"collateral_type":"gold",
+		"bank_customer_ID": "CUST0001",
+		"branch_id_code": "BR001",
+		"loan_id": "LOAN0001",
+		"collateral_id": "COLL001",
+		"weight": "1000",
+		"unit": "Kg",
+		"value": "50000"
+		
+		
+
+	  },
+	{
+		"lcicID": "123",
+		"com_enterprise_code": "ENT001",
+		"collateral_type":"gold",
+		"bank_customer_ID": "CUST0001",
+		"branch_id_code": "BR001",
+		"loan_id": "LOAN0001",
+		"collateral_id": "COLL001",
+		"weight": "1000",
+		"unit": "Kg",
+		"value": "50000"
+		
+		
+
+	  },
+	{
+		"lcicID": "123",
+		"com_enterprise_code": "ENT001",
+		"collateral_type":"gold",
+		"bank_customer_ID": "CUST0001",
+		"branch_id_code": "BR001",
+		"loan_id": "LOAN0001",
+		"collateral_id": "COLL001",
+		"weight": "1000",
+		"unit": "Kg",
+		"value": "50000"
+		
+		
+
+	  },
+	{
+		"lcicID": "123",
+		"com_enterprise_code": "ENT001",
+		"collateral_type":"gold",
+		"bank_customer_ID": "CUST0001",
+		"branch_id_code": "BR001",
+		"loan_id": "LOAN0001",
+		"collateral_id": "COLL001",
+		"weight": "1000",
+		"unit": "Kg",
+		"value": "50000"
+		
+		
+
+	  },
+	{
+		"lcicID": "1750",
+		"com_enterprise_code": "0300002125",
+		"collateral_type":"gold",
+		"bank_customer_ID": "CUST0001",
+		"branch_id_code": "BR001",
+		"loan_id": "LOAN0001",
+		"collateral_id": "COLL001",
+		"weight": "1000",
+		"unit": "Kg",
+		"value": "50000"
+		
+		
+
+	  },
+	{
+		"lcicID": "123",
+		"com_enterprise_code": "0300002125",
+		"collateral_type":"gold",
+		"bank_customer_ID": "CUST0001",
+		"branch_id_code": "BR001",
+		"loan_id": "LOAN0001",
+		"collateral_id": "COLL001",
+		"weight": "1000",
+		"unit": "Kg",
+		"value": "50000"
+		
+		
+
+	  },
+	{
+		"lcicID": "123",
+		"com_enterprise_code": "ENT001",
+		"collateral_type":"gold",
+		"bank_customer_ID": "CUST0001",
+		"branch_id_code": "BR001",
+		"loan_id": "LOAN0001",
+		"collateral_id": "COLL001",
+		"weight": "1000",
+		"unit": "Kg",
+		"value": "50000"
+		
+		
+
+	  },
+	{
+		"lcicID": "123",
+		"com_enterprise_code": "ENT001",
+		"collateral_type":"gold",
+		"bank_customer_ID": "CUST0001",
+		"branch_id_code": "BR001",
+		"loan_id": "LOAN0001",
+		"collateral_id": "COLL001",
+		"weight": "1000",
+		"unit": "Kg",
+		"value": "50000"
+		
+		
+
+	  },
+	{
+		"lcicID": "123",
+		"com_enterprise_code": "ENT001",
+		"collateral_type":"gold",
+		"bank_customer_ID": "CUST0001",
+		"branch_id_code": "BR001",
+		"loan_id": "LOAN0001",
+		"collateral_id": "COLL001",
+		"weight": "1000",
+		"unit": "Kg",
+		"value": "50000"
+		
+		
+
+	  },
+	{
+		"lcicID": "123",
+		"com_enterprise_code": "ENT001",
+		"collateral_type":"gold",
+		"bank_customer_ID": "CUST0001",
+		"branch_id_code": "BR001",
+		"loan_id": "LOAN0001",
+		"collateral_id": "COLL001",
+		"weight": "1000",
+		"unit": "Kg",
+		"value": "50000"
+		
+		
+
+	  },
+	{
+		"lcicID": "123",
+		"com_enterprise_code": "ENT001",
+		"collateral_type":"gold",
+		"bank_customer_ID": "CUST0001",
+		"branch_id_code": "BR001",
+		"loan_id": "LOAN0001",
+		"collateral_id": "COLL001",
+		"weight": "1000",
+		"unit": "Kg",
+		"value": "50000"
+		
+		
+
+	  },
+	  {
+		"lcicID": "123456",
+		"com_enterprise_code": "ENT123",
+		"collateral_type":"gua",
+		"bank_customer_ID": "CUST001",
+		"branch_id_code": "BR001",
+		"loan_id": "LOAN001",
+		"collateral_id": "COLL001",
+		"guarantor_type": "Individual",
+		"guarantor_nationality": "Lao",
+		"national_id": "ID123456",
+		"national_expiry_date": "2030-12-31",
+		"passport": "P123456789",
+		"passport_expiry_date": "2030-12-31",
+		"familybook": "FB123456",
+		"familybook_province_code_of_issue": "PV001",
+		"familybook_issue_date": "2024-01-01",
+		"birthdate": "1980-01-01",
+		"gender": "Male",
+		"ist_name_english": "John",
+		"ist_name_lao": "ຈອນ",
+		"nickname_english": "Johnny",
+		"nickname_lao": "ຈອນນີ",
+		"surname_english": "Doe",
+		"surname_lao": "ໂດ",
+		"address_number_street_english": "123 Main St",
+		"address_number_street_lao": "123 ຖະໜົນຫລັກ",
+		"address_village_english": "Village1",
+		"address_village_lao": "ບ້ານ1",
+		"address_sub_district_english": "Sub-district1",
+		"address_sub_district_lao": "ເຂຍບ1",
+		"address_district_english": "District1",
+		"address_district_lao": "ເມືອງ1",
+		"address_province_code": "PV001",
+		"enterprise_code": "ENT001",
+		"registration_date_of_issue": "2024-01-01",
+		"registration_place_issue": "Vientiane",
+		"company_name_english": "ABC Company",
+		"company_name_lao": "ບໍລິສັດ ABC",
+		"category": "Manufacturing"
+		
+		
+	  },
+	  {
+		"lcicID": "123456",
+		"com_enterprise_code": "ENT123",
+		"collateral_type":"veh",
+		"bank_customer_ID": "CUST001",
+		"branch_id_code": "BR001",
+		"loan_id": "LOAN001",
+		"collateral_id": "COLL001",
+		"name_owner": "John Doe",
+		"plate_number": "ABC1234",
+		"engine_number": "ENG123456",
+		"body_numbe": "BODY123456",
+		"model": "ModelX",
+		"value": "50000"
+		
+		
+	  },
+	  {
+		"bank_customer_id": "CUST002",
+		"lcicID": "789101",
+		"com_enterprise_code": "ENT456",
+		"collateral_type":"prj",
+		"branch_id_code": "BR002",
+		"loan_id": "LOAN002",
+		"project_type": "TypeA",
+		"collateral_id": "COLL002",
+		"project_name_en": "Project Alpha",
+		"ministry": "Ministry of Finance",
+		"project_namber": "PN12345",
+		"project_name_la": "ໂຄງການອາບປາ",
+		"value": "100000"
+		
+		
+	  },
+	  {
+		"bank_customer_id": "CUST123",
+		"lcicID": "123456",
+		"com_enterprise_code": "ENT789",
+		"collateral_type":"eqi",
+		"branch_id_code": "BR001",
+		"loan_id": "LOAN789",
+		"collateral_id": "COLL789",
+		"machine_type": "Excavator",
+		"machine_no": "MACH001",
+		"value": "50000"
+		
+		
+	  },
+	  {
+		"lcicID": "123456",
+		"com_enterprise_code": "ENT789",
+		"collateral_type":"money",
+		"bank_customer_ID": "CUST123",
+		"branch_id_code": "BR001",
+		"loan_id": "LOAN789",
+		"collateral_id": "COLL789",
+		"account_no": "ACC001",
+		"account_type": "Savings",
+		"value": "15000"
+	
+		
+	  }
+	    
+	
+]

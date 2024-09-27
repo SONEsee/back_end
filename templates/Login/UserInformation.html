@@ -1,0 +1,109 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}User Information{%endblock%}</title>
+  <link rel="stylesheet" stype="text/css" href="{% static '/css/bootstrap.min.css' %}">
+  <style>
+    .User {
+      padding-right: 7px;
+    }
+    .UserInfo {
+      float: right;
+      font-size: 15px;
+      width: 350px;
+      color: #fff;
+      padding: 0px 0px 0px 10px;
+      background: #020fbb;
+      border-radius: 0px 20px 0px 20px;
+      box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+    }
+    #adduser{
+      {% comment %} font-size: 15px; {% endcomment %}
+      color: black;
+      font-weight:normal;
+      float: right;
+    }
+    #show_mImage{
+      text-align: center;
+      max-width: 250px;
+      margin-left: auto;
+      margin-right: auto;
+      display:block;
+      box-shadow: 0 0 2px 0 rgba(0, 0, 0, 0.2), 0 0 20px 0 rgba(0, 0, 0, 0.19);
+    }
+    #show_code{
+      max-width: 250px;
+      margin-bottom: 20px;
+      margin-left: auto;
+      margin-right: auto;
+      text-align: center;
+      font-size: 20px;
+      box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+    }
+    {% comment %} div.polaroid {
+      margin-right: 200px;
+      width: 250px;
+      box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+    }
+    div.container {
+      font-weight: bold;
+      padding: 10px;
+    } {% endcomment %}
+
+
+    a:hover {
+      color: red;
+    }
+    a{
+      color: #ffff;
+      text-decoration: none;
+    }
+
+    
+    #filename {
+      color: #0000FF;
+      text-decoration-color: #0000FF;
+      text-decoration: underline;
+    }
+    {% comment %} #filename:hover {
+      text-decoration: underline;
+    } {% endcomment %}
+    {% comment %} #filename:hover {
+      text-decoration-color: #0000FF;
+      text-decoration: underline;
+    } {% endcomment %}
+  </style>
+</head>
+<body>
+  {% block content %}
+  <div class="User">
+      <div class="UserInfo">
+        {% if Lang == "la" %}
+        ຍິນດີຕ້ອນຮັບ, {% for u in uname %} {{u.nameL}} {% endfor%}
+        </br><span>ພາກສ່ວນ:</span>{% if check_UserGroup == 1 or check_UserGroup == 2 or check_UserGroup == 3 or check_UserGroup == 4 or check_UserGroup == 5 %}
+        ຂສລ, ບໍລິສັດ ຂໍ້ມູນຂ່າວສານສິນເຊື່ອແຫ່ງ ສ.ປ.ລາວ
+        {% else %}
+        {% for c in code %} {{c.code}} {% endfor%}, {% for c in code %} {{c.nameL}} {% endfor%}
+        {% endif %}
+        </br><span>ກຸ່ມຜູ້ໃຊ້:</span>{% for g in ugroup %} {{g.nameL}} {% endfor%}
+        <br />
+        {% comment %} <a href="{% url 'lcicHome:loginPage' %}?Lang=la">ອອກຈາກລະບົບ</a> {% endcomment %}
+        <a id="Logout" href="{% url 'lcicHome:loginPage' %}?Lang=la">ອອກຈາກລະບົບ</a>
+        {% elif Lang == "en" %}
+        Welcome, {% for u in uname %} {{u.nameE}} {% endfor%}
+        </br><span>From:</span>{% for c in code %} {{c.code}} {% endfor%}, {% for c in code %} {{c.nameE}} {% endfor%}
+        </br><span>User Group:</span>
+        {% for g in ugroup %} {{g.nameE}} {% endfor%}
+        <br />
+        <a id="Logout" href="{% url 'lcicHome:loginPage' %}?Lang=en">Logout</a>
+        {% endif %}
+      </div>
+    </div>
+  {% endblock %}
+</body>
+</html>
+

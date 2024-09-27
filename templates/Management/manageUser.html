@@ -1,0 +1,238 @@
+{% extends "Login/main.html" %}
+{% load static %}
+{% block title %}LCIC{% endblock %}
+
+{% block content %}
+{% comment %} {% include "Login/UserInformation.html" %} {% endcomment %}
+</br>
+</br>
+</br>
+</br>
+{% for message in messages %}
+        {% if message.tags == 'success'  %}
+         <!--Use SweetAlert-->
+        <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
+        <script>
+            var m = "{{ message }}";
+            swal("ອັບເດດຂໍ້ມູນສຳເລັດ !", m,"success") 
+        </script>
+            {% comment %} <div class="alert alert-primary alert-dismissible fade show" role="alert">{{message}}
+                <a href="{% url 'lcicHome:manage_user' %}" type="button" class="btn btn-close" data-bs-dismiss="alert" aria-label="close"></a>
+            </div> {% endcomment %}
+
+        {% elif message.tags == 'error' %}
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">{{message}}
+                <a href="{% url 'lcicHome:manageUser' %}" type="button" class="btn btn-close" data-bs-dismiss="alert" aria-label="close"></a>
+            </div>
+        {% endif %}
+    {% endfor %}
+<div class="container-fluid">
+    <h3 class="m-4"><i class="fa-solid fa-users fa-lg"></i> ຈັດການຂໍ້ມູນຜູ້ໃຊ້ລະບົບ</h3>
+    <div class="row">
+        <div class="col-12">
+          {% if users %}
+          <div class="card bg-light ms-4 me-4 mb-4">
+            <div class="card-header">
+              <i class="fa-solid fa-list fa-lg"></i> ຜູ້ໃຊ້ລະບົບທັງໝົດ
+              <a id="adduser" href="{% url 'lcicHome:addUser' %}"><i class="fa-solid fa-user-plus"></i> ເພີ່ມຜູ້ໃຊ້ລະບົບ</a>
+            </div>
+            <div class="card-body">
+              <p class="card-text">
+                <div class="table-responsive">
+                  <table class="table table-hover">
+                    <thead>
+                      <tr>
+                        <th style="font-size:17px" scope="col">ລະຫັດ</th>
+                        <th style="font-size:17px" scope="col">ຊື່ຜູ້ໃຊ້ລະບົບ</th>
+                        <th style="font-size:17px" scope="col">ຊື່ພາສາລາວ</th>
+                        <th style="font-size:17px" scope="col">ນາມສະກຸນພາສາລາວ</th>
+                        <th style="font-size:17px" scope="col">ຊື່ພາສາອັງກິດ</th>
+                        <th style="font-size:17px" scope="col">ນາມສະກຸນພາສາອັງກິດ</th>
+                        <th style="font-size:17px" scope="col">ວັນທີ່ເພີ່ມ</th>
+                        <th style="font-size:17px" scope="col">ວັນທີ່ແກ້ໄຂ</th>
+                        <th style="font-size:17px" scope="col">ສະຖານະ</th>
+                        <th scope="col">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for users in users%}
+                        <tr>
+                          <td>{{users.UID}}</td>
+                          <td>{{users.username}}</td>
+                          <td>{{users.nameL}}</td>
+                          <td>{{users.surnameL}}</td>
+                          <td>{{users.nameE}}</td>
+                          <td>{{users.surnameE}}</td>
+                          <td>{{users.insertDate}}</td>
+                          <td>{{users.updateDate}}</td>
+                          <td>{{users.is_active}}</td>
+                          <td>
+                            <button type="button" class="btn btn-success me-1" href="{% url 'lcicHome:view_user' users.UID %}" data-bs-toggle="modal" 
+                            data-bs-target="#myModal{{users.UID}}">
+                              <i class="fa-solid fa-circle-info fa-lg"></i>
+                            </button>
+
+                            <!-- Modal - view user -->
+                            <div class="modal" id="myModal{{users.UID}}" tabindex="-1" aria-labelledby="myModalLabel1" aria-hidden="true">
+                              <div class="modal-dialog" role="document">
+                                <div class="modal-content">
+                                  <div class="modal-header">
+                                    <h5 class="modal-title text-center" style="font-size:23px">
+                                      <i class="fa-solid fa-circle-info fa-lg "></i> ຂໍ້ມູນຜູ້ໃຊ້ລະບົບ
+                                    </h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
+                                      <span aria-hidden="true"></span>
+                                    </button>
+                                  </div>
+                                  <div class="modal-body">
+                                    <ul class="list-unstyled">
+                                      {% comment %} <li>ລະຫັດ: <strong>{{users.UID}}</strong> </li> {% endcomment %}
+                                      
+                                      {% comment %} <div class="polaroid">
+                                        <img src="{{ users.MID.mImage.url }}"  style="width:100%">
+                                        <div class="container">
+                                          <p><strong>{{users.MID.code}}</strong></p>
+                                        </div>
+                                      </div> {% endcomment %}
+                                      {% if users.GID_id == 1 %}
+                                        <li id="show_mImage"><img src="{% static '/images/logo1.png' %}"></li>
+                                        <li id="show_code"><strong>LCIC</strong> </li>
+                                      {% elif users.GID_id == 2 %}
+                                        <li id="show_mImage"><img src="{% static '/images/logo1.png' %}"></li>
+                                        <li id="show_code"><strong>LCIC</strong> </li>
+                                      {% elif users.GID_id == 3 %}
+                                        <li id="show_mImage"><img src="{% static '/images/logo1.png' %}"></li>
+                                        <li id="show_code"><strong>LCIC</strong> </li>
+                                      {% elif users.GID_id == 4 %}
+                                        <li id="show_mImage"><img src="{% static '/images/logo1.png' %}"></li>
+                                        <li id="show_code"><strong>LCIC</strong> </li>
+                                      {% elif users.GID_id == 5 %}
+                                        <li id="show_mImage"><img src="{% static '/images/logo1.png' %}"></li>
+                                        <li id="show_code"><strong>LCIC</strong> </li>
+                                      {% else %}
+                                        <li id="show_mImage"><img src="{{ users.MID.mImage.url }}"></li>
+                                        <li id="show_code"><strong>{{users.MID.code}}</strong> </li>
+                                      {% endif %}
+                                      <li>ຊື່ຜູ້ໃຊ້: <strong>{{users.username}}</strong> </li>
+                                      <li>ຊື່ພາສາລາວ: <strong>{{users.nameL}}</strong> </li>
+                                      <li>ນາມສະກຸນພາສາລາວ: <strong>{{users.surnameL}}</strong> </li>
+                                      <li>ຊື່ພາສາອັງກິດ: <strong>{{users.nameE}}</strong> </li>
+                                      <li>ນາມສະກຸນພາສາອັງກິດ: <strong>{{users.surnameE}}</strong> </li>
+                                      <li>ວັນທີ່ເພີ່ມ: <strong>{{users.insertDate}}</strong> </li>
+                                      <li>ວັນທີ່ແກ້ໄຂ: <strong>{{users.updateDate}}</strong> </li>
+                                      <li>ສະຖານະ: <strong>{{users.is_active}}</strong> </li>
+                                      <li>ກຸ່ມຜູ້ໃຊ້: <strong>{{users.GID}}</strong> </li>
+                                      <li>ພາກສ່ວນ: <strong>
+                                        {% if users.GID_id == 1 %}
+                                        ບໍລິສັດ ຂໍ້ມູນຂ່າວສານສິນເຊື່ອແຫ່ງ ສ.ປ.ປ.ລາວ
+                                        {% elif users.GID_id == 2 %}
+                                        ບໍລິສັດ ຂໍ້ມູນຂ່າວສານສິນເຊື່ອແຫ່ງ ສ.ປ.ປ.ລາວ
+                                        {% elif users.GID_id == 3 %}
+                                        ບໍລິສັດ ຂໍ້ມູນຂ່າວສານສິນເຊື່ອແຫ່ງ ສ.ປ.ປ.ລາວ
+                                        {% elif users.GID_id == 4 %}
+                                        ບໍລິສັດ ຂໍ້ມູນຂ່າວສານສິນເຊື່ອແຫ່ງ ສ.ປ.ປ.ລາວ
+                                        {% elif users.GID_id == 5 %}
+                                        ບໍລິສັດ ຂໍ້ມູນຂ່າວສານສິນເຊື່ອແຫ່ງ ສ.ປ.ປ.ລາວ
+                                        {% else %}
+                                        {{users.MID}}
+                                        {% endif %}
+                                      </strong> </li>
+                                    </ul>
+                                  </div>
+                                  <div class="modal-footer">
+                                    {% comment %} <button type="button" class="btn btn-primary">Save changes</button> {% endcomment %}
+                                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <a class="btn btn-warning me-1" href="{% url 'lcicHome:editUser' users.UID %}">
+                              <i class="fa-solid fa-pen-to-square fa-lg"></i>
+                            </a> 
+
+                            <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#delete{{users.UID}}">
+                              <i class="fa-solid fa-trash-can fa-lg"></i>
+                            </button>
+
+                            <!-- Modal - delete user -->
+                            <div class="modal" id="delete{{users.UID}}" tabindex="-1" aria-labelledby="myModalLabel2" aria-hidden="true">
+                              <div class="modal-dialog" role="document">
+                                <div class="modal-content">
+                                  <div class="modal-header">
+                                    <h5 class="modal-title text-center" style="font-size:23px">
+                                      <i class="fa-solid fa-circle-info fa-lg "></i> ຂໍ້ມູນຜູ້ໃຊ້ລະບົບ
+                                    </h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
+                                      <span aria-hidden="true"></span>
+                                    </button>
+                                  </div>
+                                  <div class="modal-body">
+                                    <p>ທ່ານຕ້ອງການທີ່ຈະລຶບຂໍ້ມູນຜູ້ໃຊ້ ຫຼື ບໍ່?</p>
+                                  </div>
+                                  <div class="modal-footer">
+                                    {% comment %} <button type="button" class="btn btn-primary">Save changes</button> {% endcomment %}
+                                    <form action="{% url 'lcicHome:deleteUser' users.UID %}" method="POST">
+                                      {% csrf_token %}
+                                      <input type="submit" class="btn btn-primary" value="Delete">
+                                    </form>
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ຍົກເລີກ</button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </p>
+            </div>
+           <!-- Pagination -->
+            <pagination class="ml-4">
+              {% if users.has_other_pages %}
+              <ul class="pagination">
+                {% if users.has_previous  %}
+                <a href="?page=1" class="btn btn-outline-secondary mb-4" style="border-radius: 1px; border: 1px solid #d3d3d3;">ໜ້າທຳອິດ</a>
+                <li class="page-item"><a class="page-link" href="?page={{ users.previous_page_number}}"><i class="fas fa-angle-double-left"></i></a></li>
+                {% else %}
+                <li class="page-item disabled"></li>
+                {% endif %}
+
+                {% if pages_obj.number|add:'-5' > 1 %}
+                <li><a class="page-link" href="?page={{ users.number|add:'-100' }}">&hellip;</a></li>
+                {% endif %}
+
+                {% for i in users.paginator.page_range %}
+                {% if users.number == i %}
+                <li class="page-item active"><span class="page-link">{{ i }}<span class="sr-only"></span></span></li>
+                {% elif i > users.number|add:'-5' and i < users.number|add:'5' %}
+                <li class="page-item"><a class="page-link" href="?page={{ i }}">{{i}}</a></li>
+                {% endif %}
+                {% endfor %}
+
+                {% if users.paginator.num_pages > users.number|add:'5' %}
+                <li><a class="page-link" href="?page={{ page_obj.number|add:'-5' }}">&hellip;</a></li>
+                <li><a href="?page={{ i }}">{{ i }}</a></li>
+                <li><a class="page-link" href="?page={{ users.paginator.num_pages }}">{{ users.paginator.num_pages }}</a></li>
+                {% endif %}
+
+                {% if users.has_next  %}                     
+                <li class="page-item"><a class="page-link" href="?page={{ users.next_page_number}}"><i class="fas fa-angle-double-right"></i></a></li>
+                <a href="?page={{ users.paginator.num_pages }}" class="btn btn-outline-secondary mb-4" style="border-radius: 1px; border: 1px solid #d3d3d3;">ໜ້າສຸດທ້າຍ</a>
+                {% else %}
+                <li class="page-item disabled"></li>
+                {% endif %}
+              </ul>
+              {% endif %}
+            </pagination>
+            {% comment %} {{ users }} {% endcomment %}
+          </div>
+          {% else %}
+          <h5 class="alert alert-primary ms-4 me-4">ບໍ່ມີຂໍ້ມູນຜູ້ໃຊ້ລະບົບ</h5>
+          {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
