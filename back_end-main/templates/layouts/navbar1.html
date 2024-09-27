@@ -1,0 +1,41 @@
+<nav nav class="navbar navbar-expand-lg navbar-dark" style="background-color: #0517b9;">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="#">LCIC</a>
+        
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDropdown" aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+      <div class="collapse navbar-collapse" id="navbarNavDropdown">
+        <ul class="navbar-nav">
+          <li class="nav-item"><a class="nav-link active" aria-current="page" href="{% url 'lcicHome:index'%}">ໜ້າຫຼັກ</a></li>
+          <li class="nav-item"><a class="nav-link" href="{% url 'lcicNews:index'%}">ຂ່າວ</a></li>
+          <li class="nav-item"><a class="nav-link" href="{% url 'lcicHome:products'%}">ຜະລິດຕະພັນ</a></li>
+          <li class="nav-item"><a class="nav-link" href="{% url 'lcicNews:jobs'%}">ສະໝັກວຽກ</a></li>
+          <li class="nav-item"><a class="nav-link" href="#">ແບບຟອມຕ່າງໆ</a></li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="{% url 'lcicHome:history'%}" id="navbarDropdownMenuLink" role="button" data-bs-toggle="dropdown" aria-expanded="false">ກ່ຽວກັບ ຂສລ</a>
+              <ul class="dropdown-menu" aria-labelledby="navbarDropdownMenuLink">
+                <li><a class="dropdown-item" href="{% url 'lcicHome:history'%}">ປະຫວັດຄວາມເປັນມາ</a></li>
+                <li><a class="dropdown-item" href="{% url 'lcicHome:orgChart'%}">ໂຄງຮ່່າງການຈັດຕັ້ງ</a></li>
+                <li><a class="dropdown-item" href="{% url 'lcicHome:directorChart'%}">ຄະນະບໍລິຫານ</a></li>
+                <li><a class="dropdown-item" href="{% url 'lcicHome:ManagerChart'%}">ຄະນະ ຜອ</a></li>
+              </ul>
+          </li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="navbarScrollingDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              Link
+            </a>
+            <ul class="dropdown-menu" aria-labelledby="navbarScrollingDropdown">
+              <li><a class="dropdown-item" href="#">Action</a></li>
+              <li><a class="dropdown-item" href="#">Another action</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="#">Something else here</a></li>
+            </ul>
+          </li>
+        </ul>
+          
+          <li class="nav-item"><a class="nav-link" href="{% url 'lcicHome:contact'%}">ຕິດຕໍ່ພວກເຮົາ</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>

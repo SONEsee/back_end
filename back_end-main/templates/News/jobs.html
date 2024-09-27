@@ -1,0 +1,50 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+{% block title %}job{%endblock%}
+
+{% block content %}
+    <div id="important" class="important">
+        <div class="container-sm">
+            <div class="row mt-2">
+                <div class="col-md-12 col-sm-12">
+                    <div class="titlepage">
+                        {% if Lang == "la" %}
+                        <h3>{% for j in H_join %}
+                            {{j.Trans_LA}}
+                          {% endfor %}<strong class="yellow">
+                            {% for com in H_com %}
+                            {{com.Trans_LA}}
+                          {% endfor %}</strong></h3>
+
+                        {% elif Lang == "en" %}
+                        <h3>{% for j in H_join %}
+                            {{j.Trans_EN}}
+                          {% endfor %}<strong class="yellow">
+                            {% for com in H_com %}
+                            {{com.Trans_EN}}
+                          {% endfor %}</strong></h3>
+                        {% endif %}
+                            <div class="container" style="margin-bottom:-100px">
+                                <figure><img src="{% static 'images/4055.jpeg' %}"></figure> 
+                            </div>                           
+                    </div>                                     
+               
+                </div>
+                <div class="row mt-5">
+                    <div class="col-md-12 col-sm-12">
+                    {% if Lang == "la" %}
+                     {%for j in jobsInfo_v %}                  
+                        <center><a href="{{ j.jfiles.url }}"  target="_blank" > + {{j.nameL}} </a><hr></center>    
+                     {%endfor%}</p>
+
+                     {% elif Lang == "en" %}
+                     {%for j in jobsInfo_v %}                  
+                        <center><a href="{{ j.jfiles.url }}"  target="_blank" > + {{j.nameE}} </a><hr></center>    
+                     {%endfor%}</p>
+                     {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div> <!-- end History -->
+    </div>
+{%endblock%}

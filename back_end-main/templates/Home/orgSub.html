@@ -1,0 +1,28 @@
+{% extends "layouts/base.html" %}
+{% load static %}
+{% block title %}CEO Chart{%endblock%}
+
+{% block content %}
+<div id="important" class="important">
+    <div class="container">
+      <div class="row">
+        <div class="col-md-12">
+          <div class="titlepage">
+            <h2><strong class="yellow">{% if Lang == "la" %}
+              {% for md in H_md %}
+               ຄະນະອຳນວຍການ
+              {% endfor %}
+             {% elif Lang == "en" %}
+              {% for md in H_md %}
+               {{md.Trans_EN}}
+               {% endfor %}
+            {% endif %}</strong></h2>
+                <div class="container" style="margin-bottom:-100px">
+                    <center><figure><img src="{% static 'images/CEO.png' %}"></figure></center> 
+                </div>
+          </div>
+        </div>
+      </div>
+    </div> <!-- end History -->
+
+{%endblock%}
