@@ -49,6 +49,8 @@ from .models import CustomLoginToken
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.tokens import RefreshToken
 #import requests
 # import pymysql
 
@@ -2152,34 +2154,34 @@ def tax(request):
     return render(request, 'Search/tax_invoice.html', {})
 
 # gold API keys
-def make_gapi_request():
-    api_key = "goldapi-aylvjurlrhfyjm1-io"
-    symbol = "XAU"
-    curr = "USD"
-    date = ""
+# def make_gapi_request():
+#     api_key = "goldapi-aylvjurlrhfyjm1-io"
+#     symbol = "XAU"
+#     curr = "USD"
+#     date = ""
 
-    url = f"https://www.goldapi.io/api/{symbol}/{curr}{date}"
+#     url = f"https://www.goldapi.io/api/{symbol}/{curr}{date}"
     
-    headers = {
-        "x-access-token": api_key,
-        "Content-Type": "application/json"
-    }
+#     headers = {
+#         "x-access-token": api_key,
+#         "Content-Type": "application/json"
+#     }
     
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
+#     try:
+#         response = requests.get(url, headers=headers)
+#         response.raise_for_status()
 
-        # result = response.text
-        # print(result)
+#         # result = response.text
+#         # print(result)
         
-        result_json = response.json()
+#         result_json = response.json()
         
-        price = result_json["price"]
-        print(price)
-    except requests.exceptions.RequestException as e:
-        print("Error:", str(e))
+#         price = result_json["price"]
+#         print(price)
+#     except requests.exceptions.RequestException as e:
+#         print("Error:", str(e))
 
-result = make_gapi_request()    
+# result = make_gapi_request()    
 
 
 
@@ -2402,14 +2404,29 @@ from rest_framework import status
 from .models import EnterpriseInfo, InvestorInfo
 from .serializers import EnterpriseInfoSerializer
 
+
+# Search Enterprise 30/09/2024
 class EnterpriseInfoSearch(APIView):
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsAuthenticated]
+
     def post(self, request):
+        
+        # Extract authenticated user information from the token
+        user = request.user
+
+        # Example of accessing the UID or other user info
+        UID = user.id  # or user.UID if you're using a custom field
+        username = user.username
+        
         LCICID = request.data.get('LCICID')
         EnterpriseID = request.data.get('EnterpriseID')
-        
-        # print("LCIC: ",LCICID)
-        # print("Enterpriseid: ",EnterpriseID)
-        
+
+        print("Authenticated User ID (UID):", UID)
+        print("Authenticated Username:", username)
+        print("LCICID:", LCICID)
+        print("EnterpriseID:", EnterpriseID)
+
         if LCICID is not None and EnterpriseID is not None:
             try:
                 enterprise_info = EnterpriseInfo.objects.filter(LCICID=LCICID, EnterpriseID=EnterpriseID)
@@ -2417,11 +2434,7 @@ class EnterpriseInfoSearch(APIView):
                 for i in investor_info:
                     invesinfo = i.investorName
                     # print(invesinfo)
-                    
-                print("Search_Log Are Taken Here")
-                print("UserID, ")
-                
-                
+                       
                 serializer = EnterpriseInfoSerializer(enterprise_info, many=True)
                 return Response(serializer.data, status=status.HTTP_200_OK)
             except EnterpriseInfo.DoesNotExist:
@@ -2869,8 +2882,14 @@ class UserLoginView(APIView):
             refresh = RefreshToken.for_user(user)
             access_token = refresh.access_token
 
+            # Add custom claims (user data) to the access token
+            access_token['username'] = user.username
+            access_token['GID'] = user.GID.pk if user.GID else None
+
             # user_role = user.GID
             user_data = UserLoginSerializer(user).data
+            
+            print("UserData ---> : ",user_data )
             
             return Response({
                 'detail': 'Successfully logged in.',
