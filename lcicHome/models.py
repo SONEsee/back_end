@@ -1490,7 +1490,7 @@ class Collateral(models.Model):
     def __str__(self):
         return self.filename
 
-# Paylay Pherm
+
 
 class Role(models.Model):
     name = models.CharField(max_length=100)
