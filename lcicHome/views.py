@@ -4922,7 +4922,7 @@ def confirm_uploadc(request):
                         'user_id': item.user_id,
                         'period': item.period,
                         'id_file': CID,
-                        'insert_date': timezone.now(),
+                        'insert_date': timezone.now,
                         'update_date': timezone.now
 
                     }
@@ -4975,7 +4975,10 @@ def confirm_uploadc(request):
                     'user_id': item.user_id,
                     'period': item.period,
                     'col_type': item.col_type,
-                    'id_file': CID
+                    'id_file': CID,
+                    'insert_date': timezone.now(),
+                    
+                    
 
                 }
 
