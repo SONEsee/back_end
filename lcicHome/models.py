@@ -1440,15 +1440,15 @@ class request_charge(models.Model):
     
        
 
-from django.db import models
-from django.contrib.auth.models import User
+# from django.db import models
+# from django.contrib.auth.models import User
 
-class UploadedFile(models.Model):
-    name = models.CharField(max_length=255)
-    file = models.FileField(upload_to='uploads/')
-    size = models.FloatField()
-    uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE)
-    uploaded_at = models.DateTimeField(auto_now_add=True)
+# class UploadedFile(models.Model):
+#     name = models.CharField(max_length=255)
+#     file = models.FileField(upload_to='uploads/')
+#     size = models.FloatField()
+#     uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE)
+#     uploaded_at = models.DateTimeField(auto_now_add=True)
 
 
 
@@ -1509,4 +1509,11 @@ class SidebarSubItem(models.Model):
     url = models.CharField(max_length=255)
     parent = models.ForeignKey(SidebarItem, on_delete=models.CASCADE, related_name="sub_items")
     roles = models.ManyToManyField(Role, related_name="sidebar_sub_items")
+
+from django.conf import settings
+from django.db import models
+# from django.contrib.auth.models import User
+from rest_framework.authtoken.models import Token
+class CustomLoginToken(Token):
+    custom_user = models.OneToOneField(settings.AUTH_USER_MODEL, related_name='custom_auth_token', on_delete=models.CASCADE)
 

@@ -132,17 +132,21 @@ from .models import EnterpriseInfo
 class Meta:
          model = EnterpriseInfo
          fields = '__all__'
-         
-        
+
+from .models import bank_bnk
+class Bank_InfoINDSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = bank_bnk
+        fields = '_all_' 
         
 # get EnterpriseInfo
 from rest_framework import serializers
 from .models import EnterpriseInfo, InvestorInfo
 
-class EnterpriseInfoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EnterpriseInfo
-        fields = '__all__'
+# class EnterpriseInfoSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = EnterpriseInfo
+#         fields = '__all__'
 
 class InvestorInfoSerializer(serializers.ModelSerializer):
     class Meta:
@@ -166,19 +170,12 @@ class InvestorInfoSerializer(serializers.ModelSerializer):
 from rest_framework import serializers
 from .models import EnterpriseInfo
 
-class EnterpriseInfoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EnterpriseInfo
-        fields = '__all__'
+
 
 
 from rest_framework import serializers
 from .models import EnterpriseInfo, InvestorInfo
 
-class EnterpriseInfoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EnterpriseInfo
-        fields = '__all__'
 
 class InvestorInfoSerializer(serializers.ModelSerializer):
     class Meta:
@@ -186,13 +183,13 @@ class InvestorInfoSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-from rest_framework import serializers
-from .models import EnterpriseInfo, InvestorInfo
+# from rest_framework import serializers
+# from .models import EnterpriseInfo, InvestorInfo
 
-class EnterpriseInfoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EnterpriseInfo
-        fields = '__all__'
+# class EnterpriseInfoSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = EnterpriseInfo
+#         fields = '__all__'
 
 class InvestorInfoSerializer(serializers.ModelSerializer):
     class Meta:
@@ -217,13 +214,13 @@ class B1_MonthlySerializer(serializers.ModelSerializer):
         
 
 
-from rest_framework import serializers
-from .models import UploadedFile
+# from rest_framework import serializers
+# from .models import UploadedFile
 
-class UploadedFileSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UploadedFile
-        fields = '__all__'
+# class UploadedFileSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = UploadedFile
+#         fields = '__all__'
 
 
 
@@ -320,10 +317,11 @@ class B1Serializer(serializers.ModelSerializer):
 from rest_framework import serializers
 from .models import EnterpriseInfo
 
-class EnterpriseInfoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EnterpriseInfo
-        fields = '__all__'
+# class EnterpriseInfoSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = EnterpriseInfo
+#         fields = '__all__'
+
 from .models import disputes
 class disputesSerializer(serializers.ModelSerializer):
     class Meta:
@@ -339,22 +337,22 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ('id', 'username', 'email')
 
-class LoginSerializer(serializers.Serializer):
-    username = serializers.CharField()
-    password = serializers.CharField()
+# class LoginSerializer(serializers.Serializer):
+#     username = serializers.CharField()
+#     password = serializers.CharField()
 
-    def validate(self, data):
-        user = authenticate(**data)
-        if user and user.is_active:
-            return user
-        raise serializers.ValidationError("Unable to log in with provided credentials.")
-from rest_framework import serializers
-from .models import Login
+#     def validate(self, data):
+#         user = authenticate(**data)
+#         if user and user.is_active:
+#             return user
+#         raise serializers.ValidationError("Unable to log in with provided credentials.")
+# from rest_framework import serializers
+# from .models import Login
 
-class LoginSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Login
-        fields = ['username', 'nameL', 'nameE', 'surnameL', 'surnameE', 'GID', 'MID', 'is_active']
+# class LoginSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Login
+#         fields = ['username', 'nameL', 'nameE', 'surnameL', 'surnameE', 'GID', 'MID', 'is_active']
 
 
 # Paylay Pherm 
@@ -473,10 +471,10 @@ class LoginSerializer(serializers.ModelSerializer):
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
-        
+        # Ensure the password is hashed
         user = Login.objects.create_user(
             username=validated_data['username'],
-            password=validated_data['password'],  
+            password=validated_data['password'],  # Hashing should happen inside create_user
             MID=validated_data.get('MID', None),
             GID=validated_data.get('GID', None),
             nameL=validated_data['nameL'],
@@ -535,14 +533,15 @@ class CustomerInfoINDSerializer(serializers.ModelSerializer):
 class Bank_InfoINDSerializer(serializers.ModelSerializer):
     class Meta:
         model = bank_bnk
-        fields = '_all_'
+        fields = '__all__'
         
 class EnterpriseInfoSerializer(serializers.ModelSerializer):
     class Meta:
         model = EnterpriseInfo
-        fields = '_all_'
+        fields = '__all__'
         
 class B1_YearlySerializer(serializers.ModelSerializer):
     class Meta:
         model = B1_Yearly
         fields = '_all_'
+

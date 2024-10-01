@@ -49,8 +49,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECRET_KEY = 'django-insecure-bfz1cy+$%d8touxu*_)rath$19zbh9or8#o51t(=!7(u++1scp'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-# DEBUG = False
+# DEBUG = True
+DEBUG = False
 
 # ALLOWED_HOSTS = ['192.168.45.247','localhost','139.5.159.151','lcic.com.la','www.lcic.com.la']
 # ALLOWED_HOSTS = ['192.168.45.230','localhost']
@@ -87,22 +87,36 @@ INSTALLED_APPS = [
     
 ]
 
+# REST_FRAMEWORK = {
+#     'DEFAULT_AUTHENTICATION_CLASSES': (
+#         'rest_framework_simplejwt.authentication.JWTAuthentication',
+#         'rest_framework.authentication.SessionAuthentication',
+#     ),
+# }
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
     ),
-    
-    
 }
 
+# SIMPLE_JWT = {
+#     'USER_ID_FIELD': 'UID',  
+#     'USER_ID_CLAIM': 'user_id',  
+#     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=3), 
+#     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),    
+#     'ROTATE_REFRESH_TOKENS': True,
+#     'BLACKLIST_AFTER_ROTATION': True,
+# }
 SIMPLE_JWT = {
-    'USER_ID_FIELD': 'UID',  
-    'USER_ID_CLAIM': 'user_id',  
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=3), 
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),    
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=10),  # Adjust as necessary
+    'REFRESH_TOKEN_LIFETIME': timedelta(minutes=30),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'USER_ID_FIELD': 'UID',  # Change this if your user model uses a different field
+    'USER_ID_CLAIM': 'user_id',
 }
 
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
@@ -261,8 +275,7 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
 ]
 
 # CORS_ORIGIN_ALLOW_ALL = True
-
-# AUTH_USER_MODEL = 'lcicMain.MyUser'
+AUTH_USER_MODEL = 'lcicHome.Login'
 
 # settings.py
 
