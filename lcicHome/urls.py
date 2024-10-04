@@ -53,7 +53,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView
+from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView
 from .views import STypeView
 from .views import UserGroupView
 
@@ -140,9 +140,19 @@ urlpatterns = [
    path('report/', FCR_reportView.as_view(),  name='report'),
    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+   path('insert_searchlog/', InsertSearchLogView.as_view(), name='insert_searchlog'),
+   path('log_report/', searchlog_reportView.as_view(), name='report_searchlog'),
+   path('charge_report/', charge_reportView.as_view(), name='charge_searchlog'),
+   path('log_report/<str:bnk_code>', searchlog_reportView.as_view(), name='report_searchlog'),
+   path('charge_report/<str:bnk_code>', charge_reportView.as_view(), name='charge_searchlog'),
+   path('searchlog_chart/', SearchLogChartView.as_view(), name='searchlog_doughnutchart'),
+   path('charge_chart/',ChargeChartView.as_view(), name='charge_report_chart'),
    
+   
+
+   path('enterprisematch/', EnterpriseInfoMatch.as_view(), name='enterprise-info-match'),
+   path('api/v1/enterprise-info/search/', EnterpriseInfoSearch.as_view(), name='enterprise-info-search'),
   
-  path('api/v1/enterprise-info/search/', EnterpriseInfoSearch.as_view(), name='enterprise-info-search'),
    
    
    path('enter', include(router.urls)),
