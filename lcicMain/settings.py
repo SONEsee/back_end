@@ -108,14 +108,14 @@ REST_FRAMEWORK = {
 #     'BLACKLIST_AFTER_ROTATION': True,
 # }
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=10),  # Adjust as necessary
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),  
     'REFRESH_TOKEN_LIFETIME': timedelta(minutes=30),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY,
     'AUTH_HEADER_TYPES': ('Bearer',),
-    'USER_ID_FIELD': 'UID',  # Change this if your user model uses a different field
+    'USER_ID_FIELD': 'UID', 
     'USER_ID_CLAIM': 'user_id',
 }
 

@@ -2458,28 +2458,28 @@ class EnterpriseInfoSearch(APIView):
                     # print(invesinfo)
                 
                 serializer = EnterpriseInfoSerializer(enterprise_info, many=True)
-                inquiry_month = datetime(year=2024, month=10, day=1).date()  # October 2024
+                # inquiry_month = datetime(year=2024, month=10, day=1).date()  # October 2024
 
                 # Insert log
-                insertlog = searchLog.objects.create(
-                    enterprise_ID=EnterpriseID,
-                    LCIC_ID=LCICID,
-                    bnk_code=bank,
-                    branch=branch,
-                    cus_ID='',
-                    cusType='enterprise',
-                    credit_type='ບົດລາຍງານສິນເຊື່ອຄົບຖ້ວນ',
-                    inquiry_month=inquiry_month,  # Use a valid date
-                    com_tel='',
-                    com_location='',
-                    rec_loan_amount=0.0,  # FloatField requires a float, not an empty string
-                    rec_loan_amount_currency='',
-                    rec_loan_purpose='',
-                    rec_enquiry_type=''
-                )
+                # insertlog = searchLog.objects.create(
+                #     enterprise_ID=EnterpriseID,
+                #     LCIC_ID=LCICID,
+                #     bnk_code=bank,
+                #     branch=branch,
+                #     cus_ID='',
+                #     cusType='enterprise',
+                #     credit_type='ບົດລາຍງານສິນເຊື່ອຄົບຖ້ວນ',
+                #     inquiry_month=inquiry_month,  # Use a valid date
+                #     com_tel='',
+                #     com_location='',
+                #     rec_loan_amount=0.0,  # FloatField requires a float, not an empty string
+                #     rec_loan_amount_currency='',
+                #     rec_loan_purpose='',
+                #     rec_enquiry_type=''
+                # )
 
-                insertlog.save()
-                print("Searchlog Insert Successfully ======>")
+                # insertlog.save()
+                # print("Searchlog Insert Successfully ======>")
                 
                 return Response(serializer.data, status=status.HTTP_200_OK)
             except EnterpriseInfo.DoesNotExist:
@@ -6715,15 +6715,23 @@ class UploadFileList(generics.ListAPIView):
         if user_id:
             return Upload_File.objects.filter(user_id=user_id)
         return Upload_File.objects.all()
-
-
-from rest_framework import generics
-from .models import Upload_File_C
-from .serializers import UploadFilecSerializer
-
 class UploadFilecList(generics.ListAPIView):
-    queryset = Upload_File_C.objects.all()
     serializer_class = UploadFilecSerializer
+    
+    def get_queryset(self):
+        user_id = self.request.query_params.get('user_id')
+        if user_id:
+            return Upload_File_C.objects.filter(user_id=user_id)
+        return Upload_File_C.objects.all()
+
+
+# from rest_framework import generics
+# from .models import Upload_File_C
+# from .serializers import UploadFilecSerializer
+
+# class UploadFilecList(generics.ListAPIView):
+#     queryset = Upload_File_C.objects.all()
+#     serializer_class = UploadFilecSerializer
 
 
 # kaftka
@@ -7369,13 +7377,13 @@ class FCR_reportView(APIView):
             #     'c2.7': col_goldsilver_gold.C2_7,
             # }
             col_type_to_model = {
-                'c2.1': col_real_estates,
-                'c2.2': col_money_mia,
-                'c2.3': col_equipment_eqi,
-                'c2.4': col_project_prj,
-                'c2.5': col_vechicle_veh,
-                'c2.6': col_guarantor_gua,
-                'c2.7': col_goldsilver_gold,
+                'C2.1': col_real_estates,
+                'C2.2': col_money_mia,
+                'C2.3': col_equipment_eqi,
+                'C2.4': col_project_prj,
+                'C2.5': col_vechicle_veh,
+                'C2.6': col_guarantor_gua,
+                'C2.7': col_goldsilver_gold,
             }
             
             for loan in loan_info:
