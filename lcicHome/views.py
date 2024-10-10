@@ -6254,8 +6254,6 @@ def safe_parse_datetime(value):
 #     except Exception as e:
 #         return JsonResponse({'status': 'error', 'message': f'Error in confirm_upload: {str(e)}'}, status=500)
 
-
-
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
@@ -6275,80 +6273,23 @@ def confirm_upload(request):
 
         for item in data_edits:
             try:
-                b1_monthly_match = B1_Monthly.objects.filter(
-                    bnk_code=item.bnk_code,
-                    branch_id=item.branch_id,
-                    customer_id=item.customer_id,
-                    loan_id=item.loan_id,
-                    period=item.period
-                    
-                ).exists()
-                
-                b1_match = B1.objects.filter(
-                    bnk_code=item.bnk_code,
-                    branch_id=item.branch_id,
-                    customer_id=item.customer_id,
-                    loan_id=item.loan_id,
-                    period=item.period
-                ).exists()
+                  
+                item_period_formatted = int(str(item.period)[2:] + str(item.period)[:2])
+                print("file", item_period_formatted)
 
-                if b1_monthly_match or b1_match:
-                    b1_monthly_mismatch = B1_Monthly.objects.filter(
-                        bnk_code=item.bnk_code,
-                        branch_id=item.branch_id,
-                        customer_id=item.customer_id,
-                        loan_id=item.loan_id,
-                        period=item.period
-                    ).exclude(
-                        com_enterprise_code=item.com_enterprise_code,
-                        lcicID=item.lcicID
-                    ).exists()
+               
+                last_record = B1.objects.filter(bnk_code=item.bnk_code).order_by('-period').first()
+                if last_record:
+                    last_period_formatted = int(str(last_record.period)[2:] + str(last_record.period)[:2]) 
+                    print("B1",last_period_formatted)
+                else:
+                    last_period_formatted = None
 
-                    b1_mismatch = B1.objects.filter(
-                        bnk_code=item.bnk_code,
-                        branch_id=item.branch_id,
-                        customer_id=item.customer_id,
-                        loan_id=item.loan_id,
-                        period=item.period
-                    ).exclude(
-                        com_enterprise_code=item.com_enterprise_code,
-                        lcicID=item.lcicID
-                    ).exists()
+               
+                if last_period_formatted is not None and item_period_formatted > last_period_formatted:
+                    continue
 
-                    if b1_monthly_mismatch or b1_mismatch:
-                        disputes.objects.create(
-                            id_file=FID,
-                            lcicID=item.lcicID,
-                            user_id=item.user_id,
-                            com_enterprise_code=item.com_enterprise_code,
-                            segmentType=item.segmentType,
-                            bnk_code=item.bnk_code,
-                            customer_id=item.customer_id,
-                            branch_id=item.branch_id,
-                            period=item.period,
-                            product_type=item.product_type,
-                            lon_sys_id=item.lon_sys_id,
-                            loan_id=item.loan_id,
-                            lon_open_date=item.lon_open_date,
-                            lon_exp_date=item.lon_exp_date,
-                            lon_ext_date=item.lon_ext_date,
-                            lon_int_rate=item.lon_int_rate,
-                            lon_purpose_code=item.lon_purpose_code,
-                            lon_credit_line=item.lon_credit_line,
-                            lon_currency_code=item.lon_currency_code,
-                            lon_outstanding_balance=item.lon_outstanding_balance,
-                            lon_account_no=item.lon_account_no,
-                            lon_no_days_slow=item.lon_no_days_slow,
-                            lon_class=item.lon_class,
-                            lon_type=item.lon_type,
-                            lon_term=item.lon_term,
-                            lon_status=item.lon_status,
-                            lon_insert_date=item.lon_insert_date,
-                            lon_update_date=item.lon_update_date,
-                            lon_applied_date=item.lon_applied_date,
-                            is_disputed=item.is_disputed
-                        )
-                        continue  
+             
                 b1_monthly, created = B1_Monthly.objects.update_or_create(
                     bnk_code=item.bnk_code,
                     branch_id=item.branch_id,
@@ -6434,6 +6375,188 @@ def confirm_upload(request):
         return JsonResponse({'status': 'success', 'message': 'Data successfully confirmed and updated'})
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': f'Error in confirm_upload: {str(e)}'}, status=500)
+
+
+
+  
+# from django.http import JsonResponse 
+# from django.views.decorators.http import require_POST    
+# from django.views.decorators.csrf import csrf_exempt
+# from .models import Upload_File, data_edit, B1, B1_Monthly, disputes
+
+# @csrf_exempt
+# @require_POST
+# def confirm_upload(request):
+#     try:
+#         FID = request.POST.get('FID')
+#         if not FID:
+#             return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
+
+#         data_edits = data_edit.objects.filter(id_file=FID)
+#         if not data_edits.exists():
+#             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
+
+#         for item in data_edits:
+#             try:
+#                 b1_monthly_match = B1_Monthly.objects.filter(
+#                     bnk_code=item.bnk_code,
+#                     branch_id=item.branch_id,
+#                     customer_id=item.customer_id,
+#                     loan_id=item.loan_id,
+#                     period=item.period
+                    
+#                 ).exists()
+                
+#                 b1_match = B1.objects.filter(
+#                     bnk_code=item.bnk_code,
+#                     branch_id=item.branch_id,
+#                     customer_id=item.customer_id,
+#                     loan_id=item.loan_id,
+#                     period=item.period
+#                 ).exists()
+
+#                 if b1_monthly_match or b1_match:
+#                     b1_monthly_mismatch = B1_Monthly.objects.filter(
+#                         bnk_code=item.bnk_code,
+#                         branch_id=item.branch_id,
+#                         customer_id=item.customer_id,
+#                         loan_id=item.loan_id,
+#                         period=item.period
+#                     ).exclude(
+#                         com_enterprise_code=item.com_enterprise_code,
+#                         lcicID=item.lcicID
+#                     ).exists()
+
+#                     b1_mismatch = B1.objects.filter(
+#                         bnk_code=item.bnk_code,
+#                         branch_id=item.branch_id,
+#                         customer_id=item.customer_id,
+#                         loan_id=item.loan_id,
+#                         period=item.period
+#                     ).exclude(
+#                         com_enterprise_code=item.com_enterprise_code,
+#                         lcicID=item.lcicID
+#                     ).exists()
+
+#                     if b1_monthly_mismatch or b1_mismatch:
+#                         disputes.objects.create(
+#                             id_file=FID,
+#                             lcicID=item.lcicID,
+#                             user_id=item.user_id,
+#                             com_enterprise_code=item.com_enterprise_code,
+#                             segmentType=item.segmentType,
+#                             bnk_code=item.bnk_code,
+#                             customer_id=item.customer_id,
+#                             branch_id=item.branch_id,
+#                             period=item.period,
+#                             product_type=item.product_type,
+#                             lon_sys_id=item.lon_sys_id,
+#                             loan_id=item.loan_id,
+#                             lon_open_date=item.lon_open_date,
+#                             lon_exp_date=item.lon_exp_date,
+#                             lon_ext_date=item.lon_ext_date,
+#                             lon_int_rate=item.lon_int_rate,
+#                             lon_purpose_code=item.lon_purpose_code,
+#                             lon_credit_line=item.lon_credit_line,
+#                             lon_currency_code=item.lon_currency_code,
+#                             lon_outstanding_balance=item.lon_outstanding_balance,
+#                             lon_account_no=item.lon_account_no,
+#                             lon_no_days_slow=item.lon_no_days_slow,
+#                             lon_class=item.lon_class,
+#                             lon_type=item.lon_type,
+#                             lon_term=item.lon_term,
+#                             lon_status=item.lon_status,
+#                             lon_insert_date=item.lon_insert_date,
+#                             lon_update_date=item.lon_update_date,
+#                             lon_applied_date=item.lon_applied_date,
+#                             is_disputed=item.is_disputed
+#                         )
+#                         continue  
+#                 b1_monthly, created = B1_Monthly.objects.update_or_create(
+#                     bnk_code=item.bnk_code,
+#                     branch_id=item.branch_id,
+#                     customer_id=item.customer_id,
+#                     loan_id=item.loan_id,
+#                     period=item.period,
+#                     defaults={
+#                         'lcicID': item.lcicID,
+#                         'com_enterprise_code': item.com_enterprise_code,
+#                         'segmentType': item.segmentType,
+#                         'bnk_code': item.bnk_code,
+#                         'customer_id': item.customer_id,
+#                         'branch_id': item.branch_id,
+#                         'user_id': item.user_id,
+#                         'period': item.period,
+#                         'product_type': item.product_type,
+#                         'lon_sys_id': item.lon_sys_id,
+#                         'loan_id': item.loan_id,
+#                         'lon_open_date': item.lon_open_date,
+#                         'lon_exp_date': item.lon_exp_date,
+#                         'lon_ext_date': item.lon_ext_date,
+#                         'lon_int_rate': item.lon_int_rate,
+#                         'lon_purpose_code': item.lon_purpose_code,
+#                         'lon_credit_line': item.lon_credit_line,
+#                         'lon_currency_code': item.lon_currency_code,
+#                         'lon_outstanding_balance': item.lon_outstanding_balance,
+#                         'lon_account_no': item.lon_account_no,
+#                         'lon_no_days_slow': item.lon_no_days_slow,
+#                         'lon_class': item.lon_class,
+#                         'lon_type': item.lon_type,
+#                         'lon_term': item.lon_term,
+#                         'lon_status': item.lon_status,
+#                         'lon_insert_date': item.lon_insert_date,
+#                         'lon_update_date': item.lon_update_date,
+#                         'lon_applied_date': item.lon_applied_date,
+#                         'is_disputed': item.is_disputed,
+#                         'id_file': FID,
+#                     }
+#                 )
+                
+#                 b1, created = B1.objects.update_or_create(
+#                     bnk_code=item.bnk_code,
+#                     branch_id=item.branch_id,
+#                     customer_id=item.customer_id,
+#                     loan_id=item.loan_id,
+#                     defaults={
+#                         'lcicID': item.lcicID,
+#                         'com_enterprise_code': item.com_enterprise_code,
+#                         'segmentType': item.segmentType,
+#                         'bnk_code': item.bnk_code,
+#                         'user_id': item.user_id,
+#                         'customer_id': item.customer_id,
+#                         'branch_id': item.branch_id,
+#                         'lon_sys_id': item.lon_sys_id,
+#                         'loan_id': item.loan_id,
+#                         'period': item.period,
+#                         'product_type': item.product_type,    
+#                         'lon_open_date': item.lon_open_date,
+#                         'lon_exp_date': item.lon_exp_date,
+#                         'lon_ext_date': item.lon_ext_date,
+#                         'lon_int_rate': item.lon_int_rate,
+#                         'lon_purpose_code': item.lon_purpose_code,
+#                         'lon_credit_line': item.lon_credit_line,
+#                         'lon_currency_code': item.lon_currency_code,
+#                         'lon_outstanding_balance': item.lon_outstanding_balance,
+#                         'lon_account_no': item.lon_account_no,
+#                         'lon_no_days_slow': item.lon_no_days_slow,
+#                         'lon_class': item.lon_class,
+#                         'lon_type': item.lon_type,
+#                         'lon_term': item.lon_term,
+#                         'lon_status': item.lon_status,
+#                         'lon_insert_date': item.lon_insert_date,
+#                         'lon_update_date': item.lon_update_date,
+#                         'lon_applied_date': item.lon_applied_date,
+#                         'is_disputed': item.is_disputed,
+#                         'id_file': FID,
+#                         'status_customer': '1' if created else '0'
+#                     }
+#                 )
+#             except Exception as e:
+#                 return JsonResponse({'status': 'error', 'message': f'Error while processing item with id {item.id}: {str(e)}'}, status=500)
+
+#         return JsonResponse({'status': 'success', 'message': 'Data successfully confirmed and updated'})
+#     except Exception as e:
+#         return JsonResponse({'status': 'error', 'message': f'Error in confirm_upload: {str(e)}'}, status=500)
 
 
 # from django.http import JsonResponse
@@ -6666,7 +6789,7 @@ def confirm_upload(request):
 
 
 
-# views.py
+
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.response import Response
@@ -6715,6 +6838,8 @@ class UploadFileList(generics.ListAPIView):
         if user_id:
             return Upload_File.objects.filter(user_id=user_id)
         return Upload_File.objects.all()
+    
+
 class UploadFilecList(generics.ListAPIView):
     serializer_class = UploadFilecSerializer
     
