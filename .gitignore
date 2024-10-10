@@ -1,3 +1,11 @@
+# Ignore Python bytecode
 *.pyc
+<<<<<<< HEAD
 _pycache_/
 
+=======
+__pycache__/
+
+# Ignore virtual environments
+venv/
+>>>>>>> 872ba4f85f309b60e5a06debea105447c3ef5900

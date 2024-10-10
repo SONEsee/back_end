@@ -51,6 +51,9 @@ from rest_framework.exceptions import AuthenticationFailed
 # from rest_framework.permissions import IsAuthenticated
 from rest_framework import serializers
 from .models import Login  # Ensure you import your Login model
+from .models import CustomLoginToken
+from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 #import requests
 # import pymysql
@@ -2005,19 +2008,19 @@ def searchListConfirm(request, object_id):
     
     print(fee_data, " : Data get from FeeData")
     
-    rec_charge_insert = request_charge.objects.create(
-        bnk_code = (sys_user.MID).id,
-        chg_amount = charge_amount_data.price,
-        chg_code = charge_amount_data.code,
-        status = 'InActive',
-        # insert_date = '',
-        # update_date = '',
-        rtp_code = '1',
-        chg_unit = 'LAK',
-        user_sys_id = sys_user.UID,
-        LCIC_ID = fee_data.LCICID,
-        cusType = ''
-    )
+    # rec_charge_insert = request_charge.objects.create(
+    #     bnk_code = (sys_user.MID).id,
+    #     chg_amount = charge_amount_data.price,
+    #     chg_code = charge_amount_data.code,
+    #     status = 'InActive',
+    #     # insert_date = '',
+    #     # update_date = '',
+    #     rtp_code = '1',
+    #     chg_unit = 'LAK',
+    #     user_sys_id = sys_user.UID,
+    #     LCIC_ID = fee_data.LCICID,
+    #     cusType = ''
+    # )
     
     
     context ={
@@ -2242,10 +2245,57 @@ def get_csrf_token(request):
     token = get_token(request)
     return JsonResponse({'csrfToken': token})
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import bank_bnk
+from .serializers import Bank_InfoINDSerializer
+import logging
 
+class Bank_InfoINDView(APIView):
+    def get(self, request):
+        try:
+            bank = bank_bnk.objects.all()
+            if not bank.exists():
+                return Response({"detail": "No bank information found."}, status=status.HTTP_404_NOT_FOUND)
+            
+            logger.info(f"Retrieved {bank.count()} bank records.")
+            serializer = Bank_InfoINDSerializer(bank, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error occurred: {e}")
+            return Response({"detail": "An error occurred while retrieving bank information."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class GetUserByUIDView(APIView):
+    def get(self, request, UID):
+        try:
+            user = Login.objects.get(UID=UID)
+            serializer = LoginSerializer(user)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Login.DoesNotExist:
+            return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
+class UpdateUserView(APIView):
+    def put(self, request, UID):
+        try:
+            user = Login.objects.get(UID=UID)
+            serializer = LoginSerializer(user, data=request.data, partial=True)  # partial=True allows partial updates
+            if serializer.is_valid():
+                serializer.save()
+                return Response({
+                    'success': 'User updated successfully',
+                    'user': serializer.data
+                }, status=status.HTTP_200_OK)
+            else:
+                # Log serializer errors for debugging
+                print(serializer.errors)  # Debugging line
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Login.DoesNotExist:
+            return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
@@ -2341,9 +2391,9 @@ class CustomerInfoINDView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     
-# Search Enterprise
 
-# views.py
+
+
 # from rest_framework.views import APIView
 # from rest_framework.response import Response
 # from rest_framework import status
@@ -2365,22 +2415,43 @@ class CustomerInfoINDView(APIView):
 #             status=status.HTTP_400_BAD_REQUEST)
 
 
-# search 
+
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import EnterpriseInfo
+from .models import EnterpriseInfo, InvestorInfo, searchLog
 from .serializers import EnterpriseInfoSerializer
+from datetime import datetime
 
+
+# Search Enterprise 30/09/2024
 class EnterpriseInfoSearch(APIView):
+    # authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
+        
+        # Extract authenticated user information from the token
+        user = request.user
+        # Example of accessing the UID or other user info
+        UID = user.UID  # or user.UID if you're using a custom field
+        bank = str(user.MID.id)  # Convert to string if necessary
+        branch = str(user.GID.GID)  # Convert to string if necessary
+        sys_usr = str(user.UID) + str(bank) + str(branch)
         LCICID = request.data.get('LCICID')
         EnterpriseID = request.data.get('EnterpriseID')
+        loan_purpose = request.data.get('CatalogID')
         
-        print("LCIC: ",LCICID)
-        print("Enterpriseid: ",EnterpriseID)
+        print("============> Loan Purpose: ",loan_purpose )
+
+        print("Authenticated User ID (UID):", UID)
+        print("Authenticated Bankname:", bank)
+        print("Authenticated Branchname:", branch)
         
+        print("LCICID:", LCICID)
+        print("EnterpriseID:", EnterpriseID)
+        # print("Login :",Login._meta.get_fields())
         if LCICID is not None and EnterpriseID is not None:
             try:
                 enterprise_info = EnterpriseInfo.objects.filter(LCICID=LCICID, EnterpriseID=EnterpriseID)
@@ -2388,13 +2459,75 @@ class EnterpriseInfoSearch(APIView):
                 for i in investor_info:
                     invesinfo = i.investorName
                     # print(invesinfo)
+                
                 serializer = EnterpriseInfoSerializer(enterprise_info, many=True)
+                # inquiry_month = datetime(year=2024, month=10, day=1).date()  # October 2024
+                inquiry_month = datetime.now().strftime('%Y-%m')
+                # Insert log
+                search_log = searchLog.objects.create(
+                    enterprise_ID=EnterpriseID,
+                    LCIC_ID=LCICID,
+                    bnk_code=bank,
+                    branch=branch,
+                    cus_ID='',
+                    cusType='enterprise',
+                    credit_type='Full Loan Report',
+                    inquiry_month=inquiry_month,
+                    com_tel='',
+                    com_location='',
+                    rec_loan_amount=0.0,
+                    rec_loan_amount_currency='',
+                    rec_loan_purpose=loan_purpose,
+                    rec_enquiry_type='',
+                    sys_usr=sys_usr  # Save sys_usr to the model if needed
+                )
+
+                search_log.save()
+                print("Searchlog Insert Successfully ======>")
+                
                 return Response(serializer.data, status=status.HTTP_200_OK)
             except EnterpriseInfo.DoesNotExist:
                 return Response({'error': 'EnterpriseInfo not found'}, status=status.HTTP_404_NOT_FOUND)
-        else:
-            return Response({'error': 'LCICID and EnterpriseID are required fields'}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+class EnterpriseInfoMatch(APIView):
+    # authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        
+        user = request.user
+        
+        UID = user.UID  
+        bank = str(user.MID.id)  
+        branch = str(user.GID.GID)  
+        
+        LCICID = request.data.get('LCICID')
+        EnterpriseID = request.data.get('EnterpriseID')
+
+        print("Authenticated User ID (UID):", UID)
+        print("Authenticated Bankname:", bank)
+        print("Authenticated Branchname:", branch)
+        
+        print("LCICID:", LCICID)
+        print("EnterpriseID:", EnterpriseID)
+        # print("Login :",Login._meta.get_fields())
+        if LCICID is not None and EnterpriseID is not None:
+            try:
+                enterprise_info = EnterpriseInfo.objects.filter(LCICID=LCICID, EnterpriseID=EnterpriseID)
+                investor_info = InvestorInfo.objects.filter(EnterpriseID=EnterpriseID)
+                for i in investor_info:
+                    invesinfo = i.investorName
+                    # print(invesinfo)
+                
+                serializer = EnterpriseInfoSerializer(enterprise_info, many=True)
+                
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            except EnterpriseInfo.DoesNotExist:
+                return Response({'error': 'EnterpriseInfo not found'}, status=status.HTTP_404_NOT_FOUND)
+            except Exception as e:
+                return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)    
         
         
 class LoginView(APIView):
@@ -4922,7 +5055,7 @@ def confirm_uploadc(request):
                         'user_id': item.user_id,
                         'period': item.period,
                         'id_file': CID,
-                        'insert_date': timezone.now(),
+                        'insert_date': timezone.now,
                         'update_date': timezone.now
 
                     }
@@ -4975,7 +5108,10 @@ def confirm_uploadc(request):
                     'user_id': item.user_id,
                     'period': item.period,
                     'col_type': item.col_type,
-                    'id_file': CID
+                    'id_file': CID,
+                    'insert_date': timezone.now(),
+                    
+                    
 
                 }
 
@@ -6513,56 +6649,56 @@ def confirm_upload(request):
 
 
 # views.py
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
-from .models import UploadedFile
-from .serializers import UploadedFileSerializer
+# from rest_framework import status
+# from rest_framework.response import Response
+# from rest_framework.views import APIView
+# from rest_framework.permissions import IsAuthenticated
+# from .models import UploadedFile
+# from .serializers import UploadedFileSerializer
 
-class FileUploadView(APIView):
-    permission_classes = [IsAuthenticated]
+# class FileUploadView(APIView):
+#     permission_classes = [IsAuthenticated]
 
-    def post(self, request, format=None):
-        serializer = UploadedFileSerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+#     def post(self, request, format=None):
+#         serializer = UploadedFileSerializer(data=request.data, context={'request': request})
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response(serializer.data, status=status.HTTP_201_CREATED)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.views import APIView
-from .models import UploadedFile
-from .serializers import UploadedFileSerializer
+# from rest_framework.permissions import IsAuthenticated
+# from rest_framework.parsers import MultiPartParser, FormParser
+# from rest_framework.response import Response
+# from rest_framework import status
+# from rest_framework.views import APIView
+# # from .models import UploadedFile
+# # from .serializers import UploadedFileSerializer
 
-class FileUploadView(APIView):
-    parser_classes = (MultiPartParser, FormParser)
-    permission_classes = [IsAuthenticated]
+# class FileUploadView(APIView):
+#     parser_classes = (MultiPartParser, FormParser)
+#     permission_classes = [IsAuthenticated]
 
-    def post(self, request, *args, **kwargs):
-        files = request.FILES.getlist('files')
-        uploaded_files = []
+#     def post(self, request, *args, **kwargs):
+#         files = request.FILES.getlist('files')
+#         uploaded_files = []
 
-        for file in files:
-            uploaded_file = UploadedFile(
-                name=file.name,
-                file=file,
-                size=file.size,
-                uploaded_by=request.user
-            )
-            uploaded_file.save()
-            uploaded_files.append(uploaded_file)
+#         for file in files:
+#             uploaded_file = UploadedFile(
+#                 name=file.name,
+#                 file=file,
+#                 size=file.size,
+#                 uploaded_by=request.user
+#             )
+#             uploaded_file.save()
+#             uploaded_files.append(uploaded_file)
 
-        serializer = UploadedFileSerializer(uploaded_files, many=True)
-        return Response({
-            'message': 'Files successfully uploaded!',
-            'uploadedFiles': serializer.data
-        }, status=status.HTTP_201_CREATED)
+#         serializer = UploadedFileSerializer(uploaded_files, many=True)
+#         return Response({
+#             'message': 'Files successfully uploaded!',
+#             'uploadedFiles': serializer.data
+#         }, status=status.HTTP_201_CREATED)
 
 
 
@@ -7004,15 +7140,15 @@ def get_login3(request):
 #     return JsonResponse(data)
 import logging
 
-class UserProfileView(APIView):
-    permission_classes = [IsAuthenticated]
+# class UserProfileView(APIView):
+#     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        logging.info(f"Request Headers: {request.headers}")
-        logging.info(f"User: {request.user}")
-        user = request.user
-        serializer = LoginSerializer(user)
-        return Response(serializer.data)
+#     def get(self, request):
+#         logging.info(f"Request Headers: {request.headers}")
+#         logging.info(f"User: {request.user}")
+#         user = request.user
+#         serializer = LoginSerializer(user)
+#         return Response(serializer.data)
 
 
 
@@ -7224,8 +7360,9 @@ class UserManagementView(APIView):
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import EnterpriseInfo, B1_Yearly, InvestorInfo, B1_Monthly
-from .serializers import EnterpriseInfoSerializer, B1_YearlySerializer, InvestorInfoSerializer, B1Serializer
+from .models import EnterpriseInfo, B1_Yearly, InvestorInfo, B1_Monthly, C1, request_charge
+from django.forms.models import model_to_dict
+from .serializers import EnterpriseInfoSerializer, B1_YearlySerializer, InvestorInfoSerializer, B1Serializer, RequestChargeSerializer
 
 class FCR_reportView(APIView):    
     def get(self, request):
@@ -7237,71 +7374,174 @@ class FCR_reportView(APIView):
 
         status_inactive = "INACTIVE"
         status_active = "ACTIVE"
-        
+
         try:
             # Retrieve the specific EnterpriseInfo objects
             ent_info = EnterpriseInfo.objects.filter(EnterpriseID=enterprise_id, LCICID=lcic_id)
-            loan_info = B1.objects.filter(com_enterprise_code=enterprise_id)
+            loan_info = B1.objects.filter(com_enterprise_code=enterprise_id, lon_status=status_active).order_by('lon_status')
             inves_info = InvestorInfo.objects.filter(EnterpriseID=enterprise_id)
-
-            print("Enterprise_info", ent_info)
-            print("Loan_Info", loan_info)
-            print("Investor_Info", inves_info)
+            search_history = request_charge.objects.filter(LCIC_ID=lcic_id)
             
+            print("Search_History====>",search_history)
+
+            print("Enterprise_info:", ent_info)
+            print("Loan_Info:", loan_info)
+            print("Investor_Info:", inves_info)
+
             if not ent_info.exists():
                 return Response({"detail": "Enterprise information not found."}, status=status.HTTP_404_NOT_FOUND)
-            
 
+            loan_info_list_active = []   
+
+            # Collateral Models Mapping
+            # col_type_to_model = {
+            #     'RealEstate': col_real_estates,
+            #     'Money': col_money_mia,
+            #     'Equipment': col_equipment_eqi,
+            #     'Project': col_project_prj,
+            #     'Vehicle': col_vechicle_veh,
+            #     'Guarenty': col_guarantor_gua,
+            #     'gold_silver': col_goldsilver_gold,
+            #     'c2.1': col_real_estates.C2_1,
+            #     'c2.2': col_money_mia.C2_2,
+            #     'c2.3': col_equipment_eqi.C2_3,
+            #     'c2.4': col_project_prj.C2_4,
+            #     'c2.5': col_vechicle_veh.C2_5,
+            #     'c2.6': col_guarantor_gua.C2_6,
+            #     'c2.7': col_goldsilver_gold.C2_7,
+            # }
+            col_type_to_model = {
+                'c2.1': col_real_estates,
+                'c2.2': col_money_mia,
+                'c2.3': col_equipment_eqi,
+                'c2.4': col_project_prj,
+                'c2.5': col_vechicle_veh,
+                'c2.6': col_guarantor_gua,
+                'c2.7': col_goldsilver_gold,
+            }
             
-            loan_info_list_inactive = []
             for loan in loan_info:
-                if loan.lon_status == status_inactive:
-                    lon_class_history = B1.objects.filter(
-                        bnk_code=loan.bnk_code, 
-                        com_enterprise_code=enterprise_id, 
-                        loan_id=loan.loan_id
-                    ).order_by('-id')[:12]
+                if loan.lon_status == status_active:  # Ensure processing only active loans
+                    lon_class_history = B1_Monthly.objects.filter(
+                        com_enterprise_code=enterprise_id,
+                        bnk_code=loan.bnk_code,
+                        customer_id=loan.customer_id,
+                        branch_id=loan.branch_id,
+                        loan_id=loan.loan_id,
+                    ).order_by('-period')
+
                     lon_class_history_list = list(lon_class_history.values())
-                    loan_data_inactive = {
-                        "id": loan.lon_sys_id,
+
+                    # Get Collateral Records
+                    colleteral_list = C1.objects.filter(
+                        com_enterprise_code=enterprise_id,
+                        bnk_code=loan.bnk_code,
+                        branch_id_code=loan.branch_id,
+                        bank_customer_ID=loan.customer_id,
+                        loan_id=loan.loan_id,
+                    )
+                    print("Colleteral ---------------> : ", colleteral_list)
+                    
+                    # for colleteral in colleteral_list:
+                    #     print("Col_id ----->", colleteral.col_id)
+                    
+                    # test_col = col_real_estates.objects.filter(
+                    #     com_enterprise_code=enterprise_id,
+                    #     bnk_code=loan.bnk_code,
+                    #     branch_id_code=loan.branch_id,
+                    #     bank_customer_ID=loan.customer_id,
+                    #     loan_id=loan.loan_id,
+                    # )
+                    # print("Test Colleteral ---------------> : ", test_col)
+                    
+                        # check_col_id = col_real_estates.objects.filter(
+                        #     col_id = colleteral.col_id
+                        # )
+                        # print("<---------------- Col_id",check_col_id)
+
+                    collateral_history_list = []
+                    for collateral in colleteral_list:
+                        col_id = collateral.col_id
+                        col_type = collateral.col_type
+
+                        print("Check_Col_id ====> :", col_id)  
+                        print("Check_Col_type ====> :", col_type)  
+                        
+
+                        # Get the related model based on col_type
+                        related_model = col_type_to_model.get(col_type)
+                        print("related_model: ======>", related_model)
+
+                        if related_model:
+                            # Query the related table using col_id
+                            related_record = related_model.objects.filter(col_id=col_id).first()
+                                
+                            print("get Related_Records : ====> ", related_record)
+
+                            if related_record:
+                                related_record_dict = model_to_dict(related_record)
+                                collateral_dict = model_to_dict(collateral)
+
+                                # Add the related record to collateral history list
+                                collateral_history_list.append({
+                                    "col_id": col_id,
+                                    "col_type": col_type,
+                                    "collateral_info": collateral_dict, #C1
+                                    "related_record": related_record_dict, #C2.n
+                                })
+                        else:
+                            print(f"Unrecognized col_type: {col_type} for collateral ID {col_id}")
+
+                    loan_data_active = {
+                        "id": loan.loan_id,
+                        "lon_update_date": loan.lon_update_date,
                         "bank": loan.bnk_code,
-                        "lon_open_date": loan.lon_open_date,
-                        "lon_end_date":loan.lon_exp_date,
-                        "lon_ext_date":loan.lon_ext_date,
-                        "lon_interest":loan.lon_int_rate,
-                        "lon_purpose":loan.lon_purpose_code,
+                        "lon_insert_date": loan.lon_insert_date,
                         "lon_credit_line": loan.lon_credit_line,
                         "lon_outstanding_balance": loan.lon_outstanding_balance,
                         "lon_currency_code": loan.lon_currency_code,
                         "lon_no_days_slow": loan.lon_no_days_slow,
                         "lon_class": loan.lon_class,
-                        "lon_type":loan.lon_type,
-                        "lon_term":loan.lon_term,
-                        "lon_status":loan.lon_status
+                        "period": loan.period,
+                        "lon_open_date": loan.lon_open_date,
+                        "lon_exp_date": loan.lon_exp_date,
+                        "lon_ext_date": loan.lon_ext_date,
+                        "lon_int_rate": loan.lon_int_rate,
+                        "lon_purpose_code": loan.lon_purpose_code,
+                        "lon_account_no": loan.lon_account_no,
+                        "lon_status": loan.lon_status,
+                        "lon_type": loan.lon_type,
+                        "lon_term": loan.lon_term,
+                        "is_disputed": loan.is_disputed,
+                        "lon_applied_date": loan.lon_applied_date,
+                        "lon_class_history": lon_class_history_list,
+                        "collateral_history": collateral_history_list,
                     }
-                    loan_info_list_inactive.append(loan_data_inactive)
-                    print("Loan Data for InActive:", loan_data_inactive)
-                    
-                else:
-                    print("Non InActive List")
-                    
 
-            # Serialize the retrieved objects
+                    loan_info_list_active.append(loan_data_active)
+                    print("Loan Data For Active: -------> ", loan_info_list_active)
+                else:
+                    print("Non Active List")
+
             ent_info_serializer = EnterpriseInfoSerializer(ent_info, many=True)
             loan_info_serializer = B1Serializer(loan_info, many=True)
             inves_info_serializer = InvestorInfoSerializer(inves_info, many=True)
+            request_charge_serializer = RequestChargeSerializer(search_history, many=True)
+            print("--->", request_charge_serializer)
+            
             
             response_data = {
                 'enterprise_info': ent_info_serializer.data,
                 'loan_info': loan_info_serializer.data,
                 'inves_info': inves_info_serializer.data,
-                # 'active_loans': loan_info_list_active,
-                'inactive_loans': loan_info_list_inactive
+                'active_loans': loan_info_list_active,
+                'search_history': request_charge_serializer.data
             }
 
             return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
+            print(f"Error occurred: {str(e)}")
             return Response({"detail": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     
@@ -7327,32 +7567,87 @@ from datetime import timedelta
 
 
 
-class UserLoginView(APIView):
-    serializer_class = UserLoginSerializer
+# class UserLoginView(APIView):
+#     serializer_class = UserLoginSerializer
 
-    def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(data=request.data)
-        if serializer.is_valid(raise_exception=True):
-            user = serializer.validated_data['user']
-            # print("User_info: ", user)
+#     def post(self, request, *args, **kwargs):
+#         serializer = self.serializer_class(data=request.data)
+#         if serializer.is_valid(raise_exception=True):
+#             user = serializer.validated_data['user']
+#             # print("User_info: ", user)
             
-            # Generate JWT tokens
-            refresh = RefreshToken.for_user(user)
-            access_token = refresh.access_token
+#             # Generate JWT tokens
+#             refresh = RefreshToken.for_user(user)
+#             access_token = refresh.access_token
 
-            # user_role = user.GID
-            user_data = UserLoginSerializer(user).data
-            print("user_data: ", user_data)
+#             # user_role = user.GID
+#             user_data = UserLoginSerializer(user).data
+#             print("user_data: ", user_data)
             
-            return Response({
-                'detail': 'Successfully logged in.',
-                'access': str(access_token),
-                'refresh': str(refresh),
-                'user':user_data,
-            }, status=status.HTTP_200_OK)
+#             return Response({
+#                 'detail': 'Successfully logged in.',
+#                 'access': str(access_token),
+#                 'refresh': str(refresh),
+#                 'user':user_data,
+#             }, status=status.HTTP_200_OK)
      
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .serializers import LoginSerializer,UserLoginSerializer
+from django.contrib.auth import login
+from django.shortcuts import redirect
+from rest_framework.authtoken.models import Token
+from django.utils import timezone
+from datetime import timedelta
+from rest_framework.permissions import AllowAny
+from rest_framework_simplejwt.tokens import RefreshToken
+class UserLoginView(APIView):
+    permission_classes = [AllowAny]  # Ensure login is open to unauthenticated users
+
+    def post(self, request):
+        username = request.data.get('username')
+        password = request.data.get('password')
+
+        # Authenticate user based on your custom model
+        try:
+            user = Login.objects.get(username=username)
+            if not user.check_password(password):
+                return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            # Generate JWT token
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'detail': 'Successfully logged in.',
+                'access': str(refresh.access_token),
+                'refresh': str(refresh),
+                'user': {
+                    'UID': user.UID,
+                    'MID': {
+                        'id': user.MID.bnk_code if user.MID else None,
+                        'code': user.MID.code if user.MID else None
+                    },
+                    'GID': {
+                        'GID': user.GID.GID if user.GID else None,
+                        'nameL': user.GID.nameL if user.GID else None
+                    },
+                    'username': user.username,
+                    'nameL': user.nameL,
+                    'nameE': user.nameE,
+                    'surnameL': user.surnameL,
+                    'surnameE': user.surnameE,
+                    'is_active': user.is_active,
+                    'is_staff': user.is_staff,
+                    'is_superuser': user.is_superuser
+                }
+            }, status=status.HTTP_200_OK)
+        except Login.DoesNotExist:
+            return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
 
 
@@ -7473,3 +7768,534 @@ class ManageUserView(APIView):
             user = serializer.save(password=make_password(data['password']))
             return Response(LoginSerializer(user).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+from .models import ChargeMatrix
+class InsertSearchLogView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        bank = user.MID
+        branch = user.GID.GID
+        sys_usr = str(user.UID) + str(bank) + str(branch)
+        
+        print("Bank COde: ===>", bank.bnk_code)
+        print("Bank COde: ===>", bank.code)
+        bank_info = bank_bnk.objects.get(bnk_code=bank.bnk_code)
+        print("---->",bank_info.bnk_code)
+        print("Bank_Type",bank_info.bnk_type)
+        
+        charge_bank_type = bank_info.bnk_type
+        
+        if charge_bank_type == 1:
+            chargeType = ChargeMatrix.objects.get(chg_sys_id=2)
+        else:
+            chargeType = ChargeMatrix.objects.get(chg_sys_id=5)
+        
+        print("Charge_Amount ====>",chargeType.chg_amount)
+        
+        charge_amount_com = chargeType.chg_amount # charge sum lup company
+        EnterpriseID = request.data.get('EnterpriseID')
+        LCICID = request.data.get('LCICID')
+        loan_purpose = request.data.get('CatalogID')
+        
+        print("============> Loan Purpose: ",loan_purpose )
+        
+        isfound = 1
+
+        if EnterpriseID and LCICID:
+            try:
+                # inquiry_month = datetime(year=2024, month=10, day=1).date()  # October 2024
+                inquiry_month = datetime(year=2024, month=10, day=1).strftime('%m%Y')
+                inquiry_month_charge = datetime(year=2024, month=10, day=1).strftime('%d%m%Y')
+                search_log = searchLog.objects.create(
+                    enterprise_ID=EnterpriseID,
+                    LCIC_ID=LCICID,
+                    bnk_code=bank_info.bnk_code,
+                    branch=branch,
+                    cus_ID='',
+                    cusType='enterprise',
+                    credit_type='Full Loan Report',
+                    inquiry_month=inquiry_month,
+                    com_tel='',
+                    com_location='',
+                    rec_loan_amount=0.0,
+                    rec_loan_amount_currency='',
+                    rec_loan_purpose='',
+                    rec_enquiry_type='',
+                    sys_usr=sys_usr  
+                )
+
+                charge = request_charge.objects.create(
+                    bnk_code=bank_info.bnk_code,
+                    chg_amount=charge_amount_com,
+                    chg_code=chargeType.chg_code,
+                    status='pending',  
+                    rtp_code='1', 
+                    chg_unit=chargeType.chg_unit, 
+                    user_sys_id=sys_usr,
+                    LCIC_ID=LCICID,
+                    cusType='enterprise',
+                    # user_session_id=str(request.session.session_key),  # Use Django session key if applicable 
+                    user_session_id='',
+                    rec_reference_code='',
+                    search_log=search_log 
+                )
+                charge.rec_reference_code = f"{chargeType.chg_code}-`{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
+                charge.save()
+                print("=========> has benn inserted")
+                print(f"Charge inserted with ID: {charge.rec_charge_ID}")
+                return Response({'success': 'Search log inserted'}, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response({'error': 'EnterpriseID and LCICID are required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        
+        
+# from .serializers import SearchLogSerializer
+
+# class searchlog_reportView(APIView):
+#     # permission_classes = [IsAuthenticated]
+    
+#     def get(self, request):
+#         searchlog_report = searchLog.objects.all()
+#         serializer = SearchLogSerializer(searchlog_report, many=True)  # many=True because it's a queryset
+        
+#         return Response({
+#             'logged': serializer.data
+#         }, status=status.HTTP_200_OK)
+
+from .models import searchLog
+from .serializers import SearchLogSerializer
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+
+class searchlog_reportView(APIView):
+    # permission_classes = [IsAuthenticated]
+
+    def get(self, request, bnk_code=None):
+        try:
+            # Filter the searchLog records by bnk_code
+            if bnk_code:
+                searchlog_report = searchLog.objects.filter(bnk_code=bnk_code)
+            else:
+                searchlog_report = searchLog.objects.all()
+
+            # If no records found, return an appropriate message
+            if not searchlog_report.exists():
+                return Response({
+                    'detail': 'No records found for the provided bnk_code.'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Serialize the data if records exist
+            serializer = SearchLogSerializer(searchlog_report, many=True)
+            
+            return Response({
+                'logged': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+from .serializers import ChargeSerializer
+class charge_reportView(APIView):
+    # permission_classes = [IsAuthenticated]
+
+    def get(self, request, bnk_code=None):
+        try:
+            # Filter the charge records by bnk_code if provided
+            if bnk_code:
+                charge_report = request_charge.objects.filter(bnk_code=bnk_code)
+            else:
+                charge_report = request_charge.objects.all()
+
+            # If no records are found, return an appropriate message
+            if not charge_report.exists():
+                return Response({
+                    'detail': 'No charges found for the provided bnk_code.'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Serialize the data
+            serializer = ChargeSerializer(charge_report, many=True)
+            
+            return Response({
+                'charge': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+from django.db.models import Count
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework import status
+from django.db.models.functions import TruncMonth
+from .models import searchLog
+
+class SearchLogChartView(APIView):
+
+      def get(self, request):
+        try:
+            # Aggregate search logs by bank code and inquiry_month, count them
+            searchlog_data = (
+                searchLog.objects
+                .values('bnk_code', 'inquiry_month')  # Group by bank code and inquiry month
+                .annotate(total_logs=Count('bnk_code'))  # Count logs per bank code and inquiry month
+                .order_by('-total_logs')  # Order by the total number of logs
+            )
+
+            # If no data is found, return a 404
+            if not searchlog_data:
+                return Response({'detail': 'No search log data available.'}, status=status.HTTP_404_NOT_FOUND)
+
+            # Prepare the response format
+            chart_data = []
+            for entry in searchlog_data:
+                chart_data.append({
+                    "bnk_code": entry['bnk_code'],
+                    entry['inquiry_month']: entry['total_logs']  # Use inquiry_month as the key
+                })
+
+            # Return the data formatted for the chart
+            return Response({
+                'chart_data': chart_data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+class SearchLogChart_MonthView(APIView):
+     def get(self, request, inquiry_month):
+        try:
+            # Filter search logs by the provided inquiry_month
+            searchlog_data = (
+                searchLog.objects
+                .filter(inquiry_month=inquiry_month)  # Filter by inquiry_month
+                .values('bnk_code', 'inquiry_month')
+                .annotate(total_logs=Count('bnk_code'))  # Count total logs for each bnk_code
+                .order_by('-total_logs')
+            )
+
+            # If no data is found for the given month, return a 404
+            if not searchlog_data:
+                return Response({'detail': f'No search log data available for {inquiry_month}.'}, status=status.HTTP_404_NOT_FOUND)
+
+            # Prepare the response data in the required format
+            chart_data = [
+                {
+                    "bnk_code": entry['bnk_code'],
+                    entry['inquiry_month']: entry['total_logs']
+                }
+                for entry in searchlog_data
+            ]
+
+            # Return the filtered and formatted data
+            return Response({
+                'chart_data': chart_data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+class SearchLogChartByDateView(APIView):
+    def get(self, request, inquiry_date):
+        try:
+            # Convert the date string to a datetime object for comparison
+            filter_date = datetime.strptime(inquiry_date, "%d-%m-%Y").date()
+
+            # Filter the search logs by the given inquiry date
+            searchlog_data = (
+                searchLog.objects
+                .filter(inquiry_date__date=filter_date)  # Filter by date
+                .values('bnk_code')
+                .annotate(total_logs=Count('bnk_code'))
+                .order_by('-total_logs')
+            )
+
+            # If no data is found, return a 404
+            if not searchlog_data.exists():
+                return Response({'detail': f'No search log data available for {inquiry_date}.'}, status=status.HTTP_404_NOT_FOUND)
+
+            # Prepare data for the chart
+            chart_data = [
+                {
+                    'bnk_code': entry['bnk_code'],
+                    inquiry_date: entry['total_logs'],
+                }
+                for entry in searchlog_data
+            ]
+
+            # Return the data formatted for the chart
+            return Response({'chart_data': chart_data}, status=status.HTTP_200_OK)
+
+        except ValueError:
+            # Return a 400 error if the date format is invalid
+            return Response({
+                'error': 'Invalid date format. Please use DD-MM-YYYY format.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+            
+class SearchLogChartByBankCodeView(APIView):
+    def get(self, request, bnk_code):
+        try:
+            # Filter search logs by the provided bank code
+            searchlog_data = (
+                searchLog.objects
+                .filter(bnk_code=bnk_code) 
+                # .filter(bnk_code__iexact=bnk_code.strip()) 
+                .values('bnk_code', 'inquiry_month')
+                .annotate(total_logs=Count('bnk_code'))  # Count total logs for each month
+                .order_by('-total_logs')
+            ) 
+            # If no data is found for the given bank code, return a 404
+            if not searchlog_data:
+                return Response({'detail': f'No search log data available for bank code {bnk_code}.'}, status=status.HTTP_404_NOT_FOUND)
+
+            # Prepare the response data in the required format
+            chart_data = [
+                {
+                    "inquiry_month": entry['inquiry_month'],
+                    entry['inquiry_month']: entry['total_logs']
+                }
+                for entry in searchlog_data
+            ]
+
+            # Return the filtered and formatted data
+            return Response({
+                'chart_data': chart_data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+from django.db.models import Sum
+from django.db.models.functions import ExtractMonth, ExtractYear
+class ChargeChartView(APIView):
+    
+    def get(self, request, bnk_code=None):
+        try:
+            # Filter the charge records by bnk_code if provided
+            if bnk_code:
+                charge_report = request_charge.objects.filter(bnk_code=bnk_code)
+            else:
+                charge_report = request_charge.objects.all()
+
+            # If no records are found, return an appropriate message
+            if not charge_report.exists():
+                return Response({
+                    'detail': 'No charges found for the provided bnk_code.'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Prepare the data by extracting month and year
+            monthly_charges = charge_report.annotate(
+                month=ExtractMonth('rec_insert_date'),  # Extract month from date
+                year=ExtractYear('rec_insert_date')     # Extract year from date
+            ).values('bnk_code', 'month', 'year').annotate(
+                total_amount=Sum('chg_amount')
+            ).order_by('bnk_code', 'year', 'month')
+
+            # Structure the data for the table
+            result = {}
+            for entry in monthly_charges:
+                bnk_code = entry['bnk_code']
+                month_year = f"{entry['month']:02d}-{entry['year']}"  # Format as MM-YYYY
+                total_amount = entry['total_amount']
+
+                if bnk_code not in result:
+                    result[bnk_code] = {}
+                
+                result[bnk_code][month_year] = total_amount
+
+            # Convert the result dict to a list for easier consumption in the frontend
+            chart_data = [
+                {'bnk_code': bnk, **amounts}
+                for bnk, amounts in result.items()
+            ]
+
+            return Response({
+                'chart_data': chart_data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+class ChargeChartByDateView(APIView):
+
+    def get(self, request, charge_date):
+        try:
+            # Parse the charge_date string into a datetime object
+            filter_date = datetime.strptime(charge_date, "%d-%m-%Y").date()
+
+            # Filter the charge records by the exact date
+            charge_report = request_charge.objects.filter(rec_insert_date__date=filter_date)
+
+            # If no records are found, return a 404
+            if not charge_report.exists():
+                return Response({
+                    'detail': f'No charges found for the provided date: {charge_date}.'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Prepare the data by extracting month and year and summing the charge amounts
+            monthly_charges = charge_report.annotate(
+                month=ExtractMonth('rec_insert_date'),  # Extract month
+                year=ExtractYear('rec_insert_date')     # Extract year
+            ).values('bnk_code', 'month', 'year').annotate(
+                total_amount=Sum('chg_amount')
+            ).order_by('bnk_code', 'year', 'month')
+
+            # Structure the data
+            result = {}
+            for entry in monthly_charges:
+                bnk_code = entry['bnk_code']
+                month_year = f"{entry['month']:02d}-{entry['year']}"  # Format as MM-YYYY
+                total_amount = entry['total_amount']
+
+                if bnk_code not in result:
+                    result[bnk_code] = {}
+                
+                result[bnk_code][month_year] = total_amount
+
+            # Convert the result dict to a list for easier consumption in the frontend
+            chart_data = [
+                {'bnk_code': bnk, **amounts}
+                for bnk, amounts in result.items()
+            ]
+
+            return Response({
+                'chart_data': chart_data
+            }, status=status.HTTP_200_OK)
+
+        except ValueError:
+            return Response({
+                'error': 'Invalid date format. Please use DD-MM-YYYY format.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+class ChargeChartMonthView(APIView):
+
+    def get(self, request, month_year):
+        try:
+            # Parse the month_year string (e.g., '10-2024') into month and year
+            filter_month_year = datetime.strptime(month_year, "%m-%Y")
+            filter_month = filter_month_year.month
+            filter_year = filter_month_year.year
+
+            # Filter the charge records by the extracted month and year
+            charge_report = request_charge.objects.filter(
+                rec_insert_date__month=filter_month,
+                rec_insert_date__year=filter_year
+            )
+
+            # If no records are found, return a 404
+            if not charge_report.exists():
+                return Response({
+                    'detail': f'No charges found for the provided month and year: {month_year}.'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Aggregate the charge data by bank code and sum the charge amounts
+            monthly_charges = charge_report.values('bnk_code').annotate(
+                total_amount=Sum('chg_amount')
+            ).order_by('bnk_code')
+
+            # Structure the data for the frontend
+            chart_data = [
+                {
+                    'bnk_code': entry['bnk_code'],
+                    month_year: entry['total_amount']
+                }
+                for entry in monthly_charges
+            ]
+
+            return Response({
+                'chart_data': chart_data
+            }, status=status.HTTP_200_OK)
+
+        except ValueError:
+            return Response({
+                'error': 'Invalid month-year format. Please use MM-YYYY format.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+class ChargeChartByBankView(APIView):
+
+    def get(self, request, bnk_code):
+        try:
+            # Filter the charge records by the provided bnk_code
+            charge_report = request_charge.objects.filter(bnk_code=bnk_code)
+
+            # If no records are found, return a 404
+            if not charge_report.exists():
+                return Response({
+                    'detail': f'No charges found for bank code: {bnk_code}.'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Aggregate the charge data by month and year, and sum the charge amounts
+            monthly_charges = charge_report.annotate(
+                month=ExtractMonth('rec_insert_date'),  # Extract month from date
+                year=ExtractYear('rec_insert_date')     # Extract year from date
+            ).values('month', 'year').annotate(
+                total_amount=Sum('chg_amount')
+            ).order_by('year', 'month')
+
+            # Structure the data for the frontend
+            chart_data = [
+                {
+                    'bnk_code': bnk_code,
+                    f"{entry['month']:02d}-{entry['year']}": entry['total_amount']
+                }
+                for entry in monthly_charges
+            ]
+
+            return Response({
+                'chart_data': chart_data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+            
+from .models import Main_catalog_cat  # Assuming this is your model
+from .serializers import MainCatalogCatSerializer  # Serializer for your model
+
+class CatalogCatListView(APIView):
+    def get(self, request):
+        cats = Main_catalog_cat.objects.all()
+        serializer = MainCatalogCatSerializer(cats, many=True)
+        return Response(serializer.data)
+    
+# class SearchHistory(APIView):
+    
+#     def get( self, request):
+#         LCICID = request.objects.get('LCICID')
+#         history = request_charge.objects.get(LCICID=LCICID)
+               
+    
+    

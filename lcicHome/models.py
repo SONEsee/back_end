@@ -1403,23 +1403,32 @@ class Rp_type(models.Model):
     Rp_NameE = models.CharField(max_length=255, blank=True, null=True)
 
 class searchLog(models.Model):
-    search_ID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False,verbose_name='ID')
-    enterprise_ID = models.CharField(max_length=50,blank=True,null=True)
-    LCIC_ID = models.CharField(max_length=50,blank=True,null=True)
-    bnk_code = models.CharField(max_length=255, blank=True, null=True)
-    cus_ID = models.CharField(max_length=255, blank=True, null=True)
-    credit_type = models.CharField(max_length=255, blank=True, null=True)
-    inquiry_date = models.DateTimeField(blank=True,null=True,auto_now_add=True)
-    inquiry_month = models.DateField(blank=True,null=True)
-    inquiry_time = models.DateTimeField(blank=True,null=True,auto_now_add=True)
-    com_tel = models.CharField(max_length=255, blank=True, null=True)
-    com_location = models.CharField(max_length=255, blank=True, null=True)
-    rec_loan_amount = models.FloatField(default=0, null=True)
-    rec_loan_amount_currency = models.CharField(max_length=255, blank=True, null=True)
-    rec_loan_purpose = models.CharField(max_length=255, blank=True, null=True)
-    rec_enquiry_type = models.CharField(max_length=255, blank=True, null=True)
-    cusType = models.CharField(max_length=255, blank=True, null=True)
-    branch = models.CharField(max_length=255, blank=True, null=True)
+    search_ID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+    enterprise_ID = models.CharField(max_length=50, blank=True, null=True)
+    LCIC_ID = models.CharField(max_length=50, blank=True, null=True)
+    bnk_code = models.CharField(max_length=255, blank=True, null=True)  # Bank code
+    cus_ID = models.CharField(max_length=255, blank=True, null=True)  # Customer ID if needed
+    credit_type = models.CharField(max_length=255, blank=True, null=True)  # Type of credit being searched
+    inquiry_date = models.DateTimeField(blank=True, null=True, auto_now_add=True)  # Auto set when inquiry is created
+    inquiry_month = models.CharField(max_length=7, blank=True, null=True)  # Store only year and month (e.g., '2024-09')
+    inquiry_time = models.DateTimeField(blank=True, null=True, auto_now_add=True)  # Auto capture inquiry timestamp
+    com_tel = models.CharField(max_length=255, blank=True, null=True)  # Company telephone
+    com_location = models.CharField(max_length=255, blank=True, null=True)  # Company location
+    rec_loan_amount = models.FloatField(default=0, null=True)  # Recommended loan amount
+    rec_loan_amount_currency = models.CharField(max_length=255, blank=True, null=True)  # Loan amount currency
+    rec_loan_purpose = models.CharField(max_length=255, blank=True, null=True)  # Purpose of the loan
+    rec_enquiry_type = models.CharField(max_length=255, blank=True, null=True)  # Type of enquiry made
+    cusType = models.CharField(max_length=255, blank=True, null=True)  # Type of customer (e.g., enterprise)
+    branch = models.CharField(max_length=255, blank=True, null=True)  # Branch code
+    sys_usr = models.CharField(max_length=255, blank=True, null=True)  # System user info (UID + bank + branch)
+
+    class Meta:
+        verbose_name = 'Search Log'
+        verbose_name_plural = 'Search Logs'
+
+    def __str__(self):
+        return f"SearchLog({self.search_ID}) - Enterprise: {self.enterprise_ID}, LCIC: {self.LCIC_ID}"
+
  
 class request_charge(models.Model):
     rec_charge_ID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False,verbose_name='ID')
@@ -1437,18 +1446,20 @@ class request_charge(models.Model):
     user_session_id = models.CharField(max_length=255, blank=True, null=True)
     rec_reference_code = models.CharField(max_length=255, blank=True, null=True)
     rec_insert_date = models.DateTimeField(blank=True,null=True,auto_now_add=True)
+    search_log = models.ForeignKey(searchLog, on_delete=models.CASCADE)
+    
     
        
 
-from django.db import models
-from django.contrib.auth.models import User
+# from django.db import models
+# from django.contrib.auth.models import User
 
-class UploadedFile(models.Model):
-    name = models.CharField(max_length=255)
-    file = models.FileField(upload_to='uploads/')
-    size = models.FloatField()
-    uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE)
-    uploaded_at = models.DateTimeField(auto_now_add=True)
+# class UploadedFile(models.Model):
+#     name = models.CharField(max_length=255)
+#     file = models.FileField(upload_to='uploads/')
+#     size = models.FloatField()
+#     uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE)
+#     uploaded_at = models.DateTimeField(auto_now_add=True)
 
 
 
@@ -1490,7 +1501,7 @@ class Collateral(models.Model):
     def __str__(self):
         return self.filename
 
-# Paylay Pherm
+
 
 class Role(models.Model):
     name = models.CharField(max_length=100)
@@ -1510,3 +1521,31 @@ class SidebarSubItem(models.Model):
     parent = models.ForeignKey(SidebarItem, on_delete=models.CASCADE, related_name="sub_items")
     roles = models.ManyToManyField(Role, related_name="sidebar_sub_items")
 
+from django.conf import settings
+from django.db import models
+# from django.contrib.auth.models import User
+from rest_framework.authtoken.models import Token
+class CustomLoginToken(Token):
+    custom_user = models.OneToOneField(settings.AUTH_USER_MODEL, related_name='custom_auth_token', on_delete=models.CASCADE)
+
+class ChargeMatrix(models.Model):
+    chg_sys_id = models.BigAutoField(auto_created=True, primary_key=True)
+    chg_code = models.CharField(max_length=100)
+    chg_type = models.CharField(max_length=100)
+    chg_lao_type = models.CharField(max_length=100)
+    chg_desc = models.CharField(max_length=100)
+    chg_lao_desc = models.CharField(max_length=100)
+    chg_amount = models.FloatField()  # No max_length for FloatField
+    chg_unit = models.CharField(max_length=100)
+
+class Main_catalog_cat(models.Model):
+    cat_sys_id = models.BigAutoField(auto_created=True, primary_key=True, null=False)
+    ct_type = models.CharField(max_length=30)
+    cat_name = models.CharField(max_length=100)
+    cat_lao_name = models.CharField(max_length=100)
+    cat_value = models.CharField(max_length=100)
+    cat_is_default = models.IntegerField(null=False)
+    cat_sort_order = models.IntegerField(null=False)
+    cat_group = models.IntegerField(null=True)
+    cat_status = models.IntegerField( null=False)
+    

@@ -30,7 +30,7 @@ from .views import get_product_infocode
 from .views import get_product_info, get_product_detail
 from .views import get_product_info_by_id
 # from .views import upload_files
-from .views import FileUploadView
+# from .views import FileUploadView
 from .views import UploadFileList
 from .views import UploadFilecList
 from .views import upload_file_view
@@ -48,7 +48,16 @@ from .views import confirm_image
 from .views import UserLoginView
 from django.contrib.auth import views as auth_views
 from .views import UserProfileView
-from .views import UserManagementView, FCR_reportView, SidebarItemsView, RoleListView, SidebarItemListView, SidebarSubItemListView, AssignRoleView, ManageUserView,  update_statussubmitc,confirm_uploadc
+from .views import UserManagementView, FCR_reportView, SidebarItemsView, RoleListView, SidebarItemListView, SidebarSubItemListView, AssignRoleView, ManageUserView,FCR_reportView,update_statussubmitc,confirm_uploadc
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
+from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView
+from .views import STypeView
+from .views import UserGroupView
+
+
 # from .views import FileUploadView, FileDeleteView
 # from .views import upload_files
 # from .views import enterprise_info_search
@@ -120,10 +129,39 @@ urlpatterns = [
    path('userList/', ManageUserView.as_view(), name='mangeuser'),
    path('create_user/',UserManagementView.as_view(), name='create_user'),
    path('api2/', include(router.urls)),
+   path('customers/', CustomerInfoINDView.as_view(), name='customer-info-ind'),
+   path('bank/', Bank_InfoINDView.as_view(), name='bank_info'),
+   path('edit_user/', UserManagementView.as_view(), name='edit-user'),
+   path('update_user/<str:UID>/', UpdateUserView.as_view(), name='update-user'),
+   path('delete_user/<int:UID>/', UserManagementView.as_view(), name='delete_user'),
+   path('get_user/<str:UID>/', GetUserByUIDView.as_view(), name='get-user-by-uid'),
+   path('stypes/', STypeView.as_view(), name='stype-view'),
+   path('user-groups/', UserGroupView.as_view(), name='user-groups'),
+   path('report/', FCR_reportView.as_view(),  name='report'),
+   path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+   path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+   path('insert_searchlog/', InsertSearchLogView.as_view(), name='insert_searchlog'),
+   path('log_report/', searchlog_reportView.as_view(), name='report_searchlog'),
+   path('charge_report/', charge_reportView.as_view(), name='charge_searchlog'),
+   path('log_report/<str:bnk_code>', searchlog_reportView.as_view(), name='report_searchlog'),
+   path('charge_report/<str:bnk_code>', charge_reportView.as_view(), name='charge_searchlog'),
+   path('searchlog_chart/', SearchLogChartView.as_view(), name='searchlog_chart'),
+   path('searchlog_chart/<str:inquiry_month>', SearchLogChart_MonthView.as_view(), name='searchlog_chartbymonth'),
+   path('searchlog_chart/date/<str:inquiry_date>', SearchLogChartByDateView.as_view(), name='searchlog_chartbydate'),
+   path('searchlog_chart/bank/<str:bnk_code>', SearchLogChartByBankCodeView.as_view(), name='searchlog_chartbybank'),
+   path('charge_chart/',ChargeChartView.as_view(), name='charge_report_chart'),
+   path('charge_chart/date/<str:charge_date>', ChargeChartByDateView.as_view(), name='charge-chart-by-date'),
+   path('charge_chart/month/<str:month_year>',ChargeChartMonthView.as_view(), name='charge-chart-by-month'),
+   path('charge_chart/bank/<str:bnk_code>', ChargeChartByBankView.as_view(), name='charge-chart-bank'),
+   
+   path('catalog-cats/',CatalogCatListView.as_view(), name='catalog-cats'),
    
    
+   
+
+   path('enterprisematch/', EnterpriseInfoMatch.as_view(), name='enterprise-info-match'),
+   path('api/v1/enterprise-info/search/', EnterpriseInfoSearch.as_view(), name='enterprise-info-search'),
   
-  path('api/v1/enterprise-info/search/', EnterpriseInfoSearch.as_view(), name='enterprise-info-search'),
    
    
    path('enter', include(router.urls)),
@@ -140,7 +178,7 @@ urlpatterns = [
    
    
   
-   path('api/upload_files1', FileUploadView.as_view(), name='file-upload'),
+#    path('api/upload_files1', FileUploadView.as_view(), name='file-upload'),
 
 
     path('api/upload-files2/', UploadFileList.as_view(), name='upload-file-list'),
