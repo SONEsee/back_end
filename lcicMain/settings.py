@@ -145,7 +145,7 @@ ROOT_URLCONF = 'lcicMain.urls'
 
 # session  timeout
 SESSION_COOKIE_AGE = 3600
-SESSION_TIMEOUT_REDIRECT = 'http://127.0.0.1:8000/'
+SESSION_TIMEOUT_REDIRECT = 'http://127.0.0.1:35729/'
 
 TEMPLATES = [
     {
@@ -305,7 +305,7 @@ CELERY_TIMEZONE = 'UTC'
 
 CORS_ALLOW_CREDENTIALS = True
 
-DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5 MB ຫຼືຕາມທີ່ຕ້ອງການ
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  
 FILE_UPLOAD_HANDLERS = [
     'django.core.files.uploadhandler.MemoryFileUploadHandler',
     'django.core.files.uploadhandler.TemporaryFileUploadHandler',

@@ -172,7 +172,7 @@ urlpatterns = [
 #    path('api/upload_files1', FileUploadView.as_view(), name='file-upload'),
 
 
-    path('api/upload-files2/', UploadFileList.as_view(), name='upload-file-list'),
+    path('upload-files2/', UploadFileList.as_view(), name='upload-file-list'),
     path('api/upload-filesc2/', UploadFilecList.as_view(), name='upload-file-list'),
 
     path('api/productinfo3/', get_data3, name='get_data_by_id_file_and_period'),
