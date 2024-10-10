@@ -2008,19 +2008,19 @@ def searchListConfirm(request, object_id):
     
     print(fee_data, " : Data get from FeeData")
     
-    rec_charge_insert = request_charge.objects.create(
-        bnk_code = (sys_user.MID).id,
-        chg_amount = charge_amount_data.price,
-        chg_code = charge_amount_data.code,
-        status = 'InActive',
-        # insert_date = '',
-        # update_date = '',
-        rtp_code = '1',
-        chg_unit = 'LAK',
-        user_sys_id = sys_user.UID,
-        LCIC_ID = fee_data.LCICID,
-        cusType = ''
-    )
+    # rec_charge_insert = request_charge.objects.create(
+    #     bnk_code = (sys_user.MID).id,
+    #     chg_amount = charge_amount_data.price,
+    #     chg_code = charge_amount_data.code,
+    #     status = 'InActive',
+    #     # insert_date = '',
+    #     # update_date = '',
+    #     rtp_code = '1',
+    #     chg_unit = 'LAK',
+    #     user_sys_id = sys_user.UID,
+    #     LCIC_ID = fee_data.LCICID,
+    #     cusType = ''
+    # )
     
     
     context ={
@@ -2420,13 +2420,75 @@ class CustomerInfoINDView(APIView):
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import EnterpriseInfo, InvestorInfo
+from .models import EnterpriseInfo, InvestorInfo, searchLog
 from .serializers import EnterpriseInfoSerializer
 from datetime import datetime
 
 
 # Search Enterprise 30/09/2024
 class EnterpriseInfoSearch(APIView):
+    # authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        
+        # Extract authenticated user information from the token
+        user = request.user
+        # Example of accessing the UID or other user info
+        UID = user.UID  # or user.UID if you're using a custom field
+        bank = str(user.MID.id)  # Convert to string if necessary
+        branch = str(user.GID.GID)  # Convert to string if necessary
+        sys_usr = str(user.UID) + str(bank) + str(branch)
+        LCICID = request.data.get('LCICID')
+        EnterpriseID = request.data.get('EnterpriseID')
+
+        print("Authenticated User ID (UID):", UID)
+        print("Authenticated Bankname:", bank)
+        print("Authenticated Branchname:", branch)
+        
+        print("LCICID:", LCICID)
+        print("EnterpriseID:", EnterpriseID)
+        # print("Login :",Login._meta.get_fields())
+        if LCICID is not None and EnterpriseID is not None:
+            try:
+                enterprise_info = EnterpriseInfo.objects.filter(LCICID=LCICID, EnterpriseID=EnterpriseID)
+                investor_info = InvestorInfo.objects.filter(EnterpriseID=EnterpriseID)
+                for i in investor_info:
+                    invesinfo = i.investorName
+                    # print(invesinfo)
+                
+                serializer = EnterpriseInfoSerializer(enterprise_info, many=True)
+                # inquiry_month = datetime(year=2024, month=10, day=1).date()  # October 2024
+                inquiry_month = datetime.now().strftime('%Y-%m')
+                # Insert log
+                search_log = searchLog.objects.create(
+                    enterprise_ID=EnterpriseID,
+                    LCIC_ID=LCICID,
+                    bnk_code=bank,
+                    branch=branch,
+                    cus_ID='',
+                    cusType='enterprise',
+                    credit_type='Full Loan Report',
+                    inquiry_month=inquiry_month,
+                    com_tel='',
+                    com_location='',
+                    rec_loan_amount=0.0,
+                    rec_loan_amount_currency='',
+                    rec_loan_purpose='',
+                    rec_enquiry_type='',
+                    sys_usr=sys_usr  # Save sys_usr to the model if needed
+                )
+
+                search_log.save()
+                print("Searchlog Insert Successfully ======>")
+                
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            except EnterpriseInfo.DoesNotExist:
+                return Response({'error': 'EnterpriseInfo not found'}, status=status.HTTP_404_NOT_FOUND)
+            except Exception as e:
+                return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class EnterpriseInfoMatch(APIView):
     # authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
@@ -2485,10 +2547,7 @@ class EnterpriseInfoSearch(APIView):
             except EnterpriseInfo.DoesNotExist:
                 return Response({'error': 'EnterpriseInfo not found'}, status=status.HTTP_404_NOT_FOUND)
             except Exception as e:
-                return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-       
-        
+                return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)    
         
         
 class LoginView(APIView):
@@ -7716,7 +7775,7 @@ class UserLoginView(APIView):
                 'user': {
                     'UID': user.UID,
                     'MID': {
-                        'id': user.MID.id if user.MID else None,
+                        'id': user.MID.bnk_code if user.MID else None,
                         'code': user.MID.code if user.MID else None
                     },
                     'GID': {
@@ -7855,3 +7914,250 @@ class ManageUserView(APIView):
             user = serializer.save(password=make_password(data['password']))
             return Response(LoginSerializer(user).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+from .models import ChargeMatrix
+class InsertSearchLogView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        bank = user.MID
+        branch = user.GID.GID
+        sys_usr = str(user.UID) + str(bank) + str(branch)
+        
+        print("Bank COde: ===>", bank.bnk_code)
+        print("Bank COde: ===>", bank.code)
+        bank_info = bank_bnk.objects.get(bnk_code=bank.bnk_code)
+        print("---->",bank_info.bnk_code)
+        print("Bank_Type",bank_info.bnk_type)
+        
+        charge_bank_type = bank_info.bnk_type
+        
+        if charge_bank_type == 1:
+            chargeType = ChargeMatrix.objects.get(chg_sys_id=2)
+        else:
+            chargeType = ChargeMatrix.objects.get(chg_sys_id=5)
+        
+        print("Charge_Amount ====>",chargeType.chg_amount)
+        
+        charge_amount_com = chargeType.chg_amount # charge sum lup company
+        EnterpriseID = request.data.get('EnterpriseID')
+        LCICID = request.data.get('LCICID')
+        
+        isfound = 1
+        
+        EnterpriseID = request.data.get('EnterpriseID')
+        LCICID = request.data.get('LCICID')
+
+        if EnterpriseID and LCICID:
+            try:
+                # inquiry_month = datetime(year=2024, month=10, day=1).date()  # October 2024
+                inquiry_month = datetime(year=2024, month=10, day=1).strftime('%Y-%m')
+                search_log = searchLog.objects.create(
+                    enterprise_ID=EnterpriseID,
+                    LCIC_ID=LCICID,
+                    bnk_code=bank_info.bnk_code,
+                    branch=branch,
+                    cus_ID='',
+                    cusType='enterprise',
+                    credit_type='Full Loan Report',
+                    inquiry_month=inquiry_month,
+                    com_tel='',
+                    com_location='',
+                    rec_loan_amount=0.0,
+                    rec_loan_amount_currency='',
+                    rec_loan_purpose='',
+                    rec_enquiry_type='',
+                    sys_usr=sys_usr  
+                )
+
+                charge = request_charge.objects.create(
+                    bnk_code=bank_info.bnk_code,
+                    chg_amount=charge_amount_com,
+                    chg_code=chargeType.chg_code,
+                    status='pending',  
+                    rtp_code='1', 
+                    chg_unit=chargeType.chg_unit, 
+                    user_sys_id=sys_usr,
+                    LCIC_ID=LCICID,
+                    cusType='enterprise',
+                    # user_session_id=str(request.session.session_key),  # Use Django session key if applicable 
+                    user_session_id='',
+                    rec_reference_code='',
+                    search_log=search_log 
+                )
+                charge.rec_reference_code = f"{chargeType.chg_code}{isfound}{charge.rec_charge_ID}{inquiry_month}"
+                charge.save()
+                print("=========> has benn inserted")
+                print(f"Charge inserted with ID: {charge.rec_charge_ID}")
+                return Response({'success': 'Search log inserted'}, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response({'error': 'EnterpriseID and LCICID are required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        
+        
+# from .serializers import SearchLogSerializer
+
+# class searchlog_reportView(APIView):
+#     # permission_classes = [IsAuthenticated]
+    
+#     def get(self, request):
+#         searchlog_report = searchLog.objects.all()
+#         serializer = SearchLogSerializer(searchlog_report, many=True)  # many=True because it's a queryset
+        
+#         return Response({
+#             'logged': serializer.data
+#         }, status=status.HTTP_200_OK)
+
+from .models import searchLog
+from .serializers import SearchLogSerializer
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+
+class searchlog_reportView(APIView):
+    # permission_classes = [IsAuthenticated]
+
+    def get(self, request, bnk_code=None):
+        try:
+            # Filter the searchLog records by bnk_code
+            if bnk_code:
+                searchlog_report = searchLog.objects.filter(bnk_code=bnk_code)
+            else:
+                searchlog_report = searchLog.objects.all()
+
+            # If no records found, return an appropriate message
+            if not searchlog_report.exists():
+                return Response({
+                    'detail': 'No records found for the provided bnk_code.'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Serialize the data if records exist
+            serializer = SearchLogSerializer(searchlog_report, many=True)
+            
+            return Response({
+                'logged': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+from .serializers import ChargeSerializer
+class charge_reportView(APIView):
+    # permission_classes = [IsAuthenticated]
+
+    def get(self, request, bnk_code=None):
+        try:
+            # Filter the charge records by bnk_code if provided
+            if bnk_code:
+                charge_report = request_charge.objects.filter(bnk_code=bnk_code)
+            else:
+                charge_report = request_charge.objects.all()
+
+            # If no records are found, return an appropriate message
+            if not charge_report.exists():
+                return Response({
+                    'detail': 'No charges found for the provided bnk_code.'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Serialize the data
+            serializer = ChargeSerializer(charge_report, many=True)
+            
+            return Response({
+                'charge': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+from django.db.models import Count
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework import status
+from .models import searchLog
+
+class SearchLogChartView(APIView):
+    # permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            # Aggregate search logs by bank code and count them, limiting to the top 10
+            searchlog_data = (
+                searchLog.objects
+                .values('bnk_code')
+                .annotate(total_logs=Count('bnk_code'))
+                .order_by('-total_logs')
+            )
+
+            # If no data is found, return a 404
+            if not searchlog_data:
+                return Response({'detail': 'No search log data available.'}, status=status.HTTP_404_NOT_FOUND)
+
+            # Prepare data for the doughnut chart
+            labels = [entry['bnk_code'] for entry in searchlog_data]  # bnk_code as labels
+            dataset = [entry['total_logs'] for entry in searchlog_data]  # total count as dataset
+
+            charge_data = request_charge.objects.values('bnk_code','')
+            # Return the data formatted for the chart
+            return Response({
+                'labels': labels,  # For chart labels
+                'datasets': [{
+                    'label': 'Search Logs by Bank',
+                    'data': dataset,  # For chart data
+                }]
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+from django.db.models import Sum
+class ChargeChartView(APIView):
+    
+       def get(self, request, bnk_code=None):
+        try:
+            # Filter the charge records by bnk_code if provided
+            if bnk_code:
+                charge_report = request_charge.objects.filter(bnk_code=bnk_code)
+            else:
+                charge_report = request_charge.objects.all()
+
+            # If no records are found, return an appropriate message
+            if not charge_report.exists():
+                return Response({
+                    'detail': 'No charges found for the provided bnk_code.'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Prepare the chart data
+            chart_data = charge_report.values('bnk_code', 'chg_code').annotate(
+                total_amount=Sum('chg_amount')  # Summing up the charge amounts for each code
+            ).order_by('bnk_code')
+
+            # Prepare labels and datasets for the chart
+            labels = [entry['bnk_code'] for entry in chart_data]
+            charge_codes = [entry['chg_code'] for entry in chart_data]
+            charge_amounts = [entry['total_amount'] for entry in chart_data]
+
+            # Return the data formatted for the chart
+            return Response({
+                'labels': labels,  # Bank codes
+                'datasets': [{
+                    'label': 'Charge Amount by Bank',
+                    'data': charge_amounts,  # Charge amounts for each bank code
+                    'backgroundColor': [
+                        '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'
+                    ],  # Optional: Add chart colors
+                }],
+                'charge_codes': charge_codes  # Optionally, include charge codes
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)

@@ -545,3 +545,15 @@ class B1_YearlySerializer(serializers.ModelSerializer):
         model = B1_Yearly
         fields = '_all_'
 
+from .models import searchLog
+
+class SearchLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = searchLog
+        fields = '__all__' 
+
+from .models import request_charge
+class ChargeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = request_charge
+        fields = '__all__' 
