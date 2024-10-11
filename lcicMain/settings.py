@@ -107,7 +107,7 @@ REST_FRAMEWORK = {
 #     'BLACKLIST_AFTER_ROTATION': True,
 # }
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),  # Adjust as necessary
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),  
     'REFRESH_TOKEN_LIFETIME': timedelta(minutes=50),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
@@ -145,7 +145,7 @@ ROOT_URLCONF = 'lcicMain.urls'
 
 # session  timeout
 SESSION_COOKIE_AGE = 3600
-SESSION_TIMEOUT_REDIRECT = 'http://127.0.0.1:35729/'
+SESSION_TIMEOUT_REDIRECT = 'http://127.0.0.1:8000/'
 
 TEMPLATES = [
     {
@@ -270,7 +270,7 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_HEADERS = list(default_headers) + [
-    'X-User-Roles',  # Add your custom headers here
+    'X-User-Roles', 
 ]
 
 # CORS_ORIGIN_ALLOW_ALL = True
@@ -305,7 +305,7 @@ CELERY_TIMEZONE = 'UTC'
 
 CORS_ALLOW_CREDENTIALS = True
 
-DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5 MB ຫຼືຕາມທີ່ຕ້ອງການ
 FILE_UPLOAD_HANDLERS = [
     'django.core.files.uploadhandler.MemoryFileUploadHandler',
     'django.core.files.uploadhandler.TemporaryFileUploadHandler',
