@@ -160,6 +160,7 @@ class provInfo(models.Model):
 
 class memberInfo(models.Model):
     code = models.CharField(max_length=20,unique=True)
+    bnk_code = models.CharField(max_length=150, null=True)
     slug = models.SlugField(unique=True)
     nameL = models.CharField(max_length=2500,null=True, blank=True)
     nameE = models.CharField(max_length=2500,null=True,blank=True)

@@ -1,0 +1,193 @@
+[33mcommit e82d41ca8856245f982212fb974c8f715d02fa0c[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32msone[m[33m, [m[1;31morigin/sone[m[33m)[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Thu Oct 10 08:49:06 2024 +0700
+
+    ບນທກການປຽນແປງຂອງທານ
+
+[33mcommit 61aa1f682bcacdfc59b37041ca242789e7a3263d[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Tue Oct 1 09:57:01 2024 +0700
+
+    ຂໍ້ຄວາມ commit ຂອງທ່ານ
+
+[33mcommit db319dff61a438c89c6bd96c0bceb6cd0d37e8cd[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Mon Sep 30 18:57:38 2024 +0700
+
+    ຍກເວນ __pycache__ ຈາກ Git
+
+[33mcommit e99df1dd8f26b22c5d285c9945207dcda3052315[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Mon Sep 30 18:37:35 2024 +0700
+
+    ຂຄວາມອະທບາຍແກໄຂ
+
+[33mcommit ede13f15f7b38d2bf284864bae499c3514e00f19[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Mon Sep 30 17:31:07 2024 +0700
+
+    merge
+
+[33mcommit 0b6cfcd937d59af920d1aca72850b4c7843b53a4[m
+Merge: f3cbfa9b ed43f78e
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Mon Sep 30 16:48:59 2024 +0700
+
+    Remove __pycache__ from git tracking and update .gitignore
+
+[33mcommit f3cbfa9b9ac385b1937a7a7d6ab5c217f82b1a96[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Mon Sep 30 16:28:10 2024 +0700
+
+    Your commit message
+
+[33mcommit 21bf560a4dd8f8a07bd2a08b648d00de2937ccdc[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Mon Sep 30 16:25:53 2024 +0700
+
+    Your commit message
+
+[33mcommit ed43f78ed9d9ef953cea3b307eb731e841141d37[m[33m ([m[1;32mpaylay[m[33m)[m
+Author: paylayweb <soulaphon.vongmala559@gmail.com>
+Date:   Fri Sep 27 15:18:45 2024 +0700
+
+    backend
+
+[33mcommit 4053bf7bd2a521ed0b901e6545df7ccb6f3cbb9f[m
+Merge: 32c53d7e 2833f1b0
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Fri Sep 27 14:48:08 2024 +0700
+
+    Merged branch 'paylay' into 'sone'
+
+[33mcommit 32c53d7e40969a18f20bfc5e0219a65d78f28f03[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Fri Sep 27 14:17:13 2024 +0700
+
+    Save changes to settings file
+
+[33mcommit 2833f1b076d8378f571a73905391940aecdb7ea2[m
+Author: SONEsee <sonesdv164@gmail.com>
+Date:   Fri Sep 27 09:37:36 2024 +0700
+
+    test02
+
+[33mcommit 2e72edd958862e5196a06f4258be52a84f13f14f[m[33m ([m[1;31morigin/my-new-feature[m[33m, [m[1;32mmy-new-feature[m[33m)[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Tue Sep 24 15:24:24 2024 +0700
+
+    sone Upload c and b
+
+[33mcommit 5769582a1fd51c6712299949dd804c2e56e81739[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Tue Sep 24 09:24:25 2024 +0700
+
+     Cupload sone
+
+[33mcommit 1e9230407348e2809ea1c1f22963e0c75b82b0f7[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Thu Sep 19 18:57:53 2024 +0700
+
+    sone upload 9/19/2024:6:57
+
+[33mcommit 56f1268cfe1d093e8bc745039ce34ad2bf816765[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Thu Sep 19 09:49:11 2024 +0700
+
+    sone UploadB
+
+[33mcommit d18e28dce58ce6d08f993d1815a0edbe59c67a53[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Tue Sep 17 11:11:15 2024 +0700
+
+    sone Upload B
+
+[33mcommit f549179911aea7ae53e2f46c385bd3486ecb17b5[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Thu Sep 12 18:52:28 2024 +0700
+
+    upload
+
+[33mcommit c789ffdd241f330ea5bbace29b6f45c8f0b43c1c[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Thu Sep 12 15:08:09 2024 +0700
+
+    B upload sone
+
+[33mcommit f3cda37a817514a85e750e8bb7547ec2dbc117e0[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Wed Sep 11 19:04:34 2024 +0700
+
+    upload
+
+[33mcommit 054ee525abf40b82b722c92de3065574766d8219[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Wed Sep 11 11:07:50 2024 +0700
+
+     sone 10/9/2024
+
+[33mcommit 4fd4fa327bb5342c050b2816593110b640084c34[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Fri Sep 6 11:15:09 2024 +0700
+
+    sone V1.3.0 fileUpload
+
+[33mcommit 63d579ab019f40906133767ebc91043205e8efcd[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Fri Aug 23 15:44:46 2024 +0700
+
+    V1.0.2
+
+[33mcommit 51305c12a3e66a04cda944a4a079050fc0995f44[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Fri Jul 5 09:19:24 2024 +0700
+
+    good upload
+
+[33mcommit 0c76edddaaa6c47f41c73c6fdca910857e02404e[m
+Author: Sone11 <sonesdv164@gmail.com>
+Date:   Wed Jul 3 15:03:12 2024 +0700
+
+    al
+
+[33mcommit b132ac2a4e8941b65f26d583ab2a1bf3e2dd3fd5[m
+Author: Sone SEEDAVANH <sonesdv164@gmail.com>
+Date:   Tue Jun 25 15:48:56 2024 +0700
+
+    sone
+
+[33mcommit 0a9f1891db8acc68c29d19ef6d8bfa07085b76c2[m
+Author: Sone SEEDAVANH <sonesdv164@gmail.com>
+Date:   Mon Jun 17 15:58:31 2024 +0700
+
+    Initial commit
+
+[33mcommit 771acf4c26ea270422105873c1d6af2744a2555c[m
+Author: P2P_Ex <paylay559@gmail.com>
+Date:   Mon Dec 18 09:54:15 2023 +0700
+
+    Phase2 Before Making Report
+
+[33mcommit fc749e05fd63be86941dabf444e243a34d9cdd91[m
+Author: P2P_Ex <paylay559@gmail.com>
+Date:   Tue Sep 26 10:46:15 2023 +0700
+
+    add searchList
+
+[33mcommit 5fa0272f6a8d1d5bf810e1a7f46d1b1a3a70d51c[m
+Author: P2P_Ex <paylay559@gmail.com>
+Date:   Mon Sep 25 21:41:55 2023 +0700
+
+    add div
+
+[33mcommit 97245b8afae637a053095fd3b60896b886429e58[m
+Author: P2P_Ex <paylay559@gmail.com>
+Date:   Mon Sep 25 21:23:17 2023 +0700
+
+    first commit
+
+[33mcommit 4c65b22832727e162ed9f8c714962d1ee5a85dfa[m
+Author: DOOMELEVEN <r.douangphachan1999@gmail.com>
+Date:   Mon Sep 18 10:57:53 2023 +0700
+
+    add file to project
