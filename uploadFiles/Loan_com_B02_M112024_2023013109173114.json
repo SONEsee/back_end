@@ -1,0 +1,16 @@
+[
+
+
+{
+  "lcicID": "LCIC123456",
+  "com_enterprise_code": "ENT789",
+  "bank_customer_ID": "CUST123",
+  "branch_id_code": "BR001",
+  "loan_id": "LOAN789",
+  "collateral_id": "COLL789",
+  "account_no": "ACC001",
+  "account_type": "Savings",
+  "value": "15000",
+  "insert_date": "2024-08-28",
+  "update_date": "2024-08-28"
+  }]

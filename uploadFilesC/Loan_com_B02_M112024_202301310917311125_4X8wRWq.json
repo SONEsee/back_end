@@ -1,0 +1,16 @@
+[ {
+  "bank_customer_id": "CUST123",
+  "lcicID": "LCIC123456",
+  "com_enterprise_code": "ENT789",
+  "collateral_type":"eqi",
+  "branch_id_code": "BR001",
+  "loan_id": "LOAN789",
+  "collateral_id": "COLL789",
+  "machine_type": "Excavator",
+  "machine_no": "MACH001",
+  "value": "50000",
+  "insert_date": "2024-08-28",
+  "update_date": "2024-08-28"
+  }
+  
+  ]
