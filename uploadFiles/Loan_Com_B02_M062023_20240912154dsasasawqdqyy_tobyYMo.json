@@ -1,0 +1,30 @@
+[
+	{
+		"lcicID" : "1750",
+		"com_enterprise_code" : "0300002125",
+		"segmentType" : "A2",
+		"bnk_code" : "02",
+		"customer_id" : "000008738",
+		"branch_id" : "200",
+		"loan_id" : "200FF2100020011",
+		"lon_open_date" : "2020-12-18",
+		"lon_exp_date" : "2021-12-18",
+		"lon_ext_date" : null,
+		"lon_int_rate" : 9.40,
+		"lon_purpose_code" : "CO",
+		"lon_credit_line" : 120000000.00,
+		"lon_currency_code" : "LAK",
+		"lon_outstanding_balance" : 0.00,
+		"lon_account_no" : "LN200-050/2020",
+		"lon_no_days_slow" : 0,
+		"lon_class" : "A",
+		"lon_type" : "L",
+		"lon_term" : "ST",
+		"lon_status" : "INACTIVE",
+		"lon_insert_date" : "2023-07-04 00:07:00",
+		"lon_update_date" : null,
+		"lon_applied_date" : null,
+		"is_disputed" : null,
+		"product_type" : ""
+	}
+]

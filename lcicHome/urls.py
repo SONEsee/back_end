@@ -182,7 +182,7 @@ urlpatterns = [
 #    path('api/upload_files1', FileUploadView.as_view(), name='file-upload'),
 
 
-    path('api/upload-files2/', UploadFileList.as_view(), name='upload-file-list'),
+    path('upload-files2/', UploadFileList.as_view(), name='upload-file-list'),
     path('api/upload-filesc2/', UploadFilecList.as_view(), name='upload-file-list'),
 
     path('api/productinfo3/', get_data3, name='get_data_by_id_file_and_period'),
@@ -214,5 +214,7 @@ urlpatterns = [
     path('api/get_csrf_token/', views.get_csrf_token, name='get_csrf_token'),
     path('api/confirm_image/<int:id>/', views.confirm_image, name='confirm_image'),
     path('api/user-profile/', UserProfileView.as_view(), name='user-profile'),
-]
+] 
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
      

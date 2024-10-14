@@ -1055,8 +1055,8 @@ class col_real_estates(models.Model):
     insert_date = models.CharField()
     update_date = models.CharField()
 
-    def __str__(self):
-        return f"{self.col_provin} - {self.col_district} - {self.col_village}"
+    # def __str__(self):
+    #     return f"{self.col_provin} - {self.col_district} - {self.col_village}"
 
     class Meta:
         db_table = "col_real_estate"
