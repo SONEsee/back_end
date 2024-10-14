@@ -53,7 +53,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView
+from .views import CustomerInfoINDView,Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView
 from .views import STypeView
 from .views import UserGroupView
 
