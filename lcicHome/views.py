@@ -6901,7 +6901,7 @@ class FCR_reportView(APIView):
             for lon_search in search_history:
                 print(lon_search)
                 search_data = {
-                    "id":lon_search.insert_date,
+                    "date":lon_search.insert_date,
                     "bnk_code":lon_search.bnk_code,
                     "lon_purpose":lon_search.lon_purpose
                 }
