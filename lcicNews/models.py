@@ -159,10 +159,10 @@ class provInfo(models.Model):
         return self.nameL
 
 class memberInfo(models.Model):
-    code = models.CharField(max_length=20,unique=True)
-    bnk_code = models.CharField(max_length=150, null=True)
+    code = models.CharField(max_length=20)
+    bnk_code = models.CharField(max_length=150, null=True, unique=True)
     bnk_type = models.IntegerField(null=True)
-    slug = models.SlugField(unique=True)
+    slug = models.SlugField( null=True)
     nameL = models.CharField(max_length=2500,null=True, blank=True)
     nameE = models.CharField(max_length=2500,null=True,blank=True)
     descL = models.TextField(null=True,blank=True)
