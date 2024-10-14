@@ -252,3 +252,5 @@ class H_Lang(models.Model):
     id =  models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
     Trans_LA = models.TextField(null=True,blank=True)
     Trans_EN = models.TextField(null=True,blank=True)
+    
+    

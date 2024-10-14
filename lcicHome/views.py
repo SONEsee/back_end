@@ -7341,6 +7341,7 @@ class UserManagementView(APIView):
                     'MID': user.MID.pk if user.MID else None,
                     'is_active': user.is_active,
                     'is_staff': user.is_staff
+                    
                 }
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -7491,7 +7492,7 @@ class FCR_reportView(APIView):
                                 })
                         else:
                             print(f"Unrecognized col_type: {col_type} for collateral ID {col_id}")
-
+                    
                     loan_data_active = {
                         "id": loan.loan_id,
                         "lon_update_date": loan.lon_update_date,
@@ -7522,6 +7523,17 @@ class FCR_reportView(APIView):
                     print("Loan Data For Active: -------> ", loan_info_list_active)
                 else:
                     print("Non Active List")
+                    
+            lon_search_history_list = []
+            for lon_search in search_history:
+                print(lon_search)
+                search_data = {
+                    "id":lon_search.rec_charge_ID,
+                    "bnk_code":lon_search.bnk_code,
+                    "lon_purpose":lon_search.lon_purpose
+                }
+            
+                lon_search_history_list.append(search_data)
 
             ent_info_serializer = EnterpriseInfoSerializer(ent_info, many=True)
             loan_info_serializer = B1Serializer(loan_info, many=True)
@@ -7535,7 +7547,8 @@ class FCR_reportView(APIView):
                 'loan_info': loan_info_serializer.data,
                 'inves_info': inves_info_serializer.data,
                 'active_loans': loan_info_list_active,
-                'search_history': request_charge_serializer.data
+                # 'search_history': request_charge_serializer.data
+                'search_history':lon_search_history_list
             }
 
             return Response(response_data, status=status.HTTP_200_OK)
@@ -7754,7 +7767,7 @@ class AssignRoleView(APIView):
 class ManageUserView(APIView):
 
     def get(self, request, format=None):
-        all_user = Login.objects.all()
+        all_user = Login.objects.all().order_by('UID')
         s_user = LoginSerializer(all_user, many=True)
         combined_data = {
             'all_user': s_user.data,
@@ -7769,15 +7782,16 @@ class ManageUserView(APIView):
             return Response(LoginSerializer(user).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-from .models import ChargeMatrix
+from .models import ChargeMatrix, B1
 class InsertSearchLogView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         user = request.user
         bank = user.MID
-        branch = user.GID.GID
-        sys_usr = str(user.UID) + str(bank) + str(branch)
+        # branch = user.GID.GID
+        # sys_usr = str(user.UID) + str(bank) + str(branch)
+        
         
         print("Bank COde: ===>", bank.bnk_code)
         print("Bank COde: ===>", bank.code)
@@ -7797,10 +7811,21 @@ class InsertSearchLogView(APIView):
         charge_amount_com = chargeType.chg_amount # charge sum lup company
         EnterpriseID = request.data.get('EnterpriseID')
         LCICID = request.data.get('LCICID')
-        loan_purpose = request.data.get('CatalogID')
+        # loan_purpose = request.data.get('CatalogID')
         
-        print("============> Loan Purpose: ",loan_purpose )
+        # print("============> Loan Purpose: ",loan_purpose )
+        # loan_purpose_code = Main_catalog_cat.objects.get(cat_sys_id=loan_purpose)
         
+        # print("============> Cat_Value : ",loan_purpose_code.cat_value)
+        
+        search_loan = B1.objects.filter(lcicID=LCICID)
+        for loan_log in search_loan:
+            print("branch_id:", loan_log.branch_id)
+            if loan_log.segmentType == 'A2':
+                entity = '1'
+            else:
+                entity = '2'
+        sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
         isfound = 1
 
         if EnterpriseID and LCICID:
@@ -7812,17 +7837,17 @@ class InsertSearchLogView(APIView):
                     enterprise_ID=EnterpriseID,
                     LCIC_ID=LCICID,
                     bnk_code=bank_info.bnk_code,
-                    branch=branch,
-                    cus_ID='',
-                    cusType='enterprise',
-                    credit_type='Full Loan Report',
+                    branch=loan_log.branch_id,
+                    cus_ID=loan_log.customer_id,
+                    cusType=loan_log.segmentType,
+                    credit_type=chargeType.chg_code,
                     inquiry_month=inquiry_month,
                     com_tel='',
                     com_location='',
                     rec_loan_amount=0.0,
-                    rec_loan_amount_currency='',
-                    rec_loan_purpose='',
-                    rec_enquiry_type='',
+                    rec_loan_amount_currency='LAK',
+                    rec_loan_purpose=loan_log.lon_purpose_code,
+                    rec_enquiry_type=entity,
                     sys_usr=sys_usr  
                 )
 
@@ -7831,17 +7856,18 @@ class InsertSearchLogView(APIView):
                     chg_amount=charge_amount_com,
                     chg_code=chargeType.chg_code,
                     status='pending',  
-                    rtp_code='1', 
-                    chg_unit=chargeType.chg_unit, 
+                    rtp_code=entity, 
+                    lon_purpose=loan_log.lon_purpose_code,
+                    chg_unit=chargeType.chg_unit,
                     user_sys_id=sys_usr,
                     LCIC_ID=LCICID,
-                    cusType='enterprise',
+                    cusType=loan_log.segmentType,
                     # user_session_id=str(request.session.session_key),  # Use Django session key if applicable 
                     user_session_id='',
                     rec_reference_code='',
                     search_log=search_log 
                 )
-                charge.rec_reference_code = f"{chargeType.chg_code}-`{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
+                charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
                 charge.save()
                 print("=========> has benn inserted")
                 print(f"Charge inserted with ID: {charge.rec_charge_ID}")
@@ -7881,7 +7907,7 @@ class searchlog_reportView(APIView):
             if bnk_code:
                 searchlog_report = searchLog.objects.filter(bnk_code=bnk_code)
             else:
-                searchlog_report = searchLog.objects.all()
+                searchlog_report = searchLog.objects.all().order_by('inquiry_date')
 
             # If no records found, return an appropriate message
             if not searchlog_report.exists():
@@ -7911,7 +7937,7 @@ class charge_reportView(APIView):
             if bnk_code:
                 charge_report = request_charge.objects.filter(bnk_code=bnk_code)
             else:
-                charge_report = request_charge.objects.all()
+                charge_report = request_charge.objects.all().order_by('insert_date')
 
             # If no records are found, return an appropriate message
             if not charge_report.exists():
@@ -8290,12 +8316,17 @@ class CatalogCatListView(APIView):
         cats = Main_catalog_cat.objects.all()
         serializer = MainCatalogCatSerializer(cats, many=True)
         return Response(serializer.data)
+
+
+from .models import memberInfo
+from .serializers import MemberInfoSerializer
+
+class MemberInfoListView(APIView):
+    def get(self, request):
+        member = memberInfo.objects.all()
+        serializer = MemberInfoSerializer(member, many=True)
+        return Response(serializer.data)
     
-# class SearchHistory(APIView):
-    
-#     def get( self, request):
-#         LCICID = request.objects.get('LCICID')
-#         history = request_charge.objects.get(LCICID=LCICID)
-               
+
     
     

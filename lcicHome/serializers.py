@@ -569,3 +569,10 @@ class RequestChargeSerializer(serializers.ModelSerializer):
     class Meta:
         model = request_charge
         fields = '__all__'
+        
+
+from .models import memberInfo
+class MemberInfoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = memberInfo
+        fields = '__all__'
