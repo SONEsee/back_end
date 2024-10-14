@@ -2441,6 +2441,9 @@ class EnterpriseInfoSearch(APIView):
         sys_usr = str(user.UID) + str(bank) + str(branch)
         LCICID = request.data.get('LCICID')
         EnterpriseID = request.data.get('EnterpriseID')
+        loan_purpose = request.data.get('CatalogID')
+        
+        print("============> Loan Purpose: ",loan_purpose )
 
         print("Authenticated User ID (UID):", UID)
         print("Authenticated Bankname:", bank)
@@ -2474,7 +2477,7 @@ class EnterpriseInfoSearch(APIView):
                     com_location='',
                     rec_loan_amount=0.0,
                     rec_loan_amount_currency='',
-                    rec_loan_purpose='',
+                    rec_loan_purpose=loan_purpose,
                     rec_enquiry_type='',
                     sys_usr=sys_usr  # Save sys_usr to the model if needed
                 )
@@ -2494,12 +2497,11 @@ class EnterpriseInfoMatch(APIView):
 
     def post(self, request):
         
-        # Extract authenticated user information from the token
         user = request.user
-        # Example of accessing the UID or other user info
-        UID = user.UID  # or user.UID if you're using a custom field
-        bank = str(user.MID.id)  # Convert to string if necessary
-        branch = str(user.GID.GID)  # Convert to string if necessary
+        
+        UID = user.UID  
+        bank = str(user.MID.id)  
+        branch = str(user.GID.GID)  
         
         LCICID = request.data.get('LCICID')
         EnterpriseID = request.data.get('EnterpriseID')
@@ -6712,6 +6714,7 @@ class UserManagementView(APIView):
                     'MID': user.MID.pk if user.MID else None,
                     'is_active': user.is_active,
                     'is_staff': user.is_staff
+                    
                 }
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -6731,9 +6734,9 @@ class UserManagementView(APIView):
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import EnterpriseInfo, B1_Yearly, InvestorInfo, B1_Monthly, C1
+from .models import EnterpriseInfo, B1_Yearly, InvestorInfo, B1_Monthly, C1, request_charge
 from django.forms.models import model_to_dict
-from .serializers import EnterpriseInfoSerializer, B1_YearlySerializer, InvestorInfoSerializer, B1Serializer
+from .serializers import EnterpriseInfoSerializer, B1_YearlySerializer, InvestorInfoSerializer, B1Serializer, RequestChargeSerializer
 
 class FCR_reportView(APIView):    
     def get(self, request):
@@ -6751,6 +6754,9 @@ class FCR_reportView(APIView):
             ent_info = EnterpriseInfo.objects.filter(EnterpriseID=enterprise_id, LCICID=lcic_id)
             loan_info = B1.objects.filter(com_enterprise_code=enterprise_id, lon_status=status_active).order_by('lon_status')
             inves_info = InvestorInfo.objects.filter(EnterpriseID=enterprise_id)
+            search_history = request_charge.objects.filter(LCIC_ID=lcic_id)
+            
+            print("Search_History====>",search_history)
 
             print("Enterprise_info:", ent_info)
             print("Loan_Info:", loan_info)
@@ -6859,7 +6865,7 @@ class FCR_reportView(APIView):
                                 })
                         else:
                             print(f"Unrecognized col_type: {col_type} for collateral ID {col_id}")
-
+                    
                     loan_data_active = {
                         "id": loan.loan_id,
                         "lon_update_date": loan.lon_update_date,
@@ -6890,16 +6896,32 @@ class FCR_reportView(APIView):
                     print("Loan Data For Active: -------> ", loan_info_list_active)
                 else:
                     print("Non Active List")
+                    
+            lon_search_history_list = []
+            for lon_search in search_history:
+                print(lon_search)
+                search_data = {
+                    "id":lon_search.rec_charge_ID,
+                    "bnk_code":lon_search.bnk_code,
+                    "lon_purpose":lon_search.lon_purpose
+                }
+            
+                lon_search_history_list.append(search_data)
 
             ent_info_serializer = EnterpriseInfoSerializer(ent_info, many=True)
             loan_info_serializer = B1Serializer(loan_info, many=True)
             inves_info_serializer = InvestorInfoSerializer(inves_info, many=True)
+            request_charge_serializer = RequestChargeSerializer(search_history, many=True)
+            print("--->", request_charge_serializer)
+            
             
             response_data = {
                 'enterprise_info': ent_info_serializer.data,
                 'loan_info': loan_info_serializer.data,
                 'inves_info': inves_info_serializer.data,
                 'active_loans': loan_info_list_active,
+                # 'search_history': request_charge_serializer.data
+                'search_history':lon_search_history_list
             }
 
             return Response(response_data, status=status.HTTP_200_OK)
@@ -7118,7 +7140,7 @@ class AssignRoleView(APIView):
 class ManageUserView(APIView):
 
     def get(self, request, format=None):
-        all_user = Login.objects.all()
+        all_user = Login.objects.all().order_by('UID')
         s_user = LoginSerializer(all_user, many=True)
         combined_data = {
             'all_user': s_user.data,
@@ -7133,15 +7155,16 @@ class ManageUserView(APIView):
             return Response(LoginSerializer(user).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-from .models import ChargeMatrix
+from .models import ChargeMatrix, B1
 class InsertSearchLogView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         user = request.user
         bank = user.MID
-        branch = user.GID.GID
-        sys_usr = str(user.UID) + str(bank) + str(branch)
+        # branch = user.GID.GID
+        # sys_usr = str(user.UID) + str(bank) + str(branch)
+        
         
         print("Bank COde: ===>", bank.bnk_code)
         print("Bank COde: ===>", bank.code)
@@ -7161,31 +7184,43 @@ class InsertSearchLogView(APIView):
         charge_amount_com = chargeType.chg_amount # charge sum lup company
         EnterpriseID = request.data.get('EnterpriseID')
         LCICID = request.data.get('LCICID')
+        # loan_purpose = request.data.get('CatalogID')
         
+        # print("============> Loan Purpose: ",loan_purpose )
+        # loan_purpose_code = Main_catalog_cat.objects.get(cat_sys_id=loan_purpose)
+        
+        # print("============> Cat_Value : ",loan_purpose_code.cat_value)
+        
+        search_loan = B1.objects.filter(lcicID=LCICID)
+        for loan_log in search_loan:
+            print("branch_id:", loan_log.branch_id)
+            if loan_log.segmentType == 'A2':
+                entity = '1'
+            else:
+                entity = '2'
+        sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
         isfound = 1
-        
-        EnterpriseID = request.data.get('EnterpriseID')
-        LCICID = request.data.get('LCICID')
 
         if EnterpriseID and LCICID:
             try:
                 # inquiry_month = datetime(year=2024, month=10, day=1).date()  # October 2024
-                inquiry_month = datetime(year=2024, month=10, day=1).strftime('%Y-%m')
+                inquiry_month = datetime(year=2024, month=10, day=1).strftime('%m%Y')
+                inquiry_month_charge = datetime(year=2024, month=10, day=1).strftime('%d%m%Y')
                 search_log = searchLog.objects.create(
                     enterprise_ID=EnterpriseID,
                     LCIC_ID=LCICID,
                     bnk_code=bank_info.bnk_code,
-                    branch=branch,
-                    cus_ID='',
-                    cusType='enterprise',
-                    credit_type='Full Loan Report',
+                    branch=loan_log.branch_id,
+                    cus_ID=loan_log.customer_id,
+                    cusType=loan_log.segmentType,
+                    credit_type=chargeType.chg_code,
                     inquiry_month=inquiry_month,
                     com_tel='',
                     com_location='',
                     rec_loan_amount=0.0,
-                    rec_loan_amount_currency='',
-                    rec_loan_purpose='',
-                    rec_enquiry_type='',
+                    rec_loan_amount_currency='LAK',
+                    rec_loan_purpose=loan_log.lon_purpose_code,
+                    rec_enquiry_type=entity,
                     sys_usr=sys_usr  
                 )
 
@@ -7194,17 +7229,18 @@ class InsertSearchLogView(APIView):
                     chg_amount=charge_amount_com,
                     chg_code=chargeType.chg_code,
                     status='pending',  
-                    rtp_code='1', 
-                    chg_unit=chargeType.chg_unit, 
+                    rtp_code=entity, 
+                    lon_purpose=loan_log.lon_purpose_code,
+                    chg_unit=chargeType.chg_unit,
                     user_sys_id=sys_usr,
                     LCIC_ID=LCICID,
-                    cusType='enterprise',
+                    cusType=loan_log.segmentType,
                     # user_session_id=str(request.session.session_key),  # Use Django session key if applicable 
                     user_session_id='',
                     rec_reference_code='',
                     search_log=search_log 
                 )
-                charge.rec_reference_code = f"{chargeType.chg_code}{isfound}{charge.rec_charge_ID}{inquiry_month}"
+                charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
                 charge.save()
                 print("=========> has benn inserted")
                 print(f"Charge inserted with ID: {charge.rec_charge_ID}")
@@ -7245,7 +7281,7 @@ class searchlog_reportView(APIView):
             if bnk_code:
                 searchlog_report = searchLog.objects.filter(bnk_code=bnk_code)
             else:
-                searchlog_report = searchLog.objects.all()
+                searchlog_report = searchLog.objects.all().order_by('inquiry_date')
 
             # If no records found, return an appropriate message
             if not searchlog_report.exists():
@@ -7275,7 +7311,7 @@ class charge_reportView(APIView):
             if bnk_code:
                 charge_report = request_charge.objects.filter(bnk_code=bnk_code)
             else:
-                charge_report = request_charge.objects.all()
+                charge_report = request_charge.objects.all().order_by('insert_date')
 
             # If no records are found, return an appropriate message
             if not charge_report.exists():
@@ -7298,37 +7334,149 @@ from django.db.models import Count
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
+from django.db.models.functions import TruncMonth
 from .models import searchLog
 
 class SearchLogChartView(APIView):
-    # permission_classes = [IsAuthenticated]
 
-    def get(self, request):
+      def get(self, request):
         try:
-            # Aggregate search logs by bank code and count them, limiting to the top 10
+            # Aggregate search logs by bank code and inquiry_month, count them
             searchlog_data = (
                 searchLog.objects
-                .values('bnk_code')
-                .annotate(total_logs=Count('bnk_code'))
-                .order_by('-total_logs')
+                .values('bnk_code', 'inquiry_month')  # Group by bank code and inquiry month
+                .annotate(total_logs=Count('bnk_code'))  # Count logs per bank code and inquiry month
+                .order_by('-total_logs')  # Order by the total number of logs
             )
 
             # If no data is found, return a 404
             if not searchlog_data:
                 return Response({'detail': 'No search log data available.'}, status=status.HTTP_404_NOT_FOUND)
 
-            # Prepare data for the doughnut chart
-            labels = [entry['bnk_code'] for entry in searchlog_data]  # bnk_code as labels
-            dataset = [entry['total_logs'] for entry in searchlog_data]  # total count as dataset
+            # Prepare the response format
+            chart_data = []
+            for entry in searchlog_data:
+                chart_data.append({
+                    "bnk_code": entry['bnk_code'],
+                    entry['inquiry_month']: entry['total_logs']  # Use inquiry_month as the key
+                })
 
-            charge_data = request_charge.objects.values('bnk_code','')
             # Return the data formatted for the chart
             return Response({
-                'labels': labels,  # For chart labels
-                'datasets': [{
-                    'label': 'Search Logs by Bank',
-                    'data': dataset,  # For chart data
-                }]
+                'chart_data': chart_data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+class SearchLogChart_MonthView(APIView):
+     def get(self, request, inquiry_month):
+        try:
+            # Filter search logs by the provided inquiry_month
+            searchlog_data = (
+                searchLog.objects
+                .filter(inquiry_month=inquiry_month)  # Filter by inquiry_month
+                .values('bnk_code', 'inquiry_month')
+                .annotate(total_logs=Count('bnk_code'))  # Count total logs for each bnk_code
+                .order_by('-total_logs')
+            )
+
+            # If no data is found for the given month, return a 404
+            if not searchlog_data:
+                return Response({'detail': f'No search log data available for {inquiry_month}.'}, status=status.HTTP_404_NOT_FOUND)
+
+            # Prepare the response data in the required format
+            chart_data = [
+                {
+                    "bnk_code": entry['bnk_code'],
+                    entry['inquiry_month']: entry['total_logs']
+                }
+                for entry in searchlog_data
+            ]
+
+            # Return the filtered and formatted data
+            return Response({
+                'chart_data': chart_data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+class SearchLogChartByDateView(APIView):
+    def get(self, request, inquiry_date):
+        try:
+            # Convert the date string to a datetime object for comparison
+            filter_date = datetime.strptime(inquiry_date, "%d-%m-%Y").date()
+
+            # Filter the search logs by the given inquiry date
+            searchlog_data = (
+                searchLog.objects
+                .filter(inquiry_date__date=filter_date)  # Filter by date
+                .values('bnk_code')
+                .annotate(total_logs=Count('bnk_code'))
+                .order_by('-total_logs')
+            )
+
+            # If no data is found, return a 404
+            if not searchlog_data.exists():
+                return Response({'detail': f'No search log data available for {inquiry_date}.'}, status=status.HTTP_404_NOT_FOUND)
+
+            # Prepare data for the chart
+            chart_data = [
+                {
+                    'bnk_code': entry['bnk_code'],
+                    inquiry_date: entry['total_logs'],
+                }
+                for entry in searchlog_data
+            ]
+
+            # Return the data formatted for the chart
+            return Response({'chart_data': chart_data}, status=status.HTTP_200_OK)
+
+        except ValueError:
+            # Return a 400 error if the date format is invalid
+            return Response({
+                'error': 'Invalid date format. Please use DD-MM-YYYY format.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+            
+class SearchLogChartByBankCodeView(APIView):
+    def get(self, request, bnk_code):
+        try:
+            # Filter search logs by the provided bank code
+            searchlog_data = (
+                searchLog.objects
+                .filter(bnk_code=bnk_code) 
+                # .filter(bnk_code__iexact=bnk_code.strip()) 
+                .values('bnk_code', 'inquiry_month')
+                .annotate(total_logs=Count('bnk_code'))  # Count total logs for each month
+                .order_by('-total_logs')
+            ) 
+            # If no data is found for the given bank code, return a 404
+            if not searchlog_data:
+                return Response({'detail': f'No search log data available for bank code {bnk_code}.'}, status=status.HTTP_404_NOT_FOUND)
+
+            # Prepare the response data in the required format
+            chart_data = [
+                {
+                    "inquiry_month": entry['inquiry_month'],
+                    entry['inquiry_month']: entry['total_logs']
+                }
+                for entry in searchlog_data
+            ]
+
+            # Return the filtered and formatted data
+            return Response({
+                'chart_data': chart_data
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -7337,9 +7485,10 @@ class SearchLogChartView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 from django.db.models import Sum
+from django.db.models.functions import ExtractMonth, ExtractYear
 class ChargeChartView(APIView):
     
-       def get(self, request, bnk_code=None):
+    def get(self, request, bnk_code=None):
         try:
             # Filter the charge records by bnk_code if provided
             if bnk_code:
@@ -7353,30 +7502,205 @@ class ChargeChartView(APIView):
                     'detail': 'No charges found for the provided bnk_code.'
                 }, status=status.HTTP_404_NOT_FOUND)
 
-            # Prepare the chart data
-            chart_data = charge_report.values('bnk_code', 'chg_code').annotate(
-                total_amount=Sum('chg_amount')  # Summing up the charge amounts for each code
-            ).order_by('bnk_code')
+            # Prepare the data by extracting month and year
+            monthly_charges = charge_report.annotate(
+                month=ExtractMonth('rec_insert_date'),  # Extract month from date
+                year=ExtractYear('rec_insert_date')     # Extract year from date
+            ).values('bnk_code', 'month', 'year').annotate(
+                total_amount=Sum('chg_amount')
+            ).order_by('bnk_code', 'year', 'month')
 
-            # Prepare labels and datasets for the chart
-            labels = [entry['bnk_code'] for entry in chart_data]
-            charge_codes = [entry['chg_code'] for entry in chart_data]
-            charge_amounts = [entry['total_amount'] for entry in chart_data]
+            # Structure the data for the table
+            result = {}
+            for entry in monthly_charges:
+                bnk_code = entry['bnk_code']
+                month_year = f"{entry['month']:02d}-{entry['year']}"  # Format as MM-YYYY
+                total_amount = entry['total_amount']
 
-            # Return the data formatted for the chart
+                if bnk_code not in result:
+                    result[bnk_code] = {}
+                
+                result[bnk_code][month_year] = total_amount
+
+            # Convert the result dict to a list for easier consumption in the frontend
+            chart_data = [
+                {'bnk_code': bnk, **amounts}
+                for bnk, amounts in result.items()
+            ]
+
             return Response({
-                'labels': labels,  # Bank codes
-                'datasets': [{
-                    'label': 'Charge Amount by Bank',
-                    'data': charge_amounts,  # Charge amounts for each bank code
-                    'backgroundColor': [
-                        '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'
-                    ],  # Optional: Add chart colors
-                }],
-                'charge_codes': charge_codes  # Optionally, include charge codes
+                'chart_data': chart_data
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response({
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+            
+class ChargeChartByDateView(APIView):
+
+    def get(self, request, charge_date):
+        try:
+            # Parse the charge_date string into a datetime object
+            filter_date = datetime.strptime(charge_date, "%d-%m-%Y").date()
+
+            # Filter the charge records by the exact date
+            charge_report = request_charge.objects.filter(rec_insert_date__date=filter_date)
+
+            # If no records are found, return a 404
+            if not charge_report.exists():
+                return Response({
+                    'detail': f'No charges found for the provided date: {charge_date}.'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Prepare the data by extracting month and year and summing the charge amounts
+            monthly_charges = charge_report.annotate(
+                month=ExtractMonth('rec_insert_date'),  # Extract month
+                year=ExtractYear('rec_insert_date')     # Extract year
+            ).values('bnk_code', 'month', 'year').annotate(
+                total_amount=Sum('chg_amount')
+            ).order_by('bnk_code', 'year', 'month')
+
+            # Structure the data
+            result = {}
+            for entry in monthly_charges:
+                bnk_code = entry['bnk_code']
+                month_year = f"{entry['month']:02d}-{entry['year']}"  # Format as MM-YYYY
+                total_amount = entry['total_amount']
+
+                if bnk_code not in result:
+                    result[bnk_code] = {}
+                
+                result[bnk_code][month_year] = total_amount
+
+            # Convert the result dict to a list for easier consumption in the frontend
+            chart_data = [
+                {'bnk_code': bnk, **amounts}
+                for bnk, amounts in result.items()
+            ]
+
+            return Response({
+                'chart_data': chart_data
+            }, status=status.HTTP_200_OK)
+
+        except ValueError:
+            return Response({
+                'error': 'Invalid date format. Please use DD-MM-YYYY format.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+class ChargeChartMonthView(APIView):
+
+    def get(self, request, month_year):
+        try:
+            # Parse the month_year string (e.g., '10-2024') into month and year
+            filter_month_year = datetime.strptime(month_year, "%m-%Y")
+            filter_month = filter_month_year.month
+            filter_year = filter_month_year.year
+
+            # Filter the charge records by the extracted month and year
+            charge_report = request_charge.objects.filter(
+                rec_insert_date__month=filter_month,
+                rec_insert_date__year=filter_year
+            )
+
+            # If no records are found, return a 404
+            if not charge_report.exists():
+                return Response({
+                    'detail': f'No charges found for the provided month and year: {month_year}.'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Aggregate the charge data by bank code and sum the charge amounts
+            monthly_charges = charge_report.values('bnk_code').annotate(
+                total_amount=Sum('chg_amount')
+            ).order_by('bnk_code')
+
+            # Structure the data for the frontend
+            chart_data = [
+                {
+                    'bnk_code': entry['bnk_code'],
+                    month_year: entry['total_amount']
+                }
+                for entry in monthly_charges
+            ]
+
+            return Response({
+                'chart_data': chart_data
+            }, status=status.HTTP_200_OK)
+
+        except ValueError:
+            return Response({
+                'error': 'Invalid month-year format. Please use MM-YYYY format.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+class ChargeChartByBankView(APIView):
+
+    def get(self, request, bnk_code):
+        try:
+            # Filter the charge records by the provided bnk_code
+            charge_report = request_charge.objects.filter(bnk_code=bnk_code)
+
+            # If no records are found, return a 404
+            if not charge_report.exists():
+                return Response({
+                    'detail': f'No charges found for bank code: {bnk_code}.'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Aggregate the charge data by month and year, and sum the charge amounts
+            monthly_charges = charge_report.annotate(
+                month=ExtractMonth('rec_insert_date'),  # Extract month from date
+                year=ExtractYear('rec_insert_date')     # Extract year from date
+            ).values('month', 'year').annotate(
+                total_amount=Sum('chg_amount')
+            ).order_by('year', 'month')
+
+            # Structure the data for the frontend
+            chart_data = [
+                {
+                    'bnk_code': bnk_code,
+                    f"{entry['month']:02d}-{entry['year']}": entry['total_amount']
+                }
+                for entry in monthly_charges
+            ]
+
+            return Response({
+                'chart_data': chart_data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+            
+from .models import Main_catalog_cat  # Assuming this is your model
+from .serializers import MainCatalogCatSerializer  # Serializer for your model
+
+class CatalogCatListView(APIView):
+    def get(self, request):
+        cats = Main_catalog_cat.objects.all()
+        serializer = MainCatalogCatSerializer(cats, many=True)
+        return Response(serializer.data)
+
+
+from .models import memberInfo
+from .serializers import MemberInfoSerializer
+
+class MemberInfoListView(APIView):
+    def get(self, request):
+        member = memberInfo.objects.all()
+        serializer = MemberInfoSerializer(member, many=True)
+        return Response(serializer.data)
+    
+
+    
+    

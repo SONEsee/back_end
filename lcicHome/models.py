@@ -1439,6 +1439,7 @@ class request_charge(models.Model):
     insert_date = models.DateTimeField(blank=True,null=True,auto_now_add=True)
     update_date = models.DateTimeField(blank=True,null=True,auto_now_add=True)
     rtp_code = models.CharField(max_length=255, blank=True, null=True)
+    lon_purpose = models.CharField(max_length=255, blank=True, null=True)
     chg_unit = models.CharField(max_length=255, blank=True, null=True)
     user_sys_id = models.CharField(max_length=255, blank=True, null=True)
     LCIC_ID = models.CharField(max_length=255, blank=True, null=True)
@@ -1449,8 +1450,6 @@ class request_charge(models.Model):
     search_log = models.ForeignKey(searchLog, on_delete=models.CASCADE)
     
     
-       
-
 # from django.db import models
 # from django.contrib.auth.models import User
 
@@ -1537,4 +1536,17 @@ class ChargeMatrix(models.Model):
     chg_lao_desc = models.CharField(max_length=100)
     chg_amount = models.FloatField()  # No max_length for FloatField
     chg_unit = models.CharField(max_length=100)
+
+class Main_catalog_cat(models.Model):
+    cat_sys_id = models.BigAutoField(auto_created=True, primary_key=True, null=False)
+    ct_type = models.CharField(max_length=30)
+    cat_name = models.CharField(max_length=100)
+    cat_lao_name = models.CharField(max_length=100)
+    cat_value = models.CharField(max_length=100)
+    cat_is_default = models.IntegerField(null=False)
+    cat_sort_order = models.IntegerField(null=False)
+    cat_group = models.IntegerField(null=True)
+    cat_status = models.IntegerField( null=False)
+    
+
     

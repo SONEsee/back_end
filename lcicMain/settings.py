@@ -152,10 +152,43 @@ LANGUAGE_CODE = 'en-us'
 USE_I18N = True
 USE_L10N = True
 USE_TZ = True
+<<<<<<< HEAD
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR,'static')
 MEDIA_ROOT = os.path.join(BASE_DIR,'collaterals')
 MEDIA_URL = '/collaterals/'
+=======
+
+
+# Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/3.2/howto/static-files/
+
+#STATIC_URL = '/static/'
+#STATIC_ROOT = os.path.join(BASE_DIR,'static')
+#STATICFILES_DIRS = [ (os.path.join(BASE_DIR, 'static') )]
+#STATICFILES_DIRS = (os.path.join(BASE_DIR, "static"), )
+
+# MEDIA_URL = '/media/'
+# MEDIA_ROOT = os.path.join(BASE_DIR,'media')
+# STATIC_URL = '/static/'
+
+# MEDIA_URL = '/media/'
+
+
+
+# if DEBUG:
+
+#   STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+
+# else:
+
+#   STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+
+
+
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+>>>>>>> 134ba7ad699cac7531fd387acce1026f1ed12989
 STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
@@ -175,8 +208,17 @@ CSRF_COOKIE_SECURE = False
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
 LOGIN_URL = '/accounts/login/'
+<<<<<<< HEAD
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+=======
+
+
+
+# Celery settings
+CELERY_BROKER_URL = 'redis://localhost:8000/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:8000/0'
+>>>>>>> 134ba7ad699cac7531fd387acce1026f1ed12989
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'

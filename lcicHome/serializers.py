@@ -557,3 +557,22 @@ class ChargeSerializer(serializers.ModelSerializer):
     class Meta:
         model = request_charge
         fields = '__all__' 
+
+from .models import Main_catalog_cat
+class MainCatalogCatSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Main_catalog_cat
+        fields = '__all__'
+
+from .models import request_charge
+class RequestChargeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = request_charge
+        fields = '__all__'
+        
+
+from .models import memberInfo
+class MemberInfoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = memberInfo
+        fields = '__all__'

@@ -161,6 +161,7 @@ class provInfo(models.Model):
 class memberInfo(models.Model):
     code = models.CharField(max_length=20,unique=True)
     bnk_code = models.CharField(max_length=150, null=True)
+    bnk_type = models.IntegerField(null=True)
     slug = models.SlugField(unique=True)
     nameL = models.CharField(max_length=2500,null=True, blank=True)
     nameE = models.CharField(max_length=2500,null=True,blank=True)
@@ -251,3 +252,5 @@ class H_Lang(models.Model):
     id =  models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
     Trans_LA = models.TextField(null=True,blank=True)
     Trans_EN = models.TextField(null=True,blank=True)
+    
+    
