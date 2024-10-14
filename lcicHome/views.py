@@ -5451,7 +5451,7 @@ def confirm_upload(request):
                         'message': f'The uploaded period {item.period} is earlier than the latest period {latest_b1.period} in B1.'
                     }, status=400)
 
-                # ການກວດສອບແບບເກົ່າທີ່ມີໄວ້ແລ້ວ
+                
                 b1_monthly_match = B1_Monthly.objects.filter(
                     bnk_code=item.bnk_code,
                     branch_id=item.branch_id,

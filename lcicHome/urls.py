@@ -204,5 +204,7 @@ urlpatterns = [
     path('api/get_csrf_token/', views.get_csrf_token, name='get_csrf_token'),
     path('api/confirm_image/<int:id>/', views.confirm_image, name='confirm_image'),
     path('api/user-profile/', UserProfileView.as_view(), name='user-profile'),
-]
+] 
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
      

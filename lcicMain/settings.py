@@ -9,54 +9,14 @@ https://docs.djangoproject.com/en/3.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.2/ref/settings/
 """
-
-
 import os
 from datetime import timedelta
 from corsheaders.defaults import default_headers
-#
-# from pathlib import Path
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-#BASE_DIR = Path(__file__).resolve().parent.parent
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# TEMPLATE_DIR = os.path.join(BASE_DIR,'templates')
-
-# LOGGING = {
-#     'version': 1,
-#     'disable_existing_loggers': False,
-#     'handlers': {
-#         'file': {
-#             'level': 'DEBUG',
-#             'class': 'logging.FileHandler',
-#             'filename': 'debug.log',
-#         },
-#     },
-#     'loggers': {
-#         'django': {
-#             'handlers': ['file'],
-#             'level': 'DEBUG',
-#             'propagate': True,
-#         },
-#     },
-# }
-
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
+TEMPLATE_DIR = os.path.join(BASE_DIR,'templates')
 SECRET_KEY = 'django-insecure-bfz1cy+$%d8touxu*_)rath$19zbh9or8#o51t(=!7(u++1scp'
-
-# SECURITY WARNING: don't run with debug turned on in production!
-# DEBUG = True
-DEBUG = False
-
-# ALLOWED_HOSTS = ['192.168.45.247','localhost','139.5.159.151','lcic.com.la','www.lcic.com.la']
-# ALLOWED_HOSTS = ['192.168.45.230','localhost']
+DEBUG = True
 ALLOWED_HOSTS = ['*']
-
-# kaftka
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
@@ -65,7 +25,6 @@ CHANNEL_LAYERS = {
         },
     },
 }
-
 ASGI_APPLICATION = 'lcicHome.asgi.application'
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -86,26 +45,14 @@ INSTALLED_APPS = [
     
 ]
 
-# REST_FRAMEWORK = {
-#     'DEFAULT_AUTHENTICATION_CLASSES': (
-#         'rest_framework_simplejwt.authentication.JWTAuthentication',
-#         'rest_framework.authentication.SessionAuthentication',
-#     ),
-# }
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
 }
 
-# SIMPLE_JWT = {
-#     'USER_ID_FIELD': 'UID',  
-#     'USER_ID_CLAIM': 'user_id',  
-#     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=3), 
-#     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),    
-#     'ROTATE_REFRESH_TOKENS': True,
-#     'BLACKLIST_AFTER_ROTATION': True,
-# }
+
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),  
     'REFRESH_TOKEN_LIFETIME': timedelta(minutes=50),
@@ -143,9 +90,9 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'lcicMain.urls'
 
-# session  timeout
-SESSION_COOKIE_AGE = 3600
-SESSION_TIMEOUT_REDIRECT = 'http://127.0.0.1:8000/'
+
+SESSION_COOKIE_AGE = 3000
+
 
 TEMPLATES = [
     {
@@ -163,19 +110,6 @@ TEMPLATES = [
     },
 ]
 
-# WSGI_APPLICATION = 'lcicMain.wsgi.application'
-
-
-# Database
-# https://docs.djangoproject.com/en/3.2/ref/settings/#databases
-
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         # 'NAME': BASE_DIR / 'db.sqlite3',
-#         'NAME' : os.path.join(BASE_DIR,'db.sqlite3') ,
-#     }
-# }
 
 
 DATABASES = {
@@ -189,8 +123,7 @@ DATABASES = {
     }
 }
 
-# Password validation
-# https://docs.djangoproject.com/en/3.2/ref/settings/#auth-password-validators
+
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -215,97 +148,41 @@ PASSWORD_HASHERS = [
     'django.contrib.auth.hashers.BCryptPasswordHasher',
     'django.contrib.auth.hashers.UnsaltedMD5PasswordHasher',
 ]
-
-
-# Internationalization
-# https://docs.djangoproject.com/en/3.2/topics/i18n/
-
 LANGUAGE_CODE = 'en-us'
-
-TIME_ZONE = 'Asia/Bangkok'
-
 USE_I18N = True
-
 USE_L10N = True
-
 USE_TZ = True
-
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/3.2/howto/static-files/
-
-#STATIC_URL = '/static/'
-#STATIC_ROOT = os.path.join(BASE_DIR,'static')
-#STATICFILES_DIRS = [ (os.path.join(BASE_DIR, 'static') )]
-#STATICFILES_DIRS = (os.path.join(BASE_DIR, "static"), )
-
-# MEDIA_URL = '/media/'
-# MEDIA_ROOT = os.path.join(BASE_DIR,'media')
 STATIC_URL = '/static/'
-
-# MEDIA_URL = '/media/'
-
-
-
-# if DEBUG:
-
-#   STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
-
-# else:
-
-#   STATIC_ROOT = os.path.join(BASE_DIR, 'static')
-
-
-
-# MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
+STATIC_ROOT = os.path.join(BASE_DIR,'static')
+MEDIA_ROOT = os.path.join(BASE_DIR,'collaterals')
+MEDIA_URL = '/collaterals/'
 STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
-# Default primary key field type
-# https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
-
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  
 ]
-
 CORS_ALLOW_HEADERS = list(default_headers) + [
     'X-User-Roles', 
 ]
-
-# CORS_ORIGIN_ALLOW_ALL = True
 AUTH_USER_MODEL = 'lcicHome.Login'
 
-# settings.py
+CSRF_TRUSTED_ORIGINS = ['http://localhost:3000', ]
 
-CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:3000',
-    # Add your other trusted origins here
-]
-
-
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SECURE = False
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
-
 LOGIN_URL = '/accounts/login/'
-
-
-
-# Celery settings
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
-
 CORS_ALLOW_CREDENTIALS = True
-
-DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5 MB ຫຼືຕາມທີ່ຕ້ອງການ
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  
 FILE_UPLOAD_HANDLERS = [
     'django.core.files.uploadhandler.MemoryFileUploadHandler',
     'django.core.files.uploadhandler.TemporaryFileUploadHandler',
