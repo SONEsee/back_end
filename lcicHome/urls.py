@@ -53,7 +53,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView
+from .views import CustomerInfoINDView,Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView
 from .views import STypeView
 from .views import UserGroupView
 
@@ -204,5 +204,7 @@ urlpatterns = [
     path('api/get_csrf_token/', views.get_csrf_token, name='get_csrf_token'),
     path('api/confirm_image/<int:id>/', views.confirm_image, name='confirm_image'),
     path('api/user-profile/', UserProfileView.as_view(), name='user-profile'),
-]
+] 
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
      

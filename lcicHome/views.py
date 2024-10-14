@@ -6181,6 +6181,25 @@ def confirm_upload(request):
 
         for item in data_edits:
             try:
+               
+                latest_b1 = B1.objects.filter(
+                    bnk_code=item.bnk_code,
+                   
+                    
+                   
+                ).order_by('-period').first()
+                print("B1", latest_b1)
+                print("item", item.period)
+
+                if latest_b1 and item.period < latest_b1.period:
+                    Upload_File.objects.filter(FID=FID).update(statussubmit='2')
+                   
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': f'The uploaded period {item.period} is earlier than the latest period {latest_b1.period} in B1.'
+                    }, status=400)
+
+                
                 b1_monthly_match = B1_Monthly.objects.filter(
                     bnk_code=item.bnk_code,
                     branch_id=item.branch_id,
