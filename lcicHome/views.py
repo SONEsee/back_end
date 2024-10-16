@@ -6419,6 +6419,12 @@ from django.core.files.base import ContentFile
 from .models import Collateral
 
 
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+from .models import Collateral
+
 @csrf_exempt
 def upload_image(request):
     if request.method == 'POST':
@@ -6426,13 +6432,18 @@ def upload_image(request):
             return JsonResponse({'status': 'error', 'message': 'No file provided'}, status=400)
 
         file = request.FILES['image']
-
+        
+        # ຮັບຄ່າ user_mid_id ຈາກ Frontend
+        user_mid_id = request.POST.get('user_mid_id')
+        if not user_mid_id:
+            return JsonResponse({'status': 'error', 'message': 'No user_mid_id provided'}, status=400)
+        
         try:
-            
+            # ບັນທຶກໄຟລ໌ໄວ້ທີ່ directory
             file_path = default_storage.save(f'collaterals/{file.name}', ContentFile(file.read()))
             
-           
-            collateral = Collateral(filename=file.name, pathfile=file_path)
+            # ບັນທຶກເຂົ້າຖານຂໍ້ມູນ Collateral
+            collateral = Collateral(filename=file.name, pathfile=file_path, user=user_mid_id , status= '1')
             collateral.save()
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': f'Error saving file: {str(e)}'}, status=500)
@@ -6447,12 +6458,24 @@ def upload_image(request):
 
 
 
+
 from django.http import JsonResponse
 from .models import Collateral
 
 def get_collaterals(request):
-    collaterals = Collateral.objects.all().values('id', 'filename', 'image', 'pathfile','status')
+    collaterals = Collateral.objects.all().values('id', 'filename', 'image', 'pathfile','status','user')
     return JsonResponse(list(collaterals), safe=False)
+# from django.http import JsonResponse
+# from .models import Collateral
+
+# from django.http import JsonResponse
+# from .models import Collateral
+
+# def get_collaterals(request):
+#     collaterals = Collateral.objects.exclude(status=0).values('id', 'filename', 'image', 'pathfile', 'status')
+#     return JsonResponse(list(collaterals), safe=False)
+
+
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view

@@ -157,27 +157,26 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.2/howto/static-files/
 
-<<<<<<< HEAD
+
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR,'static')
 # STATICFILES_DIRS = [ (os.path.join(BASE_DIR, 'static') )]
 # STATICFILES_DIRS = (os.path.join(BASE_DIR, "static"), )
-=======
+
 #STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR,'static')
 #STATICFILES_DIRS = [ (os.path.join(BASE_DIR, 'static') )]
 #STATICFILES_DIRS = (os.path.join(BASE_DIR, "static"), )
 
-<<<<<<< HEAD
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR,'media')
 STATIC_URL = '/static/'
-=======
+
 # MEDIA_URL = '/media/'
 # MEDIA_ROOT = os.path.join(BASE_DIR,'media')
 # STATIC_URL = '/static/'
->>>>>>> 134ba7ad (update 14-10-2024)
->>>>>>> ef617b880a3cc1314ac6213637d441ebb1676fc2
+
 
 MEDIA_URL = '/collaterals/'
 MEDIA_ROOT = os.path.join(BASE_DIR,'collaterals')
@@ -218,17 +217,17 @@ CSRF_COOKIE_SECURE = False
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
 LOGIN_URL = '/accounts/login/'
-<<<<<<< HEAD
+
 CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
-=======
+
 
 
 
 # Celery settings
 CELERY_BROKER_URL = 'redis://localhost:8000/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:8000/0'
->>>>>>> 134ba7ad (update 14-10-2024)
+
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
