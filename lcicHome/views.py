@@ -7843,3 +7843,25 @@ class SumTotalChgAmountByBankType(APIView):
 
         except Exception as e:
             return Response({'error': str(e)}, status=400)
+
+from .serializers import ProvinceSerializer, DistrictSerializer, VillageSerializer
+
+class LocationView(APIView):
+    def get(self, request):
+        provinces = Province.objects.all()
+        districts = District.objects.all()
+        villages = Village.objects.all()
+
+        # Serialize the data
+        province_serializer = ProvinceSerializer(provinces, many=True)
+        district_serializer = DistrictSerializer(districts, many=True)
+        village_serializer = VillageSerializer(villages, many=True)
+
+        # Prepare the response data
+        data = {
+            'provinces': province_serializer.data,
+            'districts': district_serializer.data,
+            'villages': village_serializer.data,
+        }
+
+        return Response(data, status=status.HTTP_200_OK)
