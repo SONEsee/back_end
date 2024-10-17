@@ -1549,4 +1549,45 @@ class Main_catalog_cat(models.Model):
     cat_status = models.IntegerField( null=False)
     
 
+class Province(models.Model):
+    Prov_ID = models.CharField(max_length=50, blank=True, null=True)
+    Province_Name = models.CharField(max_length=255, blank=True, null=True)
     
+class District(models.Model):
+    ID = models.IntegerField(blank=True, null=True)
+    Prov_ID = models.CharField(max_length=255, blank=True, null=True)
+    Dstr_ID = models.CharField(max_length=255, blank=True, null=True)
+    District_Name = models.CharField(max_length=2500, blank=True, null=True)
+    
+class Village(models.Model):
+    ID = models.IntegerField(blank=True, null=True)
+    Prov_ID = models.CharField(max_length=255, blank=True, null=True)
+    Dstr_ID = models.CharField(max_length=255, blank=True, null=True)
+    Vill_ID = models.CharField(max_length=255, blank=True, null=True)
+    Village_Name = models.CharField(max_length=2500, blank=True, null=True)
+
+# class Province(models.Model):
+#     # Use a more typical AutoField for the primary key unless Prov_ID is required to be a CharField
+#     Prov_ID = models.CharField(max_length=50, unique=True)  # Consider making it the primary key if it's unique
+#     Province_Name = models.CharField(max_length=255, blank=True, null=True)
+
+#     def __str__(self):
+#         return self.Province_Name
+
+# class District(models.Model):
+#     # Foreign key to Province
+#     province = models.ForeignKey(Province, on_delete=models.CASCADE, related_name='districts')
+#     Dstr_ID = models.CharField(max_length=255, unique=True)  # Consider making it the primary key if it's unique
+#     District_Name = models.CharField(max_length=255, blank=True, null=True)  # Reduced length
+
+#     def __str__(self):
+#         return self.District_Name
+
+# class Village(models.Model):
+#     # Foreign key to District and Province
+#     district = models.ForeignKey(District, on_delete=models.CASCADE, related_name='villages')
+#     Vill_ID = models.CharField(max_length=255, unique=True)  # Consider making it the primary key if it's unique
+#     Village_Name = models.CharField(max_length=255, blank=True, null=True)  # Reduced length
+
+#     def __str__(self):
+#         return self.Village_Name

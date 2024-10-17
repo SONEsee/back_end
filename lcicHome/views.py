@@ -2432,23 +2432,26 @@ class EnterpriseInfoSearch(APIView):
 
     def post(self, request):
         
-        # Extract authenticated user information from the token
         user = request.user
-        # Example of accessing the UID or other user info
-        UID = user.UID  # or user.UID if you're using a custom field
-        bank = str(user.MID.id)  # Convert to string if necessary
-        branch = str(user.GID.GID)  # Convert to string if necessary
-        sys_usr = str(user.UID) + str(bank) + str(branch)
+        UID = user.UID 
+        bank = user.MID
+        # bank = str(user.MID.id)
+        # branch = str(user.GID.GID)  
+        # sys_usr = str(user.UID) + str(bank) + str(branch)
+        
+        print("Bank COde: ===>", bank.bnk_code)
+        print("Bank COde: ===>", bank.code)
+        bank_info = bank_bnk.objects.get(bnk_code=bank.bnk_code)
+        print("---->",bank_info.bnk_code)
+        print("Bank_Type",bank_info.bnk_type)
         LCICID = request.data.get('LCICID')
         EnterpriseID = request.data.get('EnterpriseID')
         loan_purpose = request.data.get('CatalogID')
+        sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
         
         print("============> Loan Purpose: ",loan_purpose )
-
         print("Authenticated User ID (UID):", UID)
         print("Authenticated Bankname:", bank)
-        print("Authenticated Branchname:", branch)
-        
         print("LCICID:", LCICID)
         print("EnterpriseID:", EnterpriseID)
         # print("Login :",Login._meta.get_fields())
@@ -2467,8 +2470,8 @@ class EnterpriseInfoSearch(APIView):
                 search_log = searchLog.objects.create(
                     enterprise_ID=EnterpriseID,
                     LCIC_ID=LCICID,
-                    bnk_code=bank,
-                    branch=branch,
+                    bnk_code= bank_info.bnk_code,
+                    branch='',
                     cus_ID='',
                     cusType='enterprise',
                     credit_type='Full Loan Report',
@@ -7692,39 +7695,89 @@ class CatalogCatListView(APIView):
         return Response(serializer.data)
 
 
-from .models import memberInfo
-from .serializers import MemberInfoSerializer
 
-class MemberInfoListView(APIView):
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.db.models import Count, Q,F 
+class TotalSearchLogByBankTypeView(APIView):
     def get(self, request):
-        member = memberInfo.objects.all()
-        serializer = MemberInfoSerializer(member, many=True)
-        return Response(serializer.data)
-    
-class TotalSearchLogBank_MFIView(APIView):
+        try:
+            # Get all bank codes for banks and MFIs
+            bank_data = memberInfo.objects.filter(bnk_type__in=['1', '2']).values('bnk_code', 'bnk_type')
+
+            # Prepare a list to hold the final results
+            result = []
+
+
+            for bank in bank_data:
+                # Count search logs for each bank code
+                total_search_logs = searchLog.objects.filter(bnk_code=bank['bnk_code']).count()
+                
+                institution_type = "Bank" if bank['bnk_type'] == 1 else "MFI"
+
+                result.append({
+                    'Bank_Code': bank['bnk_code'],
+                    'Institution_Type': institution_type,
+                    'Total_Search_Logs': total_search_logs
+                })
+
+            # Return the filtered and formatted data
+            return Response({'data': result}, status=200)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.db.models import Count, Sum, Q, F
+
+class SumTotalByBankType(APIView):
     def get(self, request):
-       
-        membertype_filter = memberInfo.objects.all()
-        print("---> check Member",membertype_filter)
-        if membertype_filter.memberType_id == '1':
-            banktype = "Bank"
-        else:
-            banktype = "MFI"
-             
-        print("BankType",banktype )
-        
-        bank_mfisearchlog = searchLog.objects.filter()
-        serializer = SearchLogSerializer(bank_mfisearchlog, many=True)
-        return Response(serializer.data)
-    
+        try:
+            # Get the bank types and their corresponding bank codes
+            bank_data = memberInfo.objects.filter(bnk_type__in=['1', '2']).values('bnk_code', 'bnk_type')
+
+            # Prepare a dictionary to hold the results grouped by bank type
+            result = {
+                'Bank': 0,
+                'MFI': 0,
+                'Total': 0
+            }
+
+            # Count search logs for each bank code
+            for bank in bank_data:
+                total_search_logs = searchLog.objects.filter(bnk_code=bank['bnk_code']).count()
+                
+                # Check the bank type and accumulate totals
+                if bank['bnk_type'] == 1:
+                    result['Bank'] += total_search_logs
+                elif bank['bnk_type'] == 2:
+                    result['MFI'] += total_search_logs
+                    
+                result['Total'] = result['Bank'] + result['MFI']
+            # Return the aggregated data
+            return Response({'data': result}, status=200)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
     
 class MemberCountView(APIView):
     def get(self, request):
         try:
             # Count the number of members for each memberType_id
             member_count = memberInfo.objects.values('memberType_id').annotate(count=Count('id')).filter(memberType_id__in=[1, 2, 3, 4, 5, 6, 7])
-            
-            return Response(member_count, status=status.HTTP_200_OK)
+
+            # Calculate the total number of members across all memberType_id
+            total_count = memberInfo.objects.filter(memberType_id__in=[1, 2, 3, 4, 5, 6, 7]).count()
+
+            # Add the total count to the response
+            result = {
+                'member_count': list(member_count),  # Convert QuerySet to a list for the response
+                'total_count': total_count  # Total number of members across all types
+            }
+
+            return Response(result, status=status.HTTP_200_OK)
         
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -7739,5 +7792,54 @@ class BankTypeCountView(APIView):
         
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.db.models import Sum
 
-    
+class SumTotalChgAmountByBankType(APIView):
+    def get(self, request):
+        try:
+            # Aggregate the sum of chg_amount for banks and MFIs by joining on bnk_code
+            total_chg_amount = (
+                request_charge.objects.filter(bnk_code__isnull=False)  # Ensure that there is a valid bnk_code
+                .values('bnk_code')  # Group by bnk_code
+                .annotate(total_chg_amount=Sum('chg_amount'))  # Sum chg_amount
+                .values('bnk_code', 'total_chg_amount')  # Select bnk_code and the calculated sum
+            )
+
+            # Initialize sum variables for Bank and MFI
+            bank_total_chg_amount = 0
+            mfi_total_chg_amount = 0
+            overall_total_chg_amount = 0
+
+            # Get all banks and MFIs from memberInfo with their bnk_type
+            bank_data = memberInfo.objects.filter(bnk_type__in=['1', '2']).values('bnk_code', 'bnk_type')
+
+            # Create a dictionary for easy lookup of bnk_type by bnk_code
+            bank_type_lookup = {bank['bnk_code']: bank['bnk_type'] for bank in bank_data}
+
+            # Iterate through the aggregated total_chg_amount and sum based on the bank type
+            for charge in total_chg_amount:
+                bnk_code = charge['bnk_code']
+                total_chg_amount = charge['total_chg_amount']
+
+                # Determine the bank type using the lookup dictionary
+                if bnk_code in bank_type_lookup:
+                    if bank_type_lookup[bnk_code] == 1:
+                        bank_total_chg_amount += total_chg_amount
+                    elif bank_type_lookup[bnk_code] == 2:
+                        mfi_total_chg_amount += total_chg_amount
+                overall_total_chg_amount = bank_total_chg_amount + mfi_total_chg_amount 
+            # Prepare the response
+            result = {
+                'Bank_TotalChgAmount': bank_total_chg_amount,
+                'MFI_TotalChgAmount': mfi_total_chg_amount,
+                'Overall_TotalChgAmount': overall_total_chg_amount  # Bank + MFI
+            }
+
+            return Response({'data': result}, status=200)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
