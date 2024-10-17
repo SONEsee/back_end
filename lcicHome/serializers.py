@@ -576,3 +576,20 @@ class MemberInfoSerializer(serializers.ModelSerializer):
     class Meta:
         model = memberInfo
         fields = '__all__'
+        
+from .models import Province, District, Village
+
+class ProvinceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Province
+        fields = ['Prov_ID', 'Province_Name']
+
+class DistrictSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = District
+        fields = ['ID', 'Prov_ID', 'Dstr_ID', 'District_Name']
+
+class VillageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Village
+        fields = ['ID', 'Prov_ID', 'Dstr_ID', 'Vill_ID', 'Village_Name']

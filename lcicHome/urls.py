@@ -53,7 +53,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView, MemberInfoListView,MemberCountView,BankTypeCountView
+from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView
 from .views import STypeView
 from .views import UserGroupView
 
@@ -131,7 +131,7 @@ urlpatterns = [
    path('api2/', include(router.urls)),
    path('customers/', CustomerInfoINDView.as_view(), name='customer-info-ind'),
    path('bank/', Bank_InfoINDView.as_view(), name='bank_info'),
-   path('memberinfo/', MemberInfoListView.as_view(), name='member_info'),
+#    path('memberinfo/', MemberInfoListView.as_view(), name='member_info'),
    path('edit_user/', UserManagementView.as_view(), name='edit-user'),
    path('update_user/<str:UID>/', UpdateUserView.as_view(), name='update-user'),
    path('delete_user/<int:UID>/', UserManagementView.as_view(), name='delete_user'),
@@ -157,6 +157,14 @@ urlpatterns = [
    path('catalog-cats/',CatalogCatListView.as_view(), name='catalog-cats'),
    path('member-count/', MemberCountView.as_view(), name='member-count'),
    path('banktype-count/', BankTypeCountView.as_view(), name='member-count'),
+   path('banktype_searchlog/', TotalSearchLogByBankTypeView.as_view(), name='banktype_searchlog'),
+   path('sumbanktype_searchlog/', SumTotalByBankType.as_view(), name='sumbanktype_searchlog'),
+   path('sumbanktype_chargeamount/', SumTotalChgAmountByBankType.as_view(), name='sumbanktype_chargeamount'),
+   path('locations/', LocationView.as_view(), name='location-list'),
+   
+   
+   
+   
    
    
 
