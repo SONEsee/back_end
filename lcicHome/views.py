@@ -6924,7 +6924,7 @@ class FCR_reportView(APIView):
             for lon_search in search_history:
                 print(lon_search)
                 search_data = {
-                    "date":lon_search.insert_date,
+                    "id":lon_search.insert_date,
                     "bnk_code":lon_search.bnk_code,
                     "lon_purpose":lon_search.lon_purpose
                 }
@@ -7724,6 +7724,43 @@ class MemberInfoListView(APIView):
         serializer = MemberInfoSerializer(member, many=True)
         return Response(serializer.data)
     
-
+class TotalSearchLogBank_MFIView(APIView):
+    def get(self, request):
+       
+        membertype_filter = memberInfo.objects.all()
+        print("---> check Member",membertype_filter)
+        if membertype_filter.memberType_id == '1':
+            banktype = "Bank"
+        else:
+            banktype = "MFI"
+             
+        print("BankType",banktype )
+        
+        bank_mfisearchlog = searchLog.objects.filter()
+        serializer = SearchLogSerializer(bank_mfisearchlog, many=True)
+        return Response(serializer.data)
     
+    
+class MemberCountView(APIView):
+    def get(self, request):
+        try:
+            # Count the number of members for each memberType_id
+            member_count = memberInfo.objects.values('memberType_id').annotate(count=Count('id')).filter(memberType_id__in=[1, 2, 3, 4, 5, 6, 7])
+            
+            return Response(member_count, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class BankTypeCountView(APIView):
+    def get(self, request):
+        try:
+            # Count the number of members for each memberType_id
+            member_count = memberInfo.objects.values('bnk_type').annotate(count=Count('id')).filter(memberType_id__in=[1, 2])
+            
+            return Response(member_count, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     
