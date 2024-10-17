@@ -162,15 +162,9 @@ STATIC_ROOT = os.path.join(BASE_DIR,'static')
 #STATICFILES_DIRS = [ (os.path.join(BASE_DIR, 'static') )]
 #STATICFILES_DIRS = (os.path.join(BASE_DIR, "static"), )
 
-<<<<<<< HEAD
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR,'media')
 STATIC_URL = '/static/'
-=======
-# MEDIA_URL = '/media/'
-# MEDIA_ROOT = os.path.join(BASE_DIR,'media')
-# STATIC_URL = '/static/'
->>>>>>> 134ba7ad (update 14-10-2024)
 
 MEDIA_URL = '/media/'
 
@@ -191,7 +185,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  
+    "http://192.168.45.56:3000",  
 ]
 CORS_ALLOW_HEADERS = list(default_headers) + [
     'X-User-Roles', 
@@ -200,24 +194,19 @@ AUTH_USER_MODEL = 'lcicHome.Login'
 
 CSRF_TRUSTED_ORIGINS = ['http://localhost:3000', ]
 
-CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_ALL_ORIGINS = True
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SECURE = False
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
 LOGIN_URL = '/accounts/login/'
-<<<<<<< HEAD
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
-=======
 
 
 
 # Celery settings
 CELERY_BROKER_URL = 'redis://localhost:8000/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:8000/0'
->>>>>>> 134ba7ad (update 14-10-2024)
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
