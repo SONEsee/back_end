@@ -488,6 +488,28 @@ class LoginSerializer(serializers.ModelSerializer):
         print("AddUser: ", user)
         return user
     
+    def update(self, instance, validated_data):
+        # Handle password hashing if password is being updated
+        password = validated_data.get('password', None)
+        if password:
+            instance.set_password(password)  # Hash the password using set_password()
+
+        # Update the other fields normally
+        instance.username = validated_data.get('username', instance.username)
+        instance.nameL = validated_data.get('nameL', instance.nameL)
+        instance.nameE = validated_data.get('nameE', instance.nameE)
+        instance.surnameL = validated_data.get('surnameL', instance.surnameL)
+        instance.surnameE = validated_data.get('surnameE', instance.surnameE)
+        instance.MID = validated_data.get('MID', instance.MID)
+        instance.GID = validated_data.get('GID', instance.GID)
+        instance.is_active = validated_data.get('is_active', instance.is_active)
+        instance.is_staff = validated_data.get('is_staff', instance.is_staff)
+        instance.is_superuser = validated_data.get('is_superuser', instance.is_superuser)
+
+        # Save the updated user object
+        instance.save()
+
+        return instance
 
 from rest_framework import serializers
 from .models import memberInfo
@@ -593,3 +615,33 @@ class VillageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Village
         fields = ['ID', 'Prov_ID', 'Dstr_ID', 'Vill_ID', 'Village_Name']
+
+from .models import ReportCatalog
+# class ReportCatalogSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = ReportCatalog
+#         fields = '__all__'
+
+class ReportCatalogSerializer(serializers.ModelSerializer):
+    Report_UserRole = serializers.PrimaryKeyRelatedField(queryset=User_Group.objects.all(), many=True)
+
+    class Meta:
+        model = ReportCatalog
+        fields = ['Report_Name', 'Report_UserRole']  # Explicitly list the fields you want
+
+    def create(self, validated_data):
+        # Extract the user roles from the validated data
+        user_roles = validated_data.pop('Report_UserRole')
+        # Create the report catalog entry
+        report_catalog = ReportCatalog.objects.create(**validated_data)
+        # Add the many-to-many relationship (user roles)
+        report_catalog.Report_UserRole.set(user_roles)
+        return report_catalog
+
+    def update(self, instance, validated_data):
+        # Handle updating existing report catalog
+        user_roles = validated_data.pop('Report_UserRole')
+        instance.Report_Name = validated_data.get('Report_Name', instance.Report_Name)
+        instance.save()
+        instance.Report_UserRole.set(user_roles)  # Update the many-to-many relationship
+        return instance

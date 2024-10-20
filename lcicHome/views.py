@@ -2289,14 +2289,11 @@ class UpdateUserView(APIView):
                     'user': serializer.data
                 }, status=status.HTTP_200_OK)
             else:
-                # Log serializer errors for debugging
-                print(serializer.errors)  # Debugging line
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Login.DoesNotExist:
             return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 
 
@@ -7015,6 +7012,7 @@ from .serializers import LoginSerializer,UserLoginSerializer
 from django.contrib.auth import login
 from django.shortcuts import redirect
 from rest_framework.authtoken.models import Token
+from .models import UserLoginLog, Login
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.permissions import AllowAny
@@ -7034,6 +7032,17 @@ class UserLoginView(APIView):
             
             # Generate JWT token
             refresh = RefreshToken.for_user(user)
+            
+            login_log = UserLoginLog(
+                username=user.username,
+                bnk_code=user.MID.bnk_code if user.MID else None,
+                sys_user=user.username,  
+                status='Active',
+                login_time=timezone.now(),  
+                logout_time=None 
+            )
+            login_log.save()
+            
             return Response({
                 'detail': 'Successfully logged in.',
                 'access': str(refresh.access_token),
@@ -7817,6 +7826,102 @@ class BankTypeCountView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         
+class SumTotalByBankTypeMonth(APIView):
+    def get(self, request):
+        try:
+            # Get the bank types and their corresponding bank codes
+            bank_data = memberInfo.objects.filter(bnk_type__in=['1', '2']).values('bnk_code', 'bnk_type')
+
+            # Prepare a dictionary to hold the results grouped by month and bank type
+            result = {}
+
+            # Iterate through each bank and group search logs by inquiry_month and bank type
+            for bank in bank_data:
+                # Group by inquiry_month and count logs for each bank
+                search_logs_by_month = (
+                    searchLog.objects.filter(bnk_code=bank['bnk_code'])
+                    .values('inquiry_month')  # Use the 'inquiry_month' field to group by month
+                    .annotate(total=Count('search_ID'))  # Count the logs for each month
+                    .order_by('inquiry_month')
+                )
+
+                # Add the logs to the result dictionary by month and bank type
+                for log in search_logs_by_month:
+                    month = log['inquiry_month']  # Already in 'yyyy-mm' format
+                    if month not in result:
+                        result[month] = {'Bank': 0, 'MFI': 0}
+
+                    if bank['bnk_type'] == 1:  # Bank
+                        result[month]['Bank'] += log['total']
+                    elif bank['bnk_type'] == 2:  # MFI
+                        result[month]['MFI'] += log['total']
+
+            # Add total sums for each month
+            for month_data in result.values():
+                month_data['Total'] = month_data['Bank'] + month_data['MFI']
+
+            # Return the aggregated data
+            return Response({'data': result}, status=200)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
+class SumTotalByBankTypeYear(APIView):
+    def get(self, request):
+        try:
+            # Get the bank types and their corresponding bank codes
+            bank_data = memberInfo.objects.filter(bnk_type__in=['1', '2']).values('bnk_code', 'bnk_type')
+
+            # Prepare dictionaries to hold the results grouped by month and year
+            result_monthly = {}
+            result_yearly = {}
+
+            # Iterate through each bank and group search logs by inquiry_month and bank type
+            for bank in bank_data:
+                # Group by inquiry_month and count logs for each bank
+                search_logs_by_month = (
+                    searchLog.objects.filter(bnk_code=bank['bnk_code'])
+                    .values('inquiry_month')  # Use the 'inquiry_month' field to group by month
+                    .annotate(total=Count('search_ID'))  # Count the logs for each month
+                    .order_by('inquiry_month')
+                )
+
+                # Add the logs to the result dictionary by month and year
+                for log in search_logs_by_month:
+                    month = log['inquiry_month']  # Already in 'yyyy-mm' format
+                    year = month.split('-')[0]  # Extract the year from 'yyyy-mm'
+
+                    # Monthly results
+                    # if month not in result_monthly:
+                    #     result_monthly[month] = {'Bank': 0, 'MFI': 0}
+
+                    # if bank['bnk_type'] == 1:  # Bank
+                    #     result_monthly[month]['Bank'] += log['total']
+                    # elif bank['bnk_type'] == 2:  # MFI
+                    #     result_monthly[month]['MFI'] += log['total']
+
+                    # Yearly results
+                    if year not in result_yearly:
+                        result_yearly[year] = {'Bank': 0, 'MFI': 0}
+
+                    if bank['bnk_type'] == 1:  
+                        result_yearly[year]['Bank'] += log['total']
+                    elif bank['bnk_type'] == 2:  
+                        result_yearly[year]['MFI'] += log['total']
+
+            # Add total sums for each month and year
+            for month_data in result_monthly.values():
+                month_data['Total'] = month_data['Bank'] + month_data['MFI']
+
+            for year_data in result_yearly.values():
+                year_data['Total'] = year_data['Bank'] + year_data['MFI']
+
+            # Return the aggregated data
+            return Response({'monthly_data': result_monthly, 'yearly_data': result_yearly}, status=200)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Sum
@@ -7950,18 +8055,63 @@ def filter_villages(request):
             'Village_Name': village.Village_Name
         } for village in query]
     for village in query:
-        province = Province.objects.filter(Prov_ID=village.Prov_ID).first()
-        district = District.objects.filter(Dstr_ID=village.Dstr_ID).first()
+        # Fetch all matching provinces and districts
+        provinces = Province.objects.filter(Prov_ID=village.Prov_ID)
+        districts = District.objects.filter(Dstr_ID=village.Dstr_ID,Prov_ID=village.Prov_ID)
         
-        village_data.append({
-            'ID': village.ID,
-            'Prov_ID': village.Prov_ID,
-            'Province_Name': province.Province_Name if province else None,
-            'Dstr_ID': village.Dstr_ID,
-            'District_Name': district.District_Name if district else None,
-            'Vill_ID': village.Vill_ID,
-            'Village_Name': village.Village_Name
-        })
+        # If there are multiple provinces/districts, you can loop through them and append
+        for province in provinces:
+            for district in districts:
+                village_data.append({
+                    'ID': village.ID,
+                    'Prov_ID': village.Prov_ID,
+                    'Province_Name': province.Province_Name if province else None,
+                    'Dstr_ID': village.Dstr_ID,
+                    'District_Name': district.District_Name if district else None,
+                    'Vill_ID': village.Vill_ID,
+                    'Village_Name': village.Village_Name
+                })
+
 
     return JsonResponse(village_data, safe=False)
+
+
+from .models import ReportCatalog
+from .serializers import ReportCatalogSerializer
+# class ReportCatalogView(APIView):
+    
+#     def get(self, request):
+#         report_catalogs = ReportCatalog.objects.all()  # Retrieve all entries
+#         serializer = ReportCatalogSerializer(report_catalogs, many=True)  # Serialize the data
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+
+class ReportCatalogView(APIView):
+    def get(self, request):
+
+        report_catalogs = ReportCatalog.objects.all()  # Retrieve all report catalog entries
+        serializer = ReportCatalogSerializer(report_catalogs, many=True)  # Serialize them
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+
+        serializer = ReportCatalogSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()  # Save the new report entry if valid
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST) 
+    def put(self, request, pk):
+
+        try:
+            report_catalog = ReportCatalog.objects.get(pk=pk)
+        except ReportCatalog.DoesNotExist:
+            return Response({"error": "ReportCatalog not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = ReportCatalogSerializer(report_catalog, data=request.data, partial=True)  # Allow partial update
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    
+    
 
