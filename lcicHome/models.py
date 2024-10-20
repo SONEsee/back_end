@@ -1591,3 +1591,25 @@ class Village(models.Model):
 
 #     def __str__(self):
 #         return self.Village_Name
+class UserLoginLog(models.Model):
+    username = models.CharField(max_length=255, blank=True, null=True)
+    bnk_code = models.CharField(max_length=255, blank=True, null=True)
+    sys_user = models.CharField(max_length=255, blank=True, null=True)
+    status = models.CharField(max_length=255, blank=True, null=True)
+    login_time = models.DateTimeField(blank=True, null=True)
+    logout_time = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        verbose_name_plural = 'User Login Logs'
+        ordering = ['login_time']  # Example ordering by login time
+
+    def __str__(self):
+        return f"{self.username} - {self.status} at {self.login_time}"  
+
+class ReportCatalog(models.Model):
+    Report_Name = models.CharField(max_length=255, blank=True, null=True)
+    Report_UserRole = models.ManyToManyField(User_Group, related_name='report_catalog')
+    
+    def __str__(self):
+        return self.Report_Name
+
