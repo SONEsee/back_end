@@ -7922,24 +7922,33 @@ from .models import Village, Province, District
 from django.db.models import Q
 
 def filter_villages(request):
-    # Get the filters from the request (query parameters)
-    village_name = request.GET.get('village_name', '')  # Default to empty string if not provided
-    province_id = request.GET.get('province_id', None)  # Optional province ID filter
-    district_id = request.GET.get('district_id', None)  # Optional district ID filter (Dstr_ID)
+   
+    village_name = request.GET.get('village_name', '')  
+    province_id = request.GET.get('province_id', None)  
+    district_id = request.GET.get('district_id', None)  
 
-    # Create a base query that filters by village name (using icontains for case-insensitive LIKE)
+    
     query = Village.objects.filter(Village_Name__icontains=village_name)
 
-    # If a province ID is provided, add that to the query
+   
     if province_id:
         query = query.filter(Prov_ID=province_id)
 
-    # If a district ID is provided, add that to the query
+   
     if district_id:
         query = query.filter(Dstr_ID=district_id)
 
-    # Fetch related Province and District data
-    village_data = []
+   
+    village_data = [ 
+        {
+            'ID': village.ID,
+            'Prov_ID': village.Prov_ID,
+            'Province_Name': Province.objects.filter(Prov_ID=village.Prov_ID).first().Province_Name if Province.objects.filter(Prov_ID=village.Prov_ID).first() else None,
+            'Dstr_ID': village.Dstr_ID,
+            'District_Name': District.objects.filter(Dstr_ID=village.Dstr_ID).first().District_Name if District.objects.filter(Dstr_ID=village.Dstr_ID).first() else None,
+            'Vill_ID': village.Vill_ID,
+            'Village_Name': village.Village_Name
+        } for village in query]
     for village in query:
         province = Province.objects.filter(Prov_ID=village.Prov_ID).first()
         district = District.objects.filter(Dstr_ID=village.Dstr_ID).first()
