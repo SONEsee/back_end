@@ -8045,15 +8045,16 @@ def filter_villages(request):
 
    
     village_data = [ 
-        {
-            'ID': village.ID,
-            'Prov_ID': village.Prov_ID,
-            'Province_Name': Province.objects.filter(Prov_ID=village.Prov_ID).first().Province_Name if Province.objects.filter(Prov_ID=village.Prov_ID).first() else None,
-            'Dstr_ID': village.Dstr_ID,
-            'District_Name': District.objects.filter(Dstr_ID=village.Dstr_ID).first().District_Name if District.objects.filter(Dstr_ID=village.Dstr_ID).first() else None,
-            'Vill_ID': village.Vill_ID,
-            'Village_Name': village.Village_Name
-        } for village in query]
+        # {
+        #     'ID': village.ID,
+        #     'Prov_ID': village.Prov_ID,
+        #     'Province_Name': Province.objects.filter(Prov_ID=village.Prov_ID).first().Province_Name if Province.objects.filter(Prov_ID=village.Prov_ID).first() else None,
+        #     'Dstr_ID': village.Dstr_ID,
+        #     'District_Name': District.objects.filter(Dstr_ID=village.Dstr_ID).first().District_Name if District.objects.filter(Dstr_ID=village.Dstr_ID).first() else None,
+        #     'Vill_ID': village.Vill_ID,
+        #     'Village_Name': village.Village_Name
+        # } for village in query
+        ]
     for village in query:
         # Fetch all matching provinces and districts
         provinces = Province.objects.filter(Prov_ID=village.Prov_ID)
