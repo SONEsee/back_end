@@ -53,7 +53,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView
+from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView
 from .views import STypeView
 from .views import UserGroupView
 
@@ -147,25 +147,33 @@ urlpatterns = [
    path('log_report/<str:bnk_code>', searchlog_reportView.as_view(), name='report_searchlog'),
    path('charge_report/<str:bnk_code>', charge_reportView.as_view(), name='charge_searchlog'),
    path('searchlog_chart/', SearchLogChartView.as_view(), name='searchlog_chart'),
-   path('searchlog_chart/<str:inquiry_month>', SearchLogChart_MonthView.as_view(), name='searchlog_chartbymonth'),
+   
+   path('searchlog_chart/month/<str:month_year>', SearchLogChart_MonthView.as_view(), name='searchlog_chartbymonth'),
+   path('searchlog_chart/month/', SearchLogChart_MonthView.as_view(), name='searchlog_chart_current_month'),
+    path('searchlog_chart/month/<str:month_year>/', SearchLogChart_MonthView.as_view(), name='searchlog_chart_month'),  
+   
    path('searchlog_chart/date/<str:inquiry_date>', SearchLogChartByDateView.as_view(), name='searchlog_chartbydate'),
    path('searchlog_chart/bank/<str:bnk_code>', SearchLogChartByBankCodeView.as_view(), name='searchlog_chartbybank'),
    path('charge_chart/',ChargeChartView.as_view(), name='charge_report_chart'),
    path('charge_chart/date/<str:charge_date>', ChargeChartByDateView.as_view(), name='charge-chart-by-date'),
    path('charge_chart/month/<str:month_year>',ChargeChartMonthView.as_view(), name='charge-chart-by-month'),
+      path('charge_chart/month/',ChargeChartMonthView.as_view(), name='charge-chart-by-monthnow'),
    path('charge_chart/bank/<str:bnk_code>', ChargeChartByBankView.as_view(), name='charge-chart-bank'),
    path('catalog-cats/',CatalogCatListView.as_view(), name='catalog-cats'),
    path('member-count/', MemberCountView.as_view(), name='member-count'),
    path('banktype-count/', BankTypeCountView.as_view(), name='member-count'),
    path('banktype_searchlog/', TotalSearchLogByBankTypeView.as_view(), name='banktype_searchlog'),
    path('sumbanktype_searchlog/', SumTotalByBankType.as_view(), name='sumbanktype_searchlog'),
+#    path('sumbanktype_searchlog/datenow/', SumTotalSearchByBankTypeByDate.as_view(), name='sumbanktype_searchlog_date'),
    path('sumbanktype_searchlog/month/', SumTotalByBankTypeMonth.as_view(), name='sumbanktype_searchlog_month'),
-    path('sumbanktype_searchlog/year/', SumTotalByBankTypeYear.as_view(), name='sumbanktype_searchlog_year'),
+   path('sumbanktype_searchlog/year/', SumTotalByBankTypeYear.as_view(),   name='sumbanktype_searchlog_year'),
    path('sumbanktype_chargeamount/', SumTotalChgAmountByBankType.as_view(), name='sumbanktype_chargeamount'),
    path('locations/', LocationView.as_view(), name='location-list'),
    path('filter_villages/', filter_villages, name='filter_villages'),
    path('report_catalog/', ReportCatalogView.as_view(), name='report_catalog'),
    path('report_catalog/<int:pk>/', ReportCatalogView.as_view(), name='report-catalog-detail'),
+   path('memberinfo/', memberinfolistView.as_view(),name='memberinfo'),
+   
    
    
    path('enterprisematch/', EnterpriseInfoMatch.as_view(), name='enterprise-info-match'),
