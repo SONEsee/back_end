@@ -2467,7 +2467,8 @@ class EnterpriseInfoSearch(APIView):
                 search_log = searchLog.objects.create(
                     enterprise_ID=EnterpriseID,
                     LCIC_ID=LCICID,
-                    bnk_code= bank_info.bnk_code,
+                    bnk_code=bank_info.bnk_code,
+                    bnk_type=bank_info.bnk_type,
                     branch='',
                     cus_ID='',
                     cusType='enterprise',
@@ -7151,12 +7152,42 @@ class AssignRoleView(APIView):
 
 class ManageUserView(APIView):
 
+    # def get(self, request, format=None):
+    #     all_user = Login.objects.all().order_by('UID')
+    #     s_user = LoginSerializer(all_user, many=True)
+
+    #     combined_data = {
+    #         'all_user': s_user.data,
+    #     }
+    #     return Response(combined_data, status=status.HTTP_200_OK)
+    
     def get(self, request, format=None):
-        all_user = Login.objects.all().order_by('UID')
-        s_user = LoginSerializer(all_user, many=True)
+        # Fetch all users and order by 'UID'
+        all_users = Login.objects.all().order_by('UID')
+        
+        # List to store custom user data
+        custom_user_data = []
+
+        # Loop through all users and extract the necessary fields
+        for user in all_users:
+            custom_user_data.append({
+                "UID": user.UID,
+                "bnk_code": user.MID.bnk_code if user.MID else None,  # Ensure MID is not None
+                "bnk_name":user.MID.code,
+                "Permission": user.GID.nameL if user.GID else None,  # Custom handling for GID
+                "username": user.username,
+                "nameL": user.nameL,
+                "nameE": user.nameE,
+                "surnameL": user.surnameL,
+                "surnameE": user.surnameE,
+                "is_active": user.is_active,
+            })
+
+        # Prepare the combined response
         combined_data = {
-            'all_user': s_user.data,
+            'all_user': custom_user_data,
         }
+        
         return Response(combined_data, status=status.HTTP_200_OK)
     
     def post(self, request, format=None):
@@ -7180,7 +7211,7 @@ class InsertSearchLogView(APIView):
         
         print("Bank COde: ===>", bank.bnk_code)
         print("Bank COde: ===>", bank.code)
-        bank_info = bank_bnk.objects.get(bnk_code=bank.bnk_code)
+        bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
         print("---->",bank_info.bnk_code)
         print("Bank_Type",bank_info.bnk_type)
         
@@ -7222,6 +7253,7 @@ class InsertSearchLogView(APIView):
                     enterprise_ID=EnterpriseID,
                     LCIC_ID=LCICID,
                     bnk_code=bank_info.bnk_code,
+                    bnk_type=bank_info.bnk_type,
                     branch=loan_log.branch_id,
                     cus_ID=loan_log.customer_id,
                     cusType=loan_log.segmentType,
@@ -7383,27 +7415,72 @@ class SearchLogChartView(APIView):
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
     
+# class SearchLogChart_MonthView(APIView):
+#      def get(self, request, inquiry_month):
+#         try:
+#             # Filter search logs by the provided inquiry_month
+#             searchlog_data = (
+#                 searchLog.objects
+#                 .filter(inquiry_month=inquiry_month)  # Filter by inquiry_month
+#                 .values('bnk_code', 'inquiry_month')
+#                 .annotate(total_logs=Count('bnk_code'))  # Count total logs for each bnk_code
+#                 .order_by('-total_logs')
+#             )
+
+#             # If no data is found for the given month, return a 404
+#             if not searchlog_data:
+#                 return Response({'detail': f'No search log data available for {inquiry_month}.'}, status=status.HTTP_404_NOT_FOUND)
+
+#             # Prepare the response data in the required format
+#             chart_data = [
+#                 {
+#                     "bnk_code": entry['bnk_code'],
+#                     entry['inquiry_month']: entry['total_logs']
+#                 }
+#                 for entry in searchlog_data
+#             ]
+
+#             # Return the filtered and formatted data
+#             return Response({
+#                 'chart_data': chart_data
+#             }, status=status.HTTP_200_OK)
+
+#         except Exception as e:
+#             return Response({
+#                 'error': str(e)
+#             }, status=status.HTTP_400_BAD_REQUEST)
+
 class SearchLogChart_MonthView(APIView):
-     def get(self, request, inquiry_month):
+    def get(self, request, month_year=None):
         try:
-            # Filter search logs by the provided inquiry_month
+            # If month_year is not provided, use the current month and year
+            if not month_year:
+                current_date = datetime.now()
+                month_year = current_date.strftime("%Y-%m")
+            
+            # Extract year and month from month_year string
+            filter_month_year = datetime.strptime(month_year, "%Y-%m")
+            filter_month = filter_month_year.month
+            filter_year = filter_month_year.year
+            
+            # Filter search logs by the provided or current month_year
             searchlog_data = (
                 searchLog.objects
-                .filter(inquiry_month=inquiry_month)  # Filter by inquiry_month
-                .values('bnk_code', 'inquiry_month')
+                .filter(inquiry_date__month=filter_month, inquiry_date__year=filter_year)  # Use inquiry_date
+                .values('bnk_code')
                 .annotate(total_logs=Count('bnk_code'))  # Count total logs for each bnk_code
                 .order_by('-total_logs')
             )
 
             # If no data is found for the given month, return a 404
             if not searchlog_data:
-                return Response({'detail': f'No search log data available for {inquiry_month}.'}, status=status.HTTP_404_NOT_FOUND)
+                return Response({'detail': f'No search log data available for {month_year}.'}, status=404)
 
             # Prepare the response data in the required format
             chart_data = [
                 {
                     "bnk_code": entry['bnk_code'],
-                    entry['inquiry_month']: entry['total_logs']
+                    month_year: entry['total_logs']
                 }
                 for entry in searchlog_data
             ]
@@ -7411,12 +7488,18 @@ class SearchLogChart_MonthView(APIView):
             # Return the filtered and formatted data
             return Response({
                 'chart_data': chart_data
-            }, status=status.HTTP_200_OK)
+            }, status=200)
+
+        except ValueError:
+            return Response({
+                'error': 'Invalid month-year format. Please use YYYY-MM format.'
+            }, status=400)
 
         except Exception as e:
             return Response({
                 'error': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
+            }, status=400)
+
 
 class SearchLogChartByDateView(APIView):
     def get(self, request, inquiry_date):
@@ -7607,14 +7690,21 @@ class ChargeChartByDateView(APIView):
             
 class ChargeChartMonthView(APIView):
 
-    def get(self, request, month_year):
+    def get(self, request, month_year=None):  # Make 'month_year' optional with default None
         try:
-            # Parse the month_year string (e.g., '10-2024') into month and year
-            filter_month_year = datetime.strptime(month_year, "%m-%Y")
-            filter_month = filter_month_year.month
-            filter_year = filter_month_year.year
-
-            # Filter the charge records by the extracted month and year
+            # If month_year is not provided, default to the current month and year
+            if not month_year:
+                now = timezone.now()
+                filter_month = now.month
+                filter_year = now.year
+                month_year = now.strftime("%m-%Y")  # Format the current month and year as 'MM-YYYY'
+            else:
+                # Parse the month_year string (e.g., '10-2024') into month and year
+                filter_month_year = datetime.strptime(month_year, "%m-%Y")
+                filter_month = filter_month_year.month
+                filter_year = filter_month_year.year
+            
+            # print("date-now",month_year)
             charge_report = request_charge.objects.filter(
                 rec_insert_date__month=filter_month,
                 rec_insert_date__year=filter_year
@@ -8020,21 +8110,6 @@ def filter_villages(request):
     if district_id:
         query = query.filter(Dstr_ID=district_id)
 
-    # Fetch related Province and District data
-    # village_data = []
-    # for village in query:
-    #     province = Province.objects.filter(Prov_ID=village.Prov_ID)
-    #     district = District.objects.filter(Dstr_ID=village.Dstr_ID)
-        
-        # village_data.append({
-        #     'ID': village.ID,
-        #     'Prov_ID': village.Prov_ID,
-        #     'Province_Name': province.Province_Name if province else None,
-        #     'Dstr_ID': village.Dstr_ID,
-        #     'District_Name': district.District_Name if district else None,
-        #     'Vill_ID': village.Vill_ID,
-        #     'Village_Name': village.Village_Name
-        # })
     village_data = []
     for village in query:
         # Fetch all matching provinces and districts
@@ -8095,5 +8170,52 @@ class ReportCatalogView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     
+# from django.utils import timezone
+# from django.db.models import Count
+# from rest_framework.response import Response
+# from rest_framework.views import APIView
+
+# class SumTotalSearchByBankTypeByDate(APIView):
+#     def get(self, request):
+#         try:
+#             # Get today's date (without time)
+#             today = timezone.now().date()
+
+#             # Prepare a dictionary to hold the results separated by bank type
+#             result = {
+#                 'Bank': 0,  
+#                 'MFI': 0,
+#                 'Total': 0
+#             }
+
+#             # Get search logs for today and separate them by bnk_type
+#             search_logs_today = searchLog.objects.filter(inquiry_date__date=today)
+            
+#             print("saerch_log :", search_logs_today)
+            
+#             # Annotate and count the logs by bnk_type
+#             search_logs_by_type = search_logs_today.values('bnk_code').annotate(total=Count('search_ID')).order_by('bnk_code')
+
+#             # Iterate through each log and accumulate the counts based on bank type
+#             for log in search_logs_by_type:
+#                 bnk_code = log['bnk_code']
+#                 bank_type = memberInfo.objects.filter(bnk_code=bnk_code).values('bnk_type').first()
+
+#                 if bank_type:
+#                     if bank_type['bnk_type'] == 1: 
+#                         result['Bank'] += log['total']
+#                     elif bank_type['bnk_type'] == 2:
+#                         result['MFI'] += log['total']
+
+#             # Calculate total searches for today
+#             result['Total'] = result['Bank'] + result['MFI']
+
+#             # Return the results
+#             return Response({'data': result}, status=200)
+
+#         except Exception as e:
+#             return Response({'error': str(e)}, status=400)
+
+        
     
 

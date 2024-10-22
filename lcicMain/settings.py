@@ -185,7 +185,8 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
-    "http://192.168.45.56:3000",  
+    "http://192.168.45.56:3000",
+    "http://192.168.45.54:3000",
 ]
 CORS_ALLOW_HEADERS = list(default_headers) + [
     'X-User-Roles', 
