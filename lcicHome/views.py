@@ -7436,33 +7436,34 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
 from django.db.models.functions import TruncMonth
-from .models import searchLog
+from .models import searchLog  # Assuming you are working with the searchLog model
 
 class SearchLogChartView(APIView):
-
-      def get(self, request):
+    def get(self, request):
         try:
-            # Aggregate search logs by bank code and inquiry_month, count them
+            # Truncate rec_insert_date to month (YYYY-MM) and aggregate the count of bnk_code
             searchlog_data = (
-                searchLog.objects
-                .values('bnk_code', 'inquiry_month')  # Group by bank code and inquiry month
-                .annotate(total_logs=Count('bnk_code'))  # Count logs per bank code and inquiry month
-                .order_by('-total_logs')  # Order by the total number of logs
+                request_charge.objects
+                .annotate(month=TruncMonth('rec_insert_date'))  # Truncate rec_insert_date to month
+                .values('bnk_code', 'month')  # Group by bnk_code and month
+                .annotate(total_logs=Count('bnk_code'))  # Count total logs for each bnk_code and month
+                .order_by('-total_logs')  # Order by total logs (descending)
             )
 
-            # If no data is found, return a 404
-            if not searchlog_data:
+            # If no data is found, return a 404 response
+            if not searchlog_data.exists():
                 return Response({'detail': 'No search log data available.'}, status=status.HTTP_404_NOT_FOUND)
 
-            # Prepare the response format
-            chart_data = []
-            for entry in searchlog_data:
-                chart_data.append({
+            # Prepare the chart data
+            chart_data = [
+                {
                     "bnk_code": entry['bnk_code'],
-                    entry['inquiry_month']: entry['total_logs']  # Use inquiry_month as the key
-                })
+                    entry['month'].strftime('%Y-%m'): entry['total_logs']  # Format month as YYYY-MM
+                }
+                for entry in searchlog_data
+            ]
 
-            # Return the data formatted for the chart
+            # Return the aggregated data as a response
             return Response({
                 'chart_data': chart_data
             }, status=status.HTTP_200_OK)
@@ -7471,7 +7472,6 @@ class SearchLogChartView(APIView):
             return Response({
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
-    
 # class SearchLogChart_MonthView(APIView):
 #      def get(self, request, inquiry_month):
 #         try:
@@ -8403,6 +8403,7 @@ class ReportCatalogView(APIView):
 
 #         except Exception as e:
 #             return Response({'error': str(e)}, status=400)
+
 
         
     
