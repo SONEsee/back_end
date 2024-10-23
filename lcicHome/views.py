@@ -7270,6 +7270,7 @@ class InsertSearchLogView(APIView):
 
                 charge = request_charge.objects.create(
                     bnk_code=bank_info.bnk_code,
+                    bnk_type=bank_info.bnk_type,
                     chg_amount=charge_amount_com,
                     chg_code=chargeType.chg_code,
                     status='pending',  
@@ -7345,22 +7346,75 @@ class searchlog_reportView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
+# from .serializers import ChargeSerializer
+# class charge_reportView(APIView):
+#     # permission_classes = [IsAuthenticated]
+
+#     def get(self, request, bnk_code=None):
+#         try:
+#             # Filter the charge records by bnk_code if provided
+#             if bnk_code:
+#                 charge_report = request_charge.objects.filter(bnk_code=bnk_code)
+#             else:
+#                 charge_report = request_charge.objects.all().order_by('insert_date')
+
+#             # If no records are found, return an appropriate message
+#             if not charge_report.exists():
+#                 return Response({
+#                     'detail': 'No charges found for the provided bnk_code.'
+#                 }, status=status.HTTP_404_NOT_FOUND)
+
+#             # Serialize the data
+#             serializer = ChargeSerializer(charge_report, many=True)
+            
+#             return Response({
+#                 'charge': serializer.data
+#             }, status=status.HTTP_200_OK)
+#         except Exception as e:
+#             return Response({
+#                 'error': str(e)
+#             }, status=status.HTTP_400_BAD_REQUEST)
+
 from .serializers import ChargeSerializer
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import request_charge  # Assuming this is your model
+from django.db.models import Q  # To handle complex queries
+
 class charge_reportView(APIView):
     # permission_classes = [IsAuthenticated]
 
     def get(self, request, bnk_code=None):
         try:
-            # Filter the charge records by bnk_code if provided
-            if bnk_code:
-                charge_report = request_charge.objects.filter(bnk_code=bnk_code)
-            else:
-                charge_report = request_charge.objects.all().order_by('insert_date')
+            # Get query parameters
+            bank = request.query_params.get('bank', bnk_code)  # Can come from URL or query param
+            month = request.query_params.get('month')
+            year = request.query_params.get('year')
+
+            # Start with all records or filter by bank if provided
+            charge_report = request_charge.objects.all().order_by('insert_date')
+
+            if bank:
+                charge_report = charge_report.filter(bnk_code=bank)
+
+            # Apply year filter if provided
+            if year:
+                charge_report = charge_report.filter(insert_date__year=year)
+
+                # Apply month filter only if both year and month are provided
+                if month:
+                    charge_report = charge_report.filter(insert_date__month=month)
+            elif month:
+                # If month is provided without year, return an error
+                return Response({
+                    'error': 'Year is required when filtering by month.'
+                }, status=status.HTTP_400_BAD_REQUEST)
 
             # If no records are found, return an appropriate message
             if not charge_report.exists():
                 return Response({
-                    'detail': 'No charges found for the provided bnk_code.'
+                    'detail': 'No charges found for the provided filters.'
                 }, status=status.HTTP_404_NOT_FOUND)
 
             # Serialize the data
@@ -7369,10 +7423,13 @@ class charge_reportView(APIView):
             return Response({
                 'charge': serializer.data
             }, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
             
 from django.db.models import Count
 from rest_framework.response import Response
@@ -7989,16 +8046,85 @@ class SumTotalByBankTypeYear(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from django.db.models import Sum
+
+# class SumTotalChgAmountByBankType(APIView):
+#     def get(self, request):
+#         try:
+#             # Aggregate the sum of chg_amount for banks and MFIs by joining on bnk_code
+#             total_chg_amount = (
+#                 request_charge.objects.filter(bnk_code__isnull=False)  # Ensure that there is a valid bnk_code
+#                 .values('bnk_code')  # Group by bnk_code
+#                 .annotate(total_chg_amount=Sum('chg_amount'))  # Sum chg_amount
+#                 .values('bnk_code', 'total_chg_amount')  # Select bnk_code and the calculated sum
+#             )
+
+#             # Initialize sum variables for Bank and MFI
+#             bank_total_chg_amount = 0
+#             mfi_total_chg_amount = 0
+#             overall_total_chg_amount = 0
+
+#             # Get all banks and MFIs from memberInfo with their bnk_type
+#             bank_data = memberInfo.objects.filter(bnk_type__in=['1', '2']).values('bnk_code', 'bnk_type')
+
+#             # Create a dictionary for easy lookup of bnk_type by bnk_code
+#             bank_type_lookup = {bank['bnk_code']: bank['bnk_type'] for bank in bank_data}
+
+#             # Iterate through the aggregated total_chg_amount and sum based on the bank type
+#             for charge in total_chg_amount:
+#                 bnk_code = charge['bnk_code']
+#                 total_chg_amount = charge['total_chg_amount']
+
+#                 # Determine the bank type using the lookup dictionary
+#                 if bnk_code in bank_type_lookup:
+#                     if bank_type_lookup[bnk_code] == 1:
+#                         bank_total_chg_amount += total_chg_amount
+#                     elif bank_type_lookup[bnk_code] == 2:
+#                         mfi_total_chg_amount += total_chg_amount
+#                 overall_total_chg_amount = bank_total_chg_amount + mfi_total_chg_amount 
+#             # Prepare the response
+#             result = {
+#                 'Bank_TotalChgAmount': bank_total_chg_amount,
+#                 'MFI_TotalChgAmount': mfi_total_chg_amount,
+#                 'Overall_TotalChgAmount': overall_total_chg_amount  # Bank + MFI
+#             }
+
+#             return Response({'data': result}, status=200)
+
+#         except Exception as e:
+#             return Response({'error': str(e)}, status=400)
+
+from datetime import datetime
+from django.db.models import Sum
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.db.models import Sum
+from .models import request_charge, memberInfo
 
 class SumTotalChgAmountByBankType(APIView):
-    def get(self, request):
+    def get(self, request, month_year=None):
         try:
-            # Aggregate the sum of chg_amount for banks and MFIs by joining on bnk_code
+            # If no month_year is provided, default to the current month and year
+            if not month_year:
+                current_date = datetime.now()
+                month_year = current_date.strftime("%Y-%m")
+            
+            # Parse month_year to extract the month and year
+            try:
+                filter_month_year = datetime.strptime(month_year, "%Y-%m")
+                filter_month = filter_month_year.month
+                filter_year = filter_month_year.year
+            except ValueError:
+                return Response({'error': 'Invalid month-year format. Please use YYYY-MM format.'}, status=400)
+
+            # Filter charges by the extracted month and year
             total_chg_amount = (
-                request_charge.objects.filter(bnk_code__isnull=False)  # Ensure that there is a valid bnk_code
+                request_charge.objects.filter(
+                    bnk_code__isnull=False,  # Ensure that there is a valid bnk_code
+                    rec_insert_date__year=filter_year,  # Filter by year
+                    rec_insert_date__month=filter_month  # Filter by month
+                )
                 .values('bnk_code')  # Group by bnk_code
                 .annotate(total_chg_amount=Sum('chg_amount'))  # Sum chg_amount
                 .values('bnk_code', 'total_chg_amount')  # Select bnk_code and the calculated sum
@@ -8022,11 +8148,14 @@ class SumTotalChgAmountByBankType(APIView):
 
                 # Determine the bank type using the lookup dictionary
                 if bnk_code in bank_type_lookup:
-                    if bank_type_lookup[bnk_code] == 1:
+                    if bank_type_lookup[bnk_code] == 1:  # Bank type 1
                         bank_total_chg_amount += total_chg_amount
-                    elif bank_type_lookup[bnk_code] == 2:
+                    elif bank_type_lookup[bnk_code] == 2:  # Bank type 2 (MFI)
                         mfi_total_chg_amount += total_chg_amount
-                overall_total_chg_amount = bank_total_chg_amount + mfi_total_chg_amount 
+
+            # Calculate overall total
+            overall_total_chg_amount = bank_total_chg_amount + mfi_total_chg_amount 
+
             # Prepare the response
             result = {
                 'Bank_TotalChgAmount': bank_total_chg_amount,
@@ -8038,6 +8167,8 @@ class SumTotalChgAmountByBankType(APIView):
 
         except Exception as e:
             return Response({'error': str(e)}, status=400)
+
+
 
 from .serializers import ProvinceSerializer, DistrictSerializer, VillageSerializer
 
