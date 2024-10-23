@@ -8192,6 +8192,63 @@ class SumTotalChgAmountByBankType(APIView):
             return Response({'error': str(e)}, status=400)
 
 
+class SumTotalByBankTypeEveryMonth(APIView):
+    def get(self, request):
+        try:
+            # Get the current year
+            current_year = datetime.now().year
+
+            # Initialize a result dictionary to store the total charge amounts grouped by month and bank type
+            result = {}
+
+            # Get all banks and MFIs from memberInfo with their bnk_type
+            bank_data = memberInfo.objects.filter(bnk_type__in=['1', '2']).values('bnk_code', 'bnk_type')
+
+            # Create a dictionary for easy lookup of bnk_type by bnk_code
+            bank_type_lookup = {bank['bnk_code']: bank['bnk_type'] for bank in bank_data}
+
+            # Iterate through each month (from 1 to 12)
+            for month in range(1, 13):
+                # Filter charges for the current month and year
+                monthly_charges = (
+                    request_charge.objects.filter(
+                        rec_insert_date__year=current_year, 
+                        rec_insert_date__month=month
+                    )
+                    .values('bnk_code')
+                    .annotate(total_chg_amount=Sum('chg_amount'))  # Sum the charge amount for each bnk_code
+                )
+
+                # Initialize totals for the current month
+                bank_total_chg_amount = 0
+                mfi_total_chg_amount = 0
+
+                # Iterate through the monthly charges and sum based on the bank type
+                for charge in monthly_charges:
+                    bnk_code = charge['bnk_code']
+                    total_chg_amount = charge['total_chg_amount']
+
+                    # Determine the bank type using the lookup dictionary
+                    if bnk_code in bank_type_lookup:
+                        if bank_type_lookup[bnk_code] == 1:  # Bank
+                            bank_total_chg_amount += total_chg_amount
+                        elif bank_type_lookup[bnk_code] == 2:  # MFI
+                            mfi_total_chg_amount += total_chg_amount
+
+                # Store the totals in the result dictionary for the current month
+                month_key = f"{current_year}-{str(month).zfill(2)}"  # Format month as 'YYYY-MM'
+                result[month_key] = {
+                    'Bank_TotalChgAmount': bank_total_chg_amount,
+                    'MFI_TotalChgAmount': mfi_total_chg_amount,
+                    'Overall_TotalChgAmount': bank_total_chg_amount + mfi_total_chg_amount
+                }
+
+            # Return the aggregated data by month
+            return Response({'data': result}, status=200)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
 
 from .serializers import ProvinceSerializer, DistrictSerializer, VillageSerializer
 
