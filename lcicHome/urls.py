@@ -53,7 +53,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView
+from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth
 from .views import STypeView
 from .views import UserGroupView
 
@@ -171,6 +171,8 @@ urlpatterns = [
    path('sumbanktype_chargeamount/', SumTotalChgAmountByBankType.as_view(), name='sumbanktype_chargeamount'),
    path('sumbanktype_chargeamount/month/<str:month_year>/', SumTotalChgAmountByBankType.as_view(), name='sumbanktype_chargeamount_bymonth'),
    path('sumbanktype_chargeamount/month/', SumTotalChgAmountByBankType.as_view(), name='sumbanktype_chargeamount_bymonth'),
+   path('sumbanktype_chargeamount/anymonth/', SumTotalByBankTypeEveryMonth.as_view(), name='sumbanktype_chargeamount_byanymonth'),
+   
    path('locations/', LocationView.as_view(), name='location-list'),
    path('filter_villages/', filter_villages, name='filter_villages'),
    path('report_catalog/', ReportCatalogView.as_view(), name='report_catalog'),
