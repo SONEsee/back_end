@@ -7581,13 +7581,89 @@ class SearchLogChart_MonthView(APIView):
             }, status=400)
 
 # PerHour AS Date Today
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from rest_framework import status
+# from django.utils import timezone
+# from .models import request_charge
+# from django.db.models import Count
+# from django.db.models.functions import ExtractHour
+# from datetime import timedelta
+
+# class ChargeCountByHourView(APIView):
+#     def get(self, request):
+#         # Get the start and end of the current day
+#         now = timezone.now()
+#         start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+#         end_of_day = start_of_day + timedelta(days=1)
+
+#         # Initialize a dictionary with all hours set to zero
+#         hour_counts = {hour: 0 for hour in range(24)}
+
+#         # Query to count rec_charge_ID by hour for the current day
+#         hourly_counts = (
+#             request_charge.objects
+#             .filter(insert_date__range=(start_of_day, end_of_day))
+#             .annotate(hour=ExtractHour('insert_date'))  # Extract the hour from insert_date
+#             .values('hour')  # Group by hour
+#             .annotate(total=Count('rec_charge_ID'))  # Count rec_charge_ID
+#             .order_by('hour')  # Order by hour
+#         )
+
+#         # Populate the hour_counts dictionary with actual counts
+#         for hour in hourly_counts:
+#             hour_counts[hour['hour']] = hour['total']
+
+#         # Convert the hour counts to a standard response format
+#         formatted_result = {str(hour): hour_counts[hour] for hour in range(24)}
+
+#         return Response(formatted_result, status=status.HTTP_200_OK)
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from rest_framework import status
+# from django.utils import timezone
+# from .models import request_charge
+# from django.db.models import Count
+# from django.db.models.functions import ExtractHour
+# from datetime import timedelta
+
+# class ChargeCountByHourView(APIView):
+#     def get(self, request):
+#         # Get the start and end of the current day
+#         now = timezone.now()
+#         start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+#         end_of_day = start_of_day + timedelta(days=1)
+
+#         # Initialize a dictionary with all hours set to zero
+#         hour_counts = {hour: 0 for hour in range(24)}
+
+#         # Query to count rec_charge_ID by hour for the current day
+#         hourly_counts = (
+#             request_charge.objects
+#             .filter(insert_date__range=(start_of_day, end_of_day))
+#             .annotate(hour=ExtractHour('insert_date'))  # Extract the hour from insert_date
+#             .values('hour')  # Group by hour
+#             .annotate(total=Count('rec_charge_ID'))  # Count rec_charge_ID
+#             .order_by('hour')  # Order by hour
+#         )
+
+#         # Populate the hour_counts dictionary with actual counts
+#         for hour in hourly_counts:
+#             hour_counts[hour['hour']] = hour['total']
+
+#         # Format the output to reflect the correct hours with counts in 24-hour format
+#         formatted_result = {}
+#         for hour in range(24):
+#             formatted_result[str(hour)] = hour_counts[hour]  # Use 24-hour format directly
+
+#         return Response(formatted_result, status=status.HTTP_200_OK)
+
+from django.utils import timezone
+from django.db.models import Count
+from django.db.models.functions import ExtractHour
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.utils import timezone
-from .models import request_charge
-from django.db.models import Count
-from django.db.models.functions import ExtractHour
 from datetime import timedelta
 
 class ChargeCountByHourView(APIView):
@@ -7614,9 +7690,22 @@ class ChargeCountByHourView(APIView):
         for hour in hourly_counts:
             hour_counts[hour['hour']] = hour['total']
 
-        return Response(hour_counts, status=status.HTTP_200_OK)
-                                                                                            
+        # Format the output to reflect the correct hours with counts in 12-hour format
+        formatted_result = {}
+        for hour in range(24):
+            # Convert hour to 12-hour format
+            if hour == 0:
+                formatted_hour = "12 AM"
+            elif hour < 12:
+                formatted_hour = f"{hour} AM"
+            elif hour == 12:
+                formatted_hour = "12 PM"
+            else:
+                formatted_hour = f"{hour - 12} PM"
 
+            formatted_result[formatted_hour] = hour_counts[hour]
+
+        return Response(formatted_result, status=status.HTTP_200_OK)
 
 class SearchLogChartByDateView(APIView):
     def get(self, request, inquiry_date):
