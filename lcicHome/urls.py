@@ -53,7 +53,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView
+from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView
 from .views import STypeView
 from .views import UserGroupView
 
@@ -154,7 +154,11 @@ urlpatterns = [
     path('searchlog_chart/month/<str:month_year>/', SearchLogChart_MonthView.as_view(), name='searchlog_chart_month'),  
    
    path('searchlog_chart/date/<str:inquiry_date>', SearchLogChartByDateView.as_view(), name='searchlog_chartbydate'),
+   
    path('searchlog_chart/perday/',SearchLogChargePerDayView.as_view(), name='searchlog_chartperday'),
+   
+    path('charge-count/', ChargeCountByHourView.as_view(), name='charge-count-by-hour'),
+   
    path('searchlog_chart/bank/<str:bnk_code>', SearchLogChartByBankCodeView.as_view(), name='searchlog_chartbybank'),
    path('charge_chart/',ChargeChartView.as_view(), name='charge_report_chart'),
    path('charge_chart/date/<str:charge_date>', ChargeChartByDateView.as_view(), name='charge-chart-by-date'),
