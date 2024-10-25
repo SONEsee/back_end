@@ -2516,8 +2516,9 @@ class EnterpriseInfoMatch(APIView):
         # print("Login :",Login._meta.get_fields())
         if LCICID is not None and EnterpriseID is not None:
             try:
-                enterprise_info = EnterpriseInfo.objects.filter(LCICID=LCICID, EnterpriseID=EnterpriseID)
-                investor_info = InvestorInfo.objects.filter(EnterpriseID=EnterpriseID)
+                # enterprise_info = EnterpriseInfo.objects.filter(LCICID=LCICID, EnterpriseID=EnterpriseID)
+                enterprise_info = B1.objects.filter(lcicID=LCICID, com_enterprise_code=EnterpriseID)
+                investor_info = InvestorInfo.objects.filter(EnterpriseID=EnterpriseID)                              
                 for i in investor_info:
                     invesinfo = i.investorName
                     # print(invesinfo)
@@ -7050,10 +7051,21 @@ class UserLoginView(APIView):
 
 
 
-from .serializers import MemberInfoSerializer
+from django.db.models import IntegerField
+from django.db.models.functions import Cast
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import memberInfo  # Make sure to import your model
+from .serializers import MemberInfoSerializer  # Make sure to import your serializer
+
 class memberinfolistView(APIView):
     def get(self, request):
-        member_info = memberInfo.objects.all()
+        # Use annotate to cast bnk_code as signed integer for ordering
+        member_info = memberInfo.objects.annotate(
+            bnk_code_as_int=Cast('bnk_code', IntegerField())
+        ).order_by('bnk_code_as_int')
+        
         serializer = MemberInfoSerializer(member_info, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -7218,7 +7230,7 @@ class InsertSearchLogView(APIView):
         charge_bank_type = bank_info.bnk_type
         
         if charge_bank_type == 1:
-            chargeType = ChargeMatrix.objects.get(chg_sys_id=2)
+            chargeType = ChargeMatrix.objects.get(chg_sys_id=2)                    
         else:
             chargeType = ChargeMatrix.objects.get(chg_sys_id=5)
         
@@ -7247,7 +7259,7 @@ class InsertSearchLogView(APIView):
         if EnterpriseID and LCICID:
             try:
                 # inquiry_month = datetime(year=2024, month=10, day=1).date()  # October 2024
-                inquiry_month = datetime(year=2024, month=10, day=1).strftime('%m%Y')
+                inquiry_month = datetime(year=2024, month=10, day=1).strftime('%Y-%m')
                 inquiry_month_charge = datetime(year=2024, month=10, day=1).strftime('%d%m%Y')
                 search_log = searchLog.objects.create(
                     enterprise_ID=EnterpriseID,
@@ -7281,6 +7293,7 @@ class InsertSearchLogView(APIView):
                     LCIC_ID=LCICID,
                     cusType=loan_log.segmentType,
                     # user_session_id=str(request.session.session_key),  # Use Django session key if applicable 
+                    
                     user_session_id='',
                     rec_reference_code='',
                     search_log=search_log 
@@ -7374,7 +7387,6 @@ class searchlog_reportView(APIView):
 #             return Response({
 #                 'error': str(e)
 #             }, status=status.HTTP_400_BAD_REQUEST)
-
 from .serializers import ChargeSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -7391,25 +7403,36 @@ class charge_reportView(APIView):
             bank = request.query_params.get('bank', bnk_code)  # Can come from URL or query param
             month = request.query_params.get('month')
             year = request.query_params.get('year')
+            from_date = request.query_params.get('fromDate')  # New: fromDate filter
+            to_date = request.query_params.get('toDate')      # New: toDate filter
 
             # Start with all records or filter by bank if provided
-            charge_report = request_charge.objects.all().order_by('insert_date')
+            charge_report = request_charge.objects.all().order_by('-rec_charge_ID')
 
+            # Filter by bank code if provided
             if bank:
                 charge_report = charge_report.filter(bnk_code=bank)
 
-            # Apply year filter if provided
+            # Filter by year and month if provided
             if year:
                 charge_report = charge_report.filter(insert_date__year=year)
 
-                # Apply month filter only if both year and month are provided
                 if month:
                     charge_report = charge_report.filter(insert_date__month=month)
+
             elif month:
                 # If month is provided without year, return an error
                 return Response({
                     'error': 'Year is required when filtering by month.'
                 }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Apply date range filter if both fromDate and toDate are provided
+            if from_date and to_date:
+                charge_report = charge_report.filter(insert_date__range=[from_date, to_date])
+            elif from_date:
+                charge_report = charge_report.filter(insert_date__gte=from_date)
+            elif to_date:
+                charge_report = charge_report.filter(insert_date__lte=to_date)
 
             # If no records are found, return an appropriate message
             if not charge_report.exists():
@@ -7594,6 +7617,56 @@ class SearchLogChartByDateView(APIView):
             return Response({
                 'error': 'Invalid date format. Please use DD-MM-YYYY format.'
             }, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+from django.db.models import Count
+from django.db.models.functions import TruncHour
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework import status
+from datetime import datetime
+from .models import searchLog  # Adjust if the model is named differently
+
+class SearchLogChargePerDayView(APIView):
+    def get(self, request):
+        try:
+            # Get the date from query parameters or use today's date if not provided
+            date_str = request.query_params.get('date')
+            if date_str:
+                try:
+                    query_date = datetime.strptime(date_str, '%Y-%m-%d')
+                except ValueError:
+                    return Response({'error': 'Invalid date format. Please use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                query_date = datetime.now().date()  # Use today's date
+            
+            # Filter logs for the specified date and truncate by hour
+            hourly_data = (
+                request_charge.objects
+                .filter(rec_insert_date__date=query_date)  # Filter by the specified or current date
+                .annotate(hour=TruncHour('rec_insert_date'))  # Truncate to the hour
+                .values('hour')  # Group by the hour
+                .annotate(total_logs=Count('bnk_code'))  # Count logs for each hour
+                .order_by('hour')  # Order by hour
+            )
+            
+            # Create a list for 24 hours initialized with 0
+            chart_data = [{'hour': i, 'total_logs': 0} for i in range(24)]
+            
+            # Populate data for each hour in the result
+            for entry in hourly_data:
+                hour = entry['hour'].hour  # Extract the hour
+                chart_data[hour]['total_logs'] = entry['total_logs']  # Update with the count for that hour
+            
+            # Return the formatted data
+            return Response({
+                'date': query_date.strftime('%Y-%m-%d'),
+                'chart_data': chart_data  # List with 24 entries (0-23 hours)
+            }, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response({
