@@ -7387,12 +7387,129 @@ class searchlog_reportView(APIView):
 #             return Response({
 #                 'error': str(e)
 #             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# from .serializers import ChargeSerializer
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from rest_framework import status
+# from .models import request_charge  # Assuming this is your model
+# from django.db.models import Q  # To handle complex queries
+
+# class charge_reportView(APIView):
+#     # permission_classes = [IsAuthenticated]
+
+#     def get(self, request, bnk_code=None):
+#         try:
+#             # Get query parameters
+#             bank = request.query_params.get('bank', bnk_code)  # Can come from URL or query param
+#             month = request.query_params.get('month')
+#             year = request.query_params.get('year')
+#             from_date = request.query_params.get('fromDate')  # New: fromDate filter
+#             to_date = request.query_params.get('toDate')      # New: toDate filter
+
+#             # Start with all records or filter by bank if provided
+#             charge_report = request_charge.objects.all().order_by('-rec_charge_ID')
+            
+#             charge_report_list = []       
+#             for charge_field in charge_report:
+#                 # print(charge_field)
+                    
+#                 enterprise_data = EnterpriseInfo.objects.filter         (LCICID=charge_field.LCIC_ID)
+
+#                 lon_purpose_data = Main_catalog_cat.objects.filter(cat_value=charge_field.lon_purpose)
+#                 # print(lon_purpose_data)
+                
+#                 bank_info = memberInfo.objects.filter
+            
+#                 # for bank_data in 
+                
+#                 for lon_list in lon_purpose_data:
+#                     print("Loan_purpose: ",lon_list.cat_name)
+            
+#                 # print("====> Enterprise_Data LCICID : ",enterprise_data)
+#                 for enter_data in enterprise_data:
+#                     print("-=---->",enter_data.enterpriseNameLao)
+            
+#             charge_data_list = {
+#                 "rec_charge_ID": charge_field.rec_charge_ID,
+#                 "bnk_code": charge_field.bnk_code,
+#                 "bnk_type": charge_field.bnk_type,
+#                 "chg_amount": charge_field.chg_amount,
+#                 "chg_code": charge_field.chg_code,
+#                 "status": charge_field.status,
+#                 "insert_date": charge_field.insert_date,
+#                 "update_date": charge_field.update_date,
+#                 "rtp_code": charge_field.rtp_code,
+#                 "lon_purpose": lon_list.cat_name,
+#                 "chg_unit": charge_field.chg_unit,
+#                 "user_sys_id": charge_field.user_sys_id,
+#                 "LCIC_ID": enter_data.enterpriseNameLao,
+#                 "cusType": charge_field.cusType,
+#                 "user_session_id": "",
+#                 "rec_reference_code": charge_field.rec_reference_code,
+#                 "rec_insert_date": charge_field.rec_insert_date,
+#                 "search_log": charge_field.search_log.search_ID
+#             }
+#             charge_report_list.append(charge_data_list)
+            
+                
+                
+            
+#             # Filter by bank code if provided
+#             if bank:
+#                 charge_report = charge_report.filter(bnk_code=bank)
+
+#             # Filter by year and month if provided
+#             if year:
+#                 charge_report = charge_report.filter(insert_date__year=year)
+
+#                 if month:
+#                     charge_report = charge_report.filter(insert_date__month=month)
+
+#             elif month:
+#                 # If month is provided without year, return an error
+#                 return Response({
+#                     'error': 'Year is required when filtering by month.'
+#                 }, status=status.HTTP_400_BAD_REQUEST)
+
+#             # Apply date range filter if both fromDate and toDate are provided
+#             if from_date and to_date:
+#                 charge_report = charge_report.filter(insert_date__range=[from_date, to_date])
+#             elif from_date:
+#                 charge_report = charge_report.filter(insert_date__gte=from_date)
+#             elif to_date:
+#                 charge_report = charge_report.filter(insert_date__lte=to_date)
+
+#             # If no records are found, return an appropriate message
+#             if not charge_report.exists():
+#                 return Response({
+#                     'detail': 'No charges found for the provided filters.'
+#                 }, status=status.HTTP_404_NOT_FOUND)
+
+#             # Serialize the data
+#             serializer = ChargeSerializer(charge_report, many=True)
+            
+#             # return Response({
+#             #     'charge': serializer.data
+#             # }, status=status.HTTP_200_OK)
+            
+#             response_data = {
+#                 'charge': charge_report_list
+#             }
+#             return Response(response_data, status=status.HTTP_200_OK)
+
+
+#         except Exception as e:
+#             return Response({
+#                 'error': str(e)
+#             }, status=status.HTTP_400_BAD_REQUEST)
 from .serializers import ChargeSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import request_charge  # Assuming this is your model
-from django.db.models import Q  # To handle complex queries
+from .models import request_charge, EnterpriseInfo, Main_catalog_cat, memberInfo
+from django.db.models import Q
 
 class charge_reportView(APIView):
     # permission_classes = [IsAuthenticated]
@@ -7400,11 +7517,11 @@ class charge_reportView(APIView):
     def get(self, request, bnk_code=None):
         try:
             # Get query parameters
-            bank = request.query_params.get('bank', bnk_code)  # Can come from URL or query param
+            bank = request.query_params.get('bank', bnk_code)
             month = request.query_params.get('month')
             year = request.query_params.get('year')
-            from_date = request.query_params.get('fromDate')  # New: fromDate filter
-            to_date = request.query_params.get('toDate')      # New: toDate filter
+            from_date = request.query_params.get('fromDate')
+            to_date = request.query_params.get('toDate')
 
             # Start with all records or filter by bank if provided
             charge_report = request_charge.objects.all().order_by('-rec_charge_ID')
@@ -7416,10 +7533,8 @@ class charge_reportView(APIView):
             # Filter by year and month if provided
             if year:
                 charge_report = charge_report.filter(insert_date__year=year)
-
                 if month:
                     charge_report = charge_report.filter(insert_date__month=month)
-
             elif month:
                 # If month is provided without year, return an error
                 return Response({
@@ -7440,12 +7555,58 @@ class charge_reportView(APIView):
                     'detail': 'No charges found for the provided filters.'
                 }, status=status.HTTP_404_NOT_FOUND)
 
-            # Serialize the data
-            serializer = ChargeSerializer(charge_report, many=True)
-            
-            return Response({
-                'charge': serializer.data
-            }, status=status.HTTP_200_OK)
+            # Prepare the custom response data
+            charge_report_list = []
+            for charge_field in charge_report:
+                # Fetch specific enterprise and loan purpose data for each charge_field
+                enterprise_name = None
+                loan_purpose_name = None
+
+                # Retrieve the relevant enterprise information if available
+                enterprise_list = EnterpriseInfo.objects.filter(LCICID=charge_field.LCIC_ID)
+                for enterprise_data in enterprise_list:
+                    enterprise_name = enterprise_data.enterpriseNameLao
+
+                # Retrieve the relevant loan purpose information if available
+                loan_purpose_list = Main_catalog_cat.objects.filter(cat_value=charge_field.lon_purpose)
+                for loan_purpose_data in loan_purpose_list:
+                    loan_purpose_name = loan_purpose_data.cat_name
+                
+                bank_info_list = memberInfo.objects.filter(bnk_code=charge_field.bnk_code)
+                for bank_info_data in bank_info_list:
+                    bank_info_name = bank_info_data.code
+
+
+                # Create the data dictionary with specific related data
+                charge_data = {
+                    "rec_charge_ID": charge_field.rec_charge_ID,
+                    "bnk_code": f"{charge_field.bnk_code}-{bank_info_name}",
+                    "bnk_type": charge_field.bnk_type,
+                    "chg_amount": charge_field.chg_amount,
+                    "chg_code": charge_field.chg_code,
+                    "status": charge_field.status,
+                    "insert_date": charge_field.insert_date,
+                    "update_date": charge_field.update_date,
+                    "rtp_code": charge_field.rtp_code,
+                    "lon_purpose": loan_purpose_name,  # Specific loan purpose
+                    "chg_unit": charge_field.chg_unit,
+                    "user_sys_id": charge_field.user_sys_id,
+                    "LCIC_ID": enterprise_name,  # Specific enterprise name
+                    "cusType": charge_field.cusType,
+                    "user_session_id": "",
+                    "rec_reference_code": charge_field.rec_reference_code,
+                    "rec_insert_date": charge_field.rec_insert_date,
+                    "search_log": charge_field.search_log.search_ID if charge_field.search_log else None
+                }
+
+                # Append each charge record with its unique related data
+                charge_report_list.append(charge_data)
+
+            # Return the customized response
+            response_data = {
+                'charge': charge_report_list
+            }
+            return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response({
