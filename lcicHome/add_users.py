@@ -33,3 +33,5 @@ class Command(BaseCommand):
                 self.stderr.write(self.style.ERROR(f'Failed to add user for member {member.id}: {str(e)}'))
 
         self.stdout.write(self.style.SUCCESS(f'Successfully added {added_users} users.'))
+
+
