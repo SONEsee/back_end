@@ -7074,6 +7074,24 @@ class UserLoginView(APIView):
 
 
 
+# from django.db.models import IntegerField
+# from django.db.models.functions import Cast
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from rest_framework import status
+# from .models import memberInfo  # Make sure to import your model
+# from .serializers import MemberInfoSerializer  # Make sure to import your serializer
+
+# class memberinfolistView(APIView):
+#     def get(self, request):
+        
+#         member_info = memberInfo.objects.annotate(
+#             bnk_code_as_int=Cast('bnk_code', IntegerField())
+#         ).order_by('bnk_code_as_int')
+        
+#         serializer = MemberInfoSerializer(member_info, many=True)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+
 from django.db.models import IntegerField
 from django.db.models.functions import Cast
 from rest_framework.views import APIView
@@ -7084,8 +7102,8 @@ from .serializers import MemberInfoSerializer  # Make sure to import your serial
 
 class memberinfolistView(APIView):
     def get(self, request):
-        # Use annotate to cast bnk_code as signed integer for ordering
-        member_info = memberInfo.objects.annotate(
+        # Exclude records where bnk_code is '01' and cast bnk_code as integer
+        member_info = memberInfo.objects.exclude(bnk_code='01').annotate(
             bnk_code_as_int=Cast('bnk_code', IntegerField())
         ).order_by('bnk_code_as_int')
         
@@ -7187,43 +7205,47 @@ class AssignRoleView(APIView):
 
 class ManageUserView(APIView):
 
-    # def get(self, request, format=None):
-    #     all_user = Login.objects.all().order_by('UID')
-    #     s_user = LoginSerializer(all_user, many=True)
-
-    #     combined_data = {
-    #         'all_user': s_user.data,
-    #     }
-    #     return Response(combined_data, status=status.HTTP_200_OK)
-    
     def get(self, request, format=None):
-        # Fetch all users and order by 'UID'
-        all_users = Login.objects.all().order_by('UID')
-        
-        # List to store custom user data
-        custom_user_data = []
+        all_user = Login.objects.all().order_by('UID')
+        s_user = LoginSerializer(all_user, many=True)
 
-        # Loop through all users and extract the necessary fields
-        for user in all_users:
-            custom_user_data.append({
-                "UID": user.UID,
-                "bnk_code": user.MID.bnk_code if user.MID else None,  # Ensure MID is not None
-                "bnk_name":user.MID.code,
-                "Permission": user.GID.nameL if user.GID else None,  # Custom handling for GID
-                "username": user.username,
-                "nameL": user.nameL,
-                "nameE": user.nameE,
-                "surnameL": user.surnameL,
-                "surnameE": user.surnameE,
-                "is_active": user.is_active,
-            })
-
-        # Prepare the combined response
         combined_data = {
-            'all_user': custom_user_data,
+            'all_user': s_user.data,
         }
-        
         return Response(combined_data, status=status.HTTP_200_OK)
+    
+    # def get(self, request, format=None):
+    #     # Fetch all users and order by 'UID'
+    #     all_users = Login.objects.all().order_by('UID')
+        
+    #     bank_info = memberInfo.objects.filter(id=all_users.MID)        
+        
+    #     for bank_data in bank_info:
+    #         print(bank_data.code)
+    #     # List to store custom user data
+    #     custom_user_data = []
+
+    #     # Loop through all users and extract the necessary fields
+    #     for user in all_users:
+    #         custom_user_data.append({
+    #             "UID": user.UID,
+    #             "bnk_code": user.MID.bnk_code if user.MID else None,  # Ensure MID is not None
+    #             "bnk_name":bank_data.code,
+    #             "Permission": user.GID.nameL if user.GID else None,  # Custom handling for GID
+    #             "username": user.username,
+    #             "nameL": user.nameL,
+    #             "nameE": user.nameE,
+    #             "surnameL": user.surnameL,
+    #             "surnameE": user.surnameE,
+    #             "is_active": user.is_active,
+    #         })
+
+    #     # Prepare the combined response
+    #     combined_data = {
+    #         'all_user': custom_user_data,
+    #     }
+        
+    #     return Response(combined_data, status=status.HTTP_200_OK)
     
     def post(self, request, format=None):
         data = request.data
@@ -7272,12 +7294,8 @@ class InsertSearchLogView(APIView):
         search_loan = B1.objects.filter(lcicID=LCICID)
         for loan_log in search_loan:
             print("branch_id:", loan_log.branch_id)
-            if loan_log.segmentType == 'A2':
-                entity = '1'
-            else:
-                entity = '2'
+
         sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
-        isfound = 1
 
         if EnterpriseID and LCICID:
             try:
@@ -7299,9 +7317,29 @@ class InsertSearchLogView(APIView):
                     rec_loan_amount=0.0,
                     rec_loan_amount_currency='LAK',
                     rec_loan_purpose=loan_log.lon_purpose_code,
-                    rec_enquiry_type=entity,
+                    rec_enquiry_type='1',
                     sys_usr=sys_usr  
                 )
+                # search_log = searchLog.objects.get(
+                #     enterprise_ID=EnterpriseID,
+                #     LCIC_ID=LCICID,
+                #     # Add any other unique identifiers if necessary
+                # )
+                # search_log.bnk_code = bank_info.bnk_code
+                # search_log.bnk_type = bank_info.bnk_type
+                # search_log.branch = loan_log.branch_id
+                # search_log.cus_ID = loan_log.customer_id
+                # search_log.cusType = loan_log.segmentType
+                # search_log.credit_type = chargeType.chg_code
+                # search_log.inquiry_month = inquiry_month
+                # search_log.com_tel = ''
+                # search_log.com_location = ''
+                # search_log.rec_loan_amount = 0.0
+                # search_log.rec_loan_amount_currency = 'LAK'
+                # search_log.rec_loan_purpose = loan_log.lon_purpose_code
+                # search_log.rec_enquiry_type = '1'
+                # search_log.sys_usr = sys_usr  
+                # search_log.save()
 
                 charge = request_charge.objects.create(
                     bnk_code=bank_info.bnk_code,
@@ -7309,7 +7347,7 @@ class InsertSearchLogView(APIView):
                     chg_amount=charge_amount_com,
                     chg_code=chargeType.chg_code,
                     status='pending',  
-                    rtp_code=entity, 
+                    rtp_code='1', 
                     lon_purpose=loan_log.lon_purpose_code,
                     chg_unit=chargeType.chg_unit,
                     user_sys_id=sys_usr,
@@ -7347,7 +7385,7 @@ class InsertSearchLogView(APIView):
 #         }, status=status.HTTP_200_OK)
 
 
-from .models import searchLog
+from .models import searchLog,memberInfo
 from .serializers import SearchLogSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -7356,26 +7394,57 @@ from rest_framework import status
 class searchlog_reportView(APIView):
     # permission_classes = [IsAuthenticated]
 
-    def get(self, request, bnk_code=None):
+       def get(self, request, bnk_code=None):                
         try:
-            # Filter the searchLog records by bnk_code
-            if bnk_code:
-                searchlog_report = searchLog.objects.filter(bnk_code=bnk_code)
-            else:
-                searchlog_report = searchLog.objects.all().order_by('inquiry_date')
+            # Get query parameters
+            bank = request.query_params.get('bank', bnk_code)
+            month = request.query_params.get('month')
+            year = request.query_params.get('year')
+            from_date = request.query_params.get('fromDate')
+            to_date = request.query_params.get('toDate')
 
-            # If no records found, return an appropriate message
-            if not searchlog_report.exists():
+
+            # Start with the searchLog queryset
+            search_log_queryset = searchLog.objects.all()
+
+            # Apply filters based on query parameters
+            if bank:
+                search_log_queryset = search_log_queryset.filter(bnk_code=bank)
+            if year:
+                search_log_queryset = search_log_queryset.filter(inquiry_date__year=year)
+                if month:
+                    search_log_queryset = search_log_queryset.filter(inquiry_date__month=month)
+            elif month:
+                # If month is provided without year, return an error
                 return Response({
-                    'detail': 'No records found for the provided bnk_code.'
-                }, status=status.HTTP_404_NOT_FOUND)
-
-            # Serialize the data if records exist
-            serializer = SearchLogSerializer(searchlog_report, many=True)
+                    'error': 'Year is required when filtering by month.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            if from_date and to_date:
+                search_log_queryset = search_log_queryset.filter(inquiry_date__range=[from_date, to_date])
+            elif from_date:
+                search_log_queryset = search_log_queryset.filter(inquiry_date__gte=from_date)
+            elif to_date:
+                search_log_queryset = search_log_queryset.filter(inquiry_date__lte=to_date)
+                        
+            # Annotate the counts from both models
+            bank_info = memberInfo.objects.filter(bnk_code=bank)
             
-            return Response({
-                'logged': serializer.data
-            }, status=status.HTTP_200_OK)
+            results = (
+                search_log_queryset
+                .values('bnk_code')
+                .annotate(
+                    searchlog_count=Count('search_ID', filter=Q(rec_enquiry_type='')),  # Count search_ID where rec_enquiry_type is '1'
+                    request_charge_count=Count('request_charge__chg_amount')
+                )
+                .order_by(Cast('bnk_code', IntegerField()))  # Order by bnk_code as Integer
+            )
+
+            # Prepare the response data
+            # response_data = list(results)
+            
+
+            return Response(response_data, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({
                 'error': str(e)
@@ -7410,12 +7479,130 @@ class searchlog_reportView(APIView):
 #             return Response({
 #                 'error': str(e)
 #             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+# from .serializers import ChargeSerializer
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from rest_framework import status
+# from .models import request_charge  # Assuming this is your model
+# from django.db.models import Q  # To handle complex queries
+
+# class charge_reportView(APIView):
+#     # permission_classes = [IsAuthenticated]
+
+#     def get(self, request, bnk_code=None):
+#         try:
+#             # Get query parameters
+#             bank = request.query_params.get('bank', bnk_code)  # Can come from URL or query param
+#             month = request.query_params.get('month')
+#             year = request.query_params.get('year')
+#             from_date = request.query_params.get('fromDate')  # New: fromDate filter
+#             to_date = request.query_params.get('toDate')      # New: toDate filter
+
+#             # Start with all records or filter by bank if provided
+#             charge_report = request_charge.objects.all().order_by('-rec_charge_ID')
+            
+#             charge_report_list = []       
+#             for charge_field in charge_report:
+#                 # print(charge_field)
+                    
+#                 enterprise_data = EnterpriseInfo.objects.filter         (LCICID=charge_field.LCIC_ID)
+
+#                 lon_purpose_data = Main_catalog_cat.objects.filter(cat_value=charge_field.lon_purpose)
+#                 # print(lon_purpose_data)
+                
+#                 bank_info = memberInfo.objects.filter
+            
+#                 # for bank_data in 
+                
+#                 for lon_list in lon_purpose_data:
+#                     print("Loan_purpose: ",lon_list.cat_name)
+            
+#                 # print("====> Enterprise_Data LCICID : ",enterprise_data)
+#                 for enter_data in enterprise_data:
+#                     print("-=---->",enter_data.enterpriseNameLao)
+            
+#             charge_data_list = {
+#                 "rec_charge_ID": charge_field.rec_charge_ID,
+#                 "bnk_code": charge_field.bnk_code,
+#                 "bnk_type": charge_field.bnk_type,
+#                 "chg_amount": charge_field.chg_amount,
+#                 "chg_code": charge_field.chg_code,
+#                 "status": charge_field.status,
+#                 "insert_date": charge_field.insert_date,
+#                 "update_date": charge_field.update_date,
+#                 "rtp_code": charge_field.rtp_code,
+#                 "lon_purpose": lon_list.cat_name,
+#                 "chg_unit": charge_field.chg_unit,
+#                 "user_sys_id": charge_field.user_sys_id,
+#                 "LCIC_ID": enter_data.enterpriseNameLao,
+#                 "cusType": charge_field.cusType,
+#                 "user_session_id": "",
+#                 "rec_reference_code": charge_field.rec_reference_code,
+#                 "rec_insert_date": charge_field.rec_insert_date,
+#                 "search_log": charge_field.search_log.search_ID
+#             }
+#             charge_report_list.append(charge_data_list)
+            
+                
+                
+            
+#             # Filter by bank code if provided
+#             if bank:
+#                 charge_report = charge_report.filter(bnk_code=bank)
+
+#             # Filter by year and month if provided
+#             if year:
+#                 charge_report = charge_report.filter(insert_date__year=year)
+
+#                 if month:
+#                     charge_report = charge_report.filter(insert_date__month=month)
+
+#             elif month:
+#                 # If month is provided without year, return an error
+#                 return Response({
+#                     'error': 'Year is required when filtering by month.'
+#                 }, status=status.HTTP_400_BAD_REQUEST)
+
+#             # Apply date range filter if both fromDate and toDate are provided
+#             if from_date and to_date:
+#                 charge_report = charge_report.filter(insert_date__range=[from_date, to_date])
+#             elif from_date:
+#                 charge_report = charge_report.filter(insert_date__gte=from_date)
+#             elif to_date:
+#                 charge_report = charge_report.filter(insert_date__lte=to_date)
+
+#             # If no records are found, return an appropriate message
+#             if not charge_report.exists():
+#                 return Response({
+#                     'detail': 'No charges found for the provided filters.'
+#                 }, status=status.HTTP_404_NOT_FOUND)
+
+#             # Serialize the data
+#             serializer = ChargeSerializer(charge_report, many=True)
+            
+#             # return Response({
+#             #     'charge': serializer.data
+#             # }, status=status.HTTP_200_OK)
+            
+#             response_data = {
+#                 'charge': charge_report_list
+#             }
+#             return Response(response_data, status=status.HTTP_200_OK)
+
+
+#         except Exception as e:
+#             return Response({
+#                 'error': str(e)
+#             }, status=status.HTTP_400_BAD_REQUEST)
+
 from .serializers import ChargeSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import request_charge  # Assuming this is your model
-from django.db.models import Q  # To handle complex queries
+from .models import request_charge, EnterpriseInfo, Main_catalog_cat, memberInfo
+from django.db.models import Sum
 
 class charge_reportView(APIView):
     # permission_classes = [IsAuthenticated]
@@ -7423,26 +7610,22 @@ class charge_reportView(APIView):
     def get(self, request, bnk_code=None):
         try:
             # Get query parameters
-            bank = request.query_params.get('bank', bnk_code)  # Can come from URL or query param
+            bank = request.query_params.get('bank', bnk_code)
             month = request.query_params.get('month')
             year = request.query_params.get('year')
-            from_date = request.query_params.get('fromDate')  # New: fromDate filter
-            to_date = request.query_params.get('toDate')      # New: toDate filter
-
-            # Start with all records or filter by bank if provided
-            charge_report = request_charge.objects.all().order_by('-rec_charge_ID')
-
-            # Filter by bank code if provided
+            from_date = request.query_params.get('fromDate')
+            to_date = request.query_params.get('toDate')
+            
+            charge_report = request_charge.objects.exclude(bnk_code='01')
+            
             if bank:
                 charge_report = charge_report.filter(bnk_code=bank)
 
             # Filter by year and month if provided
             if year:
                 charge_report = charge_report.filter(insert_date__year=year)
-
                 if month:
                     charge_report = charge_report.filter(insert_date__month=month)
-
             elif month:
                 # If month is provided without year, return an error
                 return Response({
@@ -7463,18 +7646,136 @@ class charge_reportView(APIView):
                     'detail': 'No charges found for the provided filters.'
                 }, status=status.HTTP_404_NOT_FOUND)
 
-            # Serialize the data
-            serializer = ChargeSerializer(charge_report, many=True)
-            
-            return Response({
-                'charge': serializer.data
-            }, status=status.HTTP_200_OK)
+            # Prepare the custom response data
+            charge_report_list = []
+            for charge_field in charge_report:
+                # Fetch specific enterprise and loan purpose data for each charge_field
+                enterprise_name = None
+                loan_purpose_name = None
+                bank_info_name = None
+
+                # Retrieve the relevant enterprise information if available
+                enterprise_list = EnterpriseInfo.objects.filter(LCICID=charge_field.LCIC_ID)
+                for enterprise_data in enterprise_list:
+                    enterprise_name = enterprise_data.enterpriseNameLao
+
+                # Retrieve the relevant loan purpose information if available
+                loan_purpose_list = Main_catalog_cat.objects.filter(cat_value=charge_field.lon_purpose)
+                for loan_purpose_data in loan_purpose_list:
+                    loan_purpose_name = loan_purpose_data.cat_name
+                
+                # Retrieve bank info
+                bank_info_list = memberInfo.objects.filter(bnk_code=charge_field.bnk_code)
+                for bank_info_data in bank_info_list:
+                    bank_info_name = bank_info_data.code
+
+                # Create the data dictionary with specific related data
+                charge_data = {
+                    "rec_charge_ID": charge_field.rec_charge_ID,
+                    "bnk_code": f"{charge_field.bnk_code}-{bank_info_name}",
+                    "bnk_type": charge_field.bnk_type,
+                    "chg_amount": charge_field.chg_amount,
+                    "chg_code": charge_field.chg_code,
+                    "status": charge_field.status,
+                    "insert_date": charge_field.insert_date,
+                    "update_date": charge_field.update_date,
+                    "rtp_code": charge_field.rtp_code,
+                    "lon_purpose": loan_purpose_name,  # Specific loan purpose
+                    "chg_unit": charge_field.chg_unit,
+                    "user_sys_id": charge_field.user_sys_id,
+                    "LCIC_ID": enterprise_name,  # Specific enterprise name
+                    "cusType": charge_field.cusType,
+                    "user_session_id": "",
+                    "rec_reference_code": charge_field.rec_reference_code,
+                    "rec_insert_date": charge_field.rec_insert_date,
+                    "search_log": charge_field.search_log.search_ID if charge_field.search_log else None
+                }
+
+                # Append each charge record with its unique related data
+                charge_report_list.append(charge_data)
+
+            # Return the customized response
+            response_data = {
+                'charge': charge_report_list
+            }
+            return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response({
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+            
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db.models import Sum, Count
+from .models import request_charge, memberInfo
 
+class ChargeReportSummary(APIView):
+    def get(self, request):
+        try:
+            # Retrieve query parameters
+            bank = request.query_params.get('bank')
+            month = request.query_params.get('month')
+            year = request.query_params.get('year')
+            from_date = request.query_params.get('fromDate')                        
+            to_date = request.query_params.get('toDate')
+
+            # Start with all records or filter by bank if provided
+            charge_report = request_charge.objects.exclude(bnk_code='01')
+
+            # Filter by bank code if provided
+            if bank:
+                charge_report = charge_report.filter(bnk_code=bank)
+
+            # Filter by year and month if provided
+            if year:
+                charge_report = charge_report.filter(insert_date__year=year)
+                if month:
+                    charge_report = charge_report.filter(insert_date__month=month)
+            elif month:
+                return Response({
+                    'error': 'Year is required when filtering by month.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Apply date range filter if both fromDate and toDate are provided
+            if from_date and to_date:
+                charge_report = charge_report.filter(insert_date__range=[from_date, to_date])
+            elif from_date:
+                charge_report = charge_report.filter(insert_date__gte=from_date)
+            elif to_date:
+                charge_report = charge_report.filter(insert_date__lte=to_date)
+
+            # Group by bank code and calculate total records and total charge amount
+            summary_data = (
+                charge_report.values('bnk_code')
+                .annotate(
+                    total_records=Count('rec_charge_ID'),
+                    total_chg_amount=Sum('chg_amount')
+                )
+                .order_by('bnk_code')
+            )
+
+            # Retrieve bank names for display
+            response_data = []
+            for data in summary_data:
+                bank_info = memberInfo.objects.filter(bnk_code=data['bnk_code']).first()
+                
+                bank_name = bank_info.code if bank_info else 'Unknown Bank'
+                bank_nameL = bank_info.nameL if bank_info else 'Unknown NameL'  # Add NameL retrieval
+
+
+                response_data.append({
+                    'bnk_code': data['bnk_code'],
+                    'bank_name': f"{bank_name}-{bank_nameL}",         
+                    'total_records': data['total_records'],
+                    'total_chg_amount': data['total_chg_amount']
+                })
+
+            return Response({'summary': response_data}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
             
 from django.db.models import Count
