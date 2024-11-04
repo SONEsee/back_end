@@ -7385,16 +7385,83 @@ class InsertSearchLogView(APIView):
 #         }, status=status.HTTP_200_OK)
 
 
-from .models import searchLog,memberInfo
-from .serializers import SearchLogSerializer
+# from .models import searchLog,memberInfo
+# from .serializers import SearchLogSerializer
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from rest_framework import status
+
+# class searchlog_reportView(APIView):
+#     # permission_classes = [IsAuthenticated]
+
+#        def get(self, request, bnk_code=None):                
+#         try:
+#             # Get query parameters
+#             bank = request.query_params.get('bank', bnk_code)
+#             month = request.query_params.get('month')
+#             year = request.query_params.get('year')
+#             from_date = request.query_params.get('fromDate')
+#             to_date = request.query_params.get('toDate')
+
+
+#             # Start with the searchLog queryset
+#             search_log_queryset = searchLog.objects.all()
+
+#             # Apply filters based on query parameters
+#             if bank:
+#                 search_log_queryset = search_log_queryset.filter(bnk_code=bank)
+#             if year:
+#                 search_log_queryset = search_log_queryset.filter(inquiry_date__year=year)
+#                 if month:
+#                     search_log_queryset = search_log_queryset.filter(inquiry_date__month=month)
+#             elif month:
+#                 # If month is provided without year, return an error
+#                 return Response({
+#                     'error': 'Year is required when filtering by month.'
+#                 }, status=status.HTTP_400_BAD_REQUEST)
+#             if from_date and to_date:
+#                 search_log_queryset = search_log_queryset.filter(inquiry_date__range=[from_date, to_date])
+#             elif from_date:
+#                 search_log_queryset = search_log_queryset.filter(inquiry_date__gte=from_date)
+#             elif to_date:
+#                 search_log_queryset = search_log_queryset.filter(inquiry_date__lte=to_date)
+                        
+#             # Annotate the counts from both models
+#             bank_info = memberInfo.objects.filter(bnk_code=bank)
+            
+#             results = (
+#                 search_log_queryset
+#                 .values('bnk_code')
+#                 .annotate(
+#                     searchlog_count=Count('search_ID', filter=Q(rec_enquiry_type='')),  # Count search_ID where rec_enquiry_type is '1'
+#                     request_charge_count=Count('request_charge__chg_amount')
+#                 )
+#                 .order_by(Cast('bnk_code', IntegerField()))  # Order by bnk_code as Integer
+#             )
+
+#             # Prepare the response data
+#             response_data = list(results)
+            
+
+#             return Response(response_data, status=status.HTTP_200_OK)
+
+#         except Exception as e:
+#             return Response({
+#                 'error': str(e)
+#             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+from django.db.models import Count, IntegerField, Q
+from django.db.models.functions import Cast
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from .models import searchLog, request_charge, memberInfo
+from .serializers import SearchLogSerializer
 
 class searchlog_reportView(APIView):
-    # permission_classes = [IsAuthenticated]
-
-       def get(self, request, bnk_code=None):                
+    
+    def get(self, request, bnk_code=None):
         try:
             # Get query parameters
             bank = request.query_params.get('bank', bnk_code)
@@ -7402,54 +7469,170 @@ class searchlog_reportView(APIView):
             year = request.query_params.get('year')
             from_date = request.query_params.get('fromDate')
             to_date = request.query_params.get('toDate')
+            
+            # Get bank info (name) based on bnk_code if provided
+            # bank_info_name = None
+            # bank_short_form = None
 
-
-            # Start with the searchLog queryset
-            search_log_queryset = searchLog.objects.all()
-
-            # Apply filters based on query parameters
+            # Filter search logs based on parameters
+            # search_log_queryset = searchLog.objects.filter(bnk_code=bank) if bank else searchLog.objects.all()
+            search_log_queryset = searchLog.objects.exclude(bnk_code='01')
             if bank:
                 search_log_queryset = search_log_queryset.filter(bnk_code=bank)
+            
+            # Apply additional filters for date ranges if specified
             if year:
                 search_log_queryset = search_log_queryset.filter(inquiry_date__year=year)
                 if month:
                     search_log_queryset = search_log_queryset.filter(inquiry_date__month=month)
             elif month:
-                # If month is provided without year, return an error
-                return Response({
-                    'error': 'Year is required when filtering by month.'
-                }, status=status.HTTP_400_BAD_REQUEST)
+                return Response({'error': 'Year is required when filtering by month.'}, status=status.HTTP_400_BAD_REQUEST)
+
             if from_date and to_date:
                 search_log_queryset = search_log_queryset.filter(inquiry_date__range=[from_date, to_date])
             elif from_date:
                 search_log_queryset = search_log_queryset.filter(inquiry_date__gte=from_date)
             elif to_date:
                 search_log_queryset = search_log_queryset.filter(inquiry_date__lte=to_date)
-                        
-            # Annotate the counts from both models
-            bank_info = memberInfo.objects.filter(bnk_code=bank)
-            
+
+            # Annotate counts for search logs and request charges
             results = (
                 search_log_queryset
                 .values('bnk_code')
                 .annotate(
-                    searchlog_count=Count('search_ID', filter=Q(rec_enquiry_type='')),  # Count search_ID where rec_enquiry_type is '1'
-                    request_charge_count=Count('request_charge__chg_amount')
+                    searchlog_count=Count('search_ID', filter=Q(rec_enquiry_type='1')),  # Count where rec_enquiry_type='1'
+                    request_charge_count=Count('request_charge__chg_amount')  # Count related request_charge entries
                 )
-                .order_by(Cast('bnk_code', IntegerField()))  # Order by bnk_code as Integer
+                .order_by(Cast('bnk_code', IntegerField()))
             )
-
-            # Prepare the response data
-            # response_data = list(results)
+            # bnk_code_loop = result['bnk_code']
             
+            # print("--------L Bank_Code_Loop : ", bnk_code_loop)
+            # Prepare the custom response with bank info
+            response_data = []
+            for result in results:
+                bnk_code = result.get('bnk_code')  # Access bnk_code from each dictionary
+                
+                # Retrieve the bank information based on bnk_code
+                bank_info_data = memberInfo.objects.filter(bnk_code=bnk_code).first()
+                bank_info_name = bank_info_data.nameL if bank_info_data else "N/A"
+                bank_short_form = bank_info_data.code if bank_info_data else "N/A"
 
-            return Response(response_data, status=status.HTTP_200_OK)
+                # Append the result with bank details
+                response_data.append({
+                    "bnk_code": bnk_code,
+                    "Bank_short_form": f"{bank_short_form}-{bank_info_name}",
+                    "searchlog_count": result.get('searchlog_count', 0),
+                    "request_log": result.get('request_charge_count', 0)
+                })
+
+            return Response({"charge_report": response_data}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({
-                'error': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        
+        
+from .models import searchLog, request_charge, memberInfo
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db.models import Q
 
+class SearchlogReportDetailView(APIView):
+    def get(self, request):
+        # Retrieve query parameters
+        bank = request.query_params.get('bank')
+        month = request.query_params.get('month')
+        year = request.query_params.get('year')
+        from_date = request.query_params.get('fromDate')
+        to_date = request.query_params.get('toDate')
+
+        # Initial queryset for SearchLog with rec_enquiry_type='1' and bnk_code not '01'
+        searchlog_queryset = searchLog.objects.filter(rec_enquiry_type='1').exclude(bnk_code='01')
+
+        # Apply filtering based on query parameters
+        if bank:
+            searchlog_queryset = searchlog_queryset.filter(bnk_code=bank)
+        
+        if year:
+            searchlog_queryset = searchlog_queryset.filter(inquiry_date__year=year)
+            if month:
+                searchlog_queryset = searchlog_queryset.filter(inquiry_date__month=month)
+        elif month:
+            return Response({'error': 'Year is required when filtering by month.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if from_date and to_date:
+            searchlog_queryset = searchlog_queryset.filter(inquiry_date__range=[from_date, to_date])
+        elif from_date:
+            searchlog_queryset = searchlog_queryset.filter(inquiry_date_gte=from_date)
+        elif to_date:
+            searchlog_queryset = searchlog_queryset.filter(inquiry_date__lte=to_date)
+
+        # Check if there are records
+        if not searchlog_queryset.exists():
+            return Response({'detail': 'No records found for the provided filters.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Prepare separate lists for SearchLog and request_charge details
+        searchlog_details = []
+        request_charge_details = []
+
+        # Iterate over each SearchLog record
+        for log in searchlog_queryset:
+            # Fetch related bank info
+            bank_info = memberInfo.objects.filter(bnk_code=log.bnk_code).first()
+            bank_name = bank_info.nameL if bank_info else None
+            bank_short_form = bank_info.code if bank_info else None
+            
+            en_data = EnterpriseInfo.objects.filter(LCICID=log.LCIC_ID).first()
+                
+                
+            # Populate searchlog details
+            log_data = {
+                "search_ID": log.search_ID,
+                "sys_usr": log.sys_usr,
+                "bnk_code": f"{log.bnk_code} - {bank_short_form}",
+                "bank_name": bank_name,
+                "lcic_id": en_data.enterpriseNameLao,
+                "insert_date": log.inquiry_date,
+
+            }
+            searchlog_details.append(log_data)
+
+            # Retrieve related request_charge records for this SearchLog entry
+            related_request_charges = request_charge.objects.filter(bnk_code=log.bnk_code)
+
+            # Apply the same date filters to request_charge queryset
+            if year:
+                related_request_charges = related_request_charges.filter(insert_date__year=year)
+                if month:
+                    related_request_charges = related_request_charges.filter(insert_date__month=month)
+
+            if from_date and to_date:
+                related_request_charges = related_request_charges.filter(insert_date__range=[from_date, to_date])
+            elif from_date:
+                related_request_charges = related_request_charges.filter(insert_date__gte=from_date)
+            elif to_date:
+                related_request_charges = related_request_charges.filter(insert_date__lte=to_date)
+
+            # Add each filtered request_charge record to the request_charge_details list
+            for charge in related_request_charges:
+                charge_data = {
+                    "rec_charge_ID": charge.rec_charge_ID,
+                    "bnk_code": f"{log.bnk_code} - {bank_short_form}",
+                    "sys_usr": charge.user_sys_id,
+                    "bank_name": bank_name,
+                    "lcic_id": en_data.enterpriseNameLao,
+                    "rec_insert_date": charge.rec_insert_date,
+                }
+                request_charge_details.append(charge_data)
+
+        # Structure the response to include separate lists
+        response_data = {
+            'searchlog': searchlog_details,
+            'request_charge': request_charge_details
+        }
+        return Response(response_data, status=status.HTTP_200_OK)
 
 # from .serializers import ChargeSerializer
 # class charge_reportView(APIView):
@@ -7778,20 +7961,63 @@ class ChargeReportSummary(APIView):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
             
+# from django.db.models import Count
+# from rest_framework.response import Response
+# from rest_framework.views import APIView
+# from rest_framework import status
+# from django.db.models.functions import TruncMonth
+# from .models import searchLog  # Assuming you are working with the searchLog model
+
+# class SearchLogChartView(APIView):
+#     def get(self, request):
+#         try:
+#             # Truncate rec_insert_date to month (YYYY-MM) and aggregate the count of bnk_code
+#             searchlog_data = (
+#                 request_charge.objects
+#                 .annotate(month=TruncMonth('rec_insert_date'))  # Truncate rec_insert_date to month
+#                 .values('bnk_code', 'month')  # Group by bnk_code and month
+#                 .annotate(total_logs=Count('bnk_code'))  # Count total logs for each bnk_code and month
+#                 .order_by('-total_logs')  # Order by total logs (descending)
+#             )
+
+#             # If no data is found, return a 404 response
+#             if not searchlog_data.exists():
+#                 return Response({'detail': 'No search log data available.'}, status=status.HTTP_404_NOT_FOUND)
+
+#             # Prepare the chart data
+#             chart_data = [
+#                 {
+#                     "bnk_code": entry['bnk_code'],
+#                     entry['month'].strftime('%Y-%m'): entry['total_logs']  # Format month as YYYY-MM
+#                 }
+#                 for entry in searchlog_data
+#             ]
+
+#             # Return the aggregated data as a response
+#             return Response({
+#                 'chart_data': chart_data
+#             }, status=status.HTTP_200_OK)
+
+#         except Exception as e:
+#             return Response({
+#                 'error': str(e)
+#             }, status=status.HTTP_400_BAD_REQUEST)
+            
 from django.db.models import Count
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
 from django.db.models.functions import TruncMonth
-from .models import searchLog  # Assuming you are working with the searchLog model
+from .models import searchLog, memberInfo,request_charge  # Assuming MemberInfo is your model for bank information
 
 class SearchLogChartView(APIView):
     def get(self, request):
         try:
             # Truncate rec_insert_date to month (YYYY-MM) and aggregate the count of bnk_code
             searchlog_data = (
-                request_charge.objects
-                .annotate(month=TruncMonth('rec_insert_date'))  # Truncate rec_insert_date to month
+                searchLog.objects
+                .filter(rec_enquiry_type='')  # Filter where rec_enquiry_type is empty
+                .annotate(month=TruncMonth('inquiry_date'))  # Truncate insert_date to month
                 .values('bnk_code', 'month')  # Group by bnk_code and month
                 .annotate(total_logs=Count('bnk_code'))  # Count total logs for each bnk_code and month
                 .order_by('-total_logs')  # Order by total logs (descending)
@@ -7801,14 +8027,23 @@ class SearchLogChartView(APIView):
             if not searchlog_data.exists():
                 return Response({'detail': 'No search log data available.'}, status=status.HTTP_404_NOT_FOUND)
 
-            # Prepare the chart data
-            chart_data = [
-                {
-                    "bnk_code": entry['bnk_code'],
+            # Prepare the chart data with bank names from MemberInfo
+            chart_data = []
+            for entry in searchlog_data:
+                bnk_code = entry['bnk_code']
+
+                # Fetch the bank name from MemberInfo based on bnk_code
+                member_info = memberInfo.objects.filter(bnk_code=bnk_code).first()
+
+                # If bank information exists, use the bank_name, otherwise use a default value
+                bank_name = member_info.code if member_info else "Unknown Bank"
+
+                # Append the formatted data to chart_data
+                chart_data.append({
+                    "bnk_code": bnk_code,
+                    "bank_name": bank_name,  # Add bank name to the response
                     entry['month'].strftime('%Y-%m'): entry['total_logs']  # Format month as YYYY-MM
-                }
-                for entry in searchlog_data
-            ]
+                })
 
             # Return the aggregated data as a response
             return Response({
@@ -7819,6 +8054,8 @@ class SearchLogChartView(APIView):
             return Response({
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+            
 # class SearchLogChart_MonthView(APIView):
 #      def get(self, request, inquiry_month):
 #         try:
