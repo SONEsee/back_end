@@ -7604,16 +7604,16 @@ class SearchlogReportDetailView(APIView):
 
             # Apply the same date filters to request_charge queryset
             if year:
-                related_request_charges = related_request_charges.filter(insert_date__year=year)
+                related_request_charges = related_request_charges.filter(rec_insert_date__year=year)
                 if month:
-                    related_request_charges = related_request_charges.filter(insert_date__month=month)
+                    related_request_charges = related_request_charges.filter(rec_insert_date__month=month)
 
             if from_date and to_date:
-                related_request_charges = related_request_charges.filter(insert_date__range=[from_date, to_date])
+                related_request_charges = related_request_charges.filter(rec_insert_date__range=[from_date, to_date])
             elif from_date:
-                related_request_charges = related_request_charges.filter(insert_date__gte=from_date)
+                related_request_charges = related_request_charges.filter(rec_insert_date__gte=from_date)
             elif to_date:
-                related_request_charges = related_request_charges.filter(insert_date__lte=to_date)
+                related_request_charges = related_request_charges.filter(rec_insert_date__lte=to_date)
 
             # Add each filtered request_charge record to the request_charge_details list
             for charge in related_request_charges:
@@ -8017,11 +8017,13 @@ class SearchLogChartView(APIView):
             searchlog_data = (
                 searchLog.objects
                 .filter(rec_enquiry_type='')  # Filter where rec_enquiry_type is empty
-                .annotate(month=TruncMonth('inquiry_date'))  # Truncate insert_date to month
+                .exclude(bnk_code='01')  # Exclude where bnk_code is '01'
+                .annotate(month=TruncMonth('inquiry_date'))  # Truncate inquiry_date to month
                 .values('bnk_code', 'month')  # Group by bnk_code and month
                 .annotate(total_logs=Count('bnk_code'))  # Count total logs for each bnk_code and month
                 .order_by('-total_logs')  # Order by total logs (descending)
             )
+
 
             # If no data is found, return a 404 response
             if not searchlog_data.exists():
