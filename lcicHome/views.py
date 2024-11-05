@@ -55,6 +55,7 @@ from .models import CustomLoginToken
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
+
 #import requests
 # import pymysql
 
@@ -7447,23 +7448,21 @@ class searchlog_reportView(APIView):
             from_date = request.query_params.get('fromDate')
             to_date = request.query_params.get('toDate')
             
-            # Get bank info (name) based on bnk_code if provided
-            # bank_info_name = None
-            # bank_short_form = None
-
-            # Filter search logs based on parameters
-            # search_log_queryset = searchLog.objects.filter(bnk_code=bank) if bank else searchLog.objects.all()
             search_log_queryset = searchLog.objects.exclude(bnk_code='01')
             if bank:
                 search_log_queryset = search_log_queryset.filter(bnk_code=bank)
             
-            # Apply additional filters for date ranges if specified
             if year:
                 search_log_queryset = search_log_queryset.filter(inquiry_date__year=year)
                 if month:
                     search_log_queryset = search_log_queryset.filter(inquiry_date__month=month)
             elif month:
                 return Response({'error': 'Year is required when filtering by month.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if from_date:
+                from_date = datetime.strptime(from_date, '%Y-%m-%d')  # Parse fromDate as a date
+            if to_date:
+                to_date = datetime.strptime(to_date, '%Y-%m-%d') + timedelta(days=1) - timedelta(seconds=1)  # End of the day
 
             if from_date and to_date:
                 search_log_queryset = search_log_queryset.filter(inquiry_date__range=[from_date, to_date])
@@ -7477,7 +7476,7 @@ class searchlog_reportView(APIView):
                 search_log_queryset
                 .values('bnk_code')
                 .annotate(
-                    searchlog_count=Count('search_ID', filter=Q(rec_enquiry_type='1')),  # Count where rec_enquiry_type='1'
+                    searchlog_count=Count('search_ID', filter=Q(rec_enquiry_type='')),  # Count where rec_enquiry_type='1'
                     request_charge_count=Count('request_charge__chg_amount')  # Count related request_charge entries
                 )
                 .order_by(Cast('bnk_code', IntegerField()))
@@ -7526,7 +7525,7 @@ class SearchlogReportDetailView(APIView):
         to_date = request.query_params.get('toDate')
 
         # Initial queryset for SearchLog with rec_enquiry_type='1' and bnk_code not '01'
-        searchlog_queryset = searchLog.objects.filter(rec_enquiry_type='1').exclude(bnk_code='01')
+        searchlog_queryset = searchLog.objects.filter(rec_enquiry_type='').exclude(bnk_code='01')
 
         # Apply filtering based on query parameters
         if bank:
@@ -7539,6 +7538,11 @@ class SearchlogReportDetailView(APIView):
         elif month:
             return Response({'error': 'Year is required when filtering by month.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        if from_date:
+                from_date = datetime.strptime(from_date, '%Y-%m-%d')  # Parse fromDate as a date
+        if to_date:
+                to_date = datetime.strptime(to_date, '%Y-%m-%d') + timedelta(days=1) - timedelta(seconds=1)  # End of the day
+                
         if from_date and to_date:
             searchlog_queryset = searchlog_queryset.filter(inquiry_date__range=[from_date, to_date])
         elif from_date:
@@ -7577,32 +7581,36 @@ class SearchlogReportDetailView(APIView):
             searchlog_details.append(log_data)
 
             # Retrieve related request_charge records for this SearchLog entry
-            related_request_charges = request_charge.objects.filter(bnk_code=log.bnk_code)
+        related_request_charges = request_charge.objects.filter(bnk_code=log.bnk_code)
 
             # Apply the same date filters to request_charge queryset
-            if year:
-                related_request_charges = related_request_charges.filter(rec_insert_date__year=year)
-                if month:
-                    related_request_charges = related_request_charges.filter(rec_insert_date__month=month)
-
-            if from_date and to_date:
-                related_request_charges = related_request_charges.filter(rec_insert_date__range=[from_date, to_date])
-            elif from_date:
-                related_request_charges = related_request_charges.filter(rec_insert_date__gte=from_date)
-            elif to_date:
-                related_request_charges = related_request_charges.filter(rec_insert_date__lte=to_date)
+        if year:
+            related_request_charges = related_request_charges.filter(rec_insert_date__year=year)
+            if month:
+                related_request_charges = related_request_charges.filter(rec_insert_date__month=month)
+        if from_date:
+                from_date = datetime.strptime(from_date, '%Y-%m-%d')  # Parse fromDate as a date
+        if to_date:
+                to_date = datetime.strptime(to_date, '%Y-%m-%d') + timedelta(days=1) - timedelta(seconds=1)  # End of the day
+                
+        if from_date and to_date:
+            related_request_charges = related_request_charges.filter(rec_insert_date__range=[from_date, to_date])
+        elif from_date:
+            related_request_charges = related_request_charges.filter(rec_insert_date__gte=from_date)
+        elif to_date:
+            related_request_charges = related_request_charges.filter(rec_insert_date__lte=to_date)
 
             # Add each filtered request_charge record to the request_charge_details list
-            for charge in related_request_charges:
-                charge_data = {
-                    "rec_charge_ID": charge.rec_charge_ID,
-                    "bnk_code": f"{log.bnk_code} - {bank_short_form}",
-                    "sys_usr": charge.user_sys_id,
-                    "bank_name": bank_name,
-                    "lcic_id": en_data.enterpriseNameLao,
-                    "rec_insert_date": charge.rec_insert_date,
-                }
-                request_charge_details.append(charge_data)
+        for charge in related_request_charges:
+            charge_data = {
+                "rec_charge_ID": charge.rec_charge_ID,
+                "bnk_code": f"{log.bnk_code} - {bank_short_form}",
+                "sys_usr": charge.user_sys_id,
+                "bank_name": bank_name,
+                "lcic_id": en_data.enterpriseNameLao,
+                "rec_insert_date": charge.rec_insert_date,
+            }
+            request_charge_details.append(charge_data)
 
         # Structure the response to include separate lists
         response_data = {
@@ -7791,8 +7799,11 @@ class charge_reportView(APIView):
                 return Response({
                     'error': 'Year is required when filtering by month.'
                 }, status=status.HTTP_400_BAD_REQUEST)
-
-            # Apply date range filter if both fromDate and toDate are provided
+            if from_date:
+                from_date = datetime.strptime(from_date, '%Y-%m-%d')  # Parse fromDate as a date
+            if to_date:
+                to_date = datetime.strptime(to_date, '%Y-%m-%d') + timedelta(days=1) - timedelta(seconds=1)  # End of the day
+                
             if from_date and to_date:
                 charge_report = charge_report.filter(insert_date__range=[from_date, to_date])
             elif from_date:
@@ -7898,6 +7909,11 @@ class ChargeReportSummary(APIView):
                     'error': 'Year is required when filtering by month.'
                 }, status=status.HTTP_400_BAD_REQUEST)
 
+            if from_date:
+                from_date = datetime.strptime(from_date, '%Y-%m-%d')  # Parse fromDate as a date
+            if to_date:
+                    to_date = datetime.strptime(to_date, '%Y-%m-%d') + timedelta(days=1) - timedelta(seconds=1)  # End of the day
+            
             # Apply date range filter if both fromDate and toDate are provided
             if from_date and to_date:
                 charge_report = charge_report.filter(insert_date__range=[from_date, to_date])
@@ -8198,6 +8214,7 @@ class SearchLogChart_MonthView(APIView):
 
 #         return Response(formatted_result, status=status.HTTP_200_OK)
 
+
 from django.utils import timezone
 from django.db.models import Count
 from django.db.models.functions import ExtractHour
@@ -8208,15 +8225,28 @@ from datetime import timedelta
 
 class ChargeCountByHourView(APIView):
     def get(self, request):
-        # Get the start and end of the current day
-        now = timezone.now()
+        
+        # Use Django's timezone aware current time
+        now = timezone.now()  # Default DJANGO time
+        print(f"Django Timezone now: {now}")
+        
+        # System local time using datetime.now()
+        now_system_local = datetime.now()  # Local Default
+        print(f"System Local Time (datetime.now()): {now_system_local}")
+
+        # Localized time (converted from UTC)
+        now_utc = timezone.now()  # UTC time in Django
+        now_local = timezone.localtime(now_utc)  # Convert to local time
+        print(f"Local Time (Converted to Django TIME_ZONE): {now_local}")
+        
+        # Define start and end of the current day in the local timezone
         start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
         end_of_day = start_of_day + timedelta(days=1)
 
         # Initialize a dictionary with all hours set to zero
         hour_counts = {hour: 0 for hour in range(24)}
 
-        # Query to count rec_charge_ID by hour for the current day
+        # Query to count `rec_charge_ID` by hour for the current day
         hourly_counts = (
             request_charge.objects
             .filter(insert_date__range=(start_of_day, end_of_day))
@@ -8233,15 +8263,15 @@ class ChargeCountByHourView(APIView):
         # Format the output to reflect the correct hours with counts in 12-hour format
         formatted_result = {}
         for hour in range(24):
-            # Convert hour to 12-hour format
+            # Convert hour to 12-hour format with AM/PM
             if hour == 0:
-                formatted_hour = "12 AM"
+                formatted_hour = "12 AM"  # Midnight
             elif hour < 12:
-                formatted_hour = f"{hour} AM"
+                formatted_hour = f"{hour} AM"  # Morning hours
             elif hour == 12:
-                formatted_hour = "12 PM"
+                formatted_hour = "12 PM"  # Noon
             else:
-                formatted_hour = f"{hour - 12} PM"
+                formatted_hour = f"{hour - 12} PM"  # Afternoon/Evening hours
 
             formatted_result[formatted_hour] = hour_counts[hour]
 
