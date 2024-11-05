@@ -54,7 +54,9 @@ from .models import Login  # Ensure you import your Login model
 from .models import CustomLoginToken
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
-
+from django.utils import timezone
+# now = datetime.now()
+# print("---->",now)
 #import requests
 # import pymysql
 
@@ -8229,6 +8231,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from datetime import timedelta
 
+
 class ChargeCountByHourView(APIView):
     def get(self, request):
         # Get the start and end of the current day
@@ -8269,6 +8272,8 @@ class ChargeCountByHourView(APIView):
             formatted_result[formatted_hour] = hour_counts[hour]
 
         return Response(formatted_result, status=status.HTTP_200_OK)
+
+
 
 class SearchLogChartByDateView(APIView):
     def get(self, request, inquiry_date):
