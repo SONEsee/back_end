@@ -7588,10 +7588,11 @@ class SearchlogReportDetailView(APIView):
             related_request_charges = related_request_charges.filter(rec_insert_date__year=year)
             if month:
                 related_request_charges = related_request_charges.filter(rec_insert_date__month=month)
-        if from_date:
-                from_date = datetime.strptime(from_date, '%Y-%m-%d')  # Parse fromDate as a date
-        if to_date:
-                to_date = datetime.strptime(to_date, '%Y-%m-%d') + timedelta(days=1) - timedelta(seconds=1)  # End of the day
+                
+        # if from_date:
+        #         from_date = datetime.strptime(from_date, '%Y-%m-%d')  # Parse fromDate as a date
+        # if to_date:
+        #         to_date = datetime.strptime(to_date, '%Y-%m-%d') + timedelta(days=1) - timedelta(seconds=1)  # End of the day
                 
         if from_date and to_date:
             related_request_charges = related_request_charges.filter(rec_insert_date__range=[from_date, to_date])
