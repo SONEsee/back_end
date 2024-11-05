@@ -12,6 +12,9 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 import os
 from datetime import timedelta
 from corsheaders.defaults import default_headers
+TIME_ZONE = 'Asia/Bangkok'
+USE_TZ = True
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATE_DIR = os.path.join(BASE_DIR,'templates')
 SECRET_KEY = 'django-insecure-bfz1cy+$%d8touxu*_)rath$19zbh9or8#o51t(=!7(u++1scp'
