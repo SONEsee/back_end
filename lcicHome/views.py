@@ -7962,8 +7962,7 @@ class ChargeReportSummary(APIView):
                 bank_info = memberInfo.objects.filter(bnk_code=data['bnk_code']).first()
                 
                 bank_name = bank_info.code if bank_info else 'Unknown Bank'
-                bank_nameL = bank_info.nameL if bank_info else 'Unknown NameL'  # Add NameL retrieval
-
+                bank_nameL = bank_info.nameL if bank_info else 'Unknown NameL' 
 
                 response_data.append({
                     'bnk_code': data['bnk_code'],

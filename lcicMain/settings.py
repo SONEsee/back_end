@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 import os
 from datetime import timedelta
 from corsheaders.defaults import default_headers
+
 TIME_ZONE = 'Asia/Bangkok'
 USE_TZ = True
 
