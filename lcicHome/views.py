@@ -54,14 +54,8 @@ from .models import Login  # Ensure you import your Login model
 from .models import CustomLoginToken
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
-<<<<<<< HEAD
-from django.utils import timezone
-# now = datetime.now()
-# print("---->",now)
-=======
 
 
->>>>>>> 17d69a66631ef8e6426a67fb0e23968519b356f2
 #import requests
 # import pymysql
 
