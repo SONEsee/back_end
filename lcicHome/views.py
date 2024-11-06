@@ -6721,6 +6721,7 @@ class UserManagementView(APIView):
                 }
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
     def get(self, request):
         try:
             all_user = Login.objects.all()
@@ -6733,6 +6734,21 @@ class UserManagementView(APIView):
         except Exception as e:
             logger.error(f"Error occurred: {e}")
             return Response({"detail": "An error occurred while retrieving bank information."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    def delete(self, request, uid, format=None):
+        try:
+            # Get the user by UID
+            user = Login.objects.get(UID=uid)
+            
+            # Delete the user
+            user.delete()
+            
+            # Return a success response
+            return Response({'detail': 'User deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+        
+        except Login.DoesNotExist:
+            # Return a 404 response if the user doesn't exist
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
     
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -6985,18 +7001,80 @@ from datetime import timedelta
 
 
 
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from rest_framework import status
+# from .serializers import LoginSerializer,UserLoginSerializer
+# from django.contrib.auth import login
+# from django.shortcuts import redirect
+# from rest_framework.authtoken.models import Token
+# from .models import UserLoginLog, Login
+# from django.utils import timezone
+# from datetime import timedelta
+# from rest_framework.permissions import AllowAny
+# from rest_framework_simplejwt.tokens import RefreshToken
+# class UserLoginView(APIView):
+#     permission_classes = [AllowAny]  # Ensure login is open to unauthenticated users
+
+#     def post(self, request):
+#         username = request.data.get('username')
+#         password = request.data.get('password')
+
+#         # Authenticate user based on your custom model
+#         try:
+#             user = Login.objects.get(username=username)
+#             if not user.check_password(password):
+#                 return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+            
+#             # Generate JWT token
+#             refresh = RefreshToken.for_user(user)
+            
+#             # login_time = Login(
+#             #     last_login = datetime.now()
+#             # )
+#             # login_time.save()
+            
+#             # login_time.save()            
+#             print("----> Login were added Here ")
+            
+#             return Response({
+#                 'detail': 'Successfully logged in.',
+#                 'access': str(refresh.access_token),
+#                 'refresh': str(refresh),
+#                 'user': {
+#                     'UID': user.UID,
+#                     'MID': {
+#                         'id': user.MID.bnk_code if user.MID else None,
+#                         'code': user.MID.code if user.MID else None
+#                     },
+#                     'GID': {
+#                         'GID': user.GID.GID if user.GID else None,
+#                         'nameL': user.GID.nameL if user.GID else None
+#                     },
+#                     'username': user.username,
+#                     'nameL': user.nameL,
+#                     'nameE': user.nameE,
+#                     'surnameL': user.surnameL,
+#                     'surnameE': user.surnameE,
+#                     'is_active': user.is_active,
+#                     'last_login': user.last_login,
+#                     'is_staff': user.is_staff,
+#                     'is_superuser': user.is_superuser
+#                 }
+#             }, status=status.HTTP_200_OK)
+#         except Login.DoesNotExist:
+#             return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
+
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import LoginSerializer,UserLoginSerializer
-from django.contrib.auth import login
-from django.shortcuts import redirect
-from rest_framework.authtoken.models import Token
-from .models import UserLoginLog, Login
 from django.utils import timezone
-from datetime import timedelta
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
+from .models import Login
+
 class UserLoginView(APIView):
     permission_classes = [AllowAny]  # Ensure login is open to unauthenticated users
 
@@ -7007,22 +7085,17 @@ class UserLoginView(APIView):
         # Authenticate user based on your custom model
         try:
             user = Login.objects.get(username=username)
+
             if not user.check_password(password):
                 return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
             
+            # Update last_login to current time
+            user.last_login = datetime.now()
+            user.save()
+
             # Generate JWT token
             refresh = RefreshToken.for_user(user)
-            
-            login_log = UserLoginLog(
-                username=user.username,
-                bnk_code=user.MID.bnk_code if user.MID else None,
-                sys_user=user.username,  
-                status='Active',
-                login_time=timezone.now(),  
-                logout_time=None 
-            )
-            login_log.save()
-            
+
             return Response({
                 'detail': 'Successfully logged in.',
                 'access': str(refresh.access_token),
@@ -7043,12 +7116,14 @@ class UserLoginView(APIView):
                     'surnameL': user.surnameL,
                     'surnameE': user.surnameE,
                     'is_active': user.is_active,
+                    'last_login': user.last_login,
                     'is_staff': user.is_staff,
                     'is_superuser': user.is_superuser
                 }
             }, status=status.HTTP_200_OK)
         except Login.DoesNotExist:
             return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
 
 
 
@@ -7180,50 +7255,56 @@ class AssignRoleView(APIView):
         except Exception as e:
             print(f"Error: {e}")
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+    
+        
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.utils import timezone
+import pytz  # Import pytz to handle timezone conversion
 
 class ManageUserView(APIView):
 
     def get(self, request, format=None):
-        all_user = Login.objects.all().order_by('UID')
-        s_user = LoginSerializer(all_user, many=True)
+        # Define the timezone (e.g., Asia/Bangkok)
+        target_timezone = pytz.timezone('Asia/Bangkok')
+        
+        # Fetch all users and order by 'UID', including related 'memberInfo' (MID)
+        all_users = Login.objects.select_related('MID').order_by('UID')
 
+        custom_user_data = []
+
+        # Loop through all users and extract necessary fields, including memberInfo (bank) fields
+        for user in all_users:
+            if user.MID:  # Ensure that the user has a related MID
+                bank_info = user.MID  # Access the related memberInfo (MID) directly
+
+                # Convert last_login to the target timezone
+                last_login_local = user.last_login.astimezone(target_timezone) if user.last_login else None
+                formatted_last_login_local = last_login_local.strftime('%Y-%m-%d %H:%M:%S') if last_login_local else None
+                custom_user_data.append({
+                    "UID": user.UID,
+                    "bnk_code": bank_info.bnk_code if bank_info else None,  # Access bank code from memberInfo
+                    "bnk_name": bank_info.nameL if bank_info else None,  # Access bank name from memberInfo
+                    "Permission": user.GID.nameL if user.GID else None,  # Handle case where GID may be null
+                    "username": user.username,
+                    "nameL": user.nameL,
+                    "nameE": user.nameE,
+                    "surnameL": user.surnameL,
+                    "surnameE": user.surnameE,
+                    "last_login": formatted_last_login_local,  # Use the converted last_login
+                    "is_active": user.is_active,
+                })
+                
+        # Prepare the combined response
         combined_data = {
-            'all_user': s_user.data,
+            'all_user': custom_user_data,
         }
+        
         return Response(combined_data, status=status.HTTP_200_OK)
+
     
-    # def get(self, request, format=None):
-    #     # Fetch all users and order by 'UID'
-    #     all_users = Login.objects.all().order_by('UID')
-        
-    #     bank_info = memberInfo.objects.filter(id=all_users.MID)        
-        
-    #     for bank_data in bank_info:
-    #         print(bank_data.code)
-    #     # List to store custom user data
-    #     custom_user_data = []
-
-    #     # Loop through all users and extract the necessary fields
-    #     for user in all_users:
-    #         custom_user_data.append({
-    #             "UID": user.UID,
-    #             "bnk_code": user.MID.bnk_code if user.MID else None,  # Ensure MID is not None
-    #             "bnk_name":bank_data.code,
-    #             "Permission": user.GID.nameL if user.GID else None,  # Custom handling for GID
-    #             "username": user.username,
-    #             "nameL": user.nameL,
-    #             "nameE": user.nameE,
-    #             "surnameL": user.surnameL,
-    #             "surnameE": user.surnameE,
-    #             "is_active": user.is_active,
-    #         })
-
-    #     # Prepare the combined response
-    #     combined_data = {
-    #         'all_user': custom_user_data,
-    #     }
-        
-    #     return Response(combined_data, status=status.HTTP_200_OK)
     
     def post(self, request, format=None):
         data = request.data
