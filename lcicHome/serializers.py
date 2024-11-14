@@ -456,25 +456,29 @@ class UserLoginSerializer(serializers.Serializer):
         }
 
 from rest_framework import serializers
-from django.contrib.auth import authenticate
-from django.contrib.auth.hashers import check_password
-from .models import Login, memberInfo, User_Group
+from .models import Login, User_Group, memberInfo
+from django.core.validators import MinLengthValidator
 
 class LoginSerializer(serializers.ModelSerializer):
+    profile_image = serializers.ImageField(required=False)  # Ensure profile_image is optional
     password = serializers.CharField(write_only=True, validators=[MinLengthValidator(8)])
     MID = serializers.PrimaryKeyRelatedField(queryset=memberInfo.objects.all(), allow_null=True, required=False)
     GID = serializers.PrimaryKeyRelatedField(queryset=User_Group.objects.all(), allow_null=True, required=False)
-
+    
+    
     class Meta:
         model = Login
-        fields = ['UID', 'MID', 'GID', 'username', 'nameL', 'nameE', 'surnameL', 'surnameE', 'insertDate', 'updateDate', 'is_active', 'is_staff', 'is_superuser', 'password']
+        fields = ['UID', 'MID', 'GID', 'username', 'nameL', 'nameE', 'surnameL', 'surnameE', 'profile_image', 'insertDate', 'updateDate', 'is_active', 'is_staff', 'is_superuser', 'password']
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
+        # Extract the profile image from validated_data
+        profile_image = validated_data.pop('profile_image', None)
+        
         # Ensure the password is hashed
         user = Login.objects.create_user(
             username=validated_data['username'],
-            password=validated_data['password'],  # Hashing should happen inside create_user
+            password=validated_data['password'],
             MID=validated_data.get('MID', None),
             GID=validated_data.get('GID', None),
             nameL=validated_data['nameL'],
@@ -485,7 +489,12 @@ class LoginSerializer(serializers.ModelSerializer):
             is_staff=validated_data.get('is_staff', False),
             is_superuser=validated_data.get('is_superuser', False),
         )
-        print("AddUser: ", user)
+        
+        # If a profile image was provided, save it to the user instance
+        if profile_image:
+            user.profile_image = profile_image
+            user.save()
+
         return user
     
     def update(self, instance, validated_data):
@@ -508,7 +517,6 @@ class LoginSerializer(serializers.ModelSerializer):
 
         # Save the updated user object
         instance.save()
-
         return instance
 
 from rest_framework import serializers
