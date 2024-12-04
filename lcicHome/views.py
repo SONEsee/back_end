@@ -7234,6 +7234,70 @@ class SidebarSubItemListView(APIView):
         serializer = SidebarSubItemSerializer(sidebar_sub_items, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+class SidebarCreateView(APIView):
+    def post(self, request):
+        # Determine whether creating SidebarItem or SidebarSubItem
+        item_type = request.data.get('item_type')
+
+        if item_type == 'sidebar_item':
+            serializer = SidebarItemSerializer(data=request.data)
+        elif item_type == 'sidebar_sub_item':
+            serializer = SidebarSubItemSerializer(data=request.data)
+        else:
+            return Response({"error": "Invalid item_type specified."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def put(self, request, pk):
+        """Update SidebarItem or SidebarSubItem by ID"""
+        item_type = request.data.get('item_type')
+
+        if item_type == 'sidebar_item':
+            try:
+                instance = SidebarItem.objects.get(pk=pk)
+            except SidebarItem.DoesNotExist:
+                return Response({"error": "SidebarItem not found."}, status=status.HTTP_404_NOT_FOUND)
+            serializer = SidebarItemSerializer(instance, data=request.data)
+        
+        elif item_type == 'sidebar_sub_item':
+            try:
+                instance = SidebarSubItem.objects.get(pk=pk)
+            except SidebarSubItem.DoesNotExist:
+                return Response({"error": "SidebarSubItem not found."}, status=status.HTTP_404_NOT_FOUND)
+            serializer = SidebarSubItemSerializer(instance, data=request.data)
+        
+        else:
+            return Response({"error": "Invalid item_type specified."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        """Delete SidebarItem or SidebarSubItem by ID"""
+        item_type = request.query_params.get('item_type')
+
+        if item_type == 'sidebar_item':
+            try:
+                instance = SidebarItem.objects.get(pk=pk)
+                instance.delete()
+                return Response({"success": "SidebarItem deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+            except SidebarItem.DoesNotExist:
+                return Response({"error": "SidebarItem not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        elif item_type == 'sidebar_sub_item':
+            try:
+                instance = SidebarSubItem.objects.get(pk=pk)
+                instance.delete()
+                return Response({"success": "SidebarSubItem deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+            except SidebarSubItem.DoesNotExist:
+                return Response({"error": "SidebarSubItem not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({"error": "Invalid item_type specified."}, status=status.HTTP_400_BAD_REQUEST) 
 
 class AssignRoleView(APIView):
     def post(self, request):
@@ -7335,7 +7399,7 @@ class InsertSearchLogView(APIView):
 
     def post(self, request):
         user = request.user
-        bank = user.MID
+        bank = user.MID 
         # branch = user.GID.GID
         # sys_usr = str(user.UID) + str(bank) + str(branch)
         
@@ -9277,6 +9341,9 @@ class ReportCatalogView(APIView):
 
 #         except Exception as e:
 #             return Response({'error': str(e)}, status=400)
+
+
+
 
 
         

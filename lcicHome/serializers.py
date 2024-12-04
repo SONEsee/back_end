@@ -537,16 +537,32 @@ class RoleSerializer(serializers.ModelSerializer):
         fields = ['id', 'name']
 
 
+# class SidebarItemSerializer(serializers.ModelSerializer):
+#     roles = RoleSerializer(many=True, read_only=True)
+
+#     class Meta:
+#         model = SidebarItem
+#         fields = ['id', 'name', 'url', 'roles']
+
+# class SidebarSubItemSerializer(serializers.ModelSerializer):
+#     parent = SidebarItemSerializer(read_only=True)
+#     roles = RoleSerializer(many=True, read_only=True)
+
+#     class Meta:
+#         model = SidebarSubItem
+#         fields = ['id', 'name', 'url', 'parent', 'roles']
+
+
 class SidebarItemSerializer(serializers.ModelSerializer):
-    roles = RoleSerializer(many=True, read_only=True)
+    roles = serializers.PrimaryKeyRelatedField(queryset=Role.objects.all(), many=True)
 
     class Meta:
         model = SidebarItem
         fields = ['id', 'name', 'url', 'roles']
 
+
 class SidebarSubItemSerializer(serializers.ModelSerializer):
-    parent = SidebarItemSerializer(read_only=True)
-    roles = RoleSerializer(many=True, read_only=True)
+    roles = serializers.PrimaryKeyRelatedField(queryset=Role.objects.all(), many=True)
 
     class Meta:
         model = SidebarSubItem
