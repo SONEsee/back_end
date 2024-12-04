@@ -6457,6 +6457,36 @@ def upload_image(request):
 
 
 
+# test upload image for profile 
+@csrf_exempt
+def upload_imageprofile(request):
+    if request.method == 'POST':
+        if 'image' not in request.FILES:
+            return JsonResponse({'status': 'error', 'message': 'No file provided'}, status=400)
+
+        file = request.FILES['image']
+        
+        # ຮັບຄ່າ user_mid_id ຈາກ Frontend
+        user_mid_id = request.POST.get('user_mid_id')
+        if not user_mid_id:
+            return JsonResponse({'status': 'error', 'message': 'No user_mid_id provided'}, status=400)
+        
+        try:
+            # ບັນທຶກໄຟລ໌ໄວ້ທີ່ directory
+            file_path = default_storage.save(f'profile/{file.name}', ContentFile(file.read()))
+            
+            # ບັນທຶກເຂົ້າຖານຂໍ້ມູນ Login
+            collateral = Login( profile_picture=file_path)
+            collateral.save()
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': f'Error saving file: {str(e)}'}, status=500)
+
+        return JsonResponse({'status': 'success', 'message': 'File uploaded successfully', 'filename': file.name})
+    
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=400)
+
+
+
 
 
 
@@ -6724,9 +6754,12 @@ logger = logging.getLogger(__name__)
 
 class UserManagementView(APIView):
     def post(self, request):
+        print("request", request)
         serializer = LoginSerializer(data=request.data)
+        
         if serializer.is_valid():
             user = serializer.save()
+
             return Response({
                 'success': 'User created successfully',
                 'user': {
@@ -6772,6 +6805,8 @@ class UserManagementView(APIView):
         except Login.DoesNotExist:
             # Return a 404 response if the user doesn't exist
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        
     
 from rest_framework.views import APIView
 from rest_framework.response import Response

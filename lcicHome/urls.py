@@ -40,7 +40,7 @@ from .views import get_data3,get_data4
 from .views import get_data_by_id_file
 from .views import update_statussubmit
 from .views import confirm_upload
-from .views import upload_image
+from .views import upload_image, upload_imageprofile
 from .views import get_collaterals
 from .views import get_login3
 from .views import get_last_lcicid
@@ -121,7 +121,7 @@ urlpatterns = [
    path('login1/', LoginView1.as_view(), name='login'),
    path('api2/login/', LoginView.as_view(), name='login'),
   #  paylay Pherm
-   path('sidebar_items/' ,SidebarItemsView.as_view(), name='sidebar_items'),
+#    path('sidebar_items/' ,SidebarItemsView.as_view(), name='sidebar_items'),
    path('roles/', RoleListView.as_view(), name='roles'),
    path('sidebar-items/', SidebarItemListView.as_view(), name='sidebar-items'),
    path('sidebar-sub-items/', SidebarSubItemListView.as_view(), name='sidebar-sub-items'),
@@ -234,12 +234,13 @@ urlpatterns = [
     path('api/update-statussubmit/', update_statussubmit, name='update_statussubmit'),
     path('api/update-statussubmitc/',  update_statussubmitc, name=' update_statussubmitc'),
     path('api/upload_image/', upload_image, name='collateral-update'),
+    path('api/upload_imagef/', upload_imageprofile, name='collateral-update'),
     path('api/get_collaterals/', get_collaterals, name='get_collaterals'),
-     path('api/get_login3/', get_login3, name='get_login3'),
+    path('api/get_login3/', get_login3, name='get_login3'),
   
     path('api/enterprise-info/', views.create_enterprise_info, name='create_enterprise_info'),
     path('api/last-lcicid/', get_last_lcicid, name='get_last_lcicid'),
-    # path('api/confirm_image/', confirm_image, name='confirm_image'),
+    #path('api/confirm_image/', confirm_image, name='confirm_image'),
     path('api/get_csrf_token/', views.get_csrf_token, name='get_csrf_token'),
     path('api/confirm_image/<int:id>/', views.confirm_image, name='confirm_image'),
     path('api/user-profile/', UserProfileView.as_view(), name='user-profile'),

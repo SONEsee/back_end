@@ -467,7 +467,7 @@ class LoginSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Login
-        fields = ['UID', 'MID', 'GID', 'username', 'nameL', 'nameE', 'surnameL', 'surnameE', 'insertDate', 'updateDate', 'is_active', 'is_staff', 'is_superuser', 'password']
+        fields = ['UID', 'MID', 'GID', 'username', 'nameL', 'nameE', 'surnameL', 'surnameE', 'insertDate', 'updateDate', 'is_active', 'is_staff', 'is_superuser', 'password','profile_picture']
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):

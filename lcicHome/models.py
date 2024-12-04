@@ -256,10 +256,48 @@ class UserManager(BaseUserManager):
         return self.create_user(username, password, **extra_fields)
      
 
+# class Login(AbstractBaseUser):
+#     UID = models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+#     MID = models.ForeignKey(memberInfo, related_name='memberInfo', null=True, blank=True, on_delete=models.CASCADE)
+#     GID = models.ForeignKey(User_Group, null=True, blank=True , on_delete=models.CASCADE)
+#     username = models.CharField(max_length=150, unique=True)
+#     nameL = models.CharField(max_length=150)
+#     nameE = models.CharField(max_length=150)
+#     surnameL = models.CharField(max_length=150)
+#     surnameE = models.CharField(max_length=150)
+#     insertDate = models.DateTimeField(auto_now_add=True, blank=True)
+#     updateDate = models.DateTimeField(auto_now=True, blank=True)
+#     is_active = models.BooleanField(default=True)
+#     is_staff = models.BooleanField(default=False)
+#     is_superuser = models.BooleanField(default=False)
+#     last_login = models.DateTimeField(null=True, blank=True)
+
+#     objects = UserManager()
+    
+#     def create_user(self, username, password=None, **extra_fields):
+#         if not username:
+#             raise ValueError('The Username must be set')
+#         user = self.model(username=username, **extra_fields)
+#         user.set_password(password)  # Hashes the password
+#         user.save(using=self._db)
+#         return user
+
+#     USERNAME_FIELD = 'username'
+
+#     def _str_(self):
+#         return self.username
+    
+
+
+    
+from django.db import models
+from django.contrib.auth.models import AbstractBaseUser
+
+
 class Login(AbstractBaseUser):
     UID = models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
     MID = models.ForeignKey(memberInfo, related_name='memberInfo', null=True, blank=True, on_delete=models.CASCADE)
-    GID = models.ForeignKey(User_Group, null=True, blank=True , on_delete=models.CASCADE)
+    GID = models.ForeignKey(User_Group, null=True, blank=True, on_delete=models.CASCADE)
     username = models.CharField(max_length=150, unique=True)
     nameL = models.CharField(max_length=150)
     nameE = models.CharField(max_length=150)
@@ -271,26 +309,25 @@ class Login(AbstractBaseUser):
     is_staff = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
     last_login = models.DateTimeField(null=True, blank=True)
+    
+    
+    profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
 
     objects = UserManager()
-    
+
     def create_user(self, username, password=None, **extra_fields):
         if not username:
             raise ValueError('The Username must be set')
         user = self.model(username=username, **extra_fields)
-        user.set_password(password)  # Hashes the password
+        user.set_password(password)  
         user.save(using=self._db)
         return user
 
     USERNAME_FIELD = 'username'
 
-    def _str_(self):
+    def __str__(self):
         return self.username
-    
-
-
-    
-    
+  
     
     
     
