@@ -7224,7 +7224,7 @@ class RoleListView(APIView):
 
 class SidebarItemListView(APIView):
     def get(self, request):
-        sidebar_items = SidebarItem.objects.all()
+        sidebar_items = SidebarItem.objects.all().order_by('id')
         serializer = SidebarItemSerializer(sidebar_items, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
