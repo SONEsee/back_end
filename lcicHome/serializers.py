@@ -558,7 +558,7 @@ class SidebarItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SidebarItem
-        fields = ['id', 'name', 'url', 'roles']
+        fields = ['id', 'name', 'url','icon', 'roles']
 
 
 class SidebarSubItemSerializer(serializers.ModelSerializer):

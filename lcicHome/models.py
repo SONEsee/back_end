@@ -1540,6 +1540,7 @@ class Role(models.Model):
 class SidebarItem(models.Model):
     name = models.CharField(max_length=100)
     url = models.CharField(max_length=255)
+    icon = models.CharField(max_length=100, blank=True, null=True)
     roles = models.ManyToManyField(Role, related_name="sidebar_items")
 
 class SidebarSubItem(models.Model):
