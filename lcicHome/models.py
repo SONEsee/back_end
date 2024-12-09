@@ -303,6 +303,7 @@ class Login(AbstractBaseUser):
     nameE = models.CharField(max_length=150)
     surnameL = models.CharField(max_length=150)
     surnameE = models.CharField(max_length=150)
+    profile_image = models.FileField(upload_to='profile_images/', null=True, blank=True)  # New field for profile image
     insertDate = models.DateTimeField(auto_now_add=True, blank=True)
     updateDate = models.DateTimeField(auto_now=True, blank=True)
     is_active = models.BooleanField(default=True)
@@ -327,22 +328,10 @@ class Login(AbstractBaseUser):
 
     def __str__(self):
         return self.username
-  
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
+
+
     
 
 # class Login(AbstractBaseUser):

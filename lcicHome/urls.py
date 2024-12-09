@@ -53,7 +53,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView
+from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView
 from .views import STypeView
 from .views import UserGroupView
 
@@ -121,7 +121,9 @@ urlpatterns = [
    path('login1/', LoginView1.as_view(), name='login'),
    path('api2/login/', LoginView.as_view(), name='login'),
   #  paylay Pherm
-#    path('sidebar_items/' ,SidebarItemsView.as_view(), name='sidebar_items'),
+   path('sidebar_items/' ,SidebarItemsView.as_view(), name='sidebar_items'),
+   path('create_sidebar/', SidebarCreateView.as_view(),name='create_sidebar'),
+   path('create_sidebar/<int:pk>/', SidebarCreateView.as_view(),name='create_sidebar_update'),
    path('roles/', RoleListView.as_view(), name='roles'),
    path('sidebar-items/', SidebarItemListView.as_view(), name='sidebar-items'),
    path('sidebar-sub-items/', SidebarSubItemListView.as_view(), name='sidebar-sub-items'),
@@ -153,7 +155,7 @@ urlpatterns = [
    
    path('searchlog_chart/month/<str:month_year>', SearchLogChart_MonthView.as_view(), name='searchlog_chartbymonth'),
    path('searchlog_chart/month/', SearchLogChart_MonthView.as_view(), name='searchlog_chart_current_month'),
-    path('searchlog_chart/month/<str:month_year>/', SearchLogChart_MonthView.as_view(), name='searchlog_chart_month'),  
+   path('searchlog_chart/month/<str:month_year>/', SearchLogChart_MonthView.as_view(), name='searchlog_chart_month'),  
    
    path('searchlog_chart/date/<str:inquiry_date>', SearchLogChartByDateView.as_view(), name='searchlog_chartbydate'),
    
@@ -244,7 +246,7 @@ urlpatterns = [
     path('api/get_csrf_token/', views.get_csrf_token, name='get_csrf_token'),
     path('api/confirm_image/<int:id>/', views.confirm_image, name='confirm_image'),
     path('api/user-profile/', UserProfileView.as_view(), name='user-profile'),
-] 
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
      

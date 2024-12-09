@@ -2525,35 +2525,12 @@ class EnterpriseInfoMatch(APIView):
                     # print(invesinfo)
                 
                 serializer = EnterpriseInfoSerializer(enterprise_info, many=True)
-                # inquiry_month = datetime(year=2024, month=10, day=1).date()  # October 2024
-
-                # Insert log
-                # insertlog = searchLog.objects.create(
-                #     enterprise_ID=EnterpriseID,
-                #     LCIC_ID=LCICID,
-                #     bnk_code=bank,
-                #     branch=branch,
-                #     cus_ID='',
-                #     cusType='enterprise',
-                #     credit_type='ບົດລາຍງານສິນເຊື່ອຄົບຖ້ວນ',
-                #     inquiry_month=inquiry_month,  # Use a valid date
-                #     com_tel='',
-                #     com_location='',
-                #     rec_loan_amount=0.0,  # FloatField requires a float, not an empty string
-                #     rec_loan_amount_currency='',
-                #     rec_loan_purpose='',
-                #     rec_enquiry_type=''
-                # )
-
-                # insertlog.save()
-                # print("Searchlog Insert Successfully ======>")
                 
                 return Response(serializer.data, status=status.HTTP_200_OK)
             except EnterpriseInfo.DoesNotExist:
                 return Response({'error': 'EnterpriseInfo not found'}, status=status.HTTP_404_NOT_FOUND)
             except Exception as e:
                 return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)    
-        
         
 class LoginView(APIView):
     def post(self, request):
@@ -6753,8 +6730,37 @@ logger = logging.getLogger(__name__)
 
 
 class UserManagementView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+    
+    # def post(self, request):
+    #     # serializer = LoginSerializer(data=request.data)
+    #     serializer = LoginSerializer(data=request.data, files=request.FILES)
+    #     if serializer.is_valid():
+    #         user = serializer.save()
+    #         return Response({
+    #             'success': 'User created successfully',
+    #             'user': {
+    #                 'UID': user.UID,
+    #                 'username': user.username,
+    #                 'nameL': user.nameL,
+    #                 'surnameL': user.surnameL,
+    #                 'nameE': user.nameE,
+    #                 'surnameE': user.surnameE,
+    #                 'GID': user.GID.pk if user.GID else None,
+    #                 'MID': user.MID.pk if user.MID else None,
+    #                 'is_active': user.is_active,
+    #                 'is_staff': user.is_staff,
+    #                 'profile_image_url': user.profile_image.url if user.profile_image else None,  # Return image URL
+    #             }
+    #         }, status=status.HTTP_201_CREATED)
+    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
     def post(self, request):
-        print("request", request)
+        # Your code here to handle POST request
+        data = request.data.copy()
+        if 'profile_image' in request.FILES:
+            data['profile_image'] = request.FILES['profile_image']
+
         serializer = LoginSerializer(data=request.data)
         
         if serializer.is_valid():
@@ -6773,7 +6779,6 @@ class UserManagementView(APIView):
                     'MID': user.MID.pk if user.MID else None,
                     'is_active': user.is_active,
                     'is_staff': user.is_staff
-                    
                 }
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -6833,8 +6838,9 @@ class FCR_reportView(APIView):
             inves_info = InvestorInfo.objects.filter(EnterpriseID=enterprise_id)
             search_history = request_charge.objects.filter(LCIC_ID=lcic_id)
             
+            
+            
             print("Search_History====>",search_history)
-
             print("Enterprise_info:", ent_info)
             print("Loan_Info:", loan_info)
             print("Investor_Info:", inves_info)
@@ -6880,7 +6886,11 @@ class FCR_reportView(APIView):
                         branch_id=loan.branch_id,
                         loan_id=loan.loan_id,
                     ).order_by('-period')
-
+                    
+                    # loan_purpose_detail = Main_catalog_cat.objects.filter(cat_value=loan.lon_purpose_code).first()
+                    
+                    # print("Laon_data_here ----> ",loan_purpose_detail.cat_lao_name)
+                    
                     lon_class_history_list = list(lon_class_history.values())
 
                     # Get Collateral Records
@@ -6976,11 +6986,15 @@ class FCR_reportView(APIView):
                     
             lon_search_history_list = []
             for lon_search in search_history:
-                print(lon_search)
+                print(lon_search.lon_purpose)
+                lon_purpose_detail = Main_catalog_cat.objects.filter(cat_value=lon_search.lon_purpose)
+                
+                for lon_pur_code in lon_purpose_detail:
+                    print("Loan_purpose:-->",lon_pur_code.cat_lao_name)
                 search_data = {
                     "id":lon_search.insert_date,
                     "bnk_code":lon_search.bnk_code,
-                    "lon_purpose":lon_search.lon_purpose
+                    "lon_purpose":lon_pur_code.cat_lao_name
                 }
             
                 lon_search_history_list.append(search_data)
@@ -7277,6 +7291,70 @@ class SidebarSubItemListView(APIView):
         serializer = SidebarSubItemSerializer(sidebar_sub_items, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+class SidebarCreateView(APIView):
+    def post(self, request):
+        # Determine whether creating SidebarItem or SidebarSubItem
+        item_type = request.data.get('item_type')
+
+        if item_type == 'sidebar_item':
+            serializer = SidebarItemSerializer(data=request.data)
+        elif item_type == 'sidebar_sub_item':
+            serializer = SidebarSubItemSerializer(data=request.data)
+        else:
+            return Response({"error": "Invalid item_type specified."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def put(self, request, pk):
+        """Update SidebarItem or SidebarSubItem by ID"""
+        item_type = request.data.get('item_type')
+
+        if item_type == 'sidebar_item':
+            try:
+                instance = SidebarItem.objects.get(pk=pk)
+            except SidebarItem.DoesNotExist:
+                return Response({"error": "SidebarItem not found."}, status=status.HTTP_404_NOT_FOUND)
+            serializer = SidebarItemSerializer(instance, data=request.data)
+        
+        elif item_type == 'sidebar_sub_item':
+            try:
+                instance = SidebarSubItem.objects.get(pk=pk)
+            except SidebarSubItem.DoesNotExist:
+                return Response({"error": "SidebarSubItem not found."}, status=status.HTTP_404_NOT_FOUND)
+            serializer = SidebarSubItemSerializer(instance, data=request.data)
+        
+        else:
+            return Response({"error": "Invalid item_type specified."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        """Delete SidebarItem or SidebarSubItem by ID"""
+        item_type = request.query_params.get('item_type')
+
+        if item_type == 'sidebar_item':
+            try:
+                instance = SidebarItem.objects.get(pk=pk)
+                instance.delete()
+                return Response({"success": "SidebarItem deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+            except SidebarItem.DoesNotExist:
+                return Response({"error": "SidebarItem not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        elif item_type == 'sidebar_sub_item':
+            try:
+                instance = SidebarSubItem.objects.get(pk=pk)
+                instance.delete()
+                return Response({"success": "SidebarSubItem deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+            except SidebarSubItem.DoesNotExist:
+                return Response({"error": "SidebarSubItem not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({"error": "Invalid item_type specified."}, status=status.HTTP_400_BAD_REQUEST) 
 
 class AssignRoleView(APIView):
     def post(self, request):
@@ -7378,7 +7456,7 @@ class InsertSearchLogView(APIView):
 
     def post(self, request):
         user = request.user
-        bank = user.MID
+        bank = user.MID 
         # branch = user.GID.GID
         # sys_usr = str(user.UID) + str(bank) + str(branch)
         
@@ -9323,6 +9401,9 @@ class ReportCatalogView(APIView):
 
 #         except Exception as e:
 #             return Response({'error': str(e)}, status=400)
+
+
+
 
 
         
