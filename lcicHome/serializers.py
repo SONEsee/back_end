@@ -578,7 +578,7 @@ class CustomerInfoINDSerializer(serializers.ModelSerializer):
         
 class Bank_InfoINDSerializer(serializers.ModelSerializer):
     class Meta:
-        model = bank_bnk
+        model = bank_bnk 
         fields = '__all__'
         
 class EnterpriseInfoSerializer(serializers.ModelSerializer):
