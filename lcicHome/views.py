@@ -9405,7 +9405,71 @@ class ReportCatalogView(APIView):
 
 
 
+from django.views.decorators.csrf import csrf_exempt
+import json
+from .models import EnterpriseInfo, Search_batfile
+        
+@csrf_exempt
+def upload_json(request):
+    if request.method == 'POST':
+        file = request.FILES.get('file')
+        if not file:
+            return JsonResponse({"error": "No file provided"}, status=400)
+        
+        print('File name:', file.name)
+        print('File size:', file.size)
 
         
-    
+        search_batfile = Search_batfile(
+            fileName=file.name,
+            fileUpload=file,
+            fileSize=f"{file.size} bytes",
+            path=f"searchfile/{file.name}",
+            status="Uploaded",
+            FileType="json",
+        )
+        search_batfile.save()
 
+        
+        try:
+            file.seek(0)
+            data = json.load(file)
+            print('JSON data:', data)
+        except json.JSONDecodeError as e:
+            print('JSON decode error:', str(e))
+            return JsonResponse({"error": f"Invalid JSON file: {str(e)}"}, status=400)
+        except Exception as e:
+            print('Unexpected error:', str(e))
+            return JsonResponse({"error": f"Error processing file: {str(e)}"}, status=400)
+
+       
+        results = []
+        for record in data:
+            lcic_id = record.get('lcicID')
+            com_code = record.get('com_enterprise_code')
+            
+           
+            enterprise = EnterpriseInfo.objects.filter(
+                LCICID=lcic_id, 
+                EnterpriseID=com_code
+            ).first()
+            
+            if enterprise:
+                results.append({
+                    "lcicID": lcic_id,
+                    "com_enterprise_code": com_code,
+                    "status": "Found",
+                    "enterpriseNameLao": enterprise.enterpriseNameLao,
+                })
+            else:
+                results.append({
+                    "lcicID": lcic_id,
+                    "com_enterprise_code": com_code,
+                    "status": "Not Found",
+                })
+        
+      
+        return JsonResponse({"results": results}, status=200)
+    
+   
+    return JsonResponse({"error": "Invalid request method"}, status=405)

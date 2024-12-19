@@ -1648,7 +1648,7 @@ class Search_batfile(models.Model):
     GID = models.ForeignKey(User_Group, null=True, blank=True, on_delete=models.CASCADE)
     SType = models.ForeignKey(SType, null=True, blank=True, on_delete=models.CASCADE)
     UType = models.ForeignKey(Upload_Type, null=True, blank=True, on_delete=models.CASCADE)
-    user_id = models.CharField(max_length=255)  
+    user_id = models.CharField(max_length=255)
     file_id = models.CharField(max_length=255)
     fileName = models.CharField(max_length=255)
     fileUpload = models.FileField(upload_to="searchfile/")
@@ -1664,4 +1664,5 @@ class Search_batfile(models.Model):
     percentage = models.FloatField(default=0.0)
 
     def __str__(self):
-        return self.title   
+        # ປ່ຽນຈາກ self.title ເປັນ self.fileName
+        return self.fileName
