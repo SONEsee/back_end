@@ -669,3 +669,10 @@ class ReportCatalogSerializer(serializers.ModelSerializer):
         instance.save()
         instance.Report_UserRole.set(user_roles)  # Update the many-to-many relationship
         return instance
+from rest_framework import serializers
+from .models import Search_batfile
+
+class SearchBatfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Search_batfile
+        fields = '__all__'

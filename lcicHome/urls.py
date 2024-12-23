@@ -57,7 +57,7 @@ from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, Upda
 from .views import STypeView
 from .views import UserGroupView
 from .views import upload_json
-
+from .views import SearchBatfileAPIView
 
 # from .views import FileUploadView, FileDeleteView
 # from .views import upload_files
@@ -248,6 +248,8 @@ urlpatterns = [
     path('api/confirm_image/<int:id>/', views.confirm_image, name='confirm_image'),
     path('api/user-profile/', UserProfileView.as_view(), name='user-profile'),
     path('api/upload-json/', upload_json, name='upload-json'),
+     path('api/search-files/', SearchBatfileAPIView.as_view(), name='search_files_api'),
+      path("api/get-search-results/<int:id>/", views.get_search_results, name="get_search_results"),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

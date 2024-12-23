@@ -1659,10 +1659,26 @@ class Search_batfile(models.Model):
     period = models.CharField(max_length=150)
     status = models.CharField(max_length=150)
     statussubmit = models.CharField(max_length=150)
+    searchtrue = models.CharField(max_length=150)
+    searchfals = models.CharField(max_length=150)
     status_upload = models.CharField(max_length=150)
     FileType = models.CharField(max_length=10)
     percentage = models.FloatField(default=0.0)
 
     def __str__(self):
-        # ປ່ຽນຈາກ self.title ເປັນ self.fileName
+        
         return self.fileName
+    
+    from django.db import models
+
+class SearchResult(models.Model):
+    search_batch = models.ForeignKey(Search_batfile, on_delete=models.CASCADE)
+    lcicID = models.CharField(max_length=255)
+    com_enterprise_code = models.CharField(max_length=255)
+    status = models.CharField(max_length=50)
+    enterpriseNameLao = models.CharField(max_length=255, null=True, blank=True)
+    investmentCurrency = models.CharField(max_length=255, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"SearchResult {self.id} - {self.lcicID}"

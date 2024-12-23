@@ -9331,15 +9331,15 @@ from .serializers import ReportCatalogSerializer
 class ReportCatalogView(APIView):
     def get(self, request):
 
-        report_catalogs = ReportCatalog.objects.all()  # Retrieve all report catalog entries
-        serializer = ReportCatalogSerializer(report_catalogs, many=True)  # Serialize them
+        report_catalogs = ReportCatalog.objects.all()  
+        serializer = ReportCatalogSerializer(report_catalogs, many=True)  
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
 
         serializer = ReportCatalogSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()  # Save the new report entry if valid
+            serializer.save()  
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST) 
     def put(self, request, pk):
@@ -9349,7 +9349,7 @@ class ReportCatalogView(APIView):
         except ReportCatalog.DoesNotExist:
             return Response({"error": "ReportCatalog not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = ReportCatalogSerializer(report_catalog, data=request.data, partial=True)  # Allow partial update
+        serializer = ReportCatalogSerializer(report_catalog, data=request.data, partial=True)  
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -9407,19 +9407,17 @@ class ReportCatalogView(APIView):
 
 from django.views.decorators.csrf import csrf_exempt
 import json
-from .models import EnterpriseInfo, Search_batfile
+from .models import EnterpriseInfo, Search_batfile,SearchResult
         
+
 @csrf_exempt
 def upload_json(request):
     if request.method == 'POST':
         file = request.FILES.get('file')
         if not file:
             return JsonResponse({"error": "No file provided"}, status=400)
-        
-        print('File name:', file.name)
-        print('File size:', file.size)
 
-        
+       
         search_batfile = Search_batfile(
             fileName=file.name,
             fileUpload=file,
@@ -9430,46 +9428,95 @@ def upload_json(request):
         )
         search_batfile.save()
 
-        
         try:
             file.seek(0)
             data = json.load(file)
-            print('JSON data:', data)
         except json.JSONDecodeError as e:
-            print('JSON decode error:', str(e))
             return JsonResponse({"error": f"Invalid JSON file: {str(e)}"}, status=400)
-        except Exception as e:
-            print('Unexpected error:', str(e))
-            return JsonResponse({"error": f"Error processing file: {str(e)}"}, status=400)
 
-       
         results = []
+        found_count = 0  
+        not_found_count = 0 
+
         for record in data:
             lcic_id = record.get('lcicID')
             com_code = record.get('com_enterprise_code')
             
-           
             enterprise = EnterpriseInfo.objects.filter(
                 LCICID=lcic_id, 
                 EnterpriseID=com_code
             ).first()
             
-            if enterprise:
-                results.append({
-                    "lcicID": lcic_id,
-                    "com_enterprise_code": com_code,
-                    "status": "Found",
-                    "enterpriseNameLao": enterprise.enterpriseNameLao,
-                })
+            result_data = {
+                "lcicID": lcic_id,
+                "com_enterprise_code": com_code,
+                "status": "Found" if enterprise else "Not Found",
+                "enterpriseNameLao": enterprise.enterpriseNameLao if enterprise else None,
+                "investmentCurrency": enterprise.investmentCurrency if enterprise else None
+            }
+            
+            
+            if result_data["status"] == "Found":
+                found_count += 1
             else:
-                results.append({
-                    "lcicID": lcic_id,
-                    "com_enterprise_code": com_code,
-                    "status": "Not Found",
-                })
+                not_found_count += 1
+            
+           
+            SearchResult.objects.create(
+                search_batch=search_batfile,
+                lcicID=lcic_id,
+                com_enterprise_code=com_code,
+                status=result_data["status"],
+                enterpriseNameLao=result_data["enterpriseNameLao"],
+                investmentCurrency=result_data["investmentCurrency"]
+            )
+            
+            results.append(result_data)
+
         
-      
+        search_batfile.searchtrue = found_count
+        search_batfile.searchfals = not_found_count
+        search_batfile.save()
+
         return JsonResponse({"results": results}, status=200)
-    
-   
+
     return JsonResponse({"error": "Invalid request method"}, status=405)
+
+
+
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import Search_batfile
+from .serializers import SearchBatfileSerializer
+
+class SearchBatfileAPIView(APIView):
+    def get(self, request):
+        
+        files = Search_batfile.objects.all()
+        serializer = SearchBatfileSerializer(files, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from .models import Search_batfile, SearchResult
+
+def get_search_results(request, id):
+    search_batch = get_object_or_404(Search_batfile, id=id)
+    search_results = SearchResult.objects.filter(search_batch=search_batch)
+    results_data = [
+        {
+            "id": result.id,
+            "lcicID": result.lcicID,
+            "com_enterprise_code": result.com_enterprise_code,
+            "status": result.status,
+            "enterpriseNameLao": result.enterpriseNameLao,
+            "investmentCurrency": result.investmentCurrency,
+            "created_at": result.created_at,
+        }
+        for result in search_results
+    ]
+    return JsonResponse({"results": results_data})
