@@ -1649,6 +1649,7 @@ class Search_batfile(models.Model):
     SType = models.ForeignKey(SType, null=True, blank=True, on_delete=models.CASCADE)
     UType = models.ForeignKey(Upload_Type, null=True, blank=True, on_delete=models.CASCADE)
     user_id = models.CharField(max_length=255)
+    UID = models.CharField(max_length=255)
     file_id = models.CharField(max_length=255)
     fileName = models.CharField(max_length=255)
     fileUpload = models.FileField(upload_to="searchfile/")
@@ -1664,6 +1665,7 @@ class Search_batfile(models.Model):
     status_upload = models.CharField(max_length=150)
     FileType = models.CharField(max_length=10)
     percentage = models.FloatField(default=0.0)
+    
 
     def __str__(self):
         

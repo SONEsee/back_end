@@ -2423,9 +2423,10 @@ from .serializers import EnterpriseInfoSerializer
 from datetime import datetime
 
 
-# Search Enterprise 30/09/2024
+
+
 class EnterpriseInfoSearch(APIView):
-    # authentication_classes = [JWTAuthentication]
+   
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -2433,25 +2434,27 @@ class EnterpriseInfoSearch(APIView):
         user = request.user
         UID = user.UID 
         bank = user.MID
+        print('user' , user)
+        print('bank' , bank)
         # bank = str(user.MID.id)
         # branch = str(user.GID.GID)  
         # sys_usr = str(user.UID) + str(bank) + str(branch)
         
-        print("Bank COde: ===>", bank.bnk_code)
-        print("Bank COde: ===>", bank.code)
+        # print("Bank COde: ===>", bank.bnk_code)
+        # print("Bank COde: ===>", bank.code)
         bank_info = bank_bnk.objects.get(bnk_code=bank.bnk_code)
-        print("---->",bank_info.bnk_code)
-        print("Bank_Type",bank_info.bnk_type)
+        # print("---->",bank_info.bnk_code)
+        # print("Bank_Type",bank_info.bnk_type)
         LCICID = request.data.get('LCICID')
         EnterpriseID = request.data.get('EnterpriseID')
         loan_purpose = request.data.get('CatalogID')
         sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
         
-        print("============> Loan Purpose: ",loan_purpose )
-        print("Authenticated User ID (UID):", UID)
-        print("Authenticated Bankname:", bank)
-        print("LCICID:", LCICID)
-        print("EnterpriseID:", EnterpriseID)
+        # print("============> Loan Purpose: ",loan_purpose )
+        # print("Authenticated User ID (UID):", UID)
+        # print("Authenticated Bankname:", bank)
+        # print("LCICID:", LCICID)
+        # print("EnterpriseID:", EnterpriseID)
         # print("Login :",Login._meta.get_fields())
         if LCICID is not None and EnterpriseID is not None:
             try:
@@ -2481,21 +2484,23 @@ class EnterpriseInfoSearch(APIView):
                     rec_loan_amount_currency='',
                     rec_loan_purpose=loan_purpose,
                     rec_enquiry_type='',
-                    sys_usr=sys_usr  # Save sys_usr to the model if needed
+                    sys_usr=sys_usr  
                 )
 
                 search_log.save()
-                print("Searchlog Insert Successfully ======>")
+                # print("Searchlog Insert Successfully ======>")
                 
                 return Response(serializer.data, status=status.HTTP_200_OK)
             except EnterpriseInfo.DoesNotExist:
                 return Response({'error': 'EnterpriseInfo not found'}, status=status.HTTP_404_NOT_FOUND)
             except Exception as e:
                 return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
         
 class EnterpriseInfoMatch(APIView):
-    # authentication_classes = [JWTAuthentication]
+    
     permission_classes = [IsAuthenticated]
+    print('data authenticated', permission_classes)
 
     def post(self, request):
         
@@ -2514,15 +2519,15 @@ class EnterpriseInfoMatch(APIView):
         
         print("LCICID:", LCICID)
         print("EnterpriseID:", EnterpriseID)
-        # print("Login :",Login._meta.get_fields())
+       
         if LCICID is not None and EnterpriseID is not None:
             try:
-                # enterprise_info = EnterpriseInfo.objects.filter(LCICID=LCICID, EnterpriseID=EnterpriseID)
+                
                 enterprise_info = B1.objects.filter(lcicID=LCICID, com_enterprise_code=EnterpriseID)
                 investor_info = InvestorInfo.objects.filter(EnterpriseID=EnterpriseID)                              
                 for i in investor_info:
                     invesinfo = i.investorName
-                    # print(invesinfo)
+                   
                 
                 serializer = EnterpriseInfoSerializer(enterprise_info, many=True)
                 
@@ -7450,121 +7455,132 @@ class ManageUserView(APIView):
             return Response(LoginSerializer(user).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-from .models import ChargeMatrix, B1
-class InsertSearchLogView(APIView):
-    permission_classes = [IsAuthenticated]
 
-    def post(self, request):
-        user = request.user
-        bank = user.MID 
-        # branch = user.GID.GID
-        # sys_usr = str(user.UID) + str(bank) + str(branch)
-        
-        
-        print("Bank COde: ===>", bank.bnk_code)
-        print("Bank COde: ===>", bank.code)
-        bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
-        print("---->",bank_info.bnk_code)
-        print("Bank_Type",bank_info.bnk_type)
-        
-        charge_bank_type = bank_info.bnk_type
-        
-        if charge_bank_type == 1:
-            chargeType = ChargeMatrix.objects.get(chg_sys_id=2)                    
-        else:
-            chargeType = ChargeMatrix.objects.get(chg_sys_id=5)
-        
-        print("Charge_Amount ====>",chargeType.chg_amount)
-        
-        charge_amount_com = chargeType.chg_amount # charge sum lup company
-        EnterpriseID = request.data.get('EnterpriseID')
-        LCICID = request.data.get('LCICID')
-        # loan_purpose = request.data.get('CatalogID')
-        
-        # print("============> Loan Purpose: ",loan_purpose )
-        # loan_purpose_code = Main_catalog_cat.objects.get(cat_sys_id=loan_purpose)
-        
-        # print("============> Cat_Value : ",loan_purpose_code.cat_value)
-        
-        search_loan = B1.objects.filter(lcicID=LCICID)
-        for loan_log in search_loan:
-            print("branch_id:", loan_log.branch_id)
 
-        sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
 
-        if EnterpriseID and LCICID:
-            try:
-                # inquiry_month = datetime(year=2024, month=10, day=1).date()  # October 2024
-                inquiry_month = datetime(year=2024, month=10, day=1).strftime('%Y-%m')
-                inquiry_month_charge = datetime(year=2024, month=10, day=1).strftime('%d%m%Y')
-                search_log = searchLog.objects.create(
-                    enterprise_ID=EnterpriseID,
-                    LCIC_ID=LCICID,
-                    bnk_code=bank_info.bnk_code,
-                    bnk_type=bank_info.bnk_type,
-                    branch=loan_log.branch_id,
-                    cus_ID=loan_log.customer_id,
-                    cusType=loan_log.segmentType,
-                    credit_type=chargeType.chg_code,
-                    inquiry_month=inquiry_month,
-                    com_tel='',
-                    com_location='',
-                    rec_loan_amount=0.0,
-                    rec_loan_amount_currency='LAK',
-                    rec_loan_purpose=loan_log.lon_purpose_code,
-                    rec_enquiry_type='1',
-                    sys_usr=sys_usr  
-                )
-                # search_log = searchLog.objects.get(
-                #     enterprise_ID=EnterpriseID,
-                #     LCIC_ID=LCICID,
-                #     # Add any other unique identifiers if necessary
-                # )
-                # search_log.bnk_code = bank_info.bnk_code
-                # search_log.bnk_type = bank_info.bnk_type
-                # search_log.branch = loan_log.branch_id
-                # search_log.cus_ID = loan_log.customer_id
-                # search_log.cusType = loan_log.segmentType
-                # search_log.credit_type = chargeType.chg_code
-                # search_log.inquiry_month = inquiry_month
-                # search_log.com_tel = ''
-                # search_log.com_location = ''
-                # search_log.rec_loan_amount = 0.0
-                # search_log.rec_loan_amount_currency = 'LAK'
-                # search_log.rec_loan_purpose = loan_log.lon_purpose_code
-                # search_log.rec_enquiry_type = '1'
-                # search_log.sys_usr = sys_usr  
-                # search_log.save()
+    
+# from .models import ChargeMatrix, B1
+# class InsertSearchLogView(APIView):
+#     permission_classes = [IsAuthenticated]
 
-                charge = request_charge.objects.create(
-                    bnk_code=bank_info.bnk_code,
-                    bnk_type=bank_info.bnk_type,
-                    chg_amount=charge_amount_com,
-                    chg_code=chargeType.chg_code,
-                    status='pending',  
-                    rtp_code='1', 
-                    lon_purpose=loan_log.lon_purpose_code,
-                    chg_unit=chargeType.chg_unit,
-                    user_sys_id=sys_usr,
-                    LCIC_ID=LCICID,
-                    cusType=loan_log.segmentType,
-                    # user_session_id=str(request.session.session_key),  # Use Django session key if applicable 
+#     def post(self, request):
+#         user = request.user
+#         bank = user.MID 
+#         # branch = user.GID.GID
+#         # sys_usr = str(user.UID) + str(bank) + str(branch)
+        
+        
+#         print("Bank COde: ===>", bank.bnk_code)
+#         print("Bank COde: ===>", bank.code)
+#         bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
+#         print("---->",bank_info.bnk_code)
+#         print("Bank_Type",bank_info.bnk_type)
+        
+#         charge_bank_type = bank_info.bnk_type
+        
+#         if charge_bank_type == 1:
+#             chargeType = ChargeMatrix.objects.get(chg_sys_id=2)                    
+#         else:
+#             chargeType = ChargeMatrix.objects.get(chg_sys_id=5)
+        
+#         print("Charge_Amount ====>",chargeType.chg_amount)
+        
+#         charge_amount_com = chargeType.chg_amount # charge sum lup company
+#         EnterpriseID = request.data.get('EnterpriseID')
+#         LCICID = request.data.get('LCICID')
+#         # loan_purpose = request.data.get('CatalogID')
+        
+#         # print("============> Loan Purpose: ",loan_purpose )
+#         # loan_purpose_code = Main_catalog_cat.objects.get(cat_sys_id=loan_purpose)
+        
+#         # print("============> Cat_Value : ",loan_purpose_code.cat_value)
+        
+#         search_loan = B1.objects.filter(lcicID=LCICID)
+#         for loan_log in search_loan:
+#             print("branch_id:", loan_log.branch_id)
+
+#         sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
+
+#         if EnterpriseID and LCICID:
+#             try:
+                
+#                 inquiry_month = datetime(year=2024, month=10, day=1).strftime('%Y-%m')
+#                 inquiry_month_charge = datetime(year=2024, month=10, day=1).strftime('%d%m%Y')
+#                 search_log = searchLog.objects.create(
+#                     enterprise_ID=EnterpriseID,
+#                     LCIC_ID=LCICID,
+#                     bnk_code=bank_info.bnk_code,
+#                     bnk_type=bank_info.bnk_type,
+#                     branch=loan_log.branch_id,
+#                     cus_ID=loan_log.customer_id,
+#                     cusType=loan_log.segmentType,
+#                     credit_type=chargeType.chg_code,
+#                     inquiry_month=inquiry_month,
+#                     com_tel='',
+#                     com_location='',
+#                     rec_loan_amount=0.0,
+#                     rec_loan_amount_currency='LAK',
+#                     rec_loan_purpose=loan_log.lon_purpose_code,
+#                     rec_enquiry_type='1',
+#                     sys_usr=sys_usr  
+#                 )
+#                 # search_log = searchLog.objects.get(
+#                 #     enterprise_ID=EnterpriseID,
+#                 #     LCIC_ID=LCICID,
+#                 #     # Add any other unique identifiers if necessary
+#                 # )
+#                 # search_log.bnk_code = bank_info.bnk_code
+#                 # search_log.bnk_type = bank_info.bnk_type
+#                 # search_log.branch = loan_log.branch_id
+#                 # search_log.cus_ID = loan_log.customer_id
+#                 # search_log.cusType = loan_log.segmentType
+#                 # search_log.credit_type = chargeType.chg_code
+#                 # search_log.inquiry_month = inquiry_month
+#                 # search_log.com_tel = ''
+#                 # search_log.com_location = ''
+#                 # search_log.rec_loan_amount = 0.0
+#                 # search_log.rec_loan_amount_currency = 'LAK'
+#                 # search_log.rec_loan_purpose = loan_log.lon_purpose_code
+#                 # search_log.rec_enquiry_type = '1'
+#                 # search_log.sys_usr = sys_usr  
+#                 # search_log.save()
+
+#                 charge = request_charge.objects.create(
+#                     bnk_code=bank_info.bnk_code,
+#                     bnk_type=bank_info.bnk_type,
+#                     chg_amount=charge_amount_com,
+#                     chg_code=chargeType.chg_code,
+#                     status='pending',  
+#                     rtp_code='1', 
+#                     lon_purpose=loan_log.lon_purpose_code,
+#                     chg_unit=chargeType.chg_unit,
+#                     user_sys_id=sys_usr,
+#                     LCIC_ID=LCICID,
+#                     cusType=loan_log.segmentType,
                     
-                    user_session_id='',
-                    rec_reference_code='',
-                    search_log=search_log 
-                )
-                charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
-                charge.save()
-                print("=========> has benn inserted")
-                print(f"Charge inserted with ID: {charge.rec_charge_ID}")
-                return Response({'success': 'Search log inserted'}, status=status.HTTP_201_CREATED)
-            except Exception as e:
-                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            return Response({'error': 'EnterpriseID and LCICID are required'}, status=status.HTTP_400_BAD_REQUEST)
+                    
+#                     user_session_id='',
+#                     rec_reference_code='',
+#                     search_log=search_log 
+#                 )
+#                 charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
+#                 charge.save()
+#                 print("=========> has benn inserted")
+#                 print(f"Charge inserted with ID: {charge.rec_charge_ID}")
+#                 return Response({'success': 'Search log inserted'}, status=status.HTTP_201_CREATED)
+#             except Exception as e:
+#                 return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+#         else:
+#             return Response({'error': 'EnterpriseID and LCICID are required'}, status=status.HTTP_400_BAD_REQUEST)
         
         
+
+
+
+
+
+
+
         
 # from .serializers import SearchLogSerializer
 
@@ -9410,14 +9426,196 @@ import json
 from .models import EnterpriseInfo, Search_batfile,SearchResult
         
 
-@csrf_exempt
-def upload_json(request):
-    if request.method == 'POST':
-        file = request.FILES.get('file')
-        if not file:
-            return JsonResponse({"error": "No file provided"}, status=400)
+# @csrf_exempt
+# def upload_json(request):
+#     if request.method == 'POST':
+#         file = request.FILES.get('file')
+#         user_id = request.POST.get('user_id')
+#         if not file:
+#             return JsonResponse({"error": "No file provided"}, status=400)
 
        
+#         search_batfile = Search_batfile(
+#             fileName=file.name,
+#             fileUpload=file,
+#             fileSize=f"{file.size} bytes",
+#             path=f"searchfile/{file.name}",
+#             status="Uploaded",
+#             FileType="json",
+#             user_id=user_id,
+#         )
+#         search_batfile.save()
+
+#         try:
+#             file.seek(0)
+#             data = json.load(file)
+#         except json.JSONDecodeError as e:
+#             return JsonResponse({"error": f"Invalid JSON file: {str(e)}"}, status=400)
+
+#         results = []
+#         found_count = 0  
+#         not_found_count = 0 
+
+#         for record in data:
+#             lcic_id = record.get('lcicID')
+#             com_code = record.get('com_enterprise_code')
+            
+#             enterprise = EnterpriseInfo.objects.filter(
+#                 LCICID=lcic_id, 
+#                 EnterpriseID=com_code
+#             ).first()
+            
+#             result_data = {
+#                 "lcicID": lcic_id,
+#                 "com_enterprise_code": com_code,
+#                 "status": "Found" if enterprise else "Not Found",
+#                 "enterpriseNameLao": enterprise.enterpriseNameLao if enterprise else None,
+#                 "investmentCurrency": enterprise.investmentCurrency if enterprise else None
+#             }
+            
+            
+#             if result_data["status"] == "Found":
+#                 found_count += 1
+#             else:
+#                 not_found_count += 1
+            
+           
+#             SearchResult.objects.create(
+#                 search_batch=search_batfile,
+#                 lcicID=lcic_id,
+#                 com_enterprise_code=com_code,
+#                 status=result_data["status"],
+#                 enterpriseNameLao=result_data["enterpriseNameLao"],
+#                 investmentCurrency=result_data["investmentCurrency"]
+#             )
+            
+#             results.append(result_data)
+
+        
+#         search_batfile.searchtrue = found_count
+#         search_batfile.searchfals = not_found_count
+#         search_batfile.save()
+
+#         return JsonResponse({"results": results}, status=200)
+
+#     return JsonResponse({"error": "Invalid request method"}, status=405)
+
+# @csrf_exempt
+# def upload_json(request):
+#     if request.method == 'POST':
+#         file = request.FILES.get('file')
+       
+#         user_id = request.POST.get('user_id')
+#         UID = request.POST.get('UID')
+#         # print("UID", UID)
+#         print('user_id',user_id)
+#         if not file:
+#             return JsonResponse({"error": "No file provided"}, status=400)
+
+#         search_batfile = Search_batfile(
+#             fileName=file.name,
+#             fileUpload=file,
+#             fileSize=f"{file.size} bytes",
+#             path=f"searchfile/{file.name}",
+#             status="Uploaded",
+#             FileType="json",
+#             user_id=user_id,
+#             UID=UID
+            
+#         )
+#         search_batfile.save()
+
+#         try:
+#             file.seek(0)
+#             data = json.load(file)
+#         except json.JSONDecodeError as e:
+#             return JsonResponse({"error": f"Invalid JSON file: {str(e)}"}, status=400)
+
+#         results = []
+#         found_count = 0  
+#         not_found_count = 0 
+
+#         for record in data:
+#             lcic_id = record.get('lcicID') or "" 
+#             com_code = record.get('com_enterprise_code') or "" 
+            
+#             enterprise = None
+#             search_criteria = "" 
+
+#             if lcic_id and com_code:
+#                 enterprise = EnterpriseInfo.objects.filter(
+#                     LCICID=lcic_id, 
+#                     EnterpriseID=com_code
+#                 ).first()
+#                 search_criteria = "both"
+#             elif lcic_id:
+#                 enterprise = EnterpriseInfo.objects.filter(
+#                     LCICID=lcic_id
+#                 ).first()
+#                 search_criteria = "lcic_only"
+#             elif com_code:
+#                 enterprise = EnterpriseInfo.objects.filter(
+#                     EnterpriseID=com_code
+#                 ).first()
+#                 search_criteria = "com_code_only"
+            
+#             result_data = {
+#                 "lcicID": lcic_id,  
+#                 "com_enterprise_code": com_code, 
+#                 "search_criteria": search_criteria,  
+#                 "status": "Found" if enterprise else "Not Found",
+#                 "enterpriseNameLao": enterprise.enterpriseNameLao if enterprise else None,
+#                 "investmentCurrency": enterprise.investmentCurrency if enterprise else None
+#             }
+            
+            
+#             if result_data["status"] == "Found":
+#                 found_count += 1
+#             else:
+#                 not_found_count += 1
+            
+#             SearchResult.objects.create(
+#                 search_batch=search_batfile,
+#                 lcicID=lcic_id,
+#                 com_enterprise_code=com_code,
+#                 status=result_data["status"],
+#                 enterpriseNameLao=result_data["enterpriseNameLao"],
+#                 investmentCurrency=result_data["investmentCurrency"]
+#             )
+           
+            
+#             results.append(result_data)
+
+#         search_batfile.searchtrue = found_count
+#         search_batfile.searchfals = not_found_count
+#         search_batfile.save()
+
+#         return JsonResponse({"results": results}, status=200)
+   
+
+#     return JsonResponse({"error": "Invalid request method"}, status=405)
+from django.views.decorators.csrf import csrf_exempt
+import json
+from django.http import JsonResponse
+from rest_framework.views import APIView
+from rest_framework import status
+from rest_framework.response import Response
+from .models import EnterpriseInfo, Search_batfile, SearchResult, ChargeMatrix, B1, searchLog, request_charge
+from datetime import datetime
+
+@csrf_exempt
+def upload_json(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Authentication required"}, status=401)
+    if request.method == 'POST':
+        file = request.FILES.get('file')
+        user_id = request.POST.get('user_id')
+        UID = request.POST.get('UID')
+        
+        if not file:
+            return JsonResponse({"error": "No file provided"}, status=400)
+        
+            
         search_batfile = Search_batfile(
             fileName=file.name,
             fileUpload=file,
@@ -9425,43 +9623,78 @@ def upload_json(request):
             path=f"searchfile/{file.name}",
             status="Uploaded",
             FileType="json",
+            user_id=user_id,
+            UID=UID
         )
         search_batfile.save()
-
+        
         try:
+            user = request.user
+            if not hasattr(user, 'MID'):
+                return JsonResponse({"error": "User MID not found"}, status=400)
             file.seek(0)
             data = json.load(file)
         except json.JSONDecodeError as e:
             return JsonResponse({"error": f"Invalid JSON file: {str(e)}"}, status=400)
-
+            
         results = []
-        found_count = 0  
-        not_found_count = 0 
-
+        found_count = 0
+        not_found_count = 0
+        
+       
+        search_log_view = InsertSearchLogView()
+        
         for record in data:
-            lcic_id = record.get('lcicID')
-            com_code = record.get('com_enterprise_code')
+            lcic_id = record.get('lcicID') or ""
+            com_code = record.get('com_enterprise_code') or ""
             
-            enterprise = EnterpriseInfo.objects.filter(
-                LCICID=lcic_id, 
-                EnterpriseID=com_code
-            ).first()
+            enterprise = None
+            search_criteria = ""
             
+            if lcic_id and com_code:
+                enterprise = EnterpriseInfo.objects.filter(
+                    LCICID=lcic_id,
+                    EnterpriseID=com_code
+                ).first()
+                search_criteria = "both"
+            elif lcic_id:
+                enterprise = EnterpriseInfo.objects.filter(
+                    LCICID=lcic_id
+                ).first()
+                search_criteria = "lcic_only"
+            elif com_code:
+                enterprise = EnterpriseInfo.objects.filter(
+                    EnterpriseID=com_code
+                ).first()
+                search_criteria = "com_code_only"
+                
             result_data = {
                 "lcicID": lcic_id,
                 "com_enterprise_code": com_code,
+                "search_criteria": search_criteria,
                 "status": "Found" if enterprise else "Not Found",
                 "enterpriseNameLao": enterprise.enterpriseNameLao if enterprise else None,
                 "investmentCurrency": enterprise.investmentCurrency if enterprise else None
             }
             
-            
             if result_data["status"] == "Found":
                 found_count += 1
+                
+                search_data = {
+                    'EnterpriseID': com_code,
+                    'LCICID': lcic_id
+                }
+                
+                class MockRequest:
+                    def __init__(self, user, data):
+                        self.user = user
+                        self.data = data
+                
+                mock_request = MockRequest(request.user, search_data)
+                search_log_view.post(mock_request)
             else:
                 not_found_count += 1
             
-           
             SearchResult.objects.create(
                 search_batch=search_batfile,
                 lcicID=lcic_id,
@@ -9472,20 +9705,154 @@ def upload_json(request):
             )
             
             results.append(result_data)
-
-        
+            
         search_batfile.searchtrue = found_count
         search_batfile.searchfals = not_found_count
         search_batfile.save()
 
+        mock_request = MockRequest(user, search_data)
+        search_log_view.post(mock_request)
+        
         return JsonResponse({"results": results}, status=200)
-
+    
     return JsonResponse({"error": "Invalid request method"}, status=405)
 
+# @csrf_exempt
 
+# def upload_json(request):
+#     if request.method == 'POST':
+#         file = request.FILES.get('file')
+#         user_id = request.POST.get('user_id')
+#         if not file:
+#             return JsonResponse({"error": "No file provided"}, status=400)
 
+#         # ສ້າງ Search_batfile record
+#         search_batfile = Search_batfile(
+#             fileName=file.name,
+#             fileUpload=file,
+#             fileSize=f"{file.size} bytes",
+#             path=f"searchfile/{file.name}",
+#             status="Uploaded",
+#             FileType="json",
+#             user_id=user_id,
+#         )
+#         search_batfile.save()
 
+#         try:
+#             file.seek(0)
+#             data = json.load(file)
+#         except json.JSONDecodeError as e:
+#             return JsonResponse({"error": f"Invalid JSON file: {str(e)}"}, status=400)
 
+#         results = []
+#         found_count = 0  
+#         not_found_count = 0 
+
+#         # ດຶງຂໍ້ມູນຜູ້ໃຊ້
+#         user = request.user
+#         bank = user.MID
+#         bank_info = bank_bnk.objects.get(bnk_code=bank.bnk_code)
+#         sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
+#         inquiry_month = datetime.now().strftime('%Y-%m')
+
+#         for record in data:
+#             lcic_id = record.get('lcicID') or ""
+#             com_code = record.get('com_enterprise_code') or ""
+#             loan_purpose = record.get('CatalogID', '')
+            
+#             enterprise = None
+#             investor_info = None
+#             search_criteria = ""
+
+#             # ຄົ້ນຫາຂໍ້ມູນຕາມເງື່ອນໄຂ
+#             if lcic_id and com_code:
+#                 enterprise = EnterpriseInfo.objects.filter(
+#                     LCICID=lcic_id, 
+#                     EnterpriseID=com_code
+#                 ).first()
+#                 search_criteria = "both"
+#             elif lcic_id:
+#                 enterprise = EnterpriseInfo.objects.filter(
+#                     LCICID=lcic_id
+#                 ).first()
+#                 search_criteria = "lcic_only"
+#             elif com_code:
+#                 enterprise = EnterpriseInfo.objects.filter(
+#                     EnterpriseID=com_code
+#                 ).first()
+#                 search_criteria = "com_code_only"
+
+#             # ຖ້າພົບຂໍ້ມູນ, ດຶງຂໍ້ມູນນັກລົງທຶນແລະບັນທຶກ log
+#             if enterprise:
+#                 investor_info = InvestorInfo.objects.filter(EnterpriseID=com_code).first()
+                
+#                 # ບັນທຶກ search log
+#                 search_log = searchLog.objects.create(
+#                     enterprise_ID=com_code,
+#                     LCIC_ID=lcic_id,
+#                     bnk_code=bank_info.bnk_code,
+#                     bnk_type=bank_info.bnk_type,
+#                     branch='',
+#                     cus_ID='',
+#                     cusType='enterprise',
+#                     credit_type='Full Loan Report',
+#                     inquiry_month=inquiry_month,
+#                     com_tel='',
+#                     com_location='',
+#                     rec_loan_amount=0.0,
+#                     rec_loan_amount_currency='',
+#                     rec_loan_purpose=loan_purpose,
+#                     rec_enquiry_type='',
+#                     sys_usr=sys_usr  
+#                 )
+#                 search_log.save()
+            
+#             # ສ້າງຂໍ້ມູນຜົນການຄົ້ນຫາ
+#             result_data = {
+#                 "lcicID": lcic_id,
+#                 "com_enterprise_code": com_code,
+#                 "search_criteria": search_criteria,
+#                 "status": "Found" if enterprise else "Not Found",
+#                 "enterpriseNameLao": enterprise.enterpriseNameLao if enterprise else None,
+#                 "investmentCurrency": enterprise.investmentCurrency if enterprise else None,
+#                 "investorName": investor_info.investorName if investor_info else None
+#             }
+            
+#             if result_data["status"] == "Found":
+#                 found_count += 1
+#                 # ເພີ່ມຂໍ້ມູນເພີ່ມເຕີມຈາກ EnterpriseInfo serializer
+#                 serializer = EnterpriseInfoSerializer(enterprise)
+#                 result_data.update(serializer.data)
+#             else:
+#                 not_found_count += 1
+            
+#             # ບັນທຶກຜົນການຄົ້ນຫາ
+#             SearchResult.objects.create(
+#                 search_batch=search_batfile,
+#                 lcicID=lcic_id,
+#                 com_enterprise_code=com_code,
+#                 status=result_data["status"],
+#                 enterpriseNameLao=result_data["enterpriseNameLao"],
+#                 investmentCurrency=result_data["investmentCurrency"]
+#             )
+            
+#             results.append(result_data)
+
+#         # ອັບເດດຈຳນວນຜົນການຄົ້ນຫາ
+#         search_batfile.searchtrue = found_count
+#         search_batfile.searchfals = not_found_count
+#         search_batfile.save()
+
+#         return JsonResponse({
+#             "results": results,
+#             "summary": {
+#                 "total_records": len(results),
+#                 "found_count": found_count,
+#                 "not_found_count": not_found_count
+#             }
+#         }, status=200)
+
+#     return JsonResponse({"error": "Invalid request method"}, status=405)
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -9493,6 +9860,7 @@ from .models import Search_batfile
 from .serializers import SearchBatfileSerializer
 
 class SearchBatfileAPIView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request):
         
         files = Search_batfile.objects.all()
@@ -9520,3 +9888,130 @@ def get_search_results(request, id):
         for result in search_results
     ]
     return JsonResponse({"results": results_data})
+
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+import json
+
+class ProcessJsonDataView(APIView):
+    def post(self, request):
+       
+        try:
+            json_file = request.FILES['file']
+            data = json.load(json_file)
+        except Exception as e:
+            return Response({'error': f'Invalid JSON file: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+
+       
+        valid_data = []
+        invalid_data = []
+        for record in data:
+         
+            if 'EnterpriseID' in record and 'LCICID' in record:
+                valid_data.append(record)
+            else:
+                invalid_data.append(record)
+
+       
+        if invalid_data:
+           
+            print("Invalid data:", invalid_data)
+
+       
+        try:
+            for record in valid_data:
+              
+                print("Processing record:", record)
+             
+        except Exception as e:
+            return Response({'error': f'Processing error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+      
+        return Response({
+            'message': 'Data processed successfully',
+            'valid_records': len(valid_data),
+            'invalid_records': len(invalid_data)
+        }, status=status.HTTP_200_OK)
+
+
+
+
+
+
+class InsertSearchLogView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        user = request.user
+        bank = user.MID
+        
+        bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
+        charge_bank_type = bank_info.bnk_type
+        
+        if charge_bank_type == 1:
+            chargeType = ChargeMatrix.objects.get(chg_sys_id=2)
+        else:
+            chargeType = ChargeMatrix.objects.get(chg_sys_id=5)
+            
+        charge_amount_com = chargeType.chg_amount
+        EnterpriseID = request.data.get('EnterpriseID')
+        LCICID = request.data.get('LCICID')
+        
+        search_loan = B1.objects.filter(lcicID=LCICID)
+        for loan_log in search_loan:
+            branch_id = loan_log.branch_id
+
+        sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
+
+        if EnterpriseID and LCICID:
+            try:
+                inquiry_month = datetime(year=2024, month=10, day=1).strftime('%Y-%m')
+                inquiry_month_charge = datetime(year=2024, month=10, day=1).strftime('%d%m%Y')
+                
+                search_log = searchLog.objects.create(
+                    enterprise_ID=EnterpriseID,
+                    LCIC_ID=LCICID,
+                    bnk_code=bank_info.bnk_code,
+                    bnk_type=bank_info.bnk_type,
+                    branch=loan_log.branch_id,
+                    cus_ID=loan_log.customer_id,
+                    cusType=loan_log.segmentType,
+                    credit_type=chargeType.chg_code,
+                    inquiry_month=inquiry_month,
+                    com_tel='',
+                    com_location='',
+                    rec_loan_amount=0.0,
+                    rec_loan_amount_currency='LAK',
+                    rec_loan_purpose=loan_log.lon_purpose_code,
+                    rec_enquiry_type='1',
+                    sys_usr=sys_usr
+                )
+
+                charge = request_charge.objects.create(
+                    bnk_code=bank_info.bnk_code,
+                    bnk_type=bank_info.bnk_type,
+                    chg_amount=charge_amount_com,
+                    chg_code=chargeType.chg_code,
+                    status='pending',
+                    rtp_code='1',
+                    lon_purpose=loan_log.lon_purpose_code,
+                    chg_unit=chargeType.chg_unit,
+                    user_sys_id=sys_usr,
+                    LCIC_ID=LCICID,
+                    cusType=loan_log.segmentType,
+                    user_session_id='',
+                    rec_reference_code='',
+                    search_log=search_log
+                )
+                
+                charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
+                charge.save()
+                
+                return Response({'success': 'Search log inserted'}, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+                
+        else:
+            return Response({'error': 'EnterpriseID and LCICID are required'}, status=status.HTTP_400_BAD_REQUEST)
