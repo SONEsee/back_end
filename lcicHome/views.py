@@ -2492,7 +2492,8 @@ class EnterpriseInfoSearch(APIView):
                 return Response({'error': 'EnterpriseInfo not found'}, status=status.HTTP_404_NOT_FOUND)
             except Exception as e:
                 return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
+
 class EnterpriseInfoMatch(APIView):
     # authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -7450,122 +7451,10 @@ class ManageUserView(APIView):
             return Response(LoginSerializer(user).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-from .models import ChargeMatrix, B1
-class InsertSearchLogView(APIView):
-    permission_classes = [IsAuthenticated]
+    
 
-    def post(self, request):
-        user = request.user
-        bank = user.MID 
-        # branch = user.GID.GID
-        # sys_usr = str(user.UID) + str(bank) + str(branch)
-        
-        
-        print("Bank COde: ===>", bank.bnk_code)
-        print("Bank COde: ===>", bank.code)
-        bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
-        print("---->",bank_info.bnk_code)
-        print("Bank_Type",bank_info.bnk_type)
-        
-        charge_bank_type = bank_info.bnk_type
-        
-        if charge_bank_type == 1:
-            chargeType = ChargeMatrix.objects.get(chg_sys_id=2)                    
-        else:
-            chargeType = ChargeMatrix.objects.get(chg_sys_id=5)
-        
-        print("Charge_Amount ====>",chargeType.chg_amount)
-        
-        charge_amount_com = chargeType.chg_amount # charge sum lup company
-        EnterpriseID = request.data.get('EnterpriseID')
-        LCICID = request.data.get('LCICID')
-        # loan_purpose = request.data.get('CatalogID')
-        
-        # print("============> Loan Purpose: ",loan_purpose )
-        # loan_purpose_code = Main_catalog_cat.objects.get(cat_sys_id=loan_purpose)
-        
-        # print("============> Cat_Value : ",loan_purpose_code.cat_value)
-        
-        search_loan = B1.objects.filter(lcicID=LCICID)
-        for loan_log in search_loan:
-            print("branch_id:", loan_log.branch_id)
 
-        sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
 
-        if EnterpriseID and LCICID:
-            try:
-                # inquiry_month = datetime(year=2024, month=10, day=1).date()  # October 2024
-                inquiry_month = datetime(year=2024, month=10, day=1).strftime('%Y-%m')
-                inquiry_month_charge = datetime(year=2024, month=10, day=1).strftime('%d%m%Y')
-                search_log = searchLog.objects.create(
-                    enterprise_ID=EnterpriseID,
-                    LCIC_ID=LCICID,
-                    bnk_code=bank_info.bnk_code,
-                    bnk_type=bank_info.bnk_type,
-                    branch=loan_log.branch_id,
-                    cus_ID=loan_log.customer_id,
-                    cusType=loan_log.segmentType,
-                    credit_type=chargeType.chg_code,
-                    inquiry_month=inquiry_month,
-                    com_tel='',
-                    com_location='',
-                    rec_loan_amount=0.0,
-                    rec_loan_amount_currency='LAK',
-                    rec_loan_purpose=loan_log.lon_purpose_code,
-                    rec_enquiry_type='1',
-                    sys_usr=sys_usr  
-                )
-                # search_log = searchLog.objects.get(
-                #     enterprise_ID=EnterpriseID,
-                #     LCIC_ID=LCICID,
-                #     # Add any other unique identifiers if necessary
-                # )
-                # search_log.bnk_code = bank_info.bnk_code
-                # search_log.bnk_type = bank_info.bnk_type
-                # search_log.branch = loan_log.branch_id
-                # search_log.cus_ID = loan_log.customer_id
-                # search_log.cusType = loan_log.segmentType
-                # search_log.credit_type = chargeType.chg_code
-                # search_log.inquiry_month = inquiry_month
-                # search_log.com_tel = ''
-                # search_log.com_location = ''
-                # search_log.rec_loan_amount = 0.0
-                # search_log.rec_loan_amount_currency = 'LAK'
-                # search_log.rec_loan_purpose = loan_log.lon_purpose_code
-                # search_log.rec_enquiry_type = '1'
-                # search_log.sys_usr = sys_usr  
-                # search_log.save()
-
-                charge = request_charge.objects.create(
-                    bnk_code=bank_info.bnk_code,
-                    bnk_type=bank_info.bnk_type,
-                    chg_amount=charge_amount_com,
-                    chg_code=chargeType.chg_code,
-                    status='pending',  
-                    rtp_code='1', 
-                    lon_purpose=loan_log.lon_purpose_code,
-                    chg_unit=chargeType.chg_unit,
-                    user_sys_id=sys_usr,
-                    LCIC_ID=LCICID,
-                    cusType=loan_log.segmentType,
-                    # user_session_id=str(request.session.session_key),  # Use Django session key if applicable 
-                    
-                    user_session_id='',
-                    rec_reference_code='',
-                    search_log=search_log 
-                )
-                charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
-                charge.save()
-                print("=========> has benn inserted")
-                print(f"Charge inserted with ID: {charge.rec_charge_ID}")
-                return Response({'success': 'Search log inserted'}, status=status.HTTP_201_CREATED)
-            except Exception as e:
-                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            return Response({'error': 'EnterpriseID and LCICID are required'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        
-        
 # from .serializers import SearchLogSerializer
 
 # class searchlog_reportView(APIView):
@@ -8218,7 +8107,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
 from django.db.models.functions import TruncMonth
-from .models import searchLog, memberInfo,request_charge  # Assuming MemberInfo is your model for bank information
+from .models import searchLog, memberInfo,request_charge  
 
 class SearchLogChartView(APIView):
     def get(self, request):
@@ -8226,7 +8115,7 @@ class SearchLogChartView(APIView):
             # Truncate rec_insert_date to month (YYYY-MM) and aggregate the count of bnk_code
             searchlog_data = (
                 searchLog.objects
-                .filter(rec_enquiry_type='')  # Filter where rec_enquiry_type is empty
+                .filter(rec_enquiry_type='1')  # Filter where rec_enquiry_type is empty
                 .exclude(bnk_code='01')  # Exclude where bnk_code is '01'
                 .annotate(month=TruncMonth('inquiry_date'))  # Truncate inquiry_date to month
                 .values('bnk_code', 'month')  # Group by bnk_code and month
@@ -8432,68 +8321,180 @@ class SearchLogChart_MonthView(APIView):
 #         return Response(formatted_result, status=status.HTTP_200_OK)
 
 
+
+
 from django.utils import timezone
 from django.db.models import Count
-from django.db.models.functions import ExtractHour
+from django.db.models.functions import ExtractHour, ExtractDay
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from datetime import timedelta
-
-
+from datetime import datetime, timedelta
+#sone updated code 13/1/2025
 class ChargeCountByHourView(APIView):
     def get(self, request):
         
-        # Use Django's timezone aware current time
-        now = timezone.now()  # Default DJANGO time
+        now = timezone.now()  
         print(f"Django Timezone now: {now}")
         
-        # System local time using datetime.now()
-        now_system_local = datetime.now()  # Local Default
+        
+        now_system_local = datetime.now()  
         print(f"System Local Time (datetime.now()): {now_system_local}")
 
-        # Localized time (converted from UTC)
-        now_utc = timezone.now()  # UTC time in Django
-        now_local = timezone.localtime(now_utc)  # Convert to local time
+        
+        now_utc = timezone.now()  
+        now_local = timezone.localtime(now_utc)  
         print(f"Local Time (Converted to Django TIME_ZONE): {now_local}")
         
-        # Define start and end of the current day in the local timezone
+        
         start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
         end_of_day = start_of_day + timedelta(days=1)
 
-        # Initialize a dictionary with all hours set to zero
-        hour_counts = {hour: 0 for hour in range(24)}
+        
+        start_of_week = now - timedelta(days=now.weekday())
+        start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_week = start_of_week + timedelta(days=7)
 
-        # Query to count `rec_charge_ID` by hour for the current day
-        hourly_counts = (
+        
+        start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        next_month = start_of_month + timedelta(days=32)
+        start_of_next_month = next_month.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end_of_month = start_of_next_month
+
+       
+        hour_counts_day = {hour: 0 for hour in range(24)}
+        day_counts_week = {day: 0 for day in range(7)}
+        day_counts_month = {day: 0 for day in range(1, 32)}
+
+       
+        hourly_counts_day = (
             request_charge.objects
             .filter(insert_date__range=(start_of_day, end_of_day))
-            .annotate(hour=ExtractHour('insert_date'))  # Extract the hour from insert_date
-            .values('hour')  # Group by hour
-            .annotate(total=Count('rec_charge_ID'))  # Count rec_charge_ID
-            .order_by('hour')  # Order by hour
+            .annotate(hour=ExtractHour('insert_date'))  
+            .values('hour')  
+            .annotate(total=Count('rec_charge_ID'))  
+            .order_by('hour')  
         )
 
-        # Populate the hour_counts dictionary with actual counts
-        for hour in hourly_counts:
-            hour_counts[hour['hour']] = hour['total']
+        
+        daily_counts_week = (
+            request_charge.objects
+            .filter(insert_date__range=(start_of_week, end_of_week))
+            .annotate(day=ExtractDay('insert_date'))  
+            .values('day')  
+            .annotate(total=Count('rec_charge_ID'))  
+            .order_by('day')  
+        )
+        print("week ",daily_counts_week)
 
-        # Format the output to reflect the correct hours with counts in 12-hour format
-        formatted_result = {}
+        
+        daily_counts_month = (
+            request_charge.objects
+            .filter(insert_date__range=(start_of_month, end_of_month))
+            .annotate(day=ExtractDay('insert_date'))  
+            .values('day')  
+            .annotate(total=Count('rec_charge_ID')) 
+            .order_by('day')  
+        )
+
+        
+        for hour in hourly_counts_day:
+            hour_counts_day[hour['hour']] = hour['total']
+
+        for day in daily_counts_week:
+            day_counts_week[day['day'] - 1] = day['total']  
+            print("day ",day['day'],day['total'])
+            print("day ",day_counts_week)
+
+        for day in daily_counts_month:
+            day_counts_month[day['day']] = day['total']
+
+       
+        formatted_result_day = {}
+        formatted_result_week = {}
+        formatted_result_month = {}
+
         for hour in range(24):
-            # Convert hour to 12-hour format with AM/PM
+            
             if hour == 0:
-                formatted_hour = "12 AM"  # Midnight
+                formatted_hour = "12 AM"  
             elif hour < 12:
-                formatted_hour = f"{hour} AM"  # Morning hours
+                formatted_hour = f"{hour} AM"  
             elif hour == 12:
-                formatted_hour = "12 PM"  # Noon
+                formatted_hour = "12 PM"  
             else:
-                formatted_hour = f"{hour - 12} PM"  # Afternoon/Evening hours
+                formatted_hour = f"{hour - 12} PM"  
 
-            formatted_result[formatted_hour] = hour_counts[hour]
+            formatted_result_day[formatted_hour] = hour_counts_day[hour]
 
-        return Response(formatted_result, status=status.HTTP_200_OK)
+        
+        days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        for day in range(7):
+            formatted_result_week[days_of_week[day]] = day_counts_week.get(day, 0)
+            print("resuale",day_counts_week.get(day, 0))
+
+        
+        for day in range(1, 32):
+            formatted_result_month[f"ວັນທີ {day}"] = day_counts_month.get(day, 0)
+
+        return Response({
+            'day': formatted_result_day,
+            'week': formatted_result_week,
+            'month': formatted_result_month
+        }, status=status.HTTP_200_OK)
+# class ChargeCountByHourView(APIView):
+#     def get(self, request):
+        
+#         # Use Django's timezone aware current time
+#         now = timezone.now()  # Default DJANGO time
+#         print(f"Django Timezone now: {now}")
+        
+#         # System local time using datetime.now()
+#         now_system_local = datetime.now()  # Local Default
+#         print(f"System Local Time (datetime.now()): {now_system_local}")
+
+#         # Localized time (converted from UTC)
+#         now_utc = timezone.now()  # UTC time in Django
+#         now_local = timezone.localtime(now_utc)  # Convert to local time
+#         print(f"Local Time (Converted to Django TIME_ZONE): {now_local}")
+        
+#         # Define start and end of the current day in the local timezone
+#         start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+#         end_of_day = start_of_day + timedelta(days=1)
+
+#         # Initialize a dictionary with all hours set to zero
+#         hour_counts = {hour: 0 for hour in range(24)}
+
+#         # Query to count `rec_charge_ID` by hour for the current day
+#         hourly_counts = (
+#             request_charge.objects
+#             .filter(insert_date__range=(start_of_day, end_of_day))
+#             .annotate(hour=ExtractHour('insert_date'))  # Extract the hour from insert_date
+#             .values('hour')  # Group by hour
+#             .annotate(total=Count('rec_charge_ID'))  # Count rec_charge_ID
+#             .order_by('hour')  # Order by hour
+#         )
+
+#         # Populate the hour_counts dictionary with actual counts
+#         for hour in hourly_counts:
+#             hour_counts[hour['hour']] = hour['total']
+
+#         # Format the output to reflect the correct hours with counts in 12-hour format
+#         formatted_result = {}
+#         for hour in range(24):
+#             # Convert hour to 12-hour format with AM/PM
+#             if hour == 0:
+#                 formatted_hour = "12 AM"  # Midnight
+#             elif hour < 12:
+#                 formatted_hour = f"{hour} AM"  # Morning hours
+#             elif hour == 12:
+#                 formatted_hour = "12 PM"  # Noon
+#             else:
+#                 formatted_hour = f"{hour - 12} PM"  # Afternoon/Evening hours
+
+#             formatted_result[formatted_hour] = hour_counts[hour]
+
+#         return Response(formatted_result, status=status.HTTP_200_OK)
 
 
 
@@ -9405,23 +9406,20 @@ class ReportCatalogView(APIView):
 
 
 
+
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 import json
 from .models import EnterpriseInfo, Search_batfile, SearchResult
 
-from django.views.decorators.csrf import csrf_exempt
-import json
-from .models import EnterpriseInfo, Search_batfile,SearchResult   
 @csrf_exempt
 def upload_json(request):
     if request.method == 'POST':
         file = request.FILES.get('file')
-       
         user_id = request.POST.get('user_id')
         UID = request.POST.get('UID')
-        # print("UID", UID)
-        print('user_id',user_id)
+        
+        print('user_id', user_id)
         if not file:
             return JsonResponse({"error": "No file provided"}, status=400)
 
@@ -9434,13 +9432,13 @@ def upload_json(request):
             FileType="json",
             user_id=user_id,
             UID=UID
-            
         )
         search_batfile.save()
 
         try:
             file.seek(0)
             data = json.load(file)
+            print(data)
         except json.JSONDecodeError as e:
             return JsonResponse({"error": f"Invalid JSON file: {str(e)}"}, status=400)
 
@@ -9481,13 +9479,14 @@ def upload_json(request):
                 "investmentCurrency": enterprise.investmentCurrency if enterprise else None
             }
             
-            
             if result_data["status"] == "Found":
                 found_count += 1
             else:
                 not_found_count += 1
             
-            SearchResult.objects.create(
+            search_result = SearchResult.objects.create(
+                bank_code=user_id,
+                UID=UID,
                 search_batch=search_batfile,
                 lcicID=lcic_id,
                 com_enterprise_code=com_code,
@@ -9496,35 +9495,168 @@ def upload_json(request):
                 investmentCurrency=result_data["investmentCurrency"]
             )
            
-            
-            results.append(result_data)
+            results.append({
+                "id": search_result.id,
+                "lcicID": search_result.lcicID,
+                "com_enterprise_code": search_result.com_enterprise_code,
+                "status": search_result.status,
+                "enterpriseNameLao": search_result.enterpriseNameLao,
+                "investmentCurrency": search_result.investmentCurrency,
+                "created_at": search_result.created_at,
+                "bank_code": search_result.bank_code,
+                "UID": search_result.UID
+            })
 
         search_batfile.searchtrue = found_count
         search_batfile.searchfals = not_found_count
         search_batfile.save()
 
-        return JsonResponse({"results": results}, status=200)
-   
+
+        return JsonResponse({"results": results, "search_batfile_id": search_batfile.id}, status=200)
 
     return JsonResponse({"error": "Invalid request method"}, status=405)
 
+from .models import ChargeMatrix, B1
+class InsertSearchLogView(APIView):
+    permission_classes = [IsAuthenticated]
 
+    def post(self, request):
+        user = request.user
+        bank = user.MID 
+        # branch = user.GID.GID
+        # sys_usr = str(user.UID) + str(bank) + str(branch)
+        
+        
+        print("Bank COde: ===>", bank.bnk_code)
+        print("Bank COde: ===>", bank.code)
+        bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
+        print("---->",bank_info.bnk_code)
+        print("Bank_Type",bank_info.bnk_type)
+        
+        charge_bank_type = bank_info.bnk_type
+        
+        if charge_bank_type == 1:
+            chargeType = ChargeMatrix.objects.get(chg_sys_id=2)                    
+        else:
+            chargeType = ChargeMatrix.objects.get(chg_sys_id=5)
+        
+        print("Charge_Amount ====>",chargeType.chg_amount)
+        
+        charge_amount_com = chargeType.chg_amount # charge sum lup company
+        EnterpriseID = request.data.get('EnterpriseID')
+        LCICID = request.data.get('LCICID')
+        # loan_purpose = request.data.get('CatalogID')
+        
+        # print("============> Loan Purpose: ",loan_purpose )
+        # loan_purpose_code = Main_catalog_cat.objects.get(cat_sys_id=loan_purpose)
+        
+        # print("============> Cat_Value : ",loan_purpose_code.cat_value)
+        
+        search_loan = B1.objects.filter(lcicID=LCICID)
+        for loan_log in search_loan:
+            print("branch_id:", loan_log.branch_id)
 
+        sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
 
+        if EnterpriseID and LCICID:
+            try:
+                # inquiry_month = datetime(year=2024, month=10, day=1).date()  # October 2024
+                inquiry_month = datetime(year=2024, month=10, day=1).strftime('%Y-%m')
+                inquiry_month_charge = datetime(year=2024, month=10, day=1).strftime('%d%m%Y')
+                search_log = searchLog.objects.create(
+                    enterprise_ID=EnterpriseID,
+                    LCIC_ID=LCICID,
+                    bnk_code=bank_info.bnk_code,
+                    bnk_type=bank_info.bnk_type,
+                    branch=loan_log.branch_id,
+                    cus_ID=loan_log.customer_id,
+                    cusType=loan_log.segmentType,
+                    credit_type=chargeType.chg_code,
+                    inquiry_month=inquiry_month,
+                    com_tel='',
+                    com_location='',
+                    rec_loan_amount=0.0,
+                    rec_loan_amount_currency='LAK',
+                    rec_loan_purpose=loan_log.lon_purpose_code,
+                    rec_enquiry_type='1',
+                    sys_usr=sys_usr  
+                )
+                # search_log = searchLog.objects.get(
+                #     enterprise_ID=EnterpriseID,
+                #     LCIC_ID=LCICID,
+                #     # Add any other unique identifiers if necessary
+                # )
+                # search_log.bnk_code = bank_info.bnk_code
+                # search_log.bnk_type = bank_info.bnk_type
+                # search_log.branch = loan_log.branch_id
+                # search_log.cus_ID = loan_log.customer_id
+                # search_log.cusType = loan_log.segmentType
+                # search_log.credit_type = chargeType.chg_code
+                # search_log.inquiry_month = inquiry_month
+                # search_log.com_tel = ''
+                # search_log.com_location = ''
+                # search_log.rec_loan_amount = 0.0
+                # search_log.rec_loan_amount_currency = 'LAK'
+                # search_log.rec_loan_purpose = loan_log.lon_purpose_code
+                # search_log.rec_enquiry_type = '1'
+                # search_log.sys_usr = sys_usr  
+                # search_log.save()
+
+                charge = request_charge.objects.create(
+                    bnk_code=bank_info.bnk_code,
+                    bnk_type=bank_info.bnk_type,
+                    chg_amount=charge_amount_com,
+                    chg_code=chargeType.chg_code,
+                    status='pending',  
+                    rtp_code='1', 
+                    lon_purpose=loan_log.lon_purpose_code,
+                    chg_unit=chargeType.chg_unit,
+                    user_sys_id=sys_usr,
+                    LCIC_ID=LCICID,
+                    cusType=loan_log.segmentType,
+                    # user_session_id=str(request.session.session_key),  # Use Django session key if applicable 
+                    
+                    user_session_id='',
+                    rec_reference_code='',
+                    search_log=search_log 
+                )
+                charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
+                charge.save()
+                print("=========> has benn inserted")
+                print(f"Charge inserted with ID: {charge.rec_charge_ID}")
+                return Response({'success': 'Search log inserted'}, status=status.HTTP_201_CREATED)
+            except Exception as e:
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response({'error': 'EnterpriseID and LCICID are required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+        
+        
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Search_batfile
 from .serializers import SearchBatfileSerializer
 
+# class SearchBatfileAPIView(APIView):
+#     def get(self, request):
+        
+#         files = Search_batfile.objects.all()
+#         serializer = SearchBatfileSerializer(files, many=True)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+
 class SearchBatfileAPIView(APIView):
     def get(self, request):
+        user_id = request.query_params.get('user_id')
         
-        files = Search_batfile.objects.all()
+        if user_id:
+            files = Search_batfile.objects.filter(user_id=user_id)
+        else:
+            files = Search_batfile.objects.all()
+        
         serializer = SearchBatfileSerializer(files, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-
-
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from .models import Search_batfile, SearchResult
@@ -9545,3 +9677,21 @@ def get_search_results(request, id):
         for result in search_results
     ]
     return JsonResponse({"results": results_data})
+
+
+@csrf_exempt
+def update_searchlog_status(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        search_result_id = data.get('id')
+        status = data.get('status')
+
+        try:
+            search_result = SearchResult.objects.get(id=search_result_id)
+            search_result.status = status
+            search_result.save()
+            return JsonResponse({"success": "Status updated"}, status=200)
+        except SearchResult.DoesNotExist:
+            return JsonResponse({"error": "SearchResult not found"}, status=404)
+
+    return JsonResponse({"error": "Invalid request method"}, status=405)

@@ -1681,6 +1681,8 @@ class SearchResult(models.Model):
     enterpriseNameLao = models.CharField(max_length=255, null=True, blank=True)
     investmentCurrency = models.CharField(max_length=255, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    bank_code = models.CharField(max_length=255)
+    UID = models.CharField(max_length=255)
 
     def __str__(self):
         return f"SearchResult {self.id} - {self.lcicID}"
