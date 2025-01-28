@@ -9412,14 +9412,123 @@ from django.http import JsonResponse
 import json
 from .models import EnterpriseInfo, Search_batfile, SearchResult
 
+# @csrf_exempt
+# def upload_json(request):
+#     if request.method == 'POST':
+#         file = request.FILES.get('file')
+#         user_id = request.POST.get('user_id')
+#         UID = request.POST.get('UID')
+        
+#         print('user_id', user_id)
+#         if not file:
+#             return JsonResponse({"error": "No file provided"}, status=400)
+
+#         search_batfile = Search_batfile(
+#             fileName=file.name,
+#             fileUpload=file,
+#             fileSize=f"{file.size} bytes",
+#             path=f"searchfile/{file.name}",
+#             status="Uploaded",
+#             FileType="json",
+#             user_id=user_id,
+#             UID=UID
+#         )
+#         search_batfile.save()
+
+#         try:
+#             file.seek(0)
+#             data = json.load(file)
+#             print(data)
+#         except json.JSONDecodeError as e:
+#             return JsonResponse({"error": f"Invalid JSON file: {str(e)}"}, status=400)
+
+#         results = []
+#         found_count = 0  
+#         not_found_count = 0 
+
+#         for record in data:
+#             lcic_id = record.get('lcicID') or "" 
+#             com_code = record.get('com_enterprise_code') or "" 
+            
+#             enterprise = None
+#             search_criteria = "" 
+
+#             if lcic_id and com_code:
+#                 enterprise = EnterpriseInfo.objects.filter(
+#                     LCICID=lcic_id, 
+#                     EnterpriseID=com_code
+#                 ).first()
+#                 search_criteria = "both"
+#             elif lcic_id:
+#                 enterprise = EnterpriseInfo.objects.filter(
+#                     LCICID=lcic_id
+#                 ).first()
+#                 search_criteria = "lcic_only"
+#             elif com_code:
+#                 enterprise = EnterpriseInfo.objects.filter(
+#                     EnterpriseID=com_code
+#                 ).first()
+#                 search_criteria = "com_code_only"
+            
+#             result_data = {
+#                 "lcicID": lcic_id,  
+#                 "com_enterprise_code": com_code, 
+#                 "search_criteria": search_criteria,  
+#                 "status": "Found" if enterprise else "Not Found",
+#                 "enterpriseNameLao": enterprise.enterpriseNameLao if enterprise else None,
+#                 "investmentCurrency": enterprise.investmentCurrency if enterprise else None
+#             }
+            
+#             if result_data["status"] == "Found":
+#                 found_count += 1
+#             else:
+#                 not_found_count += 1
+            
+#             search_result = SearchResult.objects.create(
+#                 bank_code=user_id,
+#                 UID=UID,
+#                 search_batch=search_batfile,
+#                 lcicID=lcic_id,
+#                 com_enterprise_code=com_code,
+#                 status=result_data["status"],
+#                 enterpriseNameLao=result_data["enterpriseNameLao"],
+#                 investmentCurrency=result_data["investmentCurrency"]
+#             )
+           
+#             results.append({
+#                 "id": search_result.id,
+#                 "lcicID": search_result.lcicID,
+#                 "com_enterprise_code": search_result.com_enterprise_code,
+#                 "status": search_result.status,
+#                 "enterpriseNameLao": search_result.enterpriseNameLao,
+#                 "investmentCurrency": search_result.investmentCurrency,
+#                 "created_at": search_result.created_at,
+#                 "bank_code": search_result.bank_code,
+#                 "UID": search_result.UID
+#             })
+
+#         search_batfile.searchtrue = found_count
+#         search_batfile.searchfals = not_found_count
+#         search_batfile.save()
+
+
+#         return JsonResponse({"results": results, "search_batfile_id": search_batfile.id}, status=200)
+
+#     return JsonResponse({"error": "Invalid request method"}, status=405)
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from .models import Search_batfile, SearchResult, EnterpriseInfo
+import json
+from collections import Counter
+
 @csrf_exempt
 def upload_json(request):
     if request.method == 'POST':
         file = request.FILES.get('file')
         user_id = request.POST.get('user_id')
         UID = request.POST.get('UID')
+        token = request.POST.get('token')  
         
-        print('user_id', user_id)
         if not file:
             return JsonResponse({"error": "No file provided"}, status=400)
 
@@ -9438,18 +9547,34 @@ def upload_json(request):
         try:
             file.seek(0)
             data = json.load(file)
-            print(data)
         except json.JSONDecodeError as e:
             return JsonResponse({"error": f"Invalid JSON file: {str(e)}"}, status=400)
 
+       
+        unique_records = set()
         results = []
         found_count = 0  
         not_found_count = 0 
+
+        
+        record_counter = Counter()
 
         for record in data:
             lcic_id = record.get('lcicID') or "" 
             com_code = record.get('com_enterprise_code') or "" 
             
+            
+            unique_key = (lcic_id, com_code)
+            
+            
+            record_counter[unique_key] += 1
+
+            if unique_key in unique_records:
+                continue
+            
+            
+            unique_records.add(unique_key)
+
             enterprise = None
             search_criteria = "" 
 
@@ -9492,7 +9617,8 @@ def upload_json(request):
                 com_enterprise_code=com_code,
                 status=result_data["status"],
                 enterpriseNameLao=result_data["enterpriseNameLao"],
-                investmentCurrency=result_data["investmentCurrency"]
+                investmentCurrency=result_data["investmentCurrency"],
+                duplicates=json.dumps({"lcicID": lcic_id, "com_enterprise_code": com_code, "total": record_counter[unique_key]})  
             )
            
             results.append({
@@ -9511,11 +9637,20 @@ def upload_json(request):
         search_batfile.searchfals = not_found_count
         search_batfile.save()
 
+        
+        duplicates = {f"{key[0]}-{key[1]}": count for key, count in record_counter.items() if count > 1}
+        duplicate_counts = list(duplicates.values())
+        total_duplicates = sum(duplicate_counts)
+        print("duplicates", duplicates)
+        print("total_duplicates", total_duplicates)
+        search_batfile.duplicates = json.dumps(duplicate_counts)  
+        search_batfile.duplicates_false = json.dumps(list(duplicates.keys()))  
+        search_batfile.count_duplicates = total_duplicates
+        search_batfile.save()
 
-        return JsonResponse({"results": results, "search_batfile_id": search_batfile.id}, status=200)
+        return JsonResponse({"results": results, "search_batfile_id": search_batfile.id, "duplicates": total_duplicates}, status=200)
 
     return JsonResponse({"error": "Invalid request method"}, status=405)
-
 from .models import ChargeMatrix, B1
 class InsertSearchLogView(APIView):
     permission_classes = [IsAuthenticated]
@@ -9527,11 +9662,9 @@ class InsertSearchLogView(APIView):
         # sys_usr = str(user.UID) + str(bank) + str(branch)
         
         
-        print("Bank COde: ===>", bank.bnk_code)
-        print("Bank COde: ===>", bank.code)
+        
         bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
-        print("---->",bank_info.bnk_code)
-        print("Bank_Type",bank_info.bnk_type)
+     
         
         charge_bank_type = bank_info.bnk_type
         
@@ -9540,7 +9673,7 @@ class InsertSearchLogView(APIView):
         else:
             chargeType = ChargeMatrix.objects.get(chg_sys_id=5)
         
-        print("Charge_Amount ====>",chargeType.chg_amount)
+       
         
         charge_amount_com = chargeType.chg_amount # charge sum lup company
         EnterpriseID = request.data.get('EnterpriseID')
@@ -9554,9 +9687,9 @@ class InsertSearchLogView(APIView):
         
         search_loan = B1.objects.filter(lcicID=LCICID)
         for loan_log in search_loan:
-            print("branch_id:", loan_log.branch_id)
+            
 
-        sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
+         sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
 
         if EnterpriseID and LCICID:
             try:
@@ -9622,8 +9755,7 @@ class InsertSearchLogView(APIView):
                 )
                 charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
                 charge.save()
-                print("=========> has benn inserted")
-                print(f"Charge inserted with ID: {charge.rec_charge_ID}")
+                
                 return Response({'success': 'Search log inserted'}, status=status.HTTP_201_CREATED)
             except Exception as e:
                 return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -9657,7 +9789,9 @@ class SearchBatfileAPIView(APIView):
         
         serializer = SearchBatfileSerializer(files, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
 from django.http import JsonResponse
+
 from django.shortcuts import get_object_or_404
 from .models import Search_batfile, SearchResult
 
@@ -9673,6 +9807,7 @@ def get_search_results(request, id):
             "enterpriseNameLao": result.enterpriseNameLao,
             "investmentCurrency": result.investmentCurrency,
             "created_at": result.created_at,
+            "duplicates": result.duplicates,
         }
         for result in search_results
     ]
@@ -9695,3 +9830,458 @@ def update_searchlog_status(request):
             return JsonResponse({"error": "SearchResult not found"}, status=404)
 
     return JsonResponse({"error": "Invalid request method"}, status=405)
+
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from .models import EnterpriseInfo, UploadFile_enterpriseinfo
+from django.utils.dateparse import parse_datetime
+import json
+
+@csrf_exempt
+def upload_enterprise_info(request):
+    if request.method == 'POST':
+        file = request.FILES.get('file')
+        user_id = request.POST.get('user_id')
+        if not file:
+            return JsonResponse({"error": "No file provided"}, status=400)
+
+        try:
+            data = json.load(file)
+            if isinstance(data, dict):
+                data = [data]
+        except json.JSONDecodeError as e:
+            return JsonResponse({"error": f"Invalid JSON file: {str(e)}"}, status=400)
+
+        updated_count = 0
+        created_count = 0
+        updated_records = []
+        created_records = []
+
+        
+        upload_file = UploadFile_enterpriseinfo.objects.create(
+            user_id=user_id,
+            file_name=file.name,
+            path=f"searchfile/{file.name}",
+            fileUpload=file,
+            status='Processing'
+        )
+
+        for record in data:
+            enterprise_id = record.get('EnterpriseID')
+            lcic_id = record.get('LCICID')
+            if not enterprise_id or not lcic_id:
+                print(f"Missing EnterpriseID or LCICID in record: {record}")
+                continue
+
+            print(f"Processing record for EnterpriseID: {enterprise_id}, LCICID: {lcic_id}")
+
+            regis_date = record.get('regisDate')
+            if regis_date and isinstance(regis_date, str):
+                regis_date = parse_datetime(regis_date)
+
+            last_update = record.get('LastUpdate')
+            if last_update and isinstance(last_update, str):
+                last_update = parse_datetime(last_update)
+
+            cancellation_date = record.get('CancellationDate')
+            if cancellation_date and isinstance(cancellation_date, str):
+                cancellation_date = parse_datetime(cancellation_date)
+
+            update_date = record.get('UpdateDate')
+            if update_date and isinstance(update_date, str):
+                update_date = parse_datetime(update_date)
+
+            enterprise, created = EnterpriseInfo.objects.update_or_create(
+                EnterpriseID=enterprise_id,
+                LCICID=lcic_id,
+                defaults={
+                    'enterpriseNameLao': record.get('enterpriseNameLao'),
+                    'eneterpriseNameEnglish': record.get('enterpriseNameEnglish'),
+                    'regisCertificateNumber': record.get('regisCertificateNumber'),
+                    'regisDate': regis_date,
+                    'enLocation': record.get('enLocation'),
+                    'regisStrationOfficeType': record.get('regisStrationOfficeType'),
+                    'regisStationOfficeCode': record.get('regisStationOfficeCode'),
+                    'enLegalStrature': record.get('enLegalStrature'),
+                    'foreigninvestorFlag': record.get('foreignInvestorFlag'),
+                    'investmentAmount': record.get('investmentAmount'),
+                    'investmentCurrency': record.get('investmentCurrency'),
+                    'representativeNationality': record.get('representativeNationality'),
+                    'LastUpdate': last_update,
+                    'CancellationDate': cancellation_date,
+                    'UpdateDate': update_date,
+                    'id_file': upload_file,
+                }
+            )
+            
+            
+            enterprise.status = 1 if created else 2
+            enterprise.save()
+
+            if created:
+                created_count += 1
+                created_records.append(enterprise.EnterpriseID)
+                print(f"Created new record: {enterprise.EnterpriseID}")
+            else:
+                updated_count += 1
+                updated_records.append(enterprise.EnterpriseID)
+                print(f"Updated record: {enterprise.EnterpriseID}")
+
+       
+        upload_file.status = 'Completed'
+        upload_file.updatedate = updated_count
+        upload_file.crete = created_count
+        upload_file.save()
+
+        response_data = {
+            'updated_count': updated_count,
+            'created_count': created_count,
+            'updated_records': updated_records,
+            'created_records': created_records,
+        }
+        
+        return JsonResponse(response_data, status=201)
+
+    return JsonResponse({'error': 'Invalid request method'}, status=400)
+@csrf_exempt
+def get_enterprise_info(request):
+    if request.method == 'GET':
+        id_file = request.GET.get('id_file')
+        status = request.GET.get('status')
+        limit = int(request.GET.get('limit', 100))
+        page = int(request.GET.get('page', 1))
+
+        if id_file and status:
+            enterprises = EnterpriseInfo.objects.filter(id_file=id_file, status=status)
+        elif id_file:
+            enterprises = EnterpriseInfo.objects.filter(id_file=id_file)
+        elif status:
+            enterprises = EnterpriseInfo.objects.filter(status=status)
+        else:
+            enterprises = EnterpriseInfo.objects.all()
+
+        start = (page - 1) * limit
+        end = start + limit
+        enterprise_list = list(enterprises.values()[start:end])
+        return JsonResponse(enterprise_list, safe=False, status=200)
+
+    return JsonResponse({'error': 'Invalid request method'}, status=400)
+@csrf_exempt
+def get_all_enterprise(request):
+    if request.method == 'GET':
+        id_file = request.GET.get('id_file')
+        status = request.GET.get('status')
+
+        if id_file and status:
+            enterprises = EnterpriseInfo.objects.filter(id_file=id_file, status=status)
+        elif id_file:
+            enterprises = EnterpriseInfo.objects.filter(id_file=id_file)
+        elif status:
+            enterprises = EnterpriseInfo.objects.filter(status=status)
+        else:
+            enterprises = EnterpriseInfo.objects.all()
+
+        enterprise_list = list(enterprises.values())
+        return JsonResponse(enterprise_list, safe=False, status=200)
+
+    return JsonResponse({'error': 'Invalid request method'}, status=400)
+@csrf_exempt
+def get_all_upload_files(request):
+    if request.method == 'GET':
+        files = UploadFile_enterpriseinfo.objects.all().order_by('-insertdate')
+        file_list = list(files.values())
+        return JsonResponse(file_list, safe=False)
+    return JsonResponse({'error': 'Invalid request method'}, status=400)
+# perm paylay
+from collections import defaultdict
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.utils import timezone
+import pytz  # Import pytz to handle timezone conversion
+
+class UserListbyBank(APIView):
+    def get(self, request, format=None):
+        # Define the timezone (e.g., Asia/Bangkok)
+        target_timezone = pytz.timezone('Asia/Bangkok')
+        
+        # Fetch all users and order by 'UID', including related 'memberInfo' (MID)
+        all_users = Login.objects.select_related('MID').order_by('UID')
+
+        custom_user_data = []
+        bnk_code_counts = defaultdict(int)  # To keep track of user counts per bnk_code
+
+        # Loop through all users and extract necessary fields, including memberInfo (bank) fields
+        for user in all_users:
+            if user.MID:  # Ensure that the user has a related MID
+                bank_info = user.MID  # Access the related memberInfo (MID) directly
+
+                # Convert last_login to the target timezone
+                last_login_local = user.last_login.astimezone(target_timezone) if user.last_login else None
+                formatted_last_login_local = last_login_local.strftime('%Y-%m-%d %H:%M:%S') if last_login_local else None
+                
+                # Add user data to the list
+                custom_user_data.append({
+                    "UID": user.UID,
+                    "bnk_code": bank_info.bnk_code if bank_info else None,  # Access bank code from memberInfo
+                    "bnk_name": bank_info.nameL if bank_info else None,  # Access bank name from memberInfo
+                    "Permission": user.GID.nameL if user.GID else None,  # Handle case where GID may be null
+                    "username": user.username,
+                    "nameL": user.nameL,
+                    "nameE": user.nameE,
+                    "surnameL": user.surnameL,
+                    "surnameE": user.surnameE,
+                    "last_login": formatted_last_login_local,  # Use the converted last_login
+                    "is_active": user.is_active,
+                })
+                
+                # Increment the count for the user's bnk_code
+                if bank_info.bnk_code:
+                    bnk_code_counts[bank_info.bnk_code] += 1
+
+        # Prepare the combined response
+        combined_data = {
+            # 'all_user': custom_user_data,
+            'sum_by_bnk_code': dict(bnk_code_counts),  # Convert defaultdict to a regular dictionary for JSON response
+        }
+        
+        return Response(combined_data, status=status.HTTP_200_OK)
+from .models import DataSubmitUtility
+from .serializers import DataSubmitUtilitySerializer
+class DataSubmitUtilityView(APIView):
+    def get(self, request):
+
+        report_catalogs = DataSubmitUtility.objects.all()  # Retrieve all report catalog entries
+        serializer = DataSubmitUtilitySerializer(report_catalogs, many=True)  # Serialize them
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    def patch(self, request, pk):
+        try:
+            utility = DataSubmitUtility.objects.get(pk=pk)  # Retrieve the record by primary key (pk)
+        except DataSubmitUtility.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = DataSubmitUtilitySerializer(utility, data=request.data, partial=True)  # Partial update
+        if serializer.is_valid():
+            serializer.save()  # Save the updated record
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, pk):
+        try:
+            utility = DataSubmitUtility.objects.get(pk=pk)  # Retrieve the record by primary key (pk)
+        except DataSubmitUtility.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = DataSubmitUtilitySerializer(utility, data=request.data)  # Full update (all fields required)
+        if serializer.is_valid():
+            serializer.save()  # Save the updated record
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from .models import DataUtility
+from datetime import datetime
+import json
+
+class UploadUtilityView(APIView):
+    def post(self, request):
+        try:
+            # Ensure a file is provided in the request
+            if "file" not in request.FILES:
+                return Response({"status": "error", "message": "No file uploaded."}, status=400)
+            
+            # Parse the JSON file
+            json_file = request.FILES["file"]
+            data = json.load(json_file)
+
+            # Validate JSON structure
+            if not isinstance(data, list):
+                return Response({"status": "error", "message": "Invalid JSON structure: Expected a list."}, status=400)
+
+            # Insert records into the database
+            for record in data:
+                DataUtility.objects.create(  # Ensure this matches your model name
+                    no=record.get("NO"),
+                    customer_id=record.get("CUSTOMER_ID"),
+                    supply_type=record.get("SUPPLY_TYPE"),
+                    outstanding=record.get("OUTSTANDING"),
+                    basic_tax=record.get("BASIC+TAX"),
+                    bill_amount=record.get("BILL_AMOUNT"),
+                    bill_of_month=record.get("BILL_OF_MONTH"),
+                    date_of_issue=record.get("DATE_OF_ISSUE"),
+                    dis_id=record.get("DIS_ID"),
+                    pro_id=record.get("PRO_ID"),
+                    zone=record.get("ZONE"),
+                    pay_amount=record.get("PAY_AMOUNT"),
+                    payment_id=record.get("PAYMENT_ID"),
+                    pay_type=record.get("PAY_TYPE"),
+                    payment_date=record.get("PAYMENT_DATE"),
+                )
+            
+            return Response({"status": "success", "message": "Data inserted successfully."})
+        
+        except json.JSONDecodeError:
+            return Response({"status": "error", "message": "Invalid JSON file."}, status=400)
+        except Exception as e:
+            return Response({"status": "error", "message": str(e)}, status=500)
+class AddMemberAPIView(APIView):
+    def post(self, request):
+        serializer = MemberInfoSerializer(data=request.data)
+        if serializer.is_valid():
+            member = serializer.save()
+            return Response({
+                "success": True,
+                "message": "Member added successfully!",
+                "data": MemberInfoSerializer(member).data
+            }, status=status.HTTP_201_CREATED)
+        return Response({
+            "success": False,
+            "errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db.models import Count
+from .models import memberInfo, bank_branch
+# from django.db.models import OuterRef, Subquery, F, Count
+from django.db.models import F, Count, OuterRef, Subquery, Q
+from pytz import timezone
+
+
+class DistinctBankCodeView(APIView):
+    def get(self, request):
+        try:
+            # Get query parameters
+            bnk_code = request.GET.get('bnk_code', None)
+            branch_id = request.GET.get('branch_id', None)
+            sort_by = request.GET.get('sort_by', 'user_count')  # Default sort by `user_count`
+            
+            
+            target_timezone = pytz.timezone('Asia/Bangkok')
+            # Validate `sort_by` parameter
+            valid_sort_fields = ['user_count', '-user_count', 'bnk_code', '-bnk_code', 'branch_id', '-branch_id']
+            if sort_by not in valid_sort_fields:
+                return Response(
+                    {"detail": f"Invalid sort field: {sort_by}. Valid fields are {valid_sort_fields}."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if bnk_code and branch_id:
+                # Fetch users matching both bnk_code and branch_id
+                # user_count = Login.objects.filter(bnk_code=bnk_code, branch_id=branch_id)
+                user_count = Login.objects.filter(
+                    bnk_code=bnk_code
+                ).filter(
+                    Q(branch_id=branch_id) | Q(branch_id__isnull=True)
+                )
+                # Serialize detailed user data
+                # serializer = LoginSerializer(user_count, many=True)
+                # result = serializer.data
+                
+                custom_user_data = []
+
+                for user in user_count:
+                    # Convert `last_login` to the target timezone
+                    last_login_local = user.last_login.astimezone(target_timezone) if user.last_login else None
+                    formatted_last_login_local = last_login_local.strftime('%Y-%m-%d %H:%M:%S') if last_login_local else None
+                    
+                    # Extract related `memberInfo` (MID) fields
+                    bank_info = user.MID if user.MID else None
+
+                    # Append custom user data
+                    custom_user_data.append({
+                        "UID": user.UID,
+                        "bnk_form": bank_info.code,
+                        "bnk_code": bank_info.bnk_code if bank_info else None,  # Bank code from `memberInfo`
+                        "bnk_name": bank_info.nameL if bank_info else None,    # Bank name from `memberInfo`
+                        "Permission": user.GID.nameL if user.GID else None,    # Permission from `GID`
+                        "username": user.username,
+                        "nameL": user.nameL,
+                        "nameE": user.nameE,
+                        "surnameL": user.surnameL,
+                        "surnameE": user.surnameE,
+                        "last_login": formatted_last_login_local,             # Formatted last login
+                        "is_active": user.is_active,
+                    })
+
+                # Use the custom data list as the result
+                result = custom_user_data
+
+            elif bnk_code:
+                # Prepare a subquery to fetch branch_name from bank_branch
+                branch_name_subquery = bank_branch.objects.filter(
+                    bnk_code=OuterRef('bnk_code'),
+                    branch_id=OuterRef('branch_id')
+                ).values('branch_name')[:1]
+
+                # If `bnk_code` is provided, group by `bnk_code` and `branch_id`
+                user_count = (
+                    Login.objects.filter(bnk_code=bnk_code)
+                    .values('bnk_code', 'branch_id')
+                    .annotate(
+                        user_count=Count('UID'),               # Count the users
+                        member_code=F('MID__code'),            # Get `code` from `memberInfo`
+                        member_nameL=F('MID__nameL'),          # Get `nameL` from `memberInfo`
+                        branch_name=Subquery(branch_name_subquery)  # Fetch branch_name from `bank_branch`
+                    )
+                    .order_by(sort_by)  # Dynamic sorting
+                )
+
+                # Convert queryset to a list for JSON response
+                result = list(user_count)
+
+            else:
+                # If `bnk_code` is not provided, group only by `bnk_code` with additional join on memberInfo
+                user_count = (
+                    Login.objects.values('bnk_code')
+                    .annotate(
+                        user_count=Count('UID'),
+                        member_code=F('MID__code'),  # Referencing the related field `code` from memberInfo
+                        member_nameL=F('MID__nameL')  # Referencing the related field `nameL` from memberInfo
+                    )
+                    .order_by(sort_by)  # Dynamic sorting
+                )
+
+                # No need to use serializer for aggregated results
+                result = list(user_count)
+
+            # If no records are found, return a 404 error
+            if not result:
+                return Response({"detail": "No users found."}, status=status.HTTP_404_NOT_FOUND)
+
+            # Return the result
+            return Response(result, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            # Handle exceptions and return a 500 error if something goes wrong
+            return Response(
+                {"detail": f"An error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import bank_branch
+from .serializers import BankBranchSerializer
+
+class BankBranchListView(APIView):
+    def get(self, request):
+        bnk_code = request.GET.get('bnk_code')  # Get the bank code from query parameters
+        if not bnk_code:
+            return Response({"detail": "Bank code is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        branches = bank_branch.objects.filter(bnk_code=bnk_code)  # Filter branches by bank code
+        if not branches.exists():
+            return Response({"detail": "No branches found for this bank code."}, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = BankBranchSerializer(branches, many=True)  
+        return Response(serializer.data, status=status.HTTP_200_OK)
+		
+class CreateMemberView(APIView):
+    def post(self, request):
+        serializer = MemberInfoSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

@@ -188,7 +188,6 @@ class memberInfo(models.Model):
             return format_html('<img src="'+ self.mImage.url +'" height="40px" >')
         return ''
     memShowImage.allow_tags =True
-
 class fdocType(models.Model):
     nameL = models.CharField(max_length=250)
     nameE = models.CharField(max_length=250)

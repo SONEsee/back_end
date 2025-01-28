@@ -43,7 +43,7 @@ from .views import confirm_upload
 from .views import upload_image, upload_imageprofile
 from .views import get_collaterals
 from .views import get_login3
-from .views import get_last_lcicid
+from .views import get_last_lcicid, upload_enterprise_info
 from .views import confirm_image
 from .views import UserLoginView
 from django.contrib.auth import views as auth_views
@@ -53,8 +53,9 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status
-from .views import STypeView
+from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files
+from .views import STypeView,UserListbyBank,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView
+
 from .views import UserGroupView
 from .views import upload_json
 from .views import SearchBatfileAPIView
@@ -250,8 +251,19 @@ urlpatterns = [
     path('api/user-profile/', UserProfileView.as_view(), name='user-profile'),
     path('api/upload-json/', upload_json, name='upload-json'),
     path('api/search-files/', SearchBatfileAPIView.as_view(), name='search_files_api'),
+    
     path("api/get-search-results/<int:id>/", views.get_search_results, name="get_search_results"),
     path('update_searchlog_status/', update_searchlog_status, name='update_searchlog_status'),
+    path('upload-enterprise-info/', upload_enterprise_info, name='upload-enterprise-info'),
+     path('api/get-enterprise-info/', views.get_enterprise_info, name='get_enterprise_info'),
+     path('api/get-enterprise/<int:id_file>/', views.get_all_enterprise, name='get_enterprise'),
+      path('api/get-all-upload-files/', views.get_all_upload_files, name='get_all_upload_files'),
+      path('branches/', BankBranchListView.as_view(), name='branch-list'),
+path('distinct-bnk-codes/', DistinctBankCodeView.as_view(), name='distinct-bnk-codes'),
+path('add-member/', AddMemberAPIView.as_view(), name='add-member'),
+ path('create_member/', CreateMemberView.as_view(), name='create-member'),
+    path('upload-json/', UploadUtilityView.as_view(), name='upload_json_api'),
+	 path('submitutility/',DataSubmitUtilityView.as_view(), name='submitutility')
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

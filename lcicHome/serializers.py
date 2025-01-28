@@ -676,3 +676,16 @@ class SearchBatfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Search_batfile
         fields = '__all__'
+from rest_framework import serializers
+from .models import bank_branch
+from .models import DataSubmitUtility
+
+
+class BankBranchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = bank_branch
+        fields = '_all_'  # Include all fields from the model
+class DataSubmitUtilitySerializer (serializers.ModelSerializer):
+    class Meta:
+        model = DataSubmitUtility
+        fields = '__all__'

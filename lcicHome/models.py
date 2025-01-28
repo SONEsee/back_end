@@ -297,7 +297,9 @@ from django.contrib.auth.models import AbstractBaseUser
 class Login(AbstractBaseUser):
     UID = models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
     MID = models.ForeignKey(memberInfo, related_name='memberInfo', null=True, blank=True, on_delete=models.CASCADE)
-    GID = models.ForeignKey(User_Group, null=True, blank=True, on_delete=models.CASCADE)
+    branch_id = models.CharField(max_length=100, null=True, blank=True)
+    bnk_code = models.CharField(max_length=100, null=True, blank=True)
+    GID = models.ForeignKey(User_Group, null=True, blank=True , on_delete=models.CASCADE)
     username = models.CharField(max_length=150, unique=True)
     nameL = models.CharField(max_length=150)
     nameE = models.CharField(max_length=150)
@@ -310,25 +312,21 @@ class Login(AbstractBaseUser):
     is_staff = models.BooleanField(default=False)
     is_superuser = models.BooleanField(default=False)
     last_login = models.DateTimeField(null=True, blank=True)
-    
-    
-    profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
 
     objects = UserManager()
-
+    
     def create_user(self, username, password=None, **extra_fields):
         if not username:
             raise ValueError('The Username must be set')
         user = self.model(username=username, **extra_fields)
-        user.set_password(password)  
+        user.set_password(password)  # Hashes the password
         user.save(using=self._db)
         return user
 
     USERNAME_FIELD = 'username'
 
-    def __str__(self):
+    def _str_(self):
         return self.username
-    
 
 
 
@@ -390,7 +388,6 @@ class CustomerWater(models.Model):
     Email = models.EmailField(max_length=254)
     ConsumerType = models.CharField(max_length=150)
     RegisDate = models.DateTimeField(auto_now_add=True, auto_now=False, blank=True)
-    
     # @classmethod
     # def create(cls, **kwargs):
     #     CustomerWater = cls.objects.create(
@@ -1383,8 +1380,10 @@ class EnterpriseInfo(models.Model):
     enLegalStrature = models.CharField(max_length=500, blank=True, null=True)
     foreigninvestorFlag = models.CharField(max_length=500, blank=True, null=True)
     investmentAmount = models.FloatField(null=True, blank=True)
+    status = models.IntegerField(default=0)
     investmentCurrency = models.CharField(max_length=50, blank=True, null=True)
     representativeNationality = models.CharField(max_length=50, blank=True, null=True)
+    id_file = models.ForeignKey('UploadFile_enterpriseinfo', on_delete=models.CASCADE, null=True, blank=True)
     LastUpdate = models.DateTimeField(blank=True, null=True)
     CancellationDate = models.DateTimeField(blank=True, null=True)
     InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
@@ -1649,6 +1648,9 @@ class Search_batfile(models.Model):
     SType = models.ForeignKey(SType, null=True, blank=True, on_delete=models.CASCADE)
     UType = models.ForeignKey(Upload_Type, null=True, blank=True, on_delete=models.CASCADE)
     user_id = models.CharField(max_length=255)
+    duplicates = models.CharField(max_length=255)
+    count_duplicates = models.IntegerField(default=0)
+    duplicates_false = models.CharField(max_length=255)
     UID = models.CharField(max_length=255)
     file_id = models.CharField(max_length=255)
     fileName = models.CharField(max_length=255)
@@ -1681,8 +1683,80 @@ class SearchResult(models.Model):
     enterpriseNameLao = models.CharField(max_length=255, null=True, blank=True)
     investmentCurrency = models.CharField(max_length=255, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    duplicates = models.TextField()
     bank_code = models.CharField(max_length=255)
     UID = models.CharField(max_length=255)
 
     def __str__(self):
         return f"SearchResult {self.id} - {self.lcicID}"
+    
+
+from django.db import models
+
+class UploadFile_enterpriseinfo(models.Model):
+    id = models.AutoField(primary_key=True)
+    user_id = models.CharField(max_length=255)
+    file_name = models.CharField(max_length=255)
+    path = models.CharField(max_length=255)
+    insertdate = models.DateTimeField(auto_now_add=True)
+    fileUpload = models.FileField(upload_to="searchfile/")
+    update_date = models.DateTimeField(auto_now=True)
+    status = models.CharField(max_length=50)
+    updatedate = models.CharField(max_length=255)
+    crete = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.file_name
+from django.db import models
+
+class NEDEnterpriseInfo(models.Model):
+    is_ned_model = True
+    
+    EnterpriseID = models.CharField(max_length=255, primary_key=True)
+    LCICID = models.CharField(max_length=255)
+    enterpriseNameLao = models.CharField(max_length=255, null=True)
+    enterpriseNameEnglish = models.CharField(max_length=255, null=True)
+    regisCertificateNumber = models.CharField(max_length=255, null=True)
+    regisDate = models.DateTimeField(null=True)
+    enLocation = models.CharField(max_length=255, null=True)
+    regisStrationOfficeType = models.CharField(max_length=255, null=True)
+    regisStationOfficeCode = models.CharField(max_length=255, null=True)
+    enLegalStrature = models.CharField(max_length=255, null=True)
+    foreigninvestorFlag = models.CharField(max_length=255, null=True)
+    
+    class Meta:
+        managed = False
+        db_table = 'EnterpriseInfo'
+        app_label = 'lcicHome'
+
+class NEDCompanyInfo(models.Model):
+    is_ned_model = True
+    CompanyID = models.CharField(max_length=255, primary_key=True)
+    CompanyName = models.CharField(max_length=255)
+    
+    class Meta:
+        managed = False
+        db_table = 'CompanyInfo'
+        app_label = 'lcicHome'
+class DataUtility(models.Model):
+    no = models.IntegerField()
+    customer_id = models.CharField(max_length=150)
+    supply_type = models.CharField(max_length=150)
+    outstanding = models.DecimalField(max_digits=150, decimal_places=2)
+    basic_tax = models.DecimalField(max_digits=150, decimal_places=2)
+    bill_amount = models.DecimalField(max_digits=150, decimal_places=2)
+    bill_of_month = models.CharField(max_length=255)
+    date_of_issue = models.CharField(max_length=255)
+    dis_id = models.CharField(max_length=150)
+    pro_id = models.CharField(max_length=150)
+    zone = models.CharField(max_length=150)
+    pay_amount = models.DecimalField(max_digits=150, decimal_places=2)
+    payment_id = models.CharField(max_length=100)
+    pay_type = models.CharField(max_length=150)
+    payment_date = models.CharField(max_length=255)
+
+class DataSubmitUtility(models.Model):
+    Utility_type =  models.CharField(max_length=30, null=True, blank=True)
+    Date = models.CharField(max_length=30, null=True, blank=True)
+    Amount_data = models.IntegerField(null=True, blank=True)
+    Status =  models.CharField(max_length=10, null=True, blank=True)
