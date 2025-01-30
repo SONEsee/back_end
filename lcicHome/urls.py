@@ -54,7 +54,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files
-from .views import STypeView,UserListbyBank,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView
+from .views import STypeView,UserListbyBank,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView,BankUsersView,LoanCountByDate,CountSearchLogbyDate,CountFeebyDate                     
 
 from .views import UserGroupView
 from .views import upload_json
@@ -259,11 +259,19 @@ urlpatterns = [
      path('api/get-enterprise/<int:id_file>/', views.get_all_enterprise, name='get_enterprise'),
       path('api/get-all-upload-files/', views.get_all_upload_files, name='get_all_upload_files'),
       path('branches/', BankBranchListView.as_view(), name='branch-list'),
-path('distinct-bnk-codes/', DistinctBankCodeView.as_view(), name='distinct-bnk-codes'),
-path('add-member/', AddMemberAPIView.as_view(), name='add-member'),
- path('create_member/', CreateMemberView.as_view(), name='create-member'),
+      
+    path('distinct-bnk-codes/', DistinctBankCodeView.as_view(), name='distinct-bnk-codes'),
+    path('add-member/', AddMemberAPIView.as_view(), name='add-member'),
+    path('create_member/', CreateMemberView.as_view(), name='create-member'),
     path('upload-json/', UploadUtilityView.as_view(), name='upload_json_api'),
-	 path('submitutility/',DataSubmitUtilityView.as_view(), name='submitutility')
+	 path('submitutility/',DataSubmitUtilityView.as_view(), name='submitutility'),
+    path('userbanklist/',UserListbyBank.as_view(), name='userbanklist'),
+    # Dashboard LCIC 
+    path('dashboard/bank-user/', BankUsersView.as_view(), name='bankuser'),
+    path('dashboard/loan-count-by-month/', LoanCountByDate.as_view(), name='loan-count-by-month'),
+    path('dashboard/search-count-by-date/',CountSearchLogbyDate.as_view(), name='searchCount-by-Date'),
+    path('dashboard/fee_count-by-date/', CountFeebyDate.as_view(), name='fee-count-by-date'),
+    
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

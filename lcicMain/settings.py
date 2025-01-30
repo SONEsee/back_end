@@ -205,7 +205,7 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
 
 AUTH_USER_MODEL = 'lcicHome.Login'
 
-CSRF_TRUSTED_ORIGINS = ['http://localhost:3000']
+CSRF_TRUSTED_ORIGINS = ['http://localhost:3000','http://192.168.45.56:3000']
 
 CORS_ALLOW_ALL_ORIGINS = True
 CSRF_COOKIE_HTTPONLY = False

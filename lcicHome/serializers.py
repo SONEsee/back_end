@@ -684,8 +684,9 @@ from .models import DataSubmitUtility
 class BankBranchSerializer(serializers.ModelSerializer):
     class Meta:
         model = bank_branch
-        fields = '_all_'  # Include all fields from the model
+        fields = '__all__'  # Include all fields from the model
 class DataSubmitUtilitySerializer (serializers.ModelSerializer):
     class Meta:
         model = DataSubmitUtility
         fields = '__all__'
+        
