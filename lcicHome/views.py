@@ -10399,16 +10399,16 @@ class LoanCountByDate(APIView):
         month = request.GET.get("month")
         day = request.GET.get("day")
 
-        if not bnk_code or not year:
-            return Response({"error": "bnk_code and year are required"}, status=status.HTTP_400_BAD_REQUEST)
+        if not bnk_code:
+            return Response({"error": "bnk_code is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Initial queryset filter
-        queryset = B1.objects.filter(bnk_code=bnk_code, lon_insert_date__year=year)
+        queryset = B1.objects.filter(bnk_code=bnk_code)
 
         # Determine grouping based on provided parameters
         if year and month and day:
             # Group by Hour of the Day
-            grouped_queryset = queryset.filter(lon_insert_date__month=month, lon_insert_date__day=day) \
+            grouped_queryset = queryset.filter(lon_insert_date__year=year, lon_insert_date__month=month, lon_insert_date__day=day) \
                 .annotate(hour=ExtractHour("lon_insert_date")) \
                 .values("hour") \
                 .annotate(loan_count=Count("loan_id")) \
@@ -10418,7 +10418,7 @@ class LoanCountByDate(APIView):
 
         elif year and month:
             # Group by Day of the Month
-            grouped_queryset = queryset.filter(lon_insert_date__month=month) \
+            grouped_queryset = queryset.filter(lon_insert_date__year=year, lon_insert_date__month=month) \
                 .annotate(day=ExtractDay("lon_insert_date")) \
                 .values("day") \
                 .annotate(loan_count=Count("loan_id")) \
@@ -10426,34 +10426,53 @@ class LoanCountByDate(APIView):
 
             result = [{"day_of_month": str(item["day"]).zfill(2), "loan_count": item["loan_count"]} for item in grouped_queryset]
 
-        else:
+        elif year:
             # Group by Month of the Year
-            grouped_queryset = queryset.annotate(month=ExtractMonth("lon_insert_date")) \
+            grouped_queryset = queryset.filter(lon_insert_date__year=year) \
+                .annotate(month=ExtractMonth("lon_insert_date")) \
                 .values("month") \
                 .annotate(loan_count=Count("loan_id")) \
                 .order_by("month")
 
             result = [{"year_month": f"{year}-{str(item['month']).zfill(2)}", "loan_count": item["loan_count"]} for item in grouped_queryset]
 
+        else:
+            # Group by Year when no date filters are provided
+            grouped_queryset = queryset.annotate(year=ExtractYear("lon_insert_date")) \
+                .values("year") \
+                .annotate(loan_count=Count("loan_id")) \
+                .order_by("year")
+
+            result = [{"year": str(item["year"]), "loan_count": item["loan_count"]} for item in grouped_queryset]
+
         return Response(result, status=status.HTTP_200_OK)
 
+    
 class CountSearchLogbyDate(APIView):
     def get(self, request, *args, **kwargs):
         bnk_code = request.GET.get("bnk_code")
-        year = request.GET.get("year")  
+        year = request.GET.get("year")
         month = request.GET.get("month")
         day = request.GET.get("day")
-        
-        if not bnk_code or not year:
-            return Response({"error": "bnk_code and year are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not bnk_code:
+            return Response({"error": "bnk_code is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Initial queryset filter
-        queryset = searchLog.objects.filter(bnk_code=bnk_code, inquiry_date__year=year)
+        queryset = searchLog.objects.filter(bnk_code=bnk_code)
 
-        # Determine grouping based on provided parameters
-        if year and month and day:
-            # Group by Hour of the Day
-            grouped_queryset = queryset.filter(inquiry_date__month=month, inquiry_date__day=day) \
+        # If no year, month, or day is provided → Group by Year
+        if not year:
+            grouped_queryset = queryset.annotate(year=ExtractYear("inquiry_date")) \
+                .values("year") \
+                .annotate(search_count=Count("search_ID")) \
+                .order_by("year")
+
+            result = [{"year": item["year"], "search_count": item["search_count"]} for item in grouped_queryset]
+
+        # If year, month, and day are provided → Group by Hour
+        elif year and month and day:
+            grouped_queryset = queryset.filter(inquiry_date__year=year, inquiry_date__month=month, inquiry_date__day=day) \
                 .annotate(hour=ExtractHour("inquiry_date")) \
                 .values("hour") \
                 .annotate(search_count=Count("search_ID")) \
@@ -10461,9 +10480,9 @@ class CountSearchLogbyDate(APIView):
 
             result = [{"hour_of_day": str(item["hour"]).zfill(2), "search_count": item["search_count"]} for item in grouped_queryset]
 
+        # If year and month are provided → Group by Day
         elif year and month:
-            # Group by Day of the Month
-            grouped_queryset = queryset.filter(inquiry_date__month=month) \
+            grouped_queryset = queryset.filter(inquiry_date__year=year, inquiry_date__month=month) \
                 .annotate(day=ExtractDay("inquiry_date")) \
                 .values("day") \
                 .annotate(search_count=Count("search_ID")) \
@@ -10471,9 +10490,10 @@ class CountSearchLogbyDate(APIView):
 
             result = [{"day_of_month": str(item["day"]).zfill(2), "search_count": item["search_count"]} for item in grouped_queryset]
 
+        # If only year is provided → Group by Month
         else:
-            # Group by Month of the Year
-            grouped_queryset = queryset.annotate(month=ExtractMonth("inquiry_date")) \
+            grouped_queryset = queryset.filter(inquiry_date__year=year) \
+                .annotate(month=ExtractMonth("inquiry_date")) \
                 .values("month") \
                 .annotate(search_count=Count("search_ID")) \
                 .order_by("month")
@@ -10489,36 +10509,24 @@ class CountFeebyDate(APIView):
         year = request.GET.get("year")  
         month = request.GET.get("month")
         day = request.GET.get("day")
-        
-        if not bnk_code or not year:
-            return Response({"error": "bnk_code and year are required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Initial queryset filter
-        queryset = request_charge.objects.filter(bnk_code=bnk_code, rec_insert_date__year=year)
+        if not bnk_code:
+            return Response({"error": "bnk_code is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Determine grouping based on provided parameters
-        if year and month and day:
-            # Group by Hour of the Day
-            grouped_queryset = queryset.filter(rec_insert_date__month=month, rec_insert_date__day=day) \
-                .annotate(hour=ExtractHour("rec_insert_date")) \
-                .values("hour") \
+        queryset = request_charge.objects.filter(bnk_code=bnk_code)
+
+        # If no year, month, or day is provided → Group by Year
+        if not year and not month and not day:
+            grouped_queryset = queryset.annotate(year=ExtractYear("rec_insert_date")) \
+                .values("year") \
                 .annotate(total_fee=Sum("chg_amount")) \
-                .order_by("hour")
+                .order_by("year")
 
-            result = [{"hour_of_day": str(item["hour"]).zfill(2), "total_fee": float(item["total_fee"] or 0)} for item in grouped_queryset]
+            result = [{"year": item["year"], "total_fee": float(item["total_fee"] or 0)} for item in grouped_queryset]
 
-        elif year and month:
-            # Group by Day of the Month
-            grouped_queryset = queryset.filter(rec_insert_date__month=month) \
-                .annotate(day=ExtractDay("rec_insert_date")) \
-                .values("day") \
-                .annotate(total_fee=Sum("chg_amount")) \
-                .order_by("day")
-
-            result = [{"day_of_month": str(item["day"]).zfill(2), "total_fee": float(item["total_fee"] or 0)} for item in grouped_queryset]
-
-        else:
-            # Group by Month of the Year
+        # If only year is provided → Group by Month
+        elif year and not month and not day:
+            queryset = queryset.filter(rec_insert_date__year=year)
             grouped_queryset = queryset.annotate(month=ExtractMonth("rec_insert_date")) \
                 .values("month") \
                 .annotate(total_fee=Sum("chg_amount")) \
@@ -10526,5 +10534,24 @@ class CountFeebyDate(APIView):
 
             result = [{"year_month": f"{year}-{str(item['month']).zfill(2)}", "total_fee": float(item["total_fee"] or 0)} for item in grouped_queryset]
 
+        # If year and month are provided → Group by Day
+        elif year and month and not day:
+            queryset = queryset.filter(rec_insert_date__year=year, rec_insert_date__month=month)
+            grouped_queryset = queryset.annotate(day=ExtractDay("rec_insert_date")) \
+                .values("day") \
+                .annotate(total_fee=Sum("chg_amount")) \
+                .order_by("day")
+
+            result = [{"day_of_month": str(item["day"]).zfill(2), "total_fee": float(item["total_fee"] or 0)} for item in grouped_queryset]
+
+        # If year, month, and day are provided → Group by Hour
+        elif year and month and day:
+            queryset = queryset.filter(rec_insert_date__year=year, rec_insert_date__month=month, rec_insert_date__day=day)
+            grouped_queryset = queryset.annotate(hour=ExtractHour("rec_insert_date")) \
+                .values("hour") \
+                .annotate(total_fee=Sum("chg_amount")) \
+                .order_by("hour")
+
+            result = [{"hour_of_day": str(item["hour"]).zfill(2), "total_fee": float(item["total_fee"] or 0)} for item in grouped_queryset]
+
         return Response(result, status=status.HTTP_200_OK)
-    
