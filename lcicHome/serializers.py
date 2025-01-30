@@ -468,7 +468,7 @@ class LoginSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Login
-        fields = ['UID', 'MID', 'GID', 'username', 'nameL', 'nameE', 'surnameL', 'surnameE', 'profile_image', 'insertDate', 'updateDate', 'is_active', 'is_staff', 'is_superuser', 'password']
+        fields = ['UID', 'MID', 'GID', 'username', 'nameL', 'nameE', 'surnameL', 'surnameE', 'profile_image', 'insertDate', 'updateDate', 'is_active', 'is_staff', 'is_superuser', 'password','bnk_code','branch_id']
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
@@ -477,6 +477,8 @@ class LoginSerializer(serializers.ModelSerializer):
         
         # Ensure the password is hashed
         user = Login.objects.create_user(
+            bnk_code=validated_data.get('bnk_code', None),
+            branch_id=validated_data.get('branch_id', None),
             username=validated_data['username'],
             password=validated_data['password'],
             MID=validated_data.get('MID', None),
@@ -514,6 +516,8 @@ class LoginSerializer(serializers.ModelSerializer):
         instance.is_active = validated_data.get('is_active', instance.is_active)
         instance.is_staff = validated_data.get('is_staff', instance.is_staff)
         instance.is_superuser = validated_data.get('is_superuser', instance.is_superuser)
+        bnk_code = validated_data.get('bnk_code', instance.bnk_code)
+        branch_id = validated_data.get('branch_id', instance.branch_id)
 
         # Save the updated user object
         instance.save()
@@ -684,7 +688,8 @@ from .models import DataSubmitUtility
 class BankBranchSerializer(serializers.ModelSerializer):
     class Meta:
         model = bank_branch
-        fields = '_all_'  # Include all fields from the model
+        fields = '__all__'  
+
 class DataSubmitUtilitySerializer (serializers.ModelSerializer):
     class Meta:
         model = DataSubmitUtility

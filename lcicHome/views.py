@@ -10285,3 +10285,44 @@ class CreateMemberView(APIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.utils import timezone
+import pytz
+
+class UserByBankCodeView(APIView):
+    def get(self, request, bnk_code, format=None):
+        # Define the timezone (e.g., Asia/Bangkok)
+        target_timezone = pytz.timezone('Asia/Bangkok')
+        
+        # Fetch users with the specified bnk_code
+        users_by_bnk_code = Login.objects.select_related('MID').filter(MID__bnk_code=bnk_code).order_by('UID')
+        
+        custom_user_data = []
+
+        for user in users_by_bnk_code:
+            if user.MID:  # Ensure that the user has a related MID
+                bank_info = user.MID
+
+                # Convert last_login to the target timezone
+                last_login_local = user.last_login.astimezone(target_timezone) if user.last_login else None
+                formatted_last_login_local = last_login_local.strftime('%Y-%m-%d %H:%M:%S') if last_login_local else None
+                
+                # Add user data to the list
+                custom_user_data.append({
+                    "UID": user.UID,
+                    "bnk_code": bank_info.bnk_code if bank_info else None,
+                    "bnk_name": bank_info.nameL if bank_info else None,
+                    "Permission": user.GID.nameL if user.GID else None,
+                    "username": user.username,
+                    "nameL": user.nameL,
+                    "nameE": user.nameE,
+                    "surnameL": user.surnameL,
+                    "surnameE": user.surnameE,
+                    "last_login": formatted_last_login_local,
+                    "is_active": user.is_active,
+                })
+        
+        # Prepare the response
+        return Response({"users": custom_user_data}, status=status.HTTP_200_OK)
