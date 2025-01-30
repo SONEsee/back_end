@@ -10284,7 +10284,6 @@ class CreateMemberView(APIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-<<<<<<< HEAD
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -10326,8 +10325,6 @@ class UserByBankCodeView(APIView):
         
         # Prepare the response
         return Response({"users": custom_user_data}, status=status.HTTP_200_OK)
-=======
-    
 class BankUsersView(APIView):
     def get(self, request):
         # Get the 'bnk_code' parameter from the request
@@ -10531,4 +10528,3 @@ class CountFeebyDate(APIView):
 
         return Response(result, status=status.HTTP_200_OK)
     
->>>>>>> e15175378bd13441890e2b4d43a8f9a2cbf50a7d

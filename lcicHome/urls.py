@@ -53,12 +53,8 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files
-<<<<<<< HEAD
+from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files,BankUsersView,LoanCountByDate,CountSearchLogbyDate,CountFeebyDate
 from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView
-=======
-from .views import STypeView,UserListbyBank,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView,BankUsersView,LoanCountByDate,CountSearchLogbyDate,CountFeebyDate                     
->>>>>>> e15175378bd13441890e2b4d43a8f9a2cbf50a7d
 
 from .views import UserGroupView
 from .views import upload_json
