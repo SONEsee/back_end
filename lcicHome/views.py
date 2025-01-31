@@ -7188,7 +7188,6 @@ class UserLoginView(APIView):
                     'nameE': user.nameE,
                     'surnameL': user.surnameL,
                     'surnameE': user.surnameE,
-                    'bnk_code': user.bnk_code,
                     'is_active': user.is_active,
                     'last_login': user.last_login,
                     'is_staff': user.is_staff,
@@ -10148,6 +10147,8 @@ from .models import memberInfo, bank_branch
 # from django.db.models import OuterRef, Subquery, F, Count
 from django.db.models import F, Count, OuterRef, Subquery, Q
 from pytz import timezone
+
+
 class DistinctBankCodeView(APIView):
     def get(self, request):
         try:
