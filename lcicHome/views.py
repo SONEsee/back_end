@@ -10126,6 +10126,7 @@ class UploadUtilityView(APIView):
             return Response({"status": "error", "message": "Invalid JSON file."}, status=400)
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=500)
+        
 class AddMemberAPIView(APIView):
     def post(self, request):
         serializer = MemberInfoSerializer(data=request.data)
@@ -10140,6 +10141,7 @@ class AddMemberAPIView(APIView):
             "success": False,
             "errors": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
+        
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status

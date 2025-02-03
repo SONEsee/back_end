@@ -108,17 +108,26 @@ DATABASES = {
         'HOST': '192.168.45.230',
         'PORT': '5432',
     },
-    'sql_server': {
-        'ENGINE': 'sql_server.pyodbc',
-        'NAME': 'NED',
-        'USER': 'sa',
-        'PASSWORD': 'Lcic@12345',
-        'HOST': '192.168.45.245\\EXPRESS',
-        'PORT': '1433',
-        'OPTIONS': {
-            'driver': 'ODBC Driver 17 for SQL Server',
-        },
-    }
+    # 'sql_server': {
+    #     'ENGINE': 'sql_server.pyodbc',
+    #     'NAME': 'NED',
+    #     'USER': 'sa',
+    #     'PASSWORD': 'Lcic@12345',
+    #     'HOST': '192.168.45.245\\EXPRESS',
+    #     'PORT': '1433',
+    #     'OPTIONS': {
+    #         'driver': 'ODBC Driver 17 for SQL Server',
+    #     },
+    # },
+        'utility': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'Utility',
+        'USER': 'postgres',
+        'PASSWORD': 'Lcic@123',
+        'HOST': '192.168.45.230',
+        'PORT': '5432',
+    },
+    
 }
 DATABASE_ROUTERS = ['lcicHome.routers.NEDRouter']
 
