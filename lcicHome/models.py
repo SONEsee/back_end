@@ -1762,7 +1762,7 @@ class DataSubmitUtility(models.Model):
     Status =  models.CharField(max_length=10, null=True, blank=True)
     
 
-class Bill(models.Model):
+class Utility_Bill(models.Model):
     BillID = models.AutoField(primary_key=True)
     Customer_ID = models.CharField(max_length=100)
     InvoiceNo = models.CharField(max_length=100)
@@ -1784,8 +1784,3 @@ class Bill(models.Model):
 
     def __str__(self):
         return f"Bill {self.BillID} - {self.Customer_ID}"
-
-    class Meta:
-        db_table = 'bills'
-        verbose_name = 'Bill'
-        verbose_name_plural = 'Bills'
