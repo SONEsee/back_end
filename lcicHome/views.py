@@ -10125,6 +10125,7 @@ class UploadUtilityView(APIView):
             return Response({"status": "error", "message": "Invalid JSON file."}, status=400)
         except Exception as e:
             return Response({"status": "error", "message": str(e)}, status=500)
+        
 class AddMemberAPIView(APIView):
     def post(self, request):
         serializer = MemberInfoSerializer(data=request.data)
@@ -10139,6 +10140,7 @@ class AddMemberAPIView(APIView):
             "success": False,
             "errors": serializer.errors
         }, status=status.HTTP_400_BAD_REQUEST)
+        
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -10394,11 +10396,63 @@ from .models import B1  # Your Django model
 
 class LoanCountByDate(APIView):
     
+    # def get(self, request, *args, **kwargs):
+    #     bnk_code = request.GET.get("bnk_code")
+    #     year = request.GET.get("year")
+    #     month = request.GET.get("month")
+    #     day = request.GET.get("day")
+
+    #     if not bnk_code:
+    #         return Response({"error": "bnk_code is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    #     # Initial queryset filter
+    #     queryset = B1.objects.filter(bnk_code=bnk_code)
+
+    #     # Determine grouping based on provided parameters
+    #     if year and month and day:
+    #         # Group by Hour of the Day
+    #         grouped_queryset = queryset.filter(lon_insert_date__year=year, lon_insert_date__month=month, lon_insert_date__day=day) \
+    #             .annotate(hour=ExtractHour("lon_insert_date")) \
+    #             .values("hour") \
+    #             .annotate(loan_count=Count("loan_id")) \
+    #             .order_by("hour")
+
+    #         result = [{"hour_of_day": str(item["hour"]).zfill(2), "loan_count": item["loan_count"]} for item in grouped_queryset]
+
+    #     elif year and month:
+    #         # Group by Day of the Month
+    #         grouped_queryset = queryset.filter(lon_insert_date__year=year, lon_insert_date__month=month) \
+    #             .annotate(day=ExtractDay("lon_insert_date")) \
+    #             .values("day") \
+    #             .annotate(loan_count=Count("loan_id")) \
+    #             .order_by("day")
+
+    #         result = [{"day_of_month": str(item["day"]).zfill(2), "loan_count": item["loan_count"]} for item in grouped_queryset]
+
+    #     elif year:
+    #         # Group by Month of the Year
+    #         grouped_queryset = queryset.filter(lon_insert_date__year=year) \
+    #             .annotate(month=ExtractMonth("lon_insert_date")) \
+    #             .values("month") \
+    #             .annotate(loan_count=Count("loan_id")) \
+    #             .order_by("month")
+
+    #         result = [{"year_month": f"{year}-{str(item['month']).zfill(2)}", "loan_count": item["loan_count"]} for item in grouped_queryset]
+
+    #     else:
+    #         # Group by Year when no date filters are provided
+    #         grouped_queryset = queryset.annotate(year=ExtractYear("lon_insert_date")) \
+    #             .values("year") \
+    #             .annotate(loan_count=Count("loan_id")) \
+    #             .order_by("year")
+
+    #         result = [{"year": str(item["year"]), "loan_count": item["loan_count"]} for item in grouped_queryset]
+
+    #     return Response(result, status=status.HTTP_200_OK)
     def get(self, request, *args, **kwargs):
         bnk_code = request.GET.get("bnk_code")
         year = request.GET.get("year")
         month = request.GET.get("month")
-        day = request.GET.get("day")
 
         if not bnk_code:
             return Response({"error": "bnk_code is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -10406,45 +10460,40 @@ class LoanCountByDate(APIView):
         # Initial queryset filter
         queryset = B1.objects.filter(bnk_code=bnk_code)
 
+        # Build the period string based on year and month
+        if year and month:
+            period = f"{year}{month.zfill(2)}"  # Format: YYYYMM
+        elif year:
+            period = f"{year}"  # Format: YYYY
+        else:
+            period = None
+
         # Determine grouping based on provided parameters
-        if year and month and day:
-            # Group by Hour of the Day
-            grouped_queryset = queryset.filter(lon_insert_date__year=year, lon_insert_date__month=month, lon_insert_date__day=day) \
-                .annotate(hour=ExtractHour("lon_insert_date")) \
-                .values("hour") \
-                .annotate(loan_count=Count("loan_id")) \
-                .order_by("hour")
-
-            result = [{"hour_of_day": str(item["hour"]).zfill(2), "loan_count": item["loan_count"]} for item in grouped_queryset]
-
-        elif year and month:
+        if year and month:
             # Group by Day of the Month
-            grouped_queryset = queryset.filter(lon_insert_date__year=year, lon_insert_date__month=month) \
-                .annotate(day=ExtractDay("lon_insert_date")) \
-                .values("day") \
+            queryset = queryset.filter(period__startswith=period)  # Filter by YYYYMM
+            grouped_queryset = queryset.values("period") \
                 .annotate(loan_count=Count("loan_id")) \
-                .order_by("day")
+                .order_by("period")
 
-            result = [{"day_of_month": str(item["day"]).zfill(2), "loan_count": item["loan_count"]} for item in grouped_queryset]
+            result = [{"period": item["period"], "loan_count": item["loan_count"]} for item in grouped_queryset]
 
         elif year:
             # Group by Month of the Year
-            grouped_queryset = queryset.filter(lon_insert_date__year=year) \
-                .annotate(month=ExtractMonth("lon_insert_date")) \
-                .values("month") \
+            queryset = queryset.filter(period__startswith=year)  # Filter by YYYY
+            grouped_queryset = queryset.values("period") \
                 .annotate(loan_count=Count("loan_id")) \
-                .order_by("month")
+                .order_by("period")
 
-            result = [{"year_month": f"{year}-{str(item['month']).zfill(2)}", "loan_count": item["loan_count"]} for item in grouped_queryset]
+            result = [{"period": item["period"], "loan_count": item["loan_count"]} for item in grouped_queryset]
 
         else:
-            # Group by Year when no date filters are provided
-            grouped_queryset = queryset.annotate(year=ExtractYear("lon_insert_date")) \
-                .values("year") \
+            # Group by Year when no year or month is provided
+            grouped_queryset = queryset.values("period") \
                 .annotate(loan_count=Count("loan_id")) \
-                .order_by("year")
+                .order_by("period")
 
-            result = [{"year": str(item["year"]), "loan_count": item["loan_count"]} for item in grouped_queryset]
+            result = [{"period": item["period"], "loan_count": item["loan_count"]} for item in grouped_queryset]
 
         return Response(result, status=status.HTTP_200_OK)
 

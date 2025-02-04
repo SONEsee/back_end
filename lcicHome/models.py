@@ -1576,7 +1576,6 @@ class Main_catalog_cat(models.Model):
     cat_group = models.IntegerField(null=True)
     cat_status = models.IntegerField( null=False)
     
-
 class Province(models.Model):
     Prov_ID = models.CharField(max_length=50, blank=True, null=True)
     Province_Name = models.CharField(max_length=255, blank=True, null=True)
@@ -1738,6 +1737,7 @@ class NEDCompanyInfo(models.Model):
         managed = False
         db_table = 'CompanyInfo'
         app_label = 'lcicHome'
+        
 class DataUtility(models.Model):
     no = models.IntegerField()
     customer_id = models.CharField(max_length=150)
@@ -1760,3 +1760,27 @@ class DataSubmitUtility(models.Model):
     Date = models.CharField(max_length=30, null=True, blank=True)
     Amount_data = models.IntegerField(null=True, blank=True)
     Status =  models.CharField(max_length=10, null=True, blank=True)
+    
+
+class Utility_Bill(models.Model):
+    BillID = models.AutoField(primary_key=True)
+    Customer_ID = models.CharField(max_length=100)
+    InvoiceNo = models.CharField(max_length=100)
+    TypeOfPro = models.CharField(max_length=100)
+    Outstanding = models.DecimalField(max_digits=10, decimal_places=2)
+    Basic_Tax = models.DecimalField(max_digits=10, decimal_places=2)
+    Bill_Amount = models.DecimalField(max_digits=10, decimal_places=2)
+    Debt_Amount = models.DecimalField(max_digits=10, decimal_places=2)
+    Payment_ID = models.CharField(max_length=100)
+    PaymentType = models.CharField(max_length=100)
+    Payment_Date = models.CharField(max_length=100)
+    InvoiceMonth = models.CharField(max_length=50)
+    InvoiceDate = models.CharField(max_length=100)
+    DisID = models.CharField(max_length=100)
+    ProID = models.CharField(max_length=100)
+    InsertDate = models.DateTimeField(auto_now_add=True)
+    UpdateDate = models.DateTimeField(auto_now=True)
+    UserID = models.CharField(max_length=100)
+
+    def __str__(self):
+        return f"Bill {self.BillID} - {self.Customer_ID}"
