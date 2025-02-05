@@ -10450,7 +10450,7 @@ class LoanCountByDate(APIView):
 
     #     return Response(result, status=status.HTTP_200_OK)
     
-    
+        
     # def get(self, request, *args, **kwargs):
     #     bnk_code = request.GET.get("bnk_code")
     #     year = request.GET.get("year")
@@ -10460,7 +10460,7 @@ class LoanCountByDate(APIView):
     #         return Response({"error": "bnk_code is required"}, status=status.HTTP_400_BAD_REQUEST)
 
     #     # Initial queryset filter
-    #     queryset = B1.objects.filter(bnk_code=bnk_code)
+    #     queryset = B1_Monthly.objects.filter(bnk_code=bnk_code)
 
     #     # Build the period string based on year and month
     #     if year and month:
@@ -10478,7 +10478,7 @@ class LoanCountByDate(APIView):
     #             .annotate(loan_count=Count("loan_id")) \
     #             .order_by("period")
 
-    #         result = [{"DayofMonth": item["period"], "loan_count": item["loan_count"]} for item in grouped_queryset]
+    #         result = [{"day_of_month": item["period"][-2:], "loan_count": item["loan_count"]} for item in grouped_queryset]
 
     #     elif year:
     #         # Group by Month of the Year
@@ -10487,7 +10487,7 @@ class LoanCountByDate(APIView):
     #             .annotate(loan_count=Count("loan_id")) \
     #             .order_by("period")
 
-    #         result = [{"Year&Month": item["period"], "loan_count": item["loan_count"]} for item in grouped_queryset]
+    #         result = [{"year_month": f"{item['period'][:4]}-{item['period'][4:]}", "loan_count": item["loan_count"]} for item in grouped_queryset]
 
     #     else:
     #         # Group by Year when no year or month is provided
@@ -10495,11 +10495,10 @@ class LoanCountByDate(APIView):
     #             .annotate(loan_count=Count("loan_id")) \
     #             .order_by("period")
 
-    #         result = [{"Year": item["period"], "loan_count": item["loan_count"]} for item in grouped_queryset]
+    #         result = [{"year": item["period"][:4], "loan_count": item["loan_count"]} for item in grouped_queryset]
 
     #     return Response(result, status=status.HTTP_200_OK)
-    
-        
+
     def get(self, request, *args, **kwargs):
         bnk_code = request.GET.get("bnk_code")
         year = request.GET.get("year")
@@ -10509,20 +10508,13 @@ class LoanCountByDate(APIView):
             return Response({"error": "bnk_code is required"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Initial queryset filter
-        queryset = B1.objects.filter(bnk_code=bnk_code)
-
-        # Build the period string based on year and month
-        if year and month:
-            period = f"{year}{month.zfill(2)}"  # Format: YYYYMM
-        elif year:
-            period = f"{year}"  # Format: YYYY
-        else:
-            period = None
+        queryset = B1_Monthly.objects.filter(bnk_code=bnk_code)
 
         # Determine grouping based on provided parameters
         if year and month:
-            # Group by Day of the Month
-            queryset = queryset.filter(period__startswith=period)  # Filter by YYYYMM
+            # Group by Day of the Month (YYYYMM)
+            period_prefix = f"{year}{month.zfill(2)}"
+            queryset = queryset.filter(period__startswith=period_prefix)
             grouped_queryset = queryset.values("period") \
                 .annotate(loan_count=Count("loan_id")) \
                 .order_by("period")
@@ -10530,8 +10522,9 @@ class LoanCountByDate(APIView):
             result = [{"day_of_month": item["period"][-2:], "loan_count": item["loan_count"]} for item in grouped_queryset]
 
         elif year:
-            # Group by Month of the Year
-            queryset = queryset.filter(period__startswith=year)  # Filter by YYYY
+            # Group by Month of the Year (YYYY)
+            period_prefix = f"{year}"
+            queryset = queryset.filter(period__startswith=period_prefix)
             grouped_queryset = queryset.values("period") \
                 .annotate(loan_count=Count("loan_id")) \
                 .order_by("period")
@@ -10544,10 +10537,16 @@ class LoanCountByDate(APIView):
                 .annotate(loan_count=Count("loan_id")) \
                 .order_by("period")
 
-            result = [{"year": item["period"][:4], "loan_count": item["loan_count"]} for item in grouped_queryset]
+            result = []
+            for item in grouped_queryset:
+                year_str = item["period"][:4]  # Extract first 4 digits as year
+                found = next((r for r in result if r["year"] == year_str), None)
+                if found:
+                    found["loan_count"] += item["loan_count"]
+                else:
+                    result.append({"year": year_str, "loan_count": item["loan_count"]})
 
         return Response(result, status=status.HTTP_200_OK)
-
     
 class CountSearchLogbyDate(APIView):
     def get(self, request, *args, **kwargs):
@@ -10657,7 +10656,68 @@ class CountFeebyDate(APIView):
 
         return Response(result, status=status.HTTP_200_OK)
     
-    
+# from rest_framework.views import APIView
+# from rest_framework.parsers import MultiPartParser
+# from rest_framework.response import Response
+# from rest_framework import status
+# from .models import Utility_Bill
+# import json
+# from datetime import datetime
+
+# class UtilityUploadView(APIView):
+#     # Use MultiPartParser to handle file uploads
+#     parser_classes = [MultiPartParser]
+
+#     def post(self, request, *args, **kwargs):
+#         # Check if a file is included in the request
+#         file = request.FILES.get('file')
+#         if not file:
+#             return Response({'error': 'No file uploaded'}, status=status.HTTP_400_BAD_REQUEST)
+
+#         try:
+#             # Read and parse the JSON file
+#             file_content = file.read().decode('utf-8')
+#             json_data = json.loads(file_content)
+
+#             # Validate the JSON structure
+#             if json_data.get('status') != 200 or 'message' not in json_data:
+#                 return Response({'error': 'Invalid JSON structure'}, status=status.HTTP_400_BAD_REQUEST)
+
+#             # Process each payment record
+#             for record in json_data['message']:
+#                 # Convert date strings to Django DateField format
+#                 date_of_issue = datetime.strptime(record['DATE_OF_ISSUE'], '%d/%m/%Y').date()
+#                 payment_date = datetime.strptime(record['PAYMENT_DATE'], '%d/%m/%Y').date()
+
+#                 # Create and save the PaymentRecord instance
+#                 Utility_Bill.objects.create(
+#                     no=record['NO'],
+#                     customer_id=record['CUSTOMER_ID'],
+#                     supply_type=record['SUPPLY_TYPE'],
+#                     outstanding=record['OUTSTANDING'],
+#                     basic_tax=record['BASIC+TAX'],
+#                     bill_amount=record['BILL_AMOUNT'],
+#                     bill_of_month=record['BILL_OF_MONTH'],
+#                     date_of_issue=record['DATE_OF_ISSUE'],
+#                     dis_id=record['DIS_ID'],
+#                     pro_id=record['PRO_ID'],
+#                     zone=record['ZONE'],
+#                     pay_amount=record['PAY_AMOUNT'],
+#                     payment_id=record['PAYMENT_ID'],
+#                     pay_type=record['PAY_TYPE'],
+#                     payment_date=['PAYMENT_DATE'],
+#                     userid='unknown'
+#                 )
+
+#             return Response({'message': 'Data processed and saved successfully'}, status=status.HTTP_200_OK)
+
+#         except json.JSONDecodeError:
+#             return Response({'error': 'Invalid JSON file'}, status=status.HTTP_400_BAD_REQUEST)
+#         except KeyError as e:
+#             return Response({'error': f'Missing key in JSON data: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+#         except Exception as e:
+#             return Response({'error': f'An error occurred: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser
@@ -10668,54 +10728,117 @@ import json
 from datetime import datetime
 
 class UtilityUploadView(APIView):
-    # Use MultiPartParser to handle file uploads
     parser_classes = [MultiPartParser]
 
     def post(self, request, *args, **kwargs):
-        # Check if a file is included in the request
         file = request.FILES.get('file')
         if not file:
             return Response({'error': 'No file uploaded'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Read and parse the JSON file
             file_content = file.read().decode('utf-8')
             json_data = json.loads(file_content)
 
-            # Validate the JSON structure
             if json_data.get('status') != 200 or 'message' not in json_data:
                 return Response({'error': 'Invalid JSON structure'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Process each payment record
+            # Process each record
             for record in json_data['message']:
-                # Convert date strings to Django DateField format
-                date_of_issue = datetime.strptime(record['DATE_OF_ISSUE'], '%d/%m/%Y').date()
-                payment_date = datetime.strptime(record['PAYMENT_DATE'], '%d/%m/%Y').date()
+                try:
+                    # Convert date fields to string if they are required as CharFields
+                    date_of_issue = record.get('DATE_OF_ISSUE', '')
+                    payment_date = record.get('PAYMENT_DATE', '')
 
-                # Create and save the PaymentRecord instance
-                Utility_Bill.objects.create(
-                    no=record['NO'],
-                    customer_id=record['CUSTOMER_ID'],
-                    supply_type=record['SUPPLY_TYPE'],
-                    outstanding=record['OUTSTANDING'],
-                    basic_tax=record['BASIC+TAX'],
-                    bill_amount=record['BILL_AMOUNT'],
-                    bill_of_month=record['BILL_OF_MONTH'],
-                    date_of_issue=date_of_issue,
-                    dis_id=record['DIS_ID'],
-                    pro_id=record['PRO_ID'],
-                    zone=record['ZONE'],
-                    pay_amount=record['PAY_AMOUNT'],
-                    payment_id=record['PAYMENT_ID'],
-                    pay_type=record['PAY_TYPE'],
-                    payment_date=payment_date
-                )
+                    Utility_Bill.objects.create(
+                        Customer_ID=record['CUSTOMER_ID'],
+                        InvoiceNo=record['NO'],  # Mapping NO -> InvoiceNo
+                        TypeOfPro=record['SUPPLY_TYPE'], 
+                        Outstanding=record['OUTSTANDING'],
+                        Basic_Tax=record['BASIC+TAX'],
+                        Bill_Amount=record['BILL_AMOUNT'],
+                        Debt_Amount=record['PAY_AMOUNT'],  # Mapping PAY_AMOUNT -> Debt_Amount
+                        Payment_ID=record['PAYMENT_ID'],
+                        PaymentType=record['PAY_TYPE'],
+                        Payment_Date=payment_date,  # Payment_Date is a CharField
+                        InvoiceMonth=record['BILL_OF_MONTH'],
+                        InvoiceDate=date_of_issue,  # InvoiceDate is a CharField
+                        DisID=record['DIS_ID'],
+                        ProID=record['PRO_ID'],
+                        UserID='unknown'  # Default UserID if not provided
+                    )
+                except KeyError as e:
+                    return Response({'error': f'Missing key in record: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
             return Response({'message': 'Data processed and saved successfully'}, status=status.HTTP_200_OK)
 
         except json.JSONDecodeError:
             return Response({'error': 'Invalid JSON file'}, status=status.HTTP_400_BAD_REQUEST)
-        except KeyError as e:
-            return Response({'error': f'Missing key in JSON data: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({'error': f'An error occurred: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+# from rest_framework.views import APIView
+# from rest_framework.parsers import MultiPartParser
+# from rest_framework.response import Response
+# from rest_framework import status
+# from .models import Utility_Bill
+# import json
+# from datetime import datetime
+# import os
+
+# class UtilityUploadView(APIView):
+#     parser_classes = [MultiPartParser]
+
+#     def post(self, request, *args, **kwargs):
+#         file = request.FILES.get('file')
+#         if not file:
+#             return Response({'error': 'No file uploaded'}, status=status.HTTP_400_BAD_REQUEST)
+
+#         try:
+#             file_path = f"temp_uploads/{file.name}"
+#             os.makedirs("temp_uploads", exist_ok=True)
+
+#             # Save file temporarily
+#             with open(file_path, 'wb+') as destination:
+#                 for chunk in file.chunks():
+#                     destination.write(chunk)
+
+#             # Read the JSON file
+#             with open(file_path, 'r', encoding='utf-8') as f:
+#                 json_data = json.load(f)
+
+#             if json_data.get('status') != 200 or 'message' not in json_data:
+#                 return Response({'error': 'Invalid JSON structure'}, status=status.HTTP_400_BAD_REQUEST)
+
+#             # Process each record in the JSON file
+#             for record in json_data['message']:
+#                 Utility_Bill.objects.create(
+#                     Customer_ID=record['CUSTOMER_ID'],
+#                     InvoiceNo=record['NO'],
+#                     TypeOfPro=record['SUPPLY_TYPE'],
+#                     Outstanding=record['OUTSTANDING'],
+#                     Basic_Tax=record['BASIC+TAX'],
+#                     Bill_Amount=record['BILL_AMOUNT'],
+#                     Debt_Amount=record['PAY_AMOUNT'],
+#                     Payment_ID=record['PAYMENT_ID'],
+#                     PaymentType=record['PAY_TYPE'],
+#                     Payment_Date=datetime.strptime(record['PAYMENT_DATE'], '%d/%m/%Y').date(),
+#                     InvoiceMonth=record['BILL_OF_MONTH'],
+#                     InvoiceDate=datetime.strptime(record['DATE_OF_ISSUE'], '%d/%m/%Y').date(),
+#                     DisID=record['DIS_ID'],
+#                     ProID=record['PRO_ID'],
+#                     UserID="unknown"
+#                 )
+
+#             # Delete temporary file after processing
+#             os.remove(file_path)
+
+#             return Response({'message': 'Data processed and saved successfully'}, status=status.HTTP_200_OK)
+
+#         except json.JSONDecodeError:
+#             return Response({'error': 'Invalid JSON file'}, status=status.HTTP_400_BAD_REQUEST)
+#         except KeyError as e:
+#             return Response({'error': f'Missing key in JSON data: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+#         except Exception as e:
+#             return Response({'error': f'An error occurred: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
