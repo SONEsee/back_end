@@ -54,7 +54,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files,BankUsersView,LoanCountByDate,CountSearchLogbyDate,CountFeebyDate
-from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView
+from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView,UtilityUploadView
 
 from .views import UserGroupView
 from .views import upload_json
@@ -266,6 +266,9 @@ urlpatterns = [
     path('upload-json/', UploadUtilityView.as_view(), name='upload_json_api'),
 	 path('submitutility/',DataSubmitUtilityView.as_view(), name='submitutility'),
     path('userbanklist/',UserListbyBank.as_view(), name='userbanklist'),
+    # Upload Utility
+    path('upload_utility/', UtilityUploadView.as_view(), name='upload_utility'),
+    
     # Dashboard LCIC 
     path('dashboard/bank-user/', BankUsersView.as_view(), name='bankuser'),
     path('dashboard/loan-count-by-month/', LoanCountByDate.as_view(), name='loan-count-by-month'),
