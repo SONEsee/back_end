@@ -2159,34 +2159,34 @@ def tax(request):
     return render(request, 'Search/tax_invoice.html', {})
 
 # gold API keys
-def make_gapi_request():
-    api_key = "goldapi-aylvjurlrhfyjm1-io"
-    symbol = "XAU"
-    curr = "USD"
-    date = ""
+# def make_gapi_request():
+#     api_key = "goldapi-aylvjurlrhfyjm1-io"
+#     symbol = "XAU"
+#     curr = "USD"
+#     date = ""
 
-    url = f"https://www.goldapi.io/api/{symbol}/{curr}{date}"
+#     url = f"https://www.goldapi.io/api/{symbol}/{curr}{date}"
     
-    headers = {
-        "x-access-token": api_key,
-        "Content-Type": "application/json"
-    }
+#     headers = {
+#         "x-access-token": api_key,
+#         "Content-Type": "application/json"
+#     }
     
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
+#     try:
+#         response = requests.get(url, headers=headers)
+#         response.raise_for_status()
 
-        # result = response.text
-        # print(result)
+#         # result = response.text
+#         # print(result)
         
-        result_json = response.json()
+#         result_json = response.json()
         
-        price = result_json["price"]
-        print(price)
-    except requests.exceptions.RequestException as e:
-        print("Error:", str(e))
+#         price = result_json["price"]
+#         print(price)
+#     except requests.exceptions.RequestException as e:
+#         print("Error:", str(e))
 
-result = make_gapi_request()    
+# result = make_gapi_request()    
 
 
 
@@ -10547,7 +10547,7 @@ class LoanCountByDate(APIView):
                     result.append({"year": year_str, "loan_count": item["loan_count"]})
 
         return Response(result, status=status.HTTP_200_OK)
-    
+
 class CountSearchLogbyDate(APIView):
     def get(self, request, *args, **kwargs):
         bnk_code = request.GET.get("bnk_code")
