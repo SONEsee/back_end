@@ -1781,10 +1781,16 @@ class Utility_Bill(models.Model):
     ProID = models.CharField(max_length=100)
     InsertDate = models.DateTimeField(auto_now_add=True)
     UpdateDate = models.DateTimeField(auto_now=True)
-    UserID = models.CharField(max_length=100)
+    UserID = models.CharField(max_length=100,null=True, blank=True)
 
     def __str__(self):
         return f"Bill {self.BillID} - {self.Customer_ID}"
+<<<<<<< HEAD
+
+class UtilityBillUpload(models.Model):
+    file = models.FileField(upload_to="uploads/")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+=======
 # # ຕົວຢ່າງການແກ້ໄຂ model
 # from django.db import models
 
@@ -1810,3 +1816,4 @@ class Utility_Bill(models.Model):
 
 #     def __str__(self):
 #         return self.name
+>>>>>>> 3e68da148a65ec0459a44b32523f7db719dec7bf
