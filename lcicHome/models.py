@@ -1785,35 +1785,7 @@ class Utility_Bill(models.Model):
 
     def __str__(self):
         return f"Bill {self.BillID} - {self.Customer_ID}"
-<<<<<<< HEAD
 
 class UtilityBillUpload(models.Model):
     file = models.FileField(upload_to="uploads/")
     uploaded_at = models.DateTimeField(auto_now_add=True)
-=======
-# # ຕົວຢ່າງການແກ້ໄຂ model
-# from django.db import models
-
-# class YourModel(models.Model):
-#     field1 = models.CharField(max_length=100)
-#     field2 = models.CharField(max_length=100)
-
-#     class Meta:
-#         # ແກ້ໄຂວິທີການປະກາດ unique_together
-#         unique_together = (('field1', 'field2'),)
-#         # ຫຼື
-#         constraints = [
-#             models.UniqueConstraint(fields=['field1', 'field2'], name='unique_fields')
-#         ]
-# from django.db import models
-
-# class Customer(models.Model):
-#     id = models.AutoField(primary_key=True)
-#     name = models.CharField(max_length=255)
-#     email = models.EmailField(unique=True)
-#     phone = models.CharField(max_length=15, null=True, blank=True)
-#     created_at = models.DateTimeField(auto_now_add=True)
-
-#     def __str__(self):
-#         return self.name
->>>>>>> 3e68da148a65ec0459a44b32523f7db719dec7bf

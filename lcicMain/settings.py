@@ -28,16 +28,15 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'lcicHome',
-    'lcicNews',
     'sqlserver_models',
+
+    'lcicNews',
     'channels',
     "crispy_forms",
     "crispy_bootstrap5",
     'rest_framework_simplejwt',
     'rest_framework',
     'rest_framework.authtoken',
-    
-   
 ]
 
 REST_FRAMEWORK = {
@@ -111,24 +110,30 @@ DATABASES = {
         'HOST': '192.168.45.230',
         'PORT': '5432',
     },
-    'sql_server': {
-        'ENGINE': 'mssql',
+'sql_server': {
+    'ENGINE': 'mssql',
+    'NAME': 'NED',
+    'USER': 'sa',
+    'PASSWORD': 'Lcic@12345',
+    'HOST': r'192.168.45.245\EXPRESS',  
+    'PORT': '57004',
+    'OPTIONS': {
+        'driver': 'ODBC Driver 17 for SQL Server',
         
-        'NAME': 'NED',
-        'USER': 'sa',
-        'PASSWORD': 'Lcic@12345',
-        'HOST': r'192.168.45.245\EXPRESS',
-        'PORT': '57004',
-        'OPTIONS': {
-            'driver': 'ODBC Driver 17 for SQL Server',
-        },
-    }
+    },
+
+    },
+    #     'utility': {
+    #     'ENGINE': 'django.db.backends.postgresql',
+    #     'NAME': 'Utility',
+    #     'USER': 'postgres',
+    #     'PASSWORD': 'Lcic@123',
+    #     'HOST': '192.168.45.230',
+    #     'PORT': '5432',
+    # },
+    
 }
-
-
-DATABASE_ROUTERS = ['sqlserver_models.router.NEDRouter']
-
-
+DATABASE_ROUTERS = ['lcicMain.routers.SqlServerRouter']
 
 # connection_string = (
 #     "DRIVER={ODBC Driver 17 for SQL Server};"
@@ -238,4 +243,4 @@ FILE_UPLOAD_HANDLERS = [
     'django.core.files.uploadhandler.MemoryFileUploadHandler',
     'django.core.files.uploadhandler.TemporaryFileUploadHandler',
 ]
-DATABASE_ROUTERS = ['lcicMain.routers.SqlServerRouter']
+# DATABASE_ROUTERS = ['lcicMain.routers.SqlServerRouter']

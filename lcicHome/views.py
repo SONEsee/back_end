@@ -2437,21 +2437,21 @@ class EnterpriseInfoSearch(APIView):
         # branch = str(user.GID.GID)  
         # sys_usr = str(user.UID) + str(bank) + str(branch)
         
-        print("Bank COde: ===>", bank.bnk_code)
-        print("Bank COde: ===>", bank.code)
+        # print("Bank COde: ===>", bank.bnk_code)
+        # print("Bank COde: ===>", bank.code)
         bank_info = bank_bnk.objects.get(bnk_code=bank.bnk_code)
-        print("---->",bank_info.bnk_code)
-        print("Bank_Type",bank_info.bnk_type)
+        # print("---->",bank_info.bnk_code)
+        # print("Bank_Type",bank_info.bnk_type)
         LCICID = request.data.get('LCICID')
         EnterpriseID = request.data.get('EnterpriseID')
         loan_purpose = request.data.get('CatalogID')
         sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
         
-        print("============> Loan Purpose: ",loan_purpose )
-        print("Authenticated User ID (UID):", UID)
-        print("Authenticated Bankname:", bank)
-        print("LCICID:", LCICID)
-        print("EnterpriseID:", EnterpriseID)
+        # print("============> Loan Purpose: ",loan_purpose )
+        # print("Authenticated User ID (UID):", UID)
+        # print("Authenticated Bankname:", bank)
+        # print("LCICID:", LCICID)
+        # print("EnterpriseID:", EnterpriseID)
         # print("Login :",Login._meta.get_fields())
         if LCICID is not None and EnterpriseID is not None:
             try:
@@ -10842,3 +10842,36 @@ class UtilityUploadView(APIView):
 #             return Response({'error': f'Missing key in JSON data: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 #         except Exception as e:
 #             return Response({'error': f'An error occurred: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from .models import EnterpriseInfo
+
+@csrf_exempt
+def search_enterprise_view(request):
+    EnterpriseID = request.POST.get('q', '')
+    
+    try:
+        enterprise = EnterpriseInfo.objects.get(EnterpriseID=EnterpriseID)
+        return JsonResponse({
+            'status': 200,
+            'enterprise_id': enterprise.EnterpriseID,
+            'name': enterprise.enterpriseNameLao
+        })
+    except EnterpriseInfo.DoesNotExist:
+        return JsonResponse({
+            'status': 400,
+            'message': 'ບໍ່ພົບຂໍ້ມູນ'
+        })
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from .models import EnterpriseInfo
+
+@csrf_exempt
+def search_enterprise_by_id(request, enterprise_id):
+    if request.method == "POST":
+        try:
+            enterprise = EnterpriseInfo.objects.get(EnterpriseID=enterprise_id)
+            return JsonResponse({'enterprise': enterprise.EnterpriseID}, status=200)
+        except EnterpriseInfo.DoesNotExist:
+            return JsonResponse({'error': 'Enterprise not found'}, status=404)
+    return JsonResponse({'error': 'Invalid request method'}, status=400)
