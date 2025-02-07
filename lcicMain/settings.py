@@ -28,12 +28,11 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'lcicHome',
-    'sqlserver_models',
-
+    # 'authtoken',
     'lcicNews',
     'channels',
     "crispy_forms",
-    "crispy_bootstrap5",
+    # "crispy_bootstrap5",
     'rest_framework_simplejwt',
     'rest_framework',
     'rest_framework.authtoken',
@@ -110,19 +109,19 @@ DATABASES = {
         'HOST': '192.168.45.230',
         'PORT': '5432',
     },
-'sql_server': {
-    'ENGINE': 'mssql',
-    'NAME': 'NED',
-    'USER': 'sa',
-    'PASSWORD': 'Lcic@12345',
-    'HOST': r'192.168.45.245\EXPRESS',  
-    'PORT': '57004',
-    'OPTIONS': {
-        'driver': 'ODBC Driver 17 for SQL Server',
+# 'sql_server': {
+#     'ENGINE': 'mssql',
+#     'NAME': 'NED',
+#     'USER': 'sa',
+#     'PASSWORD': 'Lcic@12345',
+#     'HOST': r'192.168.45.245\EXPRESS',  
+#     'PORT': '57004',
+#     'OPTIONS': {
+#         'driver': 'ODBC Driver 17 for SQL Server',
         
-    },
+#     },
 
-    },
+#     },
     #     'utility': {
     #     'ENGINE': 'django.db.backends.postgresql',
     #     'NAME': 'Utility',
@@ -133,7 +132,7 @@ DATABASES = {
     # },
     
 }
-DATABASE_ROUTERS = ['lcicMain.routers.SqlServerRouter']
+# DATABASE_ROUTERS = ['lcicMain.routers.SqlServerRouter']
 
 # connection_string = (
 #     "DRIVER={ODBC Driver 17 for SQL Server};"

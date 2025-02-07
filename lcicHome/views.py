@@ -9658,42 +9658,20 @@ class InsertSearchLogView(APIView):
     def post(self, request):
         user = request.user
         bank = user.MID 
-        # branch = user.GID.GID
-        # sys_usr = str(user.UID) + str(bank) + str(branch)
-        
-        
-        
         bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
-     
-        
         charge_bank_type = bank_info.bnk_type
-        
         if charge_bank_type == 1:
             chargeType = ChargeMatrix.objects.get(chg_sys_id=2)                    
         else:
             chargeType = ChargeMatrix.objects.get(chg_sys_id=5)
-        
-       
-        
-        charge_amount_com = chargeType.chg_amount # charge sum lup company
+        charge_amount_com = chargeType.chg_amount 
         EnterpriseID = request.data.get('EnterpriseID')
         LCICID = request.data.get('LCICID')
-        # loan_purpose = request.data.get('CatalogID')
-        
-        # print("============> Loan Purpose: ",loan_purpose )
-        # loan_purpose_code = Main_catalog_cat.objects.get(cat_sys_id=loan_purpose)
-        
-        # print("============> Cat_Value : ",loan_purpose_code.cat_value)
-        
         search_loan = B1.objects.filter(lcicID=LCICID)
         for loan_log in search_loan:
-            
-
          sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
-
         if EnterpriseID and LCICID:
             try:
-                # inquiry_month = datetime(year=2024, month=10, day=1).date()  # October 2024
                 inquiry_month = datetime(year=2024, month=10, day=1).strftime('%Y-%m')
                 inquiry_month_charge = datetime(year=2024, month=10, day=1).strftime('%d%m%Y')
                 search_log = searchLog.objects.create(
@@ -9714,26 +9692,7 @@ class InsertSearchLogView(APIView):
                     rec_enquiry_type='1',
                     sys_usr=sys_usr  
                 )
-                # search_log = searchLog.objects.get(
-                #     enterprise_ID=EnterpriseID,
-                #     LCIC_ID=LCICID,
-                #     # Add any other unique identifiers if necessary
-                # )
-                # search_log.bnk_code = bank_info.bnk_code
-                # search_log.bnk_type = bank_info.bnk_type
-                # search_log.branch = loan_log.branch_id
-                # search_log.cus_ID = loan_log.customer_id
-                # search_log.cusType = loan_log.segmentType
-                # search_log.credit_type = chargeType.chg_code
-                # search_log.inquiry_month = inquiry_month
-                # search_log.com_tel = ''
-                # search_log.com_location = ''
-                # search_log.rec_loan_amount = 0.0
-                # search_log.rec_loan_amount_currency = 'LAK'
-                # search_log.rec_loan_purpose = loan_log.lon_purpose_code
-                # search_log.rec_enquiry_type = '1'
-                # search_log.sys_usr = sys_usr  
-                # search_log.save()
+                
 
                 charge = request_charge.objects.create(
                     bnk_code=bank_info.bnk_code,
@@ -9747,7 +9706,7 @@ class InsertSearchLogView(APIView):
                     user_sys_id=sys_usr,
                     LCIC_ID=LCICID,
                     cusType=loan_log.segmentType,
-                    # user_session_id=str(request.session.session_key),  # Use Django session key if applicable 
+                   
                     
                     user_session_id='',
                     rec_reference_code='',

@@ -1552,7 +1552,6 @@ from django.conf import settings
 from django.db import models
 # from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
-
 class CustomLoginToken(Token):
     custom_user = models.OneToOneField(settings.AUTH_USER_MODEL, related_name='custom_auth_token', on_delete=models.CASCADE)
 
