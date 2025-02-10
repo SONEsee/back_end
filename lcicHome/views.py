@@ -8428,7 +8428,7 @@ class ChargeCountByHourView(APIView):
             formatted_result_day[formatted_hour] = hour_counts_day[hour]
 
         
-        days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        days_of_week = ["ວັນເສົາ", "ວັນທິດ","ວັນຈັນ", "ວັນອັງຄານ", "ວັນພຸດ", "ວັນພະຫັດ", "ວັນສຸກ"]
         for day in range(7):
             formatted_result_week[days_of_week[day]] = day_counts_week.get(day, 0)
             print("resuale",day_counts_week.get(day, 0))
