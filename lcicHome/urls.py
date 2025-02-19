@@ -54,7 +54,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files,BankUsersView,LoanCountByDate,CountSearchLogbyDate,CountFeebyDate
-from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView,UtilityUploadView
+from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView
 
 from .views import UserGroupView
 from .views import upload_json
@@ -267,15 +267,23 @@ urlpatterns = [
 	 path('submitutility/',DataSubmitUtilityView.as_view(), name='submitutility'),
     path('userbanklist/',UserListbyBank.as_view(), name='userbanklist'),
     # Upload Utility
-    path('upload_utility/', UtilityUploadView.as_view(), name='upload_utility'),
+    # path('upload_utility/', UtilityUploadView.as_view(), name='upload_utility'),
+    # path('upload_utility/', JSONFileUploadView.as_view(), name='upload_utility'),
+    path('water-api/upload-json/', JsonFileUploadView.as_view(), name='upload-json'),
+    
     
     # Dashboard LCIC 
     path('dashboard/bank-user/', BankUsersView.as_view(), name='bankuser'),
     path('dashboard/loan-count-by-month/', LoanCountByDate.as_view(), name='loan-count-by-month'),
     path('dashboard/search-count-by-date/',CountSearchLogbyDate.as_view(), name='searchCount-by-Date'),
     path('dashboard/fee_count-by-date/', CountFeebyDate.as_view(), name='fee-count-by-date'),
+<<<<<<< HEAD
     path('api/enterprise/search/', views.search_enterprise_view, name='search_enterprise'),
     path('search/<str:enterprise_id>/', views.search_enterprise_by_id, name='search_enterprise_by_id'),
+=======
+    path('dashboard/LoanStatsView/', LoanStatsView.as_view(), name='LoanStatsView'),
+    
+>>>>>>> 74493af0add209ff2657fc83bfc6762a869dd790
     
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 if settings.DEBUG:

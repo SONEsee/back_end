@@ -28,8 +28,15 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'lcicHome',
+<<<<<<< HEAD
     # 'authtoken',
     'lcicNews',
+=======
+    'lcicMain',
+    'lcicNews',
+    'ned_sql',
+    'utility',
+>>>>>>> 74493af0add209ff2657fc83bfc6762a869dd790
     'channels',
     "crispy_forms",
     # "crispy_bootstrap5",
@@ -104,11 +111,20 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'lcicwebsitedb',
+        'USER': 'postgres', 
+        'PASSWORD': 'Lcic@123',
+        'HOST': '192.168.45.230',
+        'PORT': '5432',
+    },
+    'utility': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'utility',
         'USER': 'postgres',
         'PASSWORD': 'Lcic@123',
         'HOST': '192.168.45.230',
         'PORT': '5432',
     },
+<<<<<<< HEAD
 # 'sql_server': {
 #     'ENGINE': 'mssql',
 #     'NAME': 'NED',
@@ -133,6 +149,28 @@ DATABASES = {
     
 }
 # DATABASE_ROUTERS = ['lcicMain.routers.SqlServerRouter']
+=======
+    'ned_sql': {
+        'ENGINE': 'sql_server.pyodbc',
+        'NAME': 'LCIC_Fingers_old',
+        'USER': 'sa',
+        'PASSWORD': 'Lcic@12345',
+        'HOST': '192.168.45.245\EXPRESS',
+        'PORT': '57004',
+        'OPTIONS': {
+            'driver': 'ODBC Driver 17 for SQL Server',
+        },
+    },
+}
+
+
+# DATABASE_ROUTERS = ['sqlserver_models.router.NEDRouter']
+DATABASE_ROUTERS = ['lcicMain.db_router.DatabaseRouter']
+# DATABASE_ROUTERS = [
+#     'utility.db_router.UtilityDBRouter',
+#     'utility.db_router.SQLServerDBRouter',
+# ]
+>>>>>>> 74493af0add209ff2657fc83bfc6762a869dd790
 
 # connection_string = (
 #     "DRIVER={ODBC Driver 17 for SQL Server};"
@@ -230,8 +268,10 @@ CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 
 # Celery settings
-CELERY_BROKER_URL = 'redis://localhost:8000/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:8000/0'
+# CELERY_BROKER_URL = 'redis://localhost:8000/0'
+# CELERY_BROKER_URL = 'redis://localhost:6379/0'
+# CELERY_RESULT_BACKEND = 'redis://localhost:8000/0'
+
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -241,5 +281,9 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880
 FILE_UPLOAD_HANDLERS = [
     'django.core.files.uploadhandler.MemoryFileUploadHandler',
     'django.core.files.uploadhandler.TemporaryFileUploadHandler',
+<<<<<<< HEAD
 ]
 # DATABASE_ROUTERS = ['lcicMain.routers.SqlServerRouter']
+=======
+]
+>>>>>>> 74493af0add209ff2657fc83bfc6762a869dd790

@@ -292,8 +292,6 @@ class UserManager(BaseUserManager):
     
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser
-
-
 class Login(AbstractBaseUser):
     UID = models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
     MID = models.ForeignKey(memberInfo, related_name='memberInfo', null=True, blank=True, on_delete=models.CASCADE)
@@ -1548,12 +1546,22 @@ class SidebarSubItem(models.Model):
     parent = models.ForeignKey(SidebarItem, on_delete=models.CASCADE, related_name="sub_items")
     roles = models.ManyToManyField(Role, related_name="sidebar_sub_items")
 
+<<<<<<< HEAD
 from django.conf import settings
 from django.db import models
 # from django.contrib.auth.models import User
 from rest_framework.authtoken.models import Token
 class CustomLoginToken(Token):
     custom_user = models.OneToOneField(settings.AUTH_USER_MODEL, related_name='custom_auth_token', on_delete=models.CASCADE)
+=======
+# from django.conf import settings
+# from django.db import models
+# # from django.contrib.auth.models import User
+# from rest_framework.authtoken.models import Token
+
+# class CustomLoginToken(Token):
+#     custom_user = models.OneToOneField(settings.AUTH_USER_MODEL, related_name='custom_auth_token', on_delete=models.CASCADE)
+>>>>>>> 74493af0add209ff2657fc83bfc6762a869dd790
 
 class ChargeMatrix(models.Model):
     chg_sys_id = models.BigAutoField(auto_created=True, primary_key=True)
@@ -1787,4 +1795,8 @@ class Utility_Bill(models.Model):
 
 class UtilityBillUpload(models.Model):
     file = models.FileField(upload_to="uploads/")
+<<<<<<< HEAD
     uploaded_at = models.DateTimeField(auto_now_add=True)
+=======
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+>>>>>>> 74493af0add209ff2657fc83bfc6762a869dd790
