@@ -8,7 +8,7 @@ urlpatterns = [
     path('api/', include(('lcicHome.urls', 'lcicHome'), namespace='lcic')),
     path('news/', include(('lcicNews.urls', 'lcicNews'), namespace='news')),
     path('api/', include('lcicHome.urls')),
-    path('sql/', include('sqlserver_models.urls')),
+    # path('sql/', include('ned_sql.urls')),
 ]
 
 if settings.DEBUG:

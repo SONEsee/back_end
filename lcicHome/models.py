@@ -292,8 +292,6 @@ class UserManager(BaseUserManager):
     
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser
-
-
 class Login(AbstractBaseUser):
     UID = models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
     MID = models.ForeignKey(memberInfo, related_name='memberInfo', null=True, blank=True, on_delete=models.CASCADE)
@@ -1548,13 +1546,13 @@ class SidebarSubItem(models.Model):
     parent = models.ForeignKey(SidebarItem, on_delete=models.CASCADE, related_name="sub_items")
     roles = models.ManyToManyField(Role, related_name="sidebar_sub_items")
 
-from django.conf import settings
-from django.db import models
-# from django.contrib.auth.models import User
-from rest_framework.authtoken.models import Token
+# from django.conf import settings
+# from django.db import models
+# # from django.contrib.auth.models import User
+# from rest_framework.authtoken.models import Token
 
-class CustomLoginToken(Token):
-    custom_user = models.OneToOneField(settings.AUTH_USER_MODEL, related_name='custom_auth_token', on_delete=models.CASCADE)
+# class CustomLoginToken(Token):
+#     custom_user = models.OneToOneField(settings.AUTH_USER_MODEL, related_name='custom_auth_token', on_delete=models.CASCADE)
 
 class ChargeMatrix(models.Model):
     chg_sys_id = models.BigAutoField(auto_created=True, primary_key=True)
@@ -1785,35 +1783,7 @@ class Utility_Bill(models.Model):
 
     def __str__(self):
         return f"Bill {self.BillID} - {self.Customer_ID}"
-<<<<<<< HEAD
 
 class UtilityBillUpload(models.Model):
     file = models.FileField(upload_to="uploads/")
     uploaded_at = models.DateTimeField(auto_now_add=True)
-=======
-# # ຕົວຢ່າງການແກ້ໄຂ model
-# from django.db import models
-
-# class YourModel(models.Model):
-#     field1 = models.CharField(max_length=100)
-#     field2 = models.CharField(max_length=100)
-
-#     class Meta:
-#         # ແກ້ໄຂວິທີການປະກາດ unique_together
-#         unique_together = (('field1', 'field2'),)
-#         # ຫຼື
-#         constraints = [
-#             models.UniqueConstraint(fields=['field1', 'field2'], name='unique_fields')
-#         ]
-# from django.db import models
-
-# class Customer(models.Model):
-#     id = models.AutoField(primary_key=True)
-#     name = models.CharField(max_length=255)
-#     email = models.EmailField(unique=True)
-#     phone = models.CharField(max_length=15, null=True, blank=True)
-#     created_at = models.DateTimeField(auto_now_add=True)
-
-#     def __str__(self):
-#         return self.name
->>>>>>> 3e68da148a65ec0459a44b32523f7db719dec7bf

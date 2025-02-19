@@ -240,3 +240,53 @@ def upload_files(request):
     else:
         return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=400)
     os.remove(file_path)
+    
+import json
+from celery import shared_task
+from .models import Utility_Bill
+from django.db import transaction
+from utility.models import JsonfileWater
+
+@shared_task
+def process_json_file(json_file_id):
+    try:
+        json_file = JsonfileWater.objects.using('utility').get(id=json_file_id)
+        json_file.status = "processing"
+        json_file.save()
+
+        with open(json_file.file.path, 'r', encoding='utf-8') as f:
+            json_data = json.load(f)
+
+        if json_data.get('status') != 200 or 'message' not in json_data:
+            json_file.status = "failed"
+            json_file.save()
+            return {"error": "Invalid JSON structure"}
+
+        with transaction.atomic():  # Atomic insert for efficiency
+            for record in json_data['message']:
+                Utility_Bill.objects.using('utility').create(
+                    Customer_ID=record['CUSTOMER_ID'],
+                    InvoiceNo=record['NO'],
+                    TypeOfPro=record['SUPPLY_TYPE'],
+                    Outstanding=record['OUTSTANDING'],
+                    Basic_Tax=record['BASIC+TAX'],
+                    Bill_Amount=record['BILL_AMOUNT'],
+                    Debt_Amount=record['PAY_AMOUNT'],
+                    Payment_ID=record['PAYMENT_ID'],
+                    PaymentType=record['PAY_TYPE'],
+                    Payment_Date=record.get('PAYMENT_DATE', ''),  
+                    InvoiceMonth=record['BILL_OF_MONTH'],
+                    InvoiceDate=record.get('DATE_OF_ISSUE', ''),
+                    DisID=record['DIS_ID'],
+                    ProID=record['PRO_ID'],
+                    UserID='unknown'
+                )
+
+        json_file.status = "completed"
+        json_file.save()
+        return {"message": "Data processed successfully"}
+
+    except Exception as e:
+        json_file.status = "failed"
+        json_file.save()
+        return {"error": str(e)}

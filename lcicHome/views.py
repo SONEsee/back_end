@@ -51,7 +51,7 @@ from rest_framework.exceptions import AuthenticationFailed
 # from rest_framework.permissions import IsAuthenticated
 from rest_framework import serializers
 from .models import Login  # Ensure you import your Login model
-from .models import CustomLoginToken
+# from .models import CustomLoginToken
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
@@ -10656,6 +10656,111 @@ class CountFeebyDate(APIView):
 
         return Response(result, status=status.HTTP_200_OK)
     
+# class LoanStatsView(APIView):
+#     def get(self, request):
+#         # Get the bnk_code from query parameters (default to None)
+#         bnk_code = request.GET.get("bnk_code")
+
+#         if not bnk_code:
+#             return Response({"error": "bnk_code is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+#         # Total loan counts grouped by year
+#         total_counts = (
+#             B1.objects
+#             .annotate(year=ExtractYear("lon_open_date"))
+#             .values("year")
+#             .annotate(total_count=Count("id"))  # Count all records per year
+#         )
+
+#         # Loan counts for the given bnk_code grouped by year
+#         filtered_counts = (
+#             B1.objects
+#             .filter(bnk_code=bnk_code)
+#             .annotate(year=ExtractYear("lon_open_date"))
+#             .values("year")
+#             .annotate(loan_count=Count("id"))  # Count only filtered records per year
+#         )
+
+#         # Convert queryset results to dictionaries for easy lookup
+#         total_counts_dict = {entry["year"]: entry["total_count"] for entry in total_counts}
+#         filtered_counts_dict = {entry["year"]: entry["loan_count"] for entry in filtered_counts}
+
+#         # Construct the final response data
+#         result = []
+#         for year, total_count in total_counts_dict.items():
+#             loan_count = filtered_counts_dict.get(year, 0)  # Get count for bnk_code or 0
+#             percentage = round((loan_count * 100.0) / total_count, 2) if total_count > 0 else 0
+#             result.append({
+#                 "year": year,
+#                 "loan_count": loan_count,
+#                 "total_count": total_count,
+#                 "percentage": percentage
+#             })
+
+#         return Response(result, status=status.HTTP_200_OK)
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import B1
+
+class LoanStatsView(APIView):
+    def get(self, request):
+        # Get query parameters
+        bnk_code = request.GET.get("bnk_code")
+        year = request.GET.get("year")
+        month = request.GET.get("month")
+        day = request.GET.get("day")
+
+        if not bnk_code:
+            return Response({"error": "bnk_code is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Base queryset
+        queryset = B1.objects.all()
+        filtered_queryset = B1.objects.filter(bnk_code=bnk_code)
+
+        # Determine grouping
+        if year and month and day:
+            # Group by hour
+            group_by = "hour"
+            total_counts = queryset.annotate(hour=ExtractHour("lon_open_date")).values("hour").annotate(total_count=Count("id")).order_by("hour")
+            filtered_counts = filtered_queryset.filter(lon_open_date__year=year, lon_open_date__month=month, lon_open_date__day=day).annotate(hour=ExtractHour("lon_open_date")).values("hour").annotate(loan_count=Count("id"))
+        elif year and month:
+            # Group by day
+            group_by = "day"
+            total_counts = queryset.annotate(day=ExtractDay("lon_open_date")).values("day").annotate(total_count=Count("id")).order_by("day")
+            filtered_counts = filtered_queryset.filter(lon_open_date__year=year, lon_open_date__month=month).annotate(day=ExtractDay("lon_open_date")).values("day").annotate(loan_count=Count("id"))
+        elif year:
+            # Group by month
+            group_by = "month"
+            total_counts = queryset.annotate(month=ExtractMonth("lon_open_date")).values("month").annotate(total_count=Count("id")).order_by("month")
+            filtered_counts = filtered_queryset.filter(lon_open_date__year=year).annotate(month=ExtractMonth("lon_open_date")).values("month").annotate(loan_count=Count("id"))
+        else:
+            # Group by year (default case)
+            group_by = "year"
+            total_counts = queryset.annotate(year=ExtractYear("lon_open_date")).values("year").annotate(total_count=Count("id")).order_by("year")
+            filtered_counts = filtered_queryset.annotate(year=ExtractYear("lon_open_date")).values("year").annotate(loan_count=Count("id"))
+
+        # Convert results to dictionaries for easy lookup
+        total_counts_dict = {entry[group_by]: entry["total_count"] for entry in total_counts}
+        filtered_counts_dict = {entry[group_by]: entry["loan_count"] for entry in filtered_counts}
+
+        # Construct response
+        result = []
+        for group_value, total_count in total_counts_dict.items():
+            loan_count = filtered_counts_dict.get(group_value, 0)
+            percentage = round((loan_count * 100.0) / total_count, 2) if total_count > 0 else 0
+            result.append({
+                group_by: group_value,
+                "loan_count": loan_count,
+                "total_count": total_count,
+                "percentage": percentage
+            })
+
+        return Response(result, status=status.HTTP_200_OK)
+
+
 # from rest_framework.views import APIView
 # from rest_framework.parsers import MultiPartParser
 # from rest_framework.response import Response
@@ -10749,7 +10854,7 @@ class UtilityUploadView(APIView):
                     date_of_issue = record.get('DATE_OF_ISSUE', '')
                     payment_date = record.get('PAYMENT_DATE', '')
 
-                    Utility_Bill.objects.create(
+                    Utility_Bill.objects.using('utility').create(
                         Customer_ID=record['CUSTOMER_ID'],
                         InvoiceNo=record['NO'],  # Mapping NO -> InvoiceNo
                         TypeOfPro=record['SUPPLY_TYPE'], 
@@ -10842,3 +10947,58 @@ class UtilityUploadView(APIView):
 #             return Response({'error': f'Missing key in JSON data: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 #         except Exception as e:
 #             return Response({'error': f'An error occurred: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# from rest_framework.views import APIView
+# from rest_framework.parsers import MultiPartParser
+# from rest_framework.response import Response
+# from rest_framework import status
+# from utility.models import JsonfileWater
+# from .tasks import process_json_file  # Celery task
+
+# class JSONFileUploadView(APIView):
+#     parser_classes = [MultiPartParser]
+
+#     def post(self, request, *args, **kwargs):
+#         file = request.FILES.get('file')
+#         if not file:
+#             return Response({'error': 'No file uploaded'}, status=status.HTTP_400_BAD_REQUEST)
+
+#         json_file = JsonfileWater.objects.using('utility').create(file=file)
+
+#         # Trigger Celery task asynchronously
+#         process_json_file.delay(json_file.id)
+
+#         return Response({"message": "File uploaded successfully, processing started"}, status=status.HTTP_201_CREATED)
+    
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework import status
+from utility.models import JsonfileWater
+from utility.serializers import JsonfileWaterSerializer
+
+class JsonFileUploadView(APIView):
+    parser_classes = (MultiPartParser, FormParser)
+
+    def post(self, request):
+        file_obj = request.FILES.get('file_path')  # Get uploaded file
+
+        if not file_obj:
+            return Response({'error': 'No file uploaded'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Save file details
+        json_file = JsonfileWater.objects.create(
+            file_name=file_obj.name,
+            file_path=file_obj,
+            status='Pending',  # Default status
+            user_upload=request.data.get('user_upload', '')
+        )
+
+        serializer = JsonfileWaterSerializer(json_file)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def get(self, request):
+        files = JsonfileWater.objects.all()
+        serializer = JsonfileWaterSerializer(files, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
