@@ -58,8 +58,7 @@ from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtility
 
 from .views import UserGroupView
 from .views import upload_json
-from .views import SearchBatfileAPIView,search_enterprise_view,search_enterprise_by_id
-
+from .views import SearchBatfileAPIView
 # from .views import FileUploadView, FileDeleteView
 # from .views import upload_files
 # from .views import enterprise_info_search
@@ -277,13 +276,8 @@ urlpatterns = [
     path('dashboard/loan-count-by-month/', LoanCountByDate.as_view(), name='loan-count-by-month'),
     path('dashboard/search-count-by-date/',CountSearchLogbyDate.as_view(), name='searchCount-by-Date'),
     path('dashboard/fee_count-by-date/', CountFeebyDate.as_view(), name='fee-count-by-date'),
-<<<<<<< HEAD
-    path('api/enterprise/search/', views.search_enterprise_view, name='search_enterprise'),
-    path('search/<str:enterprise_id>/', views.search_enterprise_by_id, name='search_enterprise_by_id'),
-=======
     path('dashboard/LoanStatsView/', LoanStatsView.as_view(), name='LoanStatsView'),
     
->>>>>>> 74493af0add209ff2657fc83bfc6762a869dd790
     
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 if settings.DEBUG:
