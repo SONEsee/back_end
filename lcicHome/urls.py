@@ -59,7 +59,6 @@ from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtility
 from .views import UserGroupView
 from .views import upload_json
 from .views import SearchBatfileAPIView
-
 # from .views import FileUploadView, FileDeleteView
 # from .views import upload_files
 # from .views import enterprise_info_search

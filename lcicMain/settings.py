@@ -34,12 +34,10 @@ INSTALLED_APPS = [
     'utility',
     'channels',
     "crispy_forms",
-    "crispy_bootstrap5",
+    # "crispy_bootstrap5",
     'rest_framework_simplejwt',
     'rest_framework',
     'rest_framework.authtoken',
-    
-   
 ]
 
 REST_FRAMEWORK = {
