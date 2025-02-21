@@ -10658,11 +10658,12 @@ class CountFeebyDate(APIView):
 
 #         return Response(result, status=status.HTTP_200_OK)
 
-
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import B1
+from django.db.models import Count
+from django.db.models.functions import ExtractHour, ExtractDay, ExtractMonth, ExtractYear
 
 class LoanStatsView(APIView):
     def get(self, request):
@@ -10707,6 +10708,8 @@ class LoanStatsView(APIView):
 
         # Construct response
         result = []
+        sumtotals = {"loan_count": 0, "total_count": 0}  # Initialize sumtotals
+
         for group_value, total_count in total_counts_dict.items():
             loan_count = filtered_counts_dict.get(group_value, 0)
             percentage = round((loan_count * 100.0) / total_count, 2) if total_count > 0 else 0
@@ -10714,11 +10717,18 @@ class LoanStatsView(APIView):
                 group_by: group_value,
                 "loan_count": loan_count,
                 "total_count": total_count,
-                "percentage": percentage
+                "percentage": percentage,
             })
+            sumtotals["loan_count"] += loan_count
+            sumtotals["total_count"] += total_count
+
+        # Add sumtotals to the response
+        result.append({
+            "sumtotals": sumtotals,
+            "percentage": round((sumtotals["loan_count"] * 100.0) / sumtotals["total_count"], 2) if sumtotals["total_count"] > 0 else 0,
+        })
 
         return Response(result, status=status.HTTP_200_OK)
-
 
 # from rest_framework.views import APIView
 # from rest_framework.parsers import MultiPartParser
