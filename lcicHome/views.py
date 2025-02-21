@@ -10672,7 +10672,12 @@ class LoanStatsView(APIView):
         year = request.GET.get("year")
         month = request.GET.get("month")
         day = request.GET.get("day")
-
+        
+        bnk_shortform = memberInfo.objects.get(bnk_code=bnk_code)
+        print(bnk_shortform.code, "<----------")
+        
+        bnk_form = bnk_shortform.code
+        
         if not bnk_code:
             return Response({"error": "bnk_code is required"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -10715,7 +10720,7 @@ class LoanStatsView(APIView):
             percentage = round((loan_count * 100.0) / total_count, 2) if total_count > 0 else 0
             result.append({
                 group_by: group_value,
-                "loan_count": loan_count,
+                f"{bnk_form}": loan_count,
                 "total_count": total_count,
                 "percentage": percentage,
             })
@@ -10724,7 +10729,10 @@ class LoanStatsView(APIView):
 
         # Add sumtotals to the response
         result.append({
-            "sumtotals": sumtotals,
+            "sumtotals": {
+                f"{bnk_form}": sumtotals["loan_count"],
+                "total_count": sumtotals["total_count"]
+                },
             "percentage": round((sumtotals["loan_count"] * 100.0) / sumtotals["total_count"], 2) if sumtotals["total_count"] > 0 else 0,
         })
 
