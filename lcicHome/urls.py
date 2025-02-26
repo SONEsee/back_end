@@ -277,7 +277,8 @@ urlpatterns = [
     path('dashboard/search-count-by-date/',CountSearchLogbyDate.as_view(), name='searchCount-by-Date'),
     path('dashboard/fee_count-by-date/', CountFeebyDate.as_view(), name='fee-count-by-date'),
     path('dashboard/LoanStatsView/', LoanStatsView.as_view(), name='LoanStatsView'),
-    
+     path('api/enterprise/search/', views.search_enterprise_view, name='search_enterprise'),
+    path('search/<str:enterprise_id>/', views.search_enterprise_by_id, name='search_enterprise_by_id'),
     
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 if settings.DEBUG:
