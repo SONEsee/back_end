@@ -10857,7 +10857,39 @@ class UtilityUploadView(APIView):
             return Response({'error': 'Invalid JSON file'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({'error': f'An error occurred: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from .models import EnterpriseInfo
 
+@csrf_exempt
+def search_enterprise_view(request):
+    EnterpriseID = request.POST.get('q', '')
+    
+    try:
+        enterprise = EnterpriseInfo.objects.get(EnterpriseID=EnterpriseID)
+        return JsonResponse({
+            'status': 200,
+            'enterprise_id': enterprise.EnterpriseID,
+            'name': enterprise.enterpriseNameLao
+        })
+    except EnterpriseInfo.DoesNotExist:
+        return JsonResponse({
+            'status': 400,
+            'message': 'ບໍ່ພົບຂໍ້ມູນ'
+        })
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from .models import EnterpriseInfo
+
+@csrf_exempt
+def search_enterprise_by_id(request, enterprise_id):
+    if request.method == "POST":
+        try:
+            enterprise = EnterpriseInfo.objects.get(EnterpriseID=enterprise_id)
+            return JsonResponse({'enterprise': enterprise.EnterpriseID}, status=200)
+        except EnterpriseInfo.DoesNotExist:
+            return JsonResponse({'error': 'Enterprise not found'}, status=404)
+    return JsonResponse({'error': 'Invalid request method'}, status=400)
 
 
 # from rest_framework.views import APIView
