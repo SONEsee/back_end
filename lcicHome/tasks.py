@@ -242,51 +242,59 @@ def upload_files(request):
     os.remove(file_path)
     
 import json
+import os
+from django.conf import settings
 from celery import shared_task
-from .models import Utility_Bill
 from django.db import transaction
-from utility.models import JsonfileWater
+from utility.models import JsonfileWater, UploadJsonFiles,Utility_Bill, FileDetail
+def truncate(value, max_length):
+    """Truncate string values to fit max_length."""
+    return str(value)[:max_length] if value else ''
 
 @shared_task
-def process_json_file(json_file_id):
+def process_json_file_task(file_id):
     try:
-        json_file = JsonfileWater.objects.using('utility').get(id=json_file_id)
-        json_file.status = "processing"
-        json_file.save()
+        file = FileDetail.objects.get(pk=file_id)
+        file_path = os.path.join(settings.MEDIA_ROOT, file.file_path.name)
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+        
+        records = data.get('message', [])
+        total_items = len(records)
+        processed_items = file.processed_items
 
-        with open(json_file.file.path, 'r', encoding='utf-8') as f:
-            json_data = json.load(f)
-
-        if json_data.get('status') != 200 or 'message' not in json_data:
-            json_file.status = "failed"
-            json_file.save()
-            return {"error": "Invalid JSON structure"}
-
-        with transaction.atomic():  # Atomic insert for efficiency
-            for record in json_data['message']:
-                Utility_Bill.objects.using('utility').create(
-                    Customer_ID=record['CUSTOMER_ID'],
-                    InvoiceNo=record['NO'],
-                    TypeOfPro=record['SUPPLY_TYPE'],
-                    Outstanding=record['OUTSTANDING'],
-                    Basic_Tax=record['BASIC+TAX'],
-                    Bill_Amount=record['BILL_AMOUNT'],
-                    Debt_Amount=record['PAY_AMOUNT'],
-                    Payment_ID=record['PAYMENT_ID'],
-                    PaymentType=record['PAY_TYPE'],
-                    Payment_Date=record.get('PAYMENT_DATE', ''),  
-                    InvoiceMonth=record['BILL_OF_MONTH'],
-                    InvoiceDate=record.get('DATE_OF_ISSUE', ''),
-                    DisID=record['DIS_ID'],
-                    ProID=record['PRO_ID'],
-                    UserID='unknown'
-                )
-
-        json_file.status = "completed"
-        json_file.save()
-        return {"message": "Data processed successfully"}
-
+        batch = []
+        for item in records[processed_items:]:
+            if not Utility_Bill.objects.filter(Payment_ID=item.get('PAYMENT_ID', '')).exists():
+                batch.append(Utility_Bill(
+                    Customer_ID=truncate(item.get('CUSTOMER_ID', ''), 100),
+                    InvoiceNo=truncate(item.get('PAYMENT_ID', ''), 100),
+                    TypeOfPro=truncate(item.get('SUPPLY_TYPE', ''), 100),
+                    Outstanding=item.get('OUTSTANDING', 0.00),
+                    Basic_Tax=item.get('BASIC+TAX', 0.00),
+                    Bill_Amount=item.get('BILL_AMOUNT', 0.00),
+                    Debt_Amount=0.00,
+                    Payment_ID=truncate(item.get('PAYMENT_ID', ''), 255),
+                    PaymentType=truncate(item.get('PAY_TYPE', ''), 255),
+                    Payment_Date=truncate(item.get('PAYMENT_DATE', ''), 255),
+                    InvoiceMonth=truncate(item.get('BILL_OF_MONTH', ''), 50),
+                    InvoiceDate=truncate(item.get('DATE_OF_ISSUE', ''), 100),
+                    DisID=truncate(item.get('DIS_ID', ''), 100),
+                    ProID=truncate(item.get('PRO_ID', ''), 100),
+                    UserID=None
+                ))
+                processed_items += 1
+                if len(batch) >= 1000:  # Bulk create every 1000 records
+                    Utility_Bill.objects.bulk_create(batch)
+                    file.processed_items = processed_items
+                    file.save()
+                    print(f"Processed {processed_items}/{total_items}")
+                    batch = []
+        
+        if batch:  # Process remaining records
+            Utility_Bill.objects.bulk_create(batch)
+            file.processed_items = processed_items
+            file.save()
+            print(f"Processed {processed_items}/{total_items}")
     except Exception as e:
-        json_file.status = "failed"
-        json_file.save()
-        return {"error": str(e)}
+        print(f"Error in Celery task for file {file_id}: {str(e)}")

@@ -54,7 +54,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files,BankUsersView,LoanCountByDate,CountSearchLogbyDate,CountFeebyDate
-from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView
+from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view
 
 from .views import UserGroupView
 from .views import upload_json
@@ -268,8 +268,19 @@ urlpatterns = [
     # Upload Utility
     # path('upload_utility/', UtilityUploadView.as_view(), name='upload_utility'),
     # path('upload_utility/', JSONFileUploadView.as_view(), name='upload_utility'),
-    path('water-api/upload-json/', JsonFileUploadView.as_view(), name='upload-json'),
+    # path('water-api/upload-json/', JsonFileUploadView.as_view(), name='upload-json'),
+    # path('water-api/upload-json/', FileUploadView.as_view(), name='file-upload'),
+    # path('water-api/upload-json/<int:pk>/', FileUploadView.as_view(), name='file-update'),
+    # path('water-api/upload-json/<int:pk>/', FileDeleteView.as_view(), name='file-delete'),
+    # 
+    path('water-api/upload-json/', FileDetailView.as_view(), name='file-list'),
+    path('water-api/upload-json/<int:pk>/', FileDetailView.as_view(), name='file-detail'),
+    path('water-api/upload-json/<int:pk>/progress/', water_progress_view, name='file-progress'),
     
+    path('electric-api/upload-json/', FileElectricView.as_view(), name='electric-file-list'),
+    path('electric-api/upload-json/<int:pk>/', FileElectricView.as_view(), name='electric-file-detail'),
+    path('electric-api/upload-json/<int:pk>/progress/', electric_progress_view, name='electric-file-progress'),
+
     
     # Dashboard LCIC 
     path('dashboard/bank-user/', BankUsersView.as_view(), name='bankuser'),
