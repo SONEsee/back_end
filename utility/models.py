@@ -6,19 +6,14 @@
 #   * Remove `managed = False` lines if you wish to allow Django to create, modify, and delete the table
 # Feel free to rename the models, but don't rename db_table values or field names.
 from django.db import models
-import os
 
-def json_upload_path(instance, filename):
-    return os.path.join('json_uploads', filename)
 
 class JsonfileWater(models.Model):
     id = models.BigAutoField(primary_key=True)
     file_name = models.CharField(max_length=100)
-    file_path = models.FileField(upload_to=json_upload_path)  # File upload field
-    insertDate = models.DateTimeField(auto_now_add=True, blank=True)
-    updateDate = models.DateTimeField(auto_now=True, blank=True)
+    file_path = models.CharField(max_length=100)
+    upload_date = models.DateTimeField()
     status = models.CharField(max_length=20)
-    user_upload = models.CharField(max_length=50, blank=True)
 
     class Meta:
         managed = False
@@ -42,3 +37,99 @@ class Test(models.Model):
     class Meta:
         managed = False
         db_table = 'test'
+        
+class FileDetail(models.Model):
+    name = models.CharField(max_length=255)
+    file_path = models.FileField(upload_to="json_uploads/")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    status = models.CharField(
+        max_length=20,
+        choices=[('Pending', 'Pending'), ('Approved', 'Approved'), ('Rejected', 'Rejected')],
+        default='Pending'
+    )
+    processed_items = models.IntegerField(default=0)  # New field to track progress
+
+    class Meta:
+        db_table = "file_detail"
+
+class UploadJsonFiles(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    file_name = models.CharField(max_length=100)
+    file_path = models.CharField(max_length=100)
+    upload_date = models.DateTimeField()
+    # user_upload = models.CharField(max_length=100)
+    status = models.CharField(max_length=20)
+    
+    class Meta:
+        managed = False
+        db_table = 'file_detail'
+        
+
+class Utility_Bill(models.Model):
+    BillID = models.AutoField(primary_key=True)
+    Customer_ID = models.CharField(max_length=255)
+    InvoiceNo = models.CharField(max_length=255)
+    TypeOfPro = models.CharField(max_length=100)
+    Outstanding = models.DecimalField(max_digits=100, decimal_places=2)
+    Basic_Tax = models.DecimalField(max_digits=100, decimal_places=2)
+    Bill_Amount = models.DecimalField(max_digits=100, decimal_places=2)
+    Debt_Amount = models.DecimalField(max_digits=100, decimal_places=2)
+    Payment_ID = models.TextField()
+    PaymentType = models.TextField()
+    Payment_Date = models.TextField()
+    InvoiceMonth = models.CharField(max_length=50)
+    InvoiceDate = models.CharField(max_length=100)
+    DisID = models.CharField(max_length=100)
+    ProID = models.CharField(max_length=100)
+    InsertDate = models.DateTimeField(auto_now_add=True)
+    UpdateDate = models.DateTimeField(auto_now=True)
+    UserID = models.CharField(max_length=100,null=True, blank=True)
+
+    def __str__(self):
+        return f"Bill {self.BillID} - {self.Customer_ID}"
+    
+    
+      
+class File_Electric(models.Model):
+    name = models.CharField(max_length=255)
+    file_path = models.FileField(upload_to="electric_json_uploads/")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    status = models.CharField(
+        max_length=20,
+        choices=[('Pending', 'Pending'), ('Approved', 'Approved'), ('Rejected', 'Rejected')],
+        default='Pending'
+    )
+    processed_items = models.IntegerField(default=0)  # New field to track progress
+
+    class Meta:
+        db_table = "file_electric"
+        
+class Electric_Bill(models.Model):
+    BillID = models.AutoField(primary_key=True)
+    Customer_ID = models.CharField(max_length=255)
+    InvoiceNo = models.CharField(max_length=255)
+    TypeOfPro = models.CharField(max_length=100)
+    Outstanding = models.DecimalField(max_digits=100, decimal_places=2)
+    Basic_Tax = models.DecimalField(max_digits=100, decimal_places=2)
+    Bill_Amount = models.DecimalField(max_digits=100, decimal_places=2)
+    Debt_Amount = models.DecimalField(max_digits=100, decimal_places=2)
+    Payment_ID = models.TextField()
+    PaymentType = models.TextField()
+    Payment_Date = models.TextField()
+    InvoiceMonth = models.CharField(max_length=50)
+    InvoiceDate = models.CharField(max_length=100)
+    DisID = models.CharField(max_length=100)
+    ProID = models.CharField(max_length=100)
+    InsertDate = models.DateTimeField(auto_now_add=True)
+    UpdateDate = models.DateTimeField(auto_now=True)
+    UserID = models.CharField(max_length=100,null=True, blank=True)
+
+    def __str__(self):
+        return f"Bill {self.BillID} - {self.Customer_ID}"
+
+class UtilityBillUpload(models.Model):
+    file = models.FileField(upload_to="uploads/")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+        

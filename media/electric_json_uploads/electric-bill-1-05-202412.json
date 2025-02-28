@@ -1,0 +1,29 @@
+{
+  "data": {
+    "customerInfo": [
+      {
+        "INDEX_NO": "1",
+        "GIVEN_NAME": "ນາງ ສຸມາລີ",
+        "FAMILY_NAME": "ສຸວັນນາໄລ",
+        "FORW_ADDRESS": "ດົງຊຽງດີ,ມ ໄຊທານີ,ນະຄອນຫຼວງວຽງຈັນ",
+        "COMPANY_NAME": "ວົງເດືອນ",
+        "CUSTOMER_ID": "1236",
+        "ID_NO": "null",
+        "PASSPORT_NO": "null",
+        "DIS_ID": "05",
+        "PRO_ID": "11",
+        "TEL_NO": "02054444170",
+        "EMAIL_NO": "null",
+        "SUPPLY_TYPE": "1",
+        "REGIT_D": "08/07/1999"
+      }
+    ],
+    "pagination": {
+      "currentPage": "1",
+      "perPage": "1",
+      "totalItems": "97240",
+      "totalPages": "97240"
+    }
+  },
+  "duration": "1067ms"
+}

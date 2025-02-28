@@ -10984,7 +10984,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import status
-from utility.models import JsonfileWater
+from utility.models import JsonfileWater, UploadJsonFiles
 from utility.serializers import JsonfileWaterSerializer
 
 class JsonFileUploadView(APIView):
@@ -10997,11 +10997,10 @@ class JsonFileUploadView(APIView):
             return Response({'error': 'No file uploaded'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Save file details
-        json_file = JsonfileWater.objects.create(
+        json_file = UploadJsonFiles.objects.create(
             file_name=file_obj.name,
             file_path=file_obj,
-            status='Pending',  # Default status
-            user_upload=request.data.get('user_upload', '')
+            status='Pending'
         )
 
         serializer = JsonfileWaterSerializer(json_file)
@@ -11011,3 +11010,476 @@ class JsonFileUploadView(APIView):
         files = JsonfileWater.objects.all()
         serializer = JsonfileWaterSerializer(files, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    
+    
+
+from rest_framework import generics, status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from utility.models import FileDetail, Utility_Bill, File_Electric, Electric_Bill
+from .serializers import FileDetailSerializer
+from django.http import Http404
+from django.http import HttpResponse
+import json
+import os
+from celery import shared_task
+from django.conf import settings
+from django.http import StreamingHttpResponse
+import time
+import threading
+
+# backend/django_app/views.py
+class FileUploadView(APIView):
+    def get(self, request):
+        files = FileDetail.objects.all()
+        serializer = FileDetailSerializer(files, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        file_obj = request.FILES.get('file_path')
+        user_upload = request.data.get('user_upload', 'anonymous')
+        
+        if not file_obj or not file_obj.name.endswith('.json'):
+            return Response(
+                {'error': 'Please upload a valid JSON file'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        file_detail = FileDetail(
+            name=file_obj.name,
+            file_path=file_obj,
+            status='Pending' 
+        )
+        file_detail.save()
+
+        serializer = FileDetailSerializer(file_detail)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    # Add PATCH method for status update
+    def patch(self, request, pk):
+        try:
+            file = FileDetail.objects.get(pk=pk)
+            serializer = FileDetailSerializer(file, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except FileDetail.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+    def delete(self, request, pk):
+        try:
+            file = FileDetail.objects.get(pk=pk)
+            file.file_path.delete()  # Delete the file from storage
+            file.delete()  # Delete the database record
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except FileDetail.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+class FileDeleteView(APIView):
+    def delete(self, request, pk):
+        try:
+            file = FileDetail.objects.get(pk=pk)
+            file.file_path.delete()  # Delete the file from storage
+            file.delete()  # Delete the database record
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except FileDetail.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+
+# # backend/django_app/views.py
+# class FileDetailView(APIView):
+#     def get(self, request, pk=None):
+#         if pk:
+#             try:
+#                 file = FileDetail.objects.get(pk=pk)
+#                 serializer = FileDetailSerializer(file)
+#                 return Response(serializer.data)
+#             except FileDetail.DoesNotExist:
+#                 return Response(status=status.HTTP_404_NOT_FOUND)
+#         files = FileDetail.objects.all()
+#         serializer = FileDetailSerializer(files, many=True)
+#         return Response(serializer.data)
+
+#     def post(self, request):
+#         file_obj = request.FILES.get('file_path')
+#         user_upload = request.data.get('user_upload', 'anonymous')
+        
+#         if not file_obj or not file_obj.name.endswith('.json'):
+#             return Response({'error': 'Please upload a valid JSON file'}, status=status.HTTP_400_BAD_REQUEST)
+
+#         file_detail = FileDetail(name=file_obj.name, file_path=file_obj, status='Pending')
+#         file_detail.save()
+#         serializer = FileDetailSerializer(file_detail)
+#         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+#     def patch(self, request, pk):
+#         try:
+#             file = FileDetail.objects.get(pk=pk)
+#             serializer = FileDetailSerializer(file, data=request.data, partial=True)
+#             if serializer.is_valid():
+#                 serializer.save()
+#                 print(f"File {pk} status updated to: {serializer.data['status']}")
+#                 return Response(serializer.data)
+#             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+#         except FileDetail.DoesNotExist:
+#             return Response(status=status.HTTP_404_NOT_FOUND)
+
+#     def delete(self, request, pk):
+#         try:
+#             file = FileDetail.objects.get(pk=pk)
+#             file.file_path.delete()
+#             file.delete()
+#             return Response(status=status.HTTP_204_NO_CONTENT)
+#         except FileDetail.DoesNotExist:
+#             return Response(status=status.HTTP_204_NO_CONTENT)
+        
+# def truncate(value, max_length):
+#     return str(value)[:max_length] if value else ''
+# def progress_view(request, pk):
+#     try:
+#         file = FileDetail.objects.get(pk=pk)
+#         if file.status != 'Approved':
+#             print(f"File {pk} not approved, returning 0 progress")
+#             return HttpResponse(json.dumps({'progress': 0, 'total': 0}), content_type='application/json', status=200)
+
+#         file_path = os.path.join(settings.MEDIA_ROOT, file.file_path.name)
+#         print(f"Opening file: {file_path}")
+#         with open(file_path, 'r') as f:
+#             data = json.load(f)
+        
+#         records = data.get('message', [])
+#         total_items = len(records)
+#         processed_items = file.processed_items
+#         print(f"Total items: {total_items}, Processed items: {processed_items}")
+
+#         if processed_items < total_items:
+#             batch_size = 1000
+#             print(f"Processing batch from {processed_items} to {min(processed_items + batch_size, total_items)}")
+#             batch = []
+#             for i, item in enumerate(records[processed_items:processed_items + batch_size], start=processed_items + 1):
+#                 payment_id = item.get('PAYMENT_ID', '')  # No truncate for Payment_ID
+#                 print(f"Adding record {i} with Payment_ID: {payment_id}")
+#                 batch.append(Utility_Bill(
+#                     Customer_ID=truncate(item.get('CUSTOMER_ID', ''), 100),
+#                     InvoiceNo=truncate(item.get('PAYMENT_ID', ''), 100),
+#                     TypeOfPro=truncate(item.get('SUPPLY_TYPE', ''), 100),
+#                     Outstanding=item.get('OUTSTANDING', 0.00),
+#                     Basic_Tax=item.get('BASIC+TAX', 0.00),
+#                     Bill_Amount=item.get('BILL_AMOUNT', 0.00),
+#                     Debt_Amount=0.00,
+#                     Payment_ID=payment_id,  # Full value, no truncation
+#                     PaymentType=truncate(item.get('PAY_TYPE', ''), 255),
+#                     Payment_Date=truncate(item.get('PAYMENT_DATE', ''), 255),
+#                     InvoiceMonth=truncate(item.get('BILL_OF_MONTH', ''), 50),
+#                     InvoiceDate=truncate(item.get('DATE_OF_ISSUE', ''), 100),
+#                     DisID=truncate(item.get('DIS_ID', ''), 100),
+#                     ProID=truncate(item.get('PRO_ID', ''), 100),
+#                     UserID=None
+#                 ))
+#             if batch:
+#                 try:
+#                     print(f"Attempting to bulk create {len(batch)} records")
+#                     Utility_Bill.objects.bulk_create(batch)
+#                     file.processed_items += len(batch)
+#                     file.save()
+#                     print(f"Processed {file.processed_items}/{total_items}")
+#                 except Exception as e:
+#                     print(f"Bulk create failed at {processed_items}: {str(e)}")
+#                     return HttpResponse(
+#                         json.dumps({'error': f"Bulk create failed: {str(e)}"}),
+#                         content_type='application/json',
+#                         status=500
+#                     )
+
+#         progress = (file.processed_items / total_items) * 100 if total_items > 0 else 0
+#         print(f"Progress view: {file.processed_items}/{total_items} = {progress}%")
+#         return HttpResponse(
+#             json.dumps({'progress': progress, 'total': total_items}),
+#             content_type='application/json',
+#             status=200
+#         )
+#     except FileDetail.DoesNotExist:
+#         return HttpResponse(
+#             json.dumps({'error': 'File not found'}),
+#             content_type='application/json',
+#             status=404
+#         )
+#     except Exception as e:
+#         print(f"Error in progress view for file {pk}: {str(e)}")
+#         return HttpResponse(
+#             json.dumps({'error': str(e)}),
+#             content_type='application/json',
+#             status=500
+#         )
+
+class FileDetailView(APIView):
+    def get(self, request, pk=None):
+        if pk:
+            try:
+                file = FileDetail.objects.get(pk=pk)
+                serializer = FileDetailSerializer(file)
+                return Response(serializer.data)
+            except FileDetail.DoesNotExist:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+        files = FileDetail.objects.all()
+        serializer = FileDetailSerializer(files, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        file_obj = request.FILES.get('file_path')
+        user_upload = request.data.get('user_upload', 'anonymous')
+        
+        if not file_obj or not file_obj.name.endswith('.json'):
+            return Response({'error': 'Please upload a valid JSON file'}, status=status.HTTP_400_BAD_REQUEST)
+
+        file_detail = FileDetail(name=file_obj.name, file_path=file_obj, status='Pending')
+        file_detail.save()
+        serializer = FileDetailSerializer(file_detail)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def patch(self, request, pk):
+        try:
+            file = FileDetail.objects.get(pk=pk)
+            serializer = FileDetailSerializer(file, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                print(f"Water File {pk} status updated to: {serializer.data['status']}")
+                if serializer.data['status'] == 'Approved':
+                    print(f"Starting background processing for water file {pk}")
+                    threading.Thread(target=process_water_file, args=(pk,), daemon=True).start()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except FileDetail.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+    def delete(self, request, pk):
+        try:
+            file = FileDetail.objects.get(pk=pk)
+            file.file_path.delete()
+            file.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except FileDetail.DoesNotExist:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+class FileElectricView(APIView):
+    def get(self, request, pk=None):
+        if pk:
+            try:
+                file = File_Electric.objects.get(pk=pk)
+                serializer = FileDetailSerializer(file)
+                return Response(serializer.data)
+            except File_Electric.DoesNotExist:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+        files = File_Electric.objects.all()
+        serializer = FileDetailSerializer(files, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        file_obj = request.FILES.get('file_path')
+        user_upload = request.data.get('user_upload', 'anonymous')
+        
+        if not file_obj or not file_obj.name.endswith('.json'):
+            return Response({'error': 'Please upload a valid JSON file'}, status=status.HTTP_400_BAD_REQUEST)
+
+        file_electric = File_Electric(name=file_obj.name, file_path=file_obj, status='Pending')
+        file_electric.save()
+        serializer = FileDetailSerializer(file_electric)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def patch(self, request, pk):
+        try:
+            file = File_Electric.objects.get(pk=pk)
+            serializer = FileDetailSerializer(file, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                print(f"Electric File {pk} status updated to: {serializer.data['status']}")
+                if serializer.data['status'] == 'Approved':
+                    print(f"Starting background processing for electric file {pk}")
+                    threading.Thread(target=process_electric_file, args=(pk,), daemon=True).start()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except File_Electric.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+    def delete(self, request, pk):
+        try:
+            file = File_Electric.objects.get(pk=pk)
+            file.file_path.delete()
+            file.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except File_Electric.DoesNotExist:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+def truncate(value, max_length):
+    return str(value)[:max_length] if value else ''
+
+def process_water_file(file_id):
+    try:
+        file = FileDetail.objects.get(pk=file_id)
+        file_path = os.path.join(settings.MEDIA_ROOT, file.file_path.name)
+        print(f"Water background thread opening file: {file_path}")
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+        
+        records = data.get('message', [])
+        total_items = len(records)
+        processed_items = file.processed_items
+
+        batch = []
+        for i, item in enumerate(records[processed_items:], start=processed_items + 1):
+            payment_id = item.get('PAYMENT_ID', '')
+            print(f"Water background thread adding record {i} with Payment_ID: {payment_id}")
+            batch.append(Utility_Bill(
+                Customer_ID=truncate(item.get('CUSTOMER_ID', ''), 100),
+                InvoiceNo=truncate(item.get('NO', ''), 100),
+                TypeOfPro=truncate(item.get('SUPPLY_TYPE', ''), 100),
+                Outstanding=item.get('OUTSTANDING', 0.00),
+                Basic_Tax=item.get('BASIC+TAX', 0.00),
+                Bill_Amount=item.get('BILL_AMOUNT', 0.00),
+                Debt_Amount=0.00,
+                Payment_ID=payment_id,
+                PaymentType=truncate(item.get('PAY_TYPE', ''), 255),
+                Payment_Date=truncate(item.get('PAYMENT_DATE', ''), 255),
+                InvoiceMonth=truncate(item.get('BILL_OF_MONTH', ''), 50),
+                InvoiceDate=truncate(item.get('DATE_OF_ISSUE', ''), 100),
+                DisID=truncate(item.get('DIS_ID', ''), 100),
+                ProID=truncate(item.get('PRO_ID', ''), 100),
+                UserID=None
+            ))
+            if len(batch) >= 1000:
+                Utility_Bill.objects.bulk_create(batch)
+                file.processed_items += len(batch)
+                file.save()
+                print(f"Water background thread processed {file.processed_items}/{total_items}")
+                batch = []
+        if batch:
+            Utility_Bill.objects.bulk_create(batch)
+            file.processed_items += len(batch)
+            file.save()
+            print(f"Water background thread processed {file.processed_items}/{total_items} - Completed")
+    except Exception as e:
+        print(f"Error in water background thread for file {file_id}: {str(e)}")
+
+def process_electric_file(file_id):
+    try:
+        file = File_Electric.objects.get(pk=file_id)
+        file_path = os.path.join(settings.MEDIA_ROOT, file.file_path.name)
+        print(f"Electric background thread opening file: {file_path}")
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+        
+        # Updated to match electric-bill.json structure
+        records = data.get('data', {}).get('paymentHistory', [])
+        total_items = len(records)
+        processed_items = file.processed_items
+
+        batch = []
+        for i, item in enumerate(records[processed_items:], start=processed_items + 1):
+            payment_id = item.get('PAYMENT_ID', '')
+            print(f"Electric background thread adding record {i} with Payment_ID: {payment_id}")
+            batch.append(Electric_Bill(
+                Customer_ID=truncate(item.get('MASTER_BILL_ID', ''), 255),
+                InvoiceNo=truncate(item.get('INDEX_NO', ''), 255),
+                TypeOfPro=truncate(item.get('SUPPLY_TYPE', ''), 100),
+                Outstanding=item.get('OUTSTANDING', 0.00),
+                Basic_Tax=item.get('FACT_TOTAL', 0.00),
+                Bill_Amount=item.get('BILL_AMOUNT', 0.00),
+                Debt_Amount=0.00,
+                Payment_ID=payment_id,
+                PaymentType=item.get('PAYMENT_WAY', ''),
+                Payment_Date=item.get('PAYMENTDAY', ''),
+                InvoiceMonth=truncate(item.get('INVM', ''), 50),
+                InvoiceDate=truncate(item.get('INVD', ''), 100),
+                DisID=truncate(item.get('DIS_ID', ''), 100),
+                ProID=truncate(item.get('PROVINCE_CODE', ''), 100),
+                UserID=None
+            ))
+            if len(batch) >= 1000:
+                Electric_Bill.objects.bulk_create(batch)
+                file.processed_items += len(batch)
+                file.save()
+                print(f"Electric background thread processed {file.processed_items}/{total_items}")
+                batch = []
+        if batch:
+            Electric_Bill.objects.bulk_create(batch)
+            file.processed_items += len(batch)
+            file.save()
+            print(f"Electric background thread processed {file.processed_items}/{total_items} - Completed")
+    except Exception as e:
+        print(f"Error in electric background thread for file {file_id}: {str(e)}")
+
+def water_progress_view(request, pk):
+    try:
+        file = FileDetail.objects.get(pk=pk)
+        if file.status != 'Approved':
+            print(f"Water File {pk} not approved, returning 0 progress")
+            return HttpResponse(json.dumps({'progress': 0, 'total': 0, 'completed': False}), content_type='application/json', status=200)
+
+        file_path = os.path.join(settings.MEDIA_ROOT, file.file_path.name)
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+        
+        records = data.get('message', [])
+        total_items = len(records)
+        processed_items = file.processed_items
+
+        progress = (processed_items / total_items) * 100 if total_items > 0 else 0
+        completed = processed_items >= total_items
+        print(f"Water Progress view: {processed_items}/{total_items} = {progress}%{' - Completed' if completed else ''}")
+        return HttpResponse(
+            json.dumps({'progress': progress, 'total': total_items, 'completed': completed}),
+            content_type='application/json',
+            status=200
+        )
+    except FileDetail.DoesNotExist:
+        return HttpResponse(
+            json.dumps({'error': 'File not found'}),
+            content_type='application/json',
+            status=404
+        )
+    except Exception as e:
+        print(f"Error in water progress view for file {pk}: {str(e)}")
+        return HttpResponse(
+            json.dumps({'error': str(e)}),
+            content_type='application/json',
+            status=500
+        )
+
+def electric_progress_view(request, pk):
+    try:
+        file = File_Electric.objects.get(pk=pk)
+        if file.status != 'Approved':
+            print(f"Electric File {pk} not approved, returning 0 progress")
+            return HttpResponse(json.dumps({'progress': 0, 'total': 0, 'completed': False}), content_type='application/json', status=200)
+
+        file_path = os.path.join(settings.MEDIA_ROOT, file.file_path.name)
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+        
+        # Updated to match electric-bill.json structure
+        records = data.get('data', {}).get('paymentHistory', [])
+        total_items = len(records)
+        processed_items = file.processed_items
+
+        progress = (processed_items / total_items) * 100 if total_items > 0 else 0
+        completed = processed_items >= total_items
+        print(f"Electric Progress view: {processed_items}/{total_items} = {progress}%{' - Completed' if completed else ''}")
+        return HttpResponse(
+            json.dumps({'progress': progress, 'total': total_items, 'completed': completed}),
+            content_type='application/json',
+            status=200
+        )
+    except File_Electric.DoesNotExist:
+        return HttpResponse(
+            json.dumps({'error': 'File not found'}),
+            content_type='application/json',
+            status=404
+        )
+    except Exception as e:
+        print(f"Error in electric progress view for file {pk}: {str(e)}")
+        return HttpResponse(
+            json.dumps({'error': str(e)}),
+            content_type='application/json',
+            status=500
+        )

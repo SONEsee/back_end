@@ -694,3 +694,18 @@ class DataSubmitUtilitySerializer (serializers.ModelSerializer):
         model = DataSubmitUtility
         fields = '__all__'
         
+from utility.models import FileDetail
+
+class FileDetailSerializer(serializers.ModelSerializer):
+    file_name = serializers.SerializerMethodField()
+    insertDate = serializers.SerializerMethodField()
+
+    class Meta:
+        model = FileDetail
+        fields = ['id', 'file_name', 'insertDate', 'status']  # Status is now a direct field
+
+    def get_file_name(self, obj):
+        return obj.name
+    
+    def get_insertDate(self, obj):
+        return obj.created_at
