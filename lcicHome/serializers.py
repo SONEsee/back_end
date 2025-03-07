@@ -709,3 +709,28 @@ class FileDetailSerializer(serializers.ModelSerializer):
     
     def get_insertDate(self, obj):
         return obj.created_at
+
+from rest_framework import serializers
+from utility.models import w_customer_info, Utility_Bill
+class WaterCustomerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = w_customer_info
+        fields = ['Customer_ID', 'Company_name', 'Name', 'Surname', 'National_ID', 
+                 'Passport', 'Address', 'Dustrict_ID', 'Province_ID', 'Tel', 
+                 'Email', 'Cus_type', 'Regis_date']
+
+from utility.models import Utility_Bill
+class UtilityBillSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Utility_Bill
+        fields = ['BillID', 'Customer_ID', 'InvoiceNo', 'TypeOfPro', 'Outstanding',
+                 'Basic_Tax', 'Bill_Amount', 'Debt_Amount', 'Payment_ID',
+                 'PaymentType', 'Payment_Date', 'InvoiceMonth', 'InvoiceDate',
+                 'DisID', 'ProID', 'InsertDate', 'UpdateDate', 'UserID']
+
+from utility.models import searchlog_utility
+class SearchLogUtilitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = searchlog_utility
+        fields = ['search_id', 'bnk_code', 'sys_usr', 'wt_cusid', 'edl_cusid', 'tel_cusid',
+                  'proID_edl', 'proID_wt', 'proID_tel', 'credittype', 'inquiry_date', 'inquiry_time']
