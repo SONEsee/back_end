@@ -11490,6 +11490,7 @@ import uuid
 from django.db.models import Func, F, Value
 
 class UtilityReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         try:
