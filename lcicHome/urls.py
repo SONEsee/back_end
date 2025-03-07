@@ -54,7 +54,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files,BankUsersView,LoanCountByDate,CountSearchLogbyDate,CountFeebyDate
-from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view
+from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView
 
 from .views import UserGroupView
 from .views import upload_json
@@ -281,6 +281,8 @@ urlpatterns = [
     path('electric-api/upload-json/<int:pk>/', FileElectricView.as_view(), name='electric-file-detail'),
     path('electric-api/upload-json/<int:pk>/progress/', electric_progress_view, name='electric-file-progress'),
 
+    path('utility-report/<str:customer_id>/', UtilityReportAPIView.as_view(), name='credit-report'),
+    path('utility-report/', UtilityReportAPIView.as_view(), name='credit-report-query'),
     
     # Dashboard LCIC 
     path('dashboard/bank-user/', BankUsersView.as_view(), name='bankuser'),

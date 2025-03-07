@@ -11483,3 +11483,154 @@ def electric_progress_view(request, pk):
             content_type='application/json',
             status=500
         )
+        
+from utility.models import w_customer_info, Utility_Bill, searchlog_utility, request_charge_utility
+from .serializers import WaterCustomerSerializer, UtilityBillSerializer, SearchLogUtilitySerializer
+import uuid
+from django.db.models import Func, F, Value
+
+class UtilityReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            customer_id = request.query_params.get('water')
+            if not customer_id:
+                return Response({"error": "water parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+            user = request.user
+            bank = user.MID
+            sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
+
+            bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
+            charge_bank_type = bank_info.bnk_type
+            if charge_bank_type == 1:
+                chargeType = ChargeMatrix.objects.get(chg_sys_id=9)
+            else:
+                chargeType = ChargeMatrix.objects.get(chg_sys_id=10)
+            charge_amount_com = chargeType.chg_amount
+
+            customer = w_customer_info.objects.get(Customer_ID=customer_id)
+
+            # Custom function to convert MM-YYYY to YYYY-MM for sorting (PostgreSQL)
+            class ReorderMonthYear(Func):
+                function = "TO_CHAR"
+                template = "SUBSTRING(%(expressions)s FROM 4 FOR 4) || '-' || SUBSTRING(%(expressions)s FROM 1 FOR 2)"
+
+            # Sort bills by InvoiceMonth in descending order
+            bills = Utility_Bill.objects.filter(Customer_ID=customer_id).annotate(
+                year_month=ReorderMonthYear(F('InvoiceMonth'))
+            ).order_by('-year_month')
+
+            # Log the search
+            search_log = searchlog_utility.objects.create(
+                bnk_code=bank.bnk_code,
+                sys_usr=sys_usr,
+                wt_cusid=customer_id,
+                edl_cusid='',
+                tel_cusid='',
+                proID_edl='',
+                proID_wt='',
+                proID_tel='',
+                credittype='water',
+                inquiry_date=timezone.now(),
+                inquiry_time=timezone.now()
+            )
+
+            # Get current timestamp for rec_insert_date
+            rec_insert_date = timezone.now()
+            date_str = rec_insert_date.strftime('%d%m%Y')
+            report_date = rec_insert_date.strftime('%d-%m-%Y')
+            rec_reference_code = f"{chargeType.chg_code}-0-{bank.bnk_code}-{date_str}-{search_log.search_id}"
+            rec_reference_code = rec_reference_code[:100]
+
+            # Log the charge request
+            request_charge_utility.objects.create(
+                usr_session_id=str(uuid.uuid4()),
+                search_id=search_log,
+                bnk_code=bank.bnk_code,
+                chg_code=chargeType.chg_code,
+                chg_amount=charge_amount_com,
+                chg_unit='LAK',
+                sys_usr=sys_usr,
+                credit_type='water',
+                wt_cusid=customer_id,
+                edl_cusid='',
+                tel_cusid='',
+                proID_edl='',
+                proID_wt='',
+                proID_tel='',
+                rec_reference_code=rec_reference_code
+            )
+
+            customer_serializer = WaterCustomerSerializer(customer)
+            bill_serializer = UtilityBillSerializer(bills, many=True)
+            search_log_serializer = SearchLogUtilitySerializer(search_log)
+
+            # Construct reference_data as a tuple
+            reference_data = (
+                rec_reference_code,
+                customer_id,
+                report_date,
+                search_log_serializer.data,  # Serialized search_log
+                rec_insert_date.isoformat()  # Convert datetime to ISO string
+            )
+
+            # Return response with reference_data as a list (JSON-compatible)
+            return Response({
+                "reference_data": reference_data,
+                "customer": [customer_serializer.data],
+                "bill": bill_serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except w_customer_info.DoesNotExist:
+            return Response({"error": "Customer not found"}, status=status.HTTP_404_NOT_FOUND)
+        except memberInfo.DoesNotExist:
+            return Response({"error": "Bank information not found"}, status=status.HTTP_400_BAD_REQUEST)
+        except ChargeMatrix.DoesNotExist:
+            return Response({"error": "Charge configuration not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+# class CreditReportAPIView(APIView):
+#     def get(self, request, customer_id=None):
+#         try:
+#             # If no customer_id provided in URL, check query params
+#             if not customer_id:
+#                 customer_id = request.query_params.get('customer_id')
+            
+#             if not customer_id:
+#                 return Response(
+#                     {"error": "Customer_ID is required"},
+#                     status=status.HTTP_400_BAD_REQUEST
+#                 )
+
+#             # Get customer data
+#             try:
+#                 customer = w_customer_info.objects.get(Customer_ID=customer_id)
+#                 customer_serializer = WaterCustomerSerializer(customer)
+#             except w_customer_info.DoesNotExist:
+#                 return Response(
+#                     {"error": "Customer not found"},
+#                     status=status.HTTP_404_NOT_FOUND
+#                 )
+
+#             # Get bills for the customer, ordered by InvoiceMonth descending
+#             bills = Utility_Bill.objects.filter(
+#                 Customer_ID=customer_id
+#             ).order_by('-InvoiceMonth')
+            
+#             bill_serializer = UtilityBillSerializer(bills, many=True)
+
+#             # Construct the response
+#             response_data = {
+#                 "customer": [customer_serializer.data],  # Array with single customer
+#                 "bill": bill_serializer.data            # Array of bills
+#             }
+
+#             return Response(response_data, status=status.HTTP_200_OK)
+
+#         except Exception as e:
+#             return Response(
+#                 {"error": str(e)},
+#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+#             )        
