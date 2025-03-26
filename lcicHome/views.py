@@ -11017,7 +11017,7 @@ class JsonFileUploadView(APIView):
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from utility.models import FileDetail, Utility_Bill, File_Electric, Electric_Bill
+from utility.models import FileDetail, Utility_Bill, File_Electric, Electric_Bill, edl_province_code, edl_district_code
 from .serializers import FileDetailSerializer
 from django.http import Http404
 from django.http import HttpResponse
@@ -11484,18 +11484,21 @@ def electric_progress_view(request, pk):
             status=500
         )
         
-from utility.models import w_customer_info, Utility_Bill, searchlog_utility, request_charge_utility
+from utility.models import w_customer_info, Utility_Bill, searchlog_utility, request_charge_utility, edl_customer_info
 from .serializers import WaterCustomerSerializer, UtilityBillSerializer, SearchLogUtilitySerializer
 import uuid
 from django.db.models import Func, F, Value
 
 class UtilityReportAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def get(self, request):
         try:
             customer_id = request.query_params.get('water')
-            if not customer_id:
+            
+            customer_id_2 = request.query_params.get('edl')
+            
+            if not customer_id or customer_id_2:
                 return Response({"error": "water parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
 
             user = request.user
@@ -11512,6 +11515,7 @@ class UtilityReportAPIView(APIView):
 
             customer = w_customer_info.objects.get(Customer_ID=customer_id)
 
+            edl = edl_customer_info.objects.get(Customer_ID=customer_id)
             # Custom function to convert MM-YYYY to YYYY-MM for sorting (PostgreSQL)
             class ReorderMonthYear(Func):
                 function = "TO_CHAR"
@@ -11522,12 +11526,16 @@ class UtilityReportAPIView(APIView):
                 year_month=ReorderMonthYear(F('InvoiceMonth'))
             ).order_by('-year_month')
 
+            edl_bill = Electric_Bill.objects.filter(Customer_ID=customer_id_2).annotate(
+                year_month=ReorderMonthYear(F('InvoiceMonth'))
+            ).order_by('-year_month')
+            
             # Log the search
             search_log = searchlog_utility.objects.create(
                 bnk_code=bank.bnk_code,
                 sys_usr=sys_usr,
                 wt_cusid=customer_id,
-                edl_cusid='',
+                edl_cusid=customer_id_2,
                 tel_cusid='',
                 proID_edl='',
                 proID_wt='',
@@ -11555,7 +11563,7 @@ class UtilityReportAPIView(APIView):
                 sys_usr=sys_usr,
                 credit_type='water',
                 wt_cusid=customer_id,
-                edl_cusid='',
+                edl_cusid=customer_id_2,
                 tel_cusid='',
                 proID_edl='',
                 proID_wt='',
@@ -11633,4 +11641,32 @@ class UtilityReportAPIView(APIView):
 #             return Response(
 #                 {"error": str(e)},
 #                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-#             )        
+#             )       
+
+
+class ProvinceDistrictAPIView(APIView):
+    def get(self, request, pro_id=None):
+        try:
+            # Get the province
+            province = edl_province_code.objects.get(pro_id=pro_id)
+            
+            # Get all districts for this province
+            districts = edl_district_code.objects.filter(pro_id=pro_id)
+            
+            # Serialize the data
+            province_serializer = ProvinceSerializer(province)
+            districts_serializer = DistrictSerializer(districts, many=True)
+            
+            # Combine the response
+            response_data = {
+                'province': province_serializer.data,
+                'districts': districts_serializer.data
+            }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except edl_province_code.DoesNotExist:
+            return Response(
+                {'error': f'Province with pro_id {pro_id} not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
