@@ -150,6 +150,23 @@ class w_customer_info(models.Model):
     Cus_type = models.CharField(max_length=100)
     Regis_date = models.CharField(max_length=100)
    
+     
+class edl_customer_info(models.Model):
+    No =  models.CharField(max_length=100)
+    Customer_ID = models.CharField(max_length=100)
+    Company_name = models.CharField(max_length=100)
+    Name = models.CharField(max_length=100)
+    Surname = models.CharField(max_length=100)
+    National_ID = models.CharField(max_length=100)
+    Passport = models.CharField(max_length=100)
+    Address = models.CharField(max_length=100)
+    Dustrict_ID = models.CharField(max_length=100)
+    Province_ID = models.CharField(max_length=100)
+    Tel = models.CharField(max_length=100)
+    Email = models.CharField(max_length=100)
+    Cus_type = models.CharField(max_length=100)
+    Regis_date = models.CharField(max_length=100)
+   
    
 class searchlog_utility(models.Model):
     search_id = models.BigAutoField(auto_created=True, primary_key=True)
@@ -190,5 +207,13 @@ class request_charge_utility(models.Model):
     def __str__(self):
         return f"Charge {self.rec_sys_id} - {self.sys_usr}"
     
+class edl_province_code(models.Model):
+    id = models.BigAutoField(auto_created=True, primary_key=True)
+    pro_id = models.CharField(max_length=50)
+    pro_name = models.CharField(max_length=100)
     
-     
+class edl_district_code(models.Model):
+    id = models.BigAutoField(auto_created=True, primary_key=True)
+    pro_id = models.CharField(max_length=50)
+    dis_id = models.CharField(max_length=50)
+    dis_name = models.CharField(max_length=100)

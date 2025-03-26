@@ -734,3 +734,21 @@ class SearchLogUtilitySerializer(serializers.ModelSerializer):
         model = searchlog_utility
         fields = ['search_id', 'bnk_code', 'sys_usr', 'wt_cusid', 'edl_cusid', 'tel_cusid',
                   'proID_edl', 'proID_wt', 'proID_tel', 'credittype', 'inquiry_date', 'inquiry_time']
+
+from utility.models import edl_province_code, edl_district_code
+class ProvinceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = edl_province_code
+        fields = ['pro_id', 'pro_name']
+
+class DistrictSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = edl_district_code
+        fields = ['dis_id', 'dis_name']
+
+class ProvinceWithDistrictsSerializer(serializers.ModelSerializer):
+    districts = DistrictSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = edl_province_code
+        fields = ['pro_id', 'pro_name', 'districts']
