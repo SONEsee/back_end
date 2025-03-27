@@ -1561,7 +1561,7 @@ class ChargeMatrix(models.Model):
     chg_lao_type = models.CharField(max_length=100)
     chg_desc = models.CharField(max_length=100)
     chg_lao_desc = models.CharField(max_length=100)
-    chg_amount = models.FloatField()  # No max_length for FloatField
+    chg_amount = models.FloatField()
     chg_unit = models.CharField(max_length=100)
 
 class Main_catalog_cat(models.Model):

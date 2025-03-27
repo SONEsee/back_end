@@ -752,3 +752,12 @@ class ProvinceWithDistrictsSerializer(serializers.ModelSerializer):
     class Meta:
         model = edl_province_code
         fields = ['pro_id', 'pro_name', 'districts']
+
+# api/serializers.py
+from rest_framework import serializers
+from .models import ChargeMatrix
+
+class ChargeMatrixSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChargeMatrix
+        fields = '__all__'
