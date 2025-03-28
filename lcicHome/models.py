@@ -1386,6 +1386,7 @@ class EnterpriseInfo(models.Model):
     CancellationDate = models.DateTimeField(blank=True, null=True)
     InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
     UpdateDate = models.DateTimeField(blank=True, null=True)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
 
     def __str__(self):
         return f"EnterpriseInfo {self.LCICID} - {self.enterpriseNameLao}"

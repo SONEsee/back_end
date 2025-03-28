@@ -11515,7 +11515,7 @@ class UtilityReportAPIView(APIView):
 
             customer = w_customer_info.objects.get(Customer_ID=customer_id)
 
-            edl = edl_customer_info.objects.get(Customer_ID=customer_id)
+            # edl = edl_customer_info.objects.get(Customer_ID=customer_id)
             # Custom function to convert MM-YYYY to YYYY-MM for sorting (PostgreSQL)
             class ReorderMonthYear(Func):
                 function = "TO_CHAR"
@@ -11526,16 +11526,16 @@ class UtilityReportAPIView(APIView):
                 year_month=ReorderMonthYear(F('InvoiceMonth'))
             ).order_by('-year_month')
 
-            edl_bill = Electric_Bill.objects.filter(Customer_ID=customer_id_2).annotate(
-                year_month=ReorderMonthYear(F('InvoiceMonth'))
-            ).order_by('-year_month')
+            # edl_bill = Electric_Bill.objects.filter(Customer_ID=customer_id_2).annotate(
+            #     year_month=ReorderMonthYear(F('InvoiceMonth'))
+            # ).order_by('-year_month')
             
             # Log the search
             search_log = searchlog_utility.objects.create(
                 bnk_code=bank.bnk_code,
                 sys_usr=sys_usr,
                 wt_cusid=customer_id,
-                edl_cusid=customer_id_2,
+                edl_cusid='',
                 tel_cusid='',
                 proID_edl='',
                 proID_wt='',
@@ -11563,7 +11563,7 @@ class UtilityReportAPIView(APIView):
                 sys_usr=sys_usr,
                 credit_type='water',
                 wt_cusid=customer_id,
-                edl_cusid=customer_id_2,
+                edl_cusid='',
                 tel_cusid='',
                 proID_edl='',
                 proID_wt='',
