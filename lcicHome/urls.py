@@ -74,7 +74,7 @@ def get_csrf_token(request):
     return JsonResponse({'csrfToken': request.META.get('CSRF_COOKIE')})
 
 urlpatterns = [
-    path('', include(router.urls)),
+   path('', include(router.urls)),
    path('',views.index, name='index'),
    #path('',views.newsinfo_listview.as_view(), name='index'),
    path('newsdetail/',views.hnewsDetail, name='newsdetail'),
