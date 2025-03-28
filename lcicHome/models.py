@@ -666,6 +666,7 @@ class B1_Monthly(models.Model):
     lon_applied_date = models.DateTimeField(null=True)
     user_id = models.CharField(max_length=100)
     is_disputed = models.BigIntegerField(default=0, null=True)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
     # status_customer = models.CharField(max_length=100)
 
     def save(self, *args, **kwargs):
@@ -715,6 +716,7 @@ class B_Data_is_damaged(models.Model):
     lon_applied_date = models.DateTimeField(null=True)
     user_id = models.CharField(max_length=100)
     is_disputed = models.BigIntegerField(default=0, null=True)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
     # status_customer = models.CharField(max_length=100)
 
 
@@ -761,6 +763,7 @@ class data_edit(models.Model):
     lon_applied_date = models.DateTimeField(null=True)
     user_id = models.CharField(max_length=100)
     is_disputed = models.BigIntegerField(default=0, null=True)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
 
     def save(self, *args, **kwargs):
         self.lon_no_days_slow = self.lon_no_days_slow or 0
@@ -806,6 +809,7 @@ class B1(models.Model):
     is_disputed = models.BigIntegerField(default=0, null=True)
     user_id = models.CharField(max_length=100)
     status_customer = models.CharField(max_length=100)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
     def save(self, *args, **kwargs):
         self.lon_no_days_slow = self.lon_no_days_slow or 0
         self.is_disputed = self.is_disputed or 0
@@ -848,6 +852,7 @@ class B1_Daily(models.Model):
     lon_update_date = models.DateTimeField(blank=True)
     lon_applied_date = models.DateTimeField(blank=True)
     is_disputed = models.BigIntegerField(default=0, null=True)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
  
 class disputes(models.Model):
     id = models.AutoField(primary_key=True)
@@ -881,6 +886,7 @@ class disputes(models.Model):
     lon_applied_date = models.DateTimeField(null=True)
     user_id = models.CharField(max_length=100)
     is_disputed = models.BigIntegerField(default=0, null=True)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
 
     
 class B1_Yearly(models.Model):
@@ -911,6 +917,7 @@ class B1_Yearly(models.Model):
     lon_update_date = models.DateTimeField(blank=True)
     lon_applied_date = models.DateTimeField(blank=True)
     is_disputed = models.BigIntegerField(default=0, null=True)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
 
 class C1 (models.Model):
     id = models.AutoField(primary_key=True)
@@ -1387,6 +1394,7 @@ class EnterpriseInfo(models.Model):
     InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
     UpdateDate = models.DateTimeField(blank=True, null=True)
     LCIC_code = models.CharField(max_length=255, blank=True, null=True)
+    
 
     def __str__(self):
         return f"EnterpriseInfo {self.LCICID} - {self.enterpriseNameLao}"
