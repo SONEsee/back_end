@@ -11643,6 +11643,15 @@ class UtilityReportAPIView(APIView):
 #                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
 #             )       
 
+class EDLProvinceAPIView(APIView):
+    def get(self, request):
+        try:
+            provinces = edl_province_code.objects.all()
+            serializer = ProvinceSerializer(provinces, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
 
 class ProvinceDistrictAPIView(APIView):
     def get(self, request, pro_id=None):
