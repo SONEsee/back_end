@@ -20,7 +20,7 @@ confluent-kafka==2.4.0
 crispy-bootstrap5==2024.2
 cryptography==42.0.8
 cssselect2==0.7.0
-Django==5.0.6
+Django==4.2.20
 django-cors-headers==4.4.0
 django-crispy-forms==2.2
 django-livereload==1.7
@@ -69,7 +69,8 @@ urllib3==2.2.2
 verbose==1.0.0
 vine==5.1.0
 wcwidth==0.2.13
-weasyprint==62.3
+weasyprint==61.2
 webencodings==0.5.1
 xhtml2pdf==0.2.16
 zopfli==0.2.3
+pyodbc==5.2.0
