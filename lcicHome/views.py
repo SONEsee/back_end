@@ -1817,7 +1817,7 @@ def searchEnterpise(request):
             print("=====> cusType", )
     
             # Search Log for Enterprise
-            search_log_insert = searchLog.objects.create(enterprise_ID=invs_name.EnterpriseID, LCIC_ID=enterprise_object.LCICID,
+            search_log_insert = searchLog.objects.create(enterprise_ID=invs_name.EnterpriseID, LCIC_code=enterprise_object.LCIC_code,
             bnk_code = (sys_user.MID).id,
             cus_ID=sys_user.UID,
             credit_type=creditType.code,
@@ -2442,7 +2442,7 @@ class EnterpriseInfoSearch(APIView):
         bank_info = bank_bnk.objects.get(bnk_code=bank.bnk_code)
         # print("---->",bank_info.bnk_code)
         # print("Bank_Type",bank_info.bnk_type)
-        LCICID = request.data.get('LCICID')
+        LCIC_code = request.data.get('LCIC_code')
         EnterpriseID = request.data.get('EnterpriseID')
         loan_purpose = request.data.get('CatalogID')
         sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
@@ -2453,9 +2453,9 @@ class EnterpriseInfoSearch(APIView):
         # print("LCICID:", LCICID)
         # print("EnterpriseID:", EnterpriseID)
         # print("Login :",Login._meta.get_fields())
-        if LCICID is not None and EnterpriseID is not None:
+        if LCIC_code is not None and EnterpriseID is not None:
             try:
-                enterprise_info = EnterpriseInfo.objects.filter(LCICID=LCICID, EnterpriseID=EnterpriseID)
+                enterprise_info = EnterpriseInfo.objects.filter(LCIC_code=LCIC_code, EnterpriseID=EnterpriseID)
                 investor_info = InvestorInfo.objects.filter(EnterpriseID=EnterpriseID)
                 for i in investor_info:
                     invesinfo = i.investorName
@@ -2467,7 +2467,7 @@ class EnterpriseInfoSearch(APIView):
                 # Insert log
                 search_log = searchLog.objects.create(
                     enterprise_ID=EnterpriseID,
-                    LCIC_ID=LCICID,
+                    LCIC_code=LCIC_code,
                     bnk_code=bank_info.bnk_code,
                     bnk_type=bank_info.bnk_type,
                     branch='',
@@ -2506,20 +2506,20 @@ class EnterpriseInfoMatch(APIView):
         bank = str(user.MID.id)  
         branch = str(user.GID.GID)  
         
-        LCICID = request.data.get('LCICID')
+        LCIC_code = request.data.get('LCIC_code')
         EnterpriseID = request.data.get('EnterpriseID')
 
         print("Authenticated User ID (UID):", UID)
         print("Authenticated Bankname:", bank)
         print("Authenticated Branchname:", branch)
         
-        print("LCICID:", LCICID)
+        print("LCIC_code:", LCIC_code)
         print("EnterpriseID:", EnterpriseID)
         # print("Login :",Login._meta.get_fields())
-        if LCICID is not None and EnterpriseID is not None:
+        if LCIC_code is not None and EnterpriseID is not None:
             try:
                 # enterprise_info = EnterpriseInfo.objects.filter(LCICID=LCICID, EnterpriseID=EnterpriseID)
-                enterprise_info = B1.objects.filter(lcicID=LCICID, com_enterprise_code=EnterpriseID)
+                enterprise_info = B1.objects.filter(LCIC_code=LCIC_code, com_enterprise_code=EnterpriseID)
                 investor_info = InvestorInfo.objects.filter(EnterpriseID=EnterpriseID)                              
                 for i in investor_info:
                     invesinfo = i.investorName
@@ -7050,7 +7050,7 @@ from .serializers import EnterpriseInfoSerializer, B1_YearlySerializer, Investor
 class FCR_reportView(APIView):    
     def get(self, request):
         enterprise_id = request.GET.get('EnterpriseID')
-        lcic_id = request.GET.get('LCICID')
+        lcic_id = request.GET.get('LCIC_code')
 
         print(enterprise_id)
         print(lcic_id)
@@ -7060,17 +7060,17 @@ class FCR_reportView(APIView):
 
         try:
             # Retrieve the specific EnterpriseInfo objects
-            ent_info = EnterpriseInfo.objects.filter(EnterpriseID=enterprise_id, LCICID=lcic_id)
+            ent_info = EnterpriseInfo.objects.filter(EnterpriseID=enterprise_id, LCIC_code=lcic_id)
             loan_info = B1.objects.filter(com_enterprise_code=enterprise_id, lon_status=status_active).order_by('lon_status')
             inves_info = InvestorInfo.objects.filter(EnterpriseID=enterprise_id)
             search_history = request_charge.objects.filter(LCIC_ID=lcic_id)
             
             
             
-            print("Search_History====>",search_history)
-            print("Enterprise_info:", ent_info)
-            print("Loan_Info:", loan_info)
-            print("Investor_Info:", inves_info)
+            # print("Search_History====>",search_history)
+            # print("Enterprise_info:", ent_info)
+            # print("Loan_Info:", loan_info)
+            # print("Investor_Info:", inves_info)
 
             if not ent_info.exists():
                 return Response({"detail": "Enterprise information not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -7230,7 +7230,7 @@ class FCR_reportView(APIView):
             loan_info_serializer = B1Serializer(loan_info, many=True)
             inves_info_serializer = InvestorInfoSerializer(inves_info, many=True)
             request_charge_serializer = RequestChargeSerializer(search_history, many=True)
-            print("--->", request_charge_serializer)
+            print("---> FCR Report View: ", request_charge_serializer)
             
             
             response_data = {
@@ -9786,7 +9786,7 @@ def upload_json(request):
         record_counter = Counter()
 
         for record in data:
-            lcic_id = record.get('lcicID') or "" 
+            lcic_id = record.get('LCIC_code') or "" 
             com_code = record.get('com_enterprise_code') or "" 
             
             
@@ -9806,13 +9806,13 @@ def upload_json(request):
 
             if lcic_id and com_code:
                 enterprise = EnterpriseInfo.objects.filter(
-                    LCICID=lcic_id, 
+                    LCIC_code=lcic_id, 
                     EnterpriseID=com_code
                 ).first()
                 search_criteria = "both"
             elif lcic_id:
                 enterprise = EnterpriseInfo.objects.filter(
-                    LCICID=lcic_id
+                    LCIC_code=lcic_id
                 ).first()
                 search_criteria = "lcic_only"
             elif com_code:
@@ -9822,7 +9822,7 @@ def upload_json(request):
                 search_criteria = "com_code_only"
             
             result_data = {
-                "lcicID": lcic_id,  
+                "LCIC_code": lcic_id,  
                 "com_enterprise_code": com_code, 
                 "search_criteria": search_criteria,  
                 "status": "Found" if enterprise else "Not Found",
@@ -9839,17 +9839,17 @@ def upload_json(request):
                 bank_code=user_id,
                 UID=UID,
                 search_batch=search_batfile,
-                lcicID=lcic_id,
+                LCIC_code=lcic_id,
                 com_enterprise_code=com_code,
                 status=result_data["status"],
                 enterpriseNameLao=result_data["enterpriseNameLao"],
                 investmentCurrency=result_data["investmentCurrency"],
-                duplicates=json.dumps({"lcicID": lcic_id, "com_enterprise_code": com_code, "total": record_counter[unique_key]})  
+                duplicates=json.dumps({"LCIC_code": lcic_id, "com_enterprise_code": com_code, "total": record_counter[unique_key]})  
             )
            
             results.append({
                 "id": search_result.id,
-                "lcicID": search_result.lcicID,
+                "LCIC_code": search_result.LCIC_code,
                 "com_enterprise_code": search_result.com_enterprise_code,
                 "status": search_result.status,
                 "enterpriseNameLao": search_result.enterpriseNameLao,
@@ -9878,31 +9878,33 @@ def upload_json(request):
 
     return JsonResponse({"error": "Invalid request method"}, status=405)
 from .models import ChargeMatrix, B1
+
+
+
 class InsertSearchLogView(APIView):
     permission_classes = [IsAuthenticated]
-
     def post(self, request):
         user = request.user
-        bank = user.MID 
+        bank = user.MID
         bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
         charge_bank_type = bank_info.bnk_type
         if charge_bank_type == 1:
             chargeType = ChargeMatrix.objects.get(chg_sys_id=2)                    
         else:
             chargeType = ChargeMatrix.objects.get(chg_sys_id=5)
-        charge_amount_com = chargeType.chg_amount 
+        charge_amount_com = chargeType.chg_amount
         EnterpriseID = request.data.get('EnterpriseID')
-        LCICID = request.data.get('LCICID')
-        search_loan = B1.objects.filter(lcicID=LCICID)
+        LCIC_code = request.data.get('LCIC_code')
+        search_loan = B1.objects.filter(LCIC_code=LCIC_code)
         for loan_log in search_loan:
          sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
-        if EnterpriseID and LCICID:
+        if EnterpriseID and LCIC_code:
             try:
                 inquiry_month = datetime(year=2024, month=10, day=1).strftime('%Y-%m')
                 inquiry_month_charge = datetime(year=2024, month=10, day=1).strftime('%d%m%Y')
                 search_log = searchLog.objects.create(
                     enterprise_ID=EnterpriseID,
-                    LCIC_ID=LCICID,
+                    LCIC_code=LCIC_code,
                     bnk_code=bank_info.bnk_code,
                     bnk_type=bank_info.bnk_type,
                     branch=loan_log.branch_id,
@@ -9918,36 +9920,39 @@ class InsertSearchLogView(APIView):
                     rec_enquiry_type='1',
                     sys_usr=sys_usr  
                 )
-                
-
+               
                 charge = request_charge.objects.create(
                     bnk_code=bank_info.bnk_code,
                     bnk_type=bank_info.bnk_type,
                     chg_amount=charge_amount_com,
                     chg_code=chargeType.chg_code,
                     status='pending',  
-                    rtp_code='1', 
+                    rtp_code='1',
                     lon_purpose=loan_log.lon_purpose_code,
                     chg_unit=chargeType.chg_unit,
                     user_sys_id=sys_usr,
-                    LCIC_ID=LCICID,
+                    LCIC_code=LCIC_code,
                     cusType=loan_log.segmentType,
                    
-                    
+                   
                     user_session_id='',
                     rec_reference_code='',
-                    search_log=search_log 
+                    search_log=search_log
                 )
                 charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
                 charge.save()
-                
+               
                 return Response({'success': 'Search log inserted'}, status=status.HTTP_201_CREATED)
             except Exception as e:
-                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+                import traceback
+                error_details = traceback.format_exc()
+                return Response({
+        'error': str(e),
+        'details': error_details
+    }, status=status.HTTP_400_BAD_REQUEST)
         else:
-            return Response({'error': 'EnterpriseID and LCICID are required'}, status=status.HTTP_400_BAD_REQUEST)
-        
-
+            return Response({'error': 'EnterpriseID and LCIC_code are required'}, status=status.HTTP_400_BAD_REQUEST)
+       
         
         
 from rest_framework.views import APIView

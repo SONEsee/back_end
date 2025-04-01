@@ -298,3 +298,27 @@ def process_json_file_task(file_id):
             print(f"Processed {processed_items}/{total_items}")
     except Exception as e:
         print(f"Error in Celery task for file {file_id}: {str(e)}")
+from celery import Celery, states
+from celery.exceptions import Ignore
+from .models import Upload_File
+import json
+
+app = Celery('lcicHome')
+
+@app.task(bind=True)
+def process_uploaded_file(self, file_content: str, file_id: int, user_id: str, period: int):
+    try:
+        file_data = json.loads(file_content)
+        total_items = len(file_data) if isinstance(file_data, list) else 1
+        processed_items = 0
+
+        for item in file_data if isinstance(file_data, list) else [file_data]:
+            # ປະມວນຜົນແຕ່ລະ item (ຕາມ logic ຂອງເຈົ້າ)
+            processed_items += 1
+            progress = (processed_items / total_items) * 100
+            self.update_state(state='PROGRESS', meta={'progress': progress, 'file_id': file_id})
+
+        Upload_File.objects.filter(FID=file_id).update(statussubmit='1')
+    except Exception as e:
+        self.update_state(state=states.FAILURE, meta={'error': str(e)})
+        raise Ignore()

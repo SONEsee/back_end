@@ -1437,6 +1437,7 @@ class Rp_type(models.Model):
 class searchLog(models.Model):
     search_ID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
     enterprise_ID = models.CharField(max_length=50, blank=True, null=True)
+    LCIC_code = models.CharField(max_length=50, blank=True, null=True)
     LCIC_ID = models.CharField(max_length=50, blank=True, null=True)
     bnk_code = models.CharField(max_length=255, blank=True, null=True)
     bnk_type = models.CharField(max_length=255, blank=True, null=True)
@@ -1460,12 +1461,13 @@ class searchLog(models.Model):
         verbose_name_plural = 'Search Logs'
 
     def __str__(self):
-        return f"SearchLog({self.search_ID}) - Enterprise: {self.enterprise_ID}, LCIC: {self.LCIC_ID}"
+        return f"SearchLog({self.search_ID}) - Enterprise: {self.enterprise_ID}, LCIC: {self.LCIC_code}"
 
  
 class request_charge(models.Model):
     rec_charge_ID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False,verbose_name='ID')
     bnk_code = models.CharField(max_length=255, blank=True, null=True)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
     bnk_type = models.CharField(max_length=255, blank=True, null=True)
     chg_amount = models.FloatField(max_length=255, blank=True,null=True)
     chg_code = models.CharField(max_length=255, blank=True, null=True)
@@ -1685,6 +1687,7 @@ class Search_batfile(models.Model):
 class SearchResult(models.Model):
     search_batch = models.ForeignKey(Search_batfile, on_delete=models.CASCADE)
     lcicID = models.CharField(max_length=255)
+    LCIC_code = models.CharField(max_length=255)
     com_enterprise_code = models.CharField(max_length=255)
     status = models.CharField(max_length=50)
     enterpriseNameLao = models.CharField(max_length=255, null=True, blank=True)

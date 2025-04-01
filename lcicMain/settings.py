@@ -233,8 +233,8 @@ CSRF_COOKIE_SECURE = False
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
 LOGIN_URL = '/accounts/login/'
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = 'redis://localhost:3000/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:35725/0'
 
 # Celery settings
 # CELERY_BROKER_URL = 'redis://localhost:8000/0'
