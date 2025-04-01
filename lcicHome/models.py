@@ -1655,6 +1655,7 @@ class Search_batfile(models.Model):
     MID = models.ForeignKey(memberInfo, null=True, blank=True, on_delete=models.CASCADE)
     GID = models.ForeignKey(User_Group, null=True, blank=True, on_delete=models.CASCADE)
     SType = models.ForeignKey(SType, null=True, blank=True, on_delete=models.CASCADE)
+    
     UType = models.ForeignKey(Upload_Type, null=True, blank=True, on_delete=models.CASCADE)
     user_id = models.CharField(max_length=255)
     duplicates = models.CharField(max_length=255)

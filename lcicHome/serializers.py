@@ -741,6 +741,11 @@ class ProvinceSerializer(serializers.ModelSerializer):
         model = edl_province_code
         fields = ['pro_id', 'pro_name']
 
+# class Province_edlSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = edl_province_code
+#         fields = '__all__'
+
 class DistrictSerializer(serializers.ModelSerializer):
     class Meta:
         model = edl_district_code

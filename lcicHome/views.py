@@ -11876,3 +11876,41 @@ class ChargeMatrixViewSet(viewsets.ModelViewSet):
 #                 {"error": str(e)},
 #                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
 #             )        
+#             )       
+
+class EDLProvinceAPIView(APIView):
+    def get(self, request):
+        try:
+            provinces = edl_province_code.objects.all()
+            serializer = ProvinceSerializer(provinces, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+
+class ProvinceDistrictAPIView(APIView):
+    def get(self, request, pro_id=None):
+        try:
+            # Get the province
+            province = edl_province_code.objects.get(pro_id=pro_id)
+            
+            # Get all districts for this province
+            districts = edl_district_code.objects.filter(pro_id=pro_id)
+            
+            # Serialize the data
+            province_serializer = ProvinceSerializer(province)
+            districts_serializer = DistrictSerializer(districts, many=True)
+            
+            # Combine the response
+            response_data = {
+                'province': province_serializer.data,
+                'districts': districts_serializer.data
+            }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except edl_province_code.DoesNotExist:
+            return Response(
+                {'error': f'Province with pro_id {pro_id} not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
