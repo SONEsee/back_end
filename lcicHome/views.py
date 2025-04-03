@@ -7053,47 +7053,28 @@ class FCR_reportView(APIView):
         lcic_id = request.GET.get('LCIC_code')
 
         print(enterprise_id)
-        print(lcic_id)
+        print("test print",lcic_id)
 
         status_inactive = "INACTIVE"
         status_active = "ACTIVE"
 
         try:
-            # Retrieve the specific EnterpriseInfo objects
+           
             ent_info = EnterpriseInfo.objects.filter(EnterpriseID=enterprise_id, LCIC_code=lcic_id)
             loan_info = B1.objects.filter(com_enterprise_code=enterprise_id, lon_status=status_active).order_by('lon_status')
             inves_info = InvestorInfo.objects.filter(EnterpriseID=enterprise_id)
-            search_history = request_charge.objects.filter(LCIC_ID=lcic_id)
+            search_history = request_charge.objects.filter(LCIC_code=lcic_id)
             
             
             
-            # print("Search_History====>",search_history)
-            # print("Enterprise_info:", ent_info)
-            # print("Loan_Info:", loan_info)
-            # print("Investor_Info:", inves_info)
+         
 
             if not ent_info.exists():
                 return Response({"detail": "Enterprise information not found."}, status=status.HTTP_404_NOT_FOUND)
 
             loan_info_list_active = []   
 
-            # Collateral Models Mapping
-            # col_type_to_model = {
-            #     'RealEstate': col_real_estates,
-            #     'Money': col_money_mia,
-            #     'Equipment': col_equipment_eqi,
-            #     'Project': col_project_prj,
-            #     'Vehicle': col_vechicle_veh,
-            #     'Guarenty': col_guarantor_gua,
-            #     'gold_silver': col_goldsilver_gold,
-            #     'c2.1': col_real_estates.C2_1,
-            #     'c2.2': col_money_mia.C2_2,
-            #     'c2.3': col_equipment_eqi.C2_3,
-            #     'c2.4': col_project_prj.C2_4,
-            #     'c2.5': col_vechicle_veh.C2_5,
-            #     'c2.6': col_guarantor_gua.C2_6,
-            #     'c2.7': col_goldsilver_gold.C2_7,
-            # }
+            
             col_type_to_model = {
                 'C2.1': col_real_estates,
                 'C2.2': col_money_mia,
@@ -7114,13 +7095,11 @@ class FCR_reportView(APIView):
                         loan_id=loan.loan_id,
                     ).order_by('-period')
                     
-                    # loan_purpose_detail = Main_catalog_cat.objects.filter(cat_value=loan.lon_purpose_code).first()
-                    
-                    # print("Laon_data_here ----> ",loan_purpose_detail.cat_lao_name)
+                  
                     
                     lon_class_history_list = list(lon_class_history.values())
 
-                    # Get Collateral Records
+                    
                     colleteral_list = C1.objects.filter(
                         com_enterprise_code=enterprise_id,
                         bnk_code=loan.bnk_code,
@@ -7130,30 +7109,13 @@ class FCR_reportView(APIView):
                     )
                     print("Colleteral ---------------> : ", colleteral_list)
                     
-                    # for colleteral in colleteral_list:
-                    #     print("Col_id ----->", colleteral.col_id)
                     
-                    # test_col = col_real_estates.objects.filter(
-                    #     com_enterprise_code=enterprise_id,
-                    #     bnk_code=loan.bnk_code,
-                    #     branch_id_code=loan.branch_id,
-                    #     bank_customer_ID=loan.customer_id,
-                    #     loan_id=loan.loan_id,
-                    # )
-                    # print("Test Colleteral ---------------> : ", test_col)
-                    
-                        # check_col_id = col_real_estates.objects.filter(
-                        #     col_id = colleteral.col_id
-                        # )
-                        # print("<---------------- Col_id",check_col_id)
-
                     collateral_history_list = []
                     for collateral in colleteral_list:
                         col_id = collateral.col_id
                         col_type = collateral.col_type
 
-                        print("Check_Col_id ====> :", col_id)  
-                        print("Check_Col_type ====> :", col_type)  
+                       
                         
 
                         # Get the related model based on col_type
@@ -7170,7 +7132,7 @@ class FCR_reportView(APIView):
                                 related_record_dict = model_to_dict(related_record)
                                 collateral_dict = model_to_dict(collateral)
 
-                                # Add the related record to collateral history list
+                               
                                 collateral_history_list.append({
                                     "col_id": col_id,
                                     "col_type": col_type,
@@ -9991,7 +9953,7 @@ def get_search_results(request, id):
     results_data = [
         {
             "id": result.id,
-            "lcicID": result.lcicID,
+            "LCIC_code": result.LCIC_code,
             "com_enterprise_code": result.com_enterprise_code,
             "status": result.status,
             "enterpriseNameLao": result.enterpriseNameLao,
