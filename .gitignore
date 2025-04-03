@@ -2,11 +2,5 @@
 *.pyc
 _pycache_/
 venv/
-db.sqlite3
-staticfiles/
-media/
-secret_key.txt
-.env
-logs/
-settings.py
+
 
