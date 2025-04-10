@@ -287,13 +287,10 @@ class UserManager(BaseUserManager):
 #     def _str_(self):
 #         return self.username
     
-
-
-    
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser
 class Login(AbstractBaseUser):
-    UID = models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+    UID = models.AutoField(auto_created=True, primary_key=True, serialize=False)
     MID = models.ForeignKey(memberInfo, related_name='memberInfo', null=True, blank=True, on_delete=models.CASCADE)
     branch_id = models.CharField(max_length=100, null=True, blank=True)
     bnk_code = models.CharField(max_length=100, null=True, blank=True)
@@ -326,31 +323,6 @@ class Login(AbstractBaseUser):
     def _str_(self):
         return self.username
 
-
-
-    
-
-# class Login(AbstractBaseUser):
-#     UID = models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
-#     MID = models.ForeignKey(memberInfo, related_name='memberInfo', null=True, blank=True, on_delete=models.CASCADE)
-#     GID = models.ForeignKey(User_Group, null=True, blank=True , on_delete=models.CASCADE)
-#     username = models.CharField(max_length=150, unique=True)
-#     nameL = models.CharField(max_length=150)
-#     nameE = models.CharField(max_length=150)
-#     surnameL = models.CharField(max_length=150)
-#     surnameE = models.CharField(max_length=150)
-#     insertDate = models.DateTimeField(auto_now_add=True, blank=True)
-#     updateDate = models.DateTimeField(auto_now=True, blank=True)
-#     is_active = models.BooleanField(default=True)
-
-#     objects = UserManager()
-
-#     USERNAME_FIELD = 'username'
-
-#     def __str__(self):
-#         return self.username
-
-    
 class bank_bnk(models.Model):
     bnk_sys_id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
     bnk_code = models.CharField(max_length=10,null=False, blank=False)
@@ -359,7 +331,6 @@ class bank_bnk(models.Model):
     bnk_lao_name = models.TextField()
     bnk_insert_date = models.DateField(null=True, blank=True)
     bnk_type = models.IntegerField()
-    
     
 class bank_branch(models.Model):
     branch_sys_id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False,verbose_name='ID')
@@ -1800,3 +1771,33 @@ class Utility_Bill(models.Model):
 class UtilityBillUpload(models.Model):
     file = models.FileField(upload_to="uploads/")
     uploaded_at = models.DateTimeField(auto_now_add=True)
+
+from django.contrib.auth.hashers import check_password,make_password
+class SystemUser(models.Model):
+    bnk_code = models.CharField(max_length=20)
+    branch_code = models.CharField(max_length=20)
+    username = models.CharField(max_length=50, unique=True)
+    password = models.CharField(max_length=128)  # Will store hashed password
+    roles = models.CharField(max_length=100)
+    nameL = models.CharField(max_length=100)
+    nameE = models.CharField(max_length=100)
+    surnameL = models.CharField(max_length=100)
+    surnameE = models.CharField(max_length=100)
+    profile_image = models.ImageField(upload_to='profile_images/', null=True, blank=True)
+    insertDate = models.DateTimeField(auto_now_add=True)
+    updateDate = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
+    last_login = models.DateTimeField(null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        # Hash password if it's not already hashed
+        if not self.password.startswith('pbkdf2_sha256$'):
+            self.password = make_password(self.password)
+        super().save(*args, **kwargs)
+
+    # def __str__(self):
+    #     return self.username
+
+    class Meta:
+        verbose_name = 'System User'
+        verbose_name_plural = 'System Users'
