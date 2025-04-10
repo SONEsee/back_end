@@ -757,3 +757,34 @@ class ProvinceWithDistrictsSerializer(serializers.ModelSerializer):
     class Meta:
         model = edl_province_code
         fields = ['pro_id', 'pro_name', 'districts']
+        
+
+
+from django.contrib.auth.hashers import check_password, make_password
+from rest_framework import serializers
+from .models import SystemUser
+class SystemUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SystemUser
+        fields = [
+            'bnk_code', 'branch_code', 'username', 'password', 'roles',
+            'nameL', 'nameE', 'surnameL', 'surnameE', 'profile_image'
+        ]
+        extra_kwargs = {
+            'password': {'write_only': True},
+            'profile_image': {'required': False}
+        }
+
+    def create(self, validated_data):
+        validated_data['password'] = make_password(validated_data['password'])
+        return SystemUser.objects.create(**validated_data)
+
+class UserLoginSerializer(serializers.Serializer):
+    username = serializers.CharField(required=True)
+    password = serializers.CharField(required=True, write_only=True)
+
+class UserResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SystemUser
+        fields = ['username', 'bnk_code', 'branch_code', 'roles',
+                 'nameL', 'nameE', 'surnameL', 'surnameE', 'last_login']

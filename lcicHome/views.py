@@ -11679,3 +11679,148 @@ class ProvinceDistrictAPIView(APIView):
                 {'error': f'Province with pro_id {pro_id} not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
+  
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import SystemUser
+from django.utils import timezone
+from django.contrib.auth.hashers import check_password
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.core.exceptions import ObjectDoesNotExist
+class SysUserLogin(APIView):
+    def post(self, request):
+        try:
+            username = request.data.get('username')
+            password = request.data.get('password')
+
+            if not username or not password:
+                return Response({'error': 'Username and password are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+            user = SystemUser.objects.filter(username=username).first()
+            if not user or not check_password(password, user.password):
+                return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
+            if not user.is_active:
+                return Response({'error': 'Account is deactivated'}, status=status.HTTP_403_FORBIDDEN)
+
+            user.last_login = timezone.now()
+            user.save(update_fields=['last_login'])
+
+            refresh = RefreshToken.for_user(user)
+
+            user_data = {
+                'id': user.id,
+                'username': user.username,
+                'bnk_code': user.bnk_code,
+                'branch_code': user.branch_code,
+                'roles': user.roles,
+                'nameL': user.nameL,
+                'nameE': user.nameE,
+                'surnameL': user.surnameL,
+                'surnameE': user.surnameE,
+                'last_login': user.last_login,
+            }
+
+            return Response({
+                'message': 'Login successful',
+                'user': user_data,
+                'tokens': {
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print("Login error:", str(e))  # Add this for debugging
+            return Response(
+                {'error': 'An unexpected error occurred'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+    )
+
+# Optional: Add a token refresh view
+from rest_framework_simplejwt.views import TokenRefreshView
+
+class SysUserTokenRefresh(TokenRefreshView):
+    pass
+            
+from django.contrib.auth.hashers import make_password
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.utils import timezone
+from .models import SystemUser  # Assuming SystemUser is in models.py
+
+class AddSystemUser(APIView):
+    def post(self, request):
+        try:
+            # Extract required fields from request data
+            required_fields = [
+                'bnk_code', 'branch_code', 'username', 'password', 'roles',
+                'nameL', 'nameE', 'surnameL', 'surnameE'
+            ]
+            
+            # Check if all required fields are present
+            missing_fields = [field for field in required_fields if field not in request.data]
+            if missing_fields:
+                return Response(
+                    {'error': f'Missing required fields: {", ".join(missing_fields)}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Check if username already exists
+            if SystemUser.objects.filter(username=request.data['username']).exists():
+                return Response(
+                    {'error': 'Username already exists'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Create new user with hashed password
+            user = SystemUser(
+                bnk_code=request.data['bnk_code'],
+                branch_code=request.data['branch_code'],
+                username=request.data['username'],
+                password=make_password(request.data['password']),  # Explicitly hash password
+                roles=request.data['roles'],
+                nameL=request.data['nameL'],
+                nameE=request.data['nameE'],
+                surnameL=request.data['surnameL'],
+                surnameE=request.data['surnameE'],
+                is_active=True,
+                insertDate=timezone.now(),
+            )
+
+            # Handle optional profile image if provided
+            if 'profile_image' in request.FILES:
+                user.profile_image = request.FILES['profile_image']
+
+            # Save user
+            user.save()
+
+            # Prepare response data (excluding password)
+            user_data = {
+                'username': user.username,
+                'bnk_code': user.bnk_code,
+                'branch_code': user.branch_code,
+                'roles': user.roles,
+                'nameL': user.nameL,
+                'nameE': user.nameE,
+                'surnameL': user.surnameL,
+                'surnameE': user.surnameE,
+                'insertDate': user.insertDate,
+                'is_active': user.is_active,
+            }
+
+            return Response(
+                {
+                    'message': 'User created successfully',
+                    'user': user_data
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        except Exception as e:
+            return Response(
+                {'error': f'An error occurred: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

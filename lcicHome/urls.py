@@ -54,7 +54,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files,BankUsersView,LoanCountByDate,CountSearchLogbyDate,CountFeebyDate
-from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView
+from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddSystemUser, SysUserTokenRefresh
 
 from .views import UserGroupView
 from .views import upload_json
@@ -272,7 +272,7 @@ urlpatterns = [
     # path('water-api/upload-json/', FileUploadView.as_view(), name='file-upload'),
     # path('water-api/upload-json/<int:pk>/', FileUploadView.as_view(), name='file-update'),
     # path('water-api/upload-json/<int:pk>/', FileDeleteView.as_view(), name='file-delete'),
-    # 
+     
     path('water-api/upload-json/', FileDetailView.as_view(), name='file-list'),
     path('water-api/upload-json/<int:pk>/', FileDetailView.as_view(), name='file-detail'),
     path('water-api/upload-json/<int:pk>/progress/', water_progress_view, name='file-progress'),
@@ -295,6 +295,14 @@ urlpatterns = [
     path('province-district/<str:pro_id>/', ProvinceDistrictAPIView.as_view(), name='province-district'),
     path('province-edl/', EDLProvinceAPIView.as_view(), name='province-edl'),
     # path('province-district-combined/<str:pro_id>/', ProvinceDistrictCombinedAPIView.as_view(), name='province-district-combined'),
+    
+    
+    #Logim Method:
+    path('systemlogin/', SysUserLogin.as_view(), name='sys_user_login'),
+    path('sys-add-user/', AddSystemUser.as_view(), name='add_system_user'),
+    path('token/refresh/', SysUserTokenRefresh.as_view(), name='token_refresh'),
+    
+    
     
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 if settings.DEBUG:
