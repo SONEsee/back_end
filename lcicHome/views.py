@@ -12021,3 +12021,29 @@ class AddSystemUser(APIView):
                 {'error': f'An error occurred: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class SystemUserListView(APIView):
+    def get(self, request):
+        users = SystemUser.objects.all()
+        serializer = SystemUserSerializer(users, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+# Retrieve, Update, or Delete a single user
+class SystemUserDetailView(APIView):
+    def get(self, request, pk):
+        user = get_object_or_404(SystemUser, pk=pk)
+        serializer = SystemUserSerializer(user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk):
+        user = get_object_or_404(SystemUser, pk=pk)
+        serializer = SystemUserSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        user = get_object_or_404(SystemUser, pk=pk)
+        user.delete()
+        return Response({'message': 'User deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
