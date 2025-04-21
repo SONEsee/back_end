@@ -11876,39 +11876,75 @@ class ProvinceDistrictAPIView(APIView):
                 {'error': f'Province with pro_id {pro_id} not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-  
+# views.py
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import SystemUser
+from .models import LCICSystemUser
 from django.utils import timezone
 from django.contrib.auth.hashers import check_password
-from rest_framework_simplejwt.tokens import RefreshToken
 from django.core.exceptions import ObjectDoesNotExist
+
+# Import the custom token generation function
+from .utils import get_tokens_for_user  # Adjust the import path if needed
+
 class SysUserLogin(APIView):
     def post(self, request):
         try:
+            # Extract username and password from request
             username = request.data.get('username')
             password = request.data.get('password')
 
-            print(username)
-            print(password)
+            print(f"Username: {username}, Password: {password}")
             
+            # Validate input
             if not username or not password:
-                return Response({'error': 'Username and password are required'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {'error': 'Username and password are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-            user = SystemUser.objects.filter(username=username).first()
-            if not user or not check_password(password, user.password):
-                return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+            # Query the LCICSystemUser model for the user
+            try:
+                user = LCICSystemUser.objects.get(username=username)
+            except ObjectDoesNotExist:
+                return Response(
+                    {'error': 'Invalid credentials'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
 
+            # Verify password
+            if not check_password(password, user.password):
+                return Response(
+                    {'error': 'Invalid credentials'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+            # Check if the user is active
             if not user.is_active:
-                return Response({'error': 'Account is deactivated'}, status=status.HTTP_403_FORBIDDEN)
+                return Response(
+                    {'error': 'Account is deactivated'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
+            # Update last login timestamp
             user.last_login = timezone.now()
             user.save(update_fields=['last_login'])
 
-            refresh = RefreshToken.for_user(user)
+            # Generate JWT tokens using the custom function
+            try:
+                tokens = get_tokens_for_user(user)
+            except Exception as token_error:
+                print(f"Token generation error: {str(token_error)}")
+                return Response(
+                    {
+                        'error': 'Failed to generate token',
+                        'details': str(token_error)
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
 
+            # Prepare user data for response
             user_data = {
                 'id': user.id,
                 'username': user.username,
@@ -11919,25 +11955,28 @@ class SysUserLogin(APIView):
                 'nameE': user.nameE,
                 'surnameL': user.surnameL,
                 'surnameE': user.surnameE,
+                'profile_image_url': user.profile_image.url if user.profile_image else None,
                 'last_login': user.last_login,
+                'insertDate': user.insertDate,
+                'updateDate': user.updateDate,
+                'is_active': user.is_active,
             }
 
             return Response({
                 'message': 'Login successful',
                 'user': user_data,
-                'tokens': {
-                    'refresh': str(refresh),
-                    'access': str(refresh.access_token),
-                }
+                'tokens': tokens
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
-            print("Login error:", str(e))  # Add this for debugging
+            print(f"Login error: {str(e)}")
             return Response(
-                {'error': 'An unexpected error occurred'},
+                {
+                    'error': 'An unexpected error occurred',
+                    'details': str(e)
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-    )
-
+            )
 # Optional: Add a token refresh view
 from rest_framework_simplejwt.views import TokenRefreshView
 
@@ -11949,9 +11988,9 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
-from .models import SystemUser  # Assuming SystemUser is in models.py
+from .models import LCICSystemUser  # Assuming LCICSystemUser is in models.py
 
-class AddSystemUser(APIView):
+class AddLCICSystemUser(APIView):
     def post(self, request):
         try:
             # Extract required fields from request data
@@ -11969,14 +12008,14 @@ class AddSystemUser(APIView):
                 )
 
             # Check if username already exists
-            if SystemUser.objects.filter(username=request.data['username']).exists():
+            if LCICSystemUser.objects.filter(username=request.data['username']).exists():
                 return Response(
                     {'error': 'Username already exists'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
             # Create new user with hashed password
-            user = SystemUser(
+            user = LCICSystemUser(
                 bnk_code=request.data['bnk_code'],
                 branch_code=request.data['branch_code'],
                 username=request.data['username'],
@@ -12025,24 +12064,24 @@ class AddSystemUser(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-class SystemUserListView(APIView):
+class LCICSystemUserListView(APIView):
     def get(self, request):
-        users = SystemUser.objects.all()
+        users = LCICSystemUser.objects.all()
         
-        serializer = SystemUserSerializer(users, many=True)
+        serializer = LCICSystemUserSerializer(users, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
-class SystemUserDetailView(APIView):
+class LCICSystemUserDetailView(APIView):
     def get(self, request, pk):
-        user = get_object_or_404(SystemUser, pk=pk)
-        serializer = SystemUserSerializer(user, context={'request': request})
+        user = get_object_or_404(LCICSystemUser, pk=pk)
+        serializer = LCICSystemUserSerializer(user, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def put(self, request, pk):
         print('Request.FILES:', request.FILES)  # Debug: Check if file is received
         print('Request.data:', request.data)   # Debug: Check all data
-        user = get_object_or_404(SystemUser, pk=pk)
-        serializer = SystemUserSerializer(user, data=request.data, partial=True, context={'request': request})
+        user = get_object_or_404(LCICSystemUser, pk=pk)
+        serializer = LCICSystemUserSerializer(user, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             print('Validated data:', serializer.validated_data)  # Debug: Check validated data
             user = serializer.save()
@@ -12052,7 +12091,7 @@ class SystemUserDetailView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        user = get_object_or_404(SystemUser, pk=pk)
+        user = get_object_or_404(LCICSystemUser, pk=pk)
         user.delete()
         return Response({'message': 'User deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
     

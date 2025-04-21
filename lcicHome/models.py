@@ -1773,32 +1773,26 @@ class UtilityBillUpload(models.Model):
     file = models.FileField(upload_to="uploads/")
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
-from django.contrib.auth.hashers import check_password,make_password
-class SystemUser(models.Model):
-    bnk_code = models.CharField(max_length=20)
-    branch_code = models.CharField(max_length=20)
-    username = models.CharField(max_length=50, unique=True)
-    password = models.CharField(max_length=128) 
-    roles = models.CharField(max_length=100)
-    nameL = models.CharField(max_length=100)
-    nameE = models.CharField(max_length=100)
-    surnameL = models.CharField(max_length=100)
-    surnameE = models.CharField(max_length=100)
+        
+from django.db import models
+from django.utils import timezone
+
+class LCICSystemUser(models.Model):
+    id = models.BigAutoField(primary_key=True)  # Auto-incrementing primary key
+    bnk_code = models.CharField(max_length=10, null=False, blank=False)
+    branch_code = models.CharField(max_length=10, null=False, blank=False)
+    username = models.CharField(max_length=50, unique=True, null=False, blank=False)
+    password = models.CharField(max_length=128, null=False, blank=False)  # Hashed password
+    roles = models.CharField(max_length=10, null=False, blank=False)
+    nameL = models.CharField(max_length=100, null=False, blank=False)  # Local name
+    nameE = models.CharField(max_length=100, null=False, blank=False)  # English name
+    surnameL = models.CharField(max_length=100, null=False, blank=False)  # Local surname
+    surnameE = models.CharField(max_length=100, null=False, blank=False)  # English surname
     profile_image = models.ImageField(upload_to='profile_images/', null=True, blank=True)
-    insertDate = models.DateTimeField(auto_now_add=True)
+    insertDate = models.DateTimeField(default=timezone.now)
     updateDate = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True)
     last_login = models.DateTimeField(null=True, blank=True)
 
-    # def save(self, *args, **kwargs):
-    #     # Hash password if it's not already hashed
-    #     if not self.password.startswith('pbkdf2_sha256$'):
-    #         self.password = make_password(self.password)
-    #     super().save(*args, **kwargs)
-
-    # # def __str__(self):
-    # #     return self.username
-
-    # class Meta:
-    #     verbose_name = 'System User'
-    #     verbose_name_plural = 'System Users'
+    def __str__(self):
+        return self.username
