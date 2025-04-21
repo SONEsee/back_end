@@ -759,26 +759,72 @@ class ProvinceWithDistrictsSerializer(serializers.ModelSerializer):
         fields = ['pro_id', 'pro_name', 'districts']
         
 
-
-from django.contrib.auth.hashers import check_password, make_password
 from rest_framework import serializers
 from .models import SystemUser
+from django.contrib.auth.hashers import make_password
+
+from rest_framework import serializers
+from .models import SystemUser
+from django.contrib.auth.hashers import make_password
 class SystemUserSerializer(serializers.ModelSerializer):
+    # Use SerializerMethodField for reading (output)
+    profile_image_url = serializers.SerializerMethodField()
+    # Use ImageField for writing (input)
+    profile_image = serializers.ImageField(required=False, allow_null=True)
+
     class Meta:
         model = SystemUser
         fields = [
-            'bnk_code', 'branch_code', 'username', 'password', 'roles',
-            'nameL', 'nameE', 'surnameL', 'surnameE', 'profile_image'
+            'id',
+            'bnk_code',
+            'branch_code',
+            'username',
+            'password',
+            'roles',
+            'nameL',
+            'nameE',
+            'surnameL',
+            'surnameE',
+            'profile_image',  # Include for writing
+            'profile_image_url',  # Include for reading
+            'is_active',
+            'insertDate'
         ]
         extra_kwargs = {
             'password': {'write_only': True},
-            'profile_image': {'required': False}
+            'profile_image': {'required': False},
         }
+
+    def get_profile_image_url(self, obj):
+        if obj.profile_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.profile_image.url)
+            return obj.profile_image.url
+        return None
+
+    def validate_profile_image(self, value):
+        if value:
+            if value.size > 5 * 1024 * 1024:  # 5MB limit
+                raise serializers.ValidationError('Image size should be less than 5 MB')
+            if not value.content_type.startswith('image/'):
+                raise serializers.ValidationError('File must be an image')
+        return value
 
     def create(self, validated_data):
         validated_data['password'] = make_password(validated_data['password'])
         return SystemUser.objects.create(**validated_data)
 
+    def update(self, instance, validated_data):
+        print('Updating instance with validated data:', validated_data)  # Debug
+        if 'password' in validated_data:
+            validated_data['password'] = make_password(validated_data['password'])
+        # Explicitly handle profile_image
+        if 'profile_image' in validated_data:
+            if instance.profile_image:
+                instance.profile_image.delete(save=False)  # Delete old image
+            instance.profile_image = validated_data['profile_image']
+        return super().update(instance, validated_data)
 class UserLoginSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
     password = serializers.CharField(required=True, write_only=True)
@@ -793,3 +839,57 @@ class ChargeMatrixSerializer (serializers.ModelSerializer):
     class Meta:
         model = ChargeMatrix
         fields = '__all__'
+        
+from .models import bank_bnk
+
+class BankSerializer(serializers.ModelSerializer):
+    # Read-only field for image URL
+    bnk_images_url = serializers.SerializerMethodField()
+    # Writeable field for image upload
+    bnk_images = serializers.ImageField(required=False, allow_null=True)
+
+    class Meta:
+        model = bank_bnk
+        fields = [
+            'bnk_sys_id',
+            'bnk_code',
+            'bnk_short_form',
+            'bnk_images',
+            'bnk_images_url',
+            'bnk_name',
+            'bnk_lao_name',
+            'bnk_insert_date',
+            'bnk_type',
+        ]
+        extra_kwargs = {
+            'bnk_sys_id': {'read_only': True},
+            'bnk_insert_date': {'required': False},
+        }
+
+    def get_bnk_images_url(self, obj):
+        if obj.bnk_images:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.bnk_images.url)
+            return obj.bnk_images.url
+        return None
+
+    def validate_bnk_images(self, value):
+        if value:
+            if value.size > 5 * 1024 * 1024:  # 5MB limit
+                raise serializers.ValidationError('Image size should be less than 5 MB')
+            if not value.content_type.startswith('image/'):
+                raise serializers.ValidationError('File must be an image')
+        return value
+
+    def create(self, validated_data):
+        return bank_bnk.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        print('Updating instance with validated data:', validated_data)  # Debug
+        # Handle bnk_images update
+        if 'bnk_images' in validated_data:
+            if instance.bnk_images:
+                instance.bnk_images.delete(save=False)  # Delete old image
+            instance.bnk_images = validated_data['bnk_images']
+        return super().update(instance, validated_data)

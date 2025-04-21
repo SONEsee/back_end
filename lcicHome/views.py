@@ -11891,6 +11891,9 @@ class SysUserLogin(APIView):
             username = request.data.get('username')
             password = request.data.get('password')
 
+            print(username)
+            print(password)
+            
             if not username or not password:
                 return Response({'error': 'Username and password are required'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -12025,25 +12028,88 @@ class AddSystemUser(APIView):
 class SystemUserListView(APIView):
     def get(self, request):
         users = SystemUser.objects.all()
+        
         serializer = SystemUserSerializer(users, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
-# Retrieve, Update, or Delete a single user
 class SystemUserDetailView(APIView):
     def get(self, request, pk):
         user = get_object_or_404(SystemUser, pk=pk)
-        serializer = SystemUserSerializer(user)
+        serializer = SystemUserSerializer(user, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def put(self, request, pk):
+        print('Request.FILES:', request.FILES)  # Debug: Check if file is received
+        print('Request.data:', request.data)   # Debug: Check all data
         user = get_object_or_404(SystemUser, pk=pk)
-        serializer = SystemUserSerializer(user, data=request.data, partial=True)
+        serializer = SystemUserSerializer(user, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
-            serializer.save()
+            print('Validated data:', serializer.validated_data)  # Debug: Check validated data
+            user = serializer.save()
+            print('Updated user profile_image:', user.profile_image)  # Debug: Check saved image
             return Response(serializer.data, status=status.HTTP_200_OK)
+        print('Serializer errors:', serializer.errors)  # Debug: Check validation errors
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
         user = get_object_or_404(SystemUser, pk=pk)
         user.delete()
         return Response({'message': 'User deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+    
+    
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+from .models import bank_bnk
+from .serializers import BankSerializer
+
+class BankListCreateView(APIView):
+    def get(self, request):
+        banks = bank_bnk.objects.all()
+        serializer = BankSerializer(banks, many=True, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        print('Request.FILES:', request.FILES)  # Debug
+        print('Request.data:', request.data)   # Debug
+
+        # Check for duplicate bnk_code
+        bnk_code = request.data.get('bnk_code')
+        if bnk_code and bank_bnk.objects.filter(bnk_code=bnk_code).exists():
+            return Response(
+                {'error': f'A bank with bnk_code "{bnk_code}" already exists. Skipping creation.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = BankSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            print('Validated data:', serializer.validated_data)  # Debug
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        print('Serializer errors:', serializer.errors)  # Debug
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class BankDetailView(APIView):
+    def get(self, request, pk):
+        bank = get_object_or_404(bank_bnk, pk=pk)
+        serializer = BankSerializer(bank, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk):
+        print('Request.FILES:', request.FILES)  
+        print('Request.data:', request.data)   
+        bank = get_object_or_404(bank_bnk, pk=pk)
+        serializer = BankSerializer(bank, data=request.data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            print('Validated data:', serializer.validated_data)  
+            bank = serializer.save()
+            print('Updated bank bnk_images:', bank.bnk_images)  
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        print('Serializer errors:', serializer.errors)  
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        bank = get_object_or_404(bank_bnk, pk=pk)
+        bank.delete()
+        return Response({'message': 'Bank deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
