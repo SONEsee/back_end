@@ -327,6 +327,7 @@ class bank_bnk(models.Model):
     bnk_sys_id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
     bnk_code = models.CharField(max_length=10,null=False, blank=False)
     bnk_short_form = models.CharField(max_length=10)
+    bnk_images =  models.ImageField(upload_to='bank_images/', null=True, blank=True)
     bnk_name = models.CharField(max_length=100)
     bnk_lao_name = models.TextField()
     bnk_insert_date = models.DateField(null=True, blank=True)
@@ -1777,7 +1778,7 @@ class SystemUser(models.Model):
     bnk_code = models.CharField(max_length=20)
     branch_code = models.CharField(max_length=20)
     username = models.CharField(max_length=50, unique=True)
-    password = models.CharField(max_length=128)  # Will store hashed password
+    password = models.CharField(max_length=128) 
     roles = models.CharField(max_length=100)
     nameL = models.CharField(max_length=100)
     nameE = models.CharField(max_length=100)
@@ -1789,15 +1790,15 @@ class SystemUser(models.Model):
     is_active = models.BooleanField(default=True)
     last_login = models.DateTimeField(null=True, blank=True)
 
-    def save(self, *args, **kwargs):
-        # Hash password if it's not already hashed
-        if not self.password.startswith('pbkdf2_sha256$'):
-            self.password = make_password(self.password)
-        super().save(*args, **kwargs)
+    # def save(self, *args, **kwargs):
+    #     # Hash password if it's not already hashed
+    #     if not self.password.startswith('pbkdf2_sha256$'):
+    #         self.password = make_password(self.password)
+    #     super().save(*args, **kwargs)
 
-    # def __str__(self):
-    #     return self.username
+    # # def __str__(self):
+    # #     return self.username
 
-    class Meta:
-        verbose_name = 'System User'
-        verbose_name_plural = 'System Users'
+    # class Meta:
+    #     verbose_name = 'System User'
+    #     verbose_name_plural = 'System Users'
