@@ -760,20 +760,20 @@ class ProvinceWithDistrictsSerializer(serializers.ModelSerializer):
         
 
 from rest_framework import serializers
-from .models import SystemUser
+from .models import LCICSystemUser
 from django.contrib.auth.hashers import make_password
 
 from rest_framework import serializers
-from .models import SystemUser
+from .models import LCICSystemUser
 from django.contrib.auth.hashers import make_password
-class SystemUserSerializer(serializers.ModelSerializer):
+class LCICSystemUserSerializer(serializers.ModelSerializer):
     # Use SerializerMethodField for reading (output)
     profile_image_url = serializers.SerializerMethodField()
     # Use ImageField for writing (input)
     profile_image = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
-        model = SystemUser
+        model = LCICSystemUser
         fields = [
             'id',
             'bnk_code',
@@ -813,7 +813,7 @@ class SystemUserSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data['password'] = make_password(validated_data['password'])
-        return SystemUser.objects.create(**validated_data)
+        return LCICSystemUser.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
         print('Updating instance with validated data:', validated_data)  # Debug
@@ -831,7 +831,7 @@ class UserLoginSerializer(serializers.Serializer):
 
 class UserResponseSerializer(serializers.ModelSerializer):
     class Meta:
-        model = SystemUser
+        model = LCICSystemUser
         fields = ['username', 'bnk_code', 'branch_code', 'roles',
                  'nameL', 'nameE', 'surnameL', 'surnameE', 'last_login']
 from .models import ChargeMatrix
