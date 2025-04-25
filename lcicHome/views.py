@@ -5874,7 +5874,6 @@ def safe_parse_datetime(value):
     
 #     except Exception as e:
 #         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
-
 @csrf_exempt
 @require_POST
 def confirm_upload(request):
@@ -5894,7 +5893,6 @@ def confirm_upload(request):
                 ).order_by('-period').first()
                 print("B1", latest_b1)
                 print("item", item.period)
-
                 if latest_b1 and item.period < latest_b1.period:
                     Upload_File.objects.filter(FID=FID).update(statussubmit='2')
                     return JsonResponse({
