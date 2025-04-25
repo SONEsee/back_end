@@ -5184,6 +5184,58 @@ def update_statussubmit(request):
     except Exception as e:
        
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+@csrf_exempt
+@require_POST
+def unload_statussubmit(request):
+    print("update_statussubmit", request)
+    try:
+       
+        FID = request.POST.get('FID')
+        statussubmit = request.POST.get('statussubmit','4')  
+        if not FID or statussubmit not in ['4','0', '2' ]:
+            return JsonResponse({'status': 'error', 'message': 'Invalid FID or statussubmit value'}, status=400)
+
+        
+        file = Upload_File.objects.get(FID=FID)
+        
+       
+        file.statussubmit = statussubmit
+        file.save()
+
+        
+        return JsonResponse({'status': 'success', 'message': 'statussubmit updated successfully'})
+
+    except Upload_File.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'File not found'}, status=404)
+    except Exception as e:
+       
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+@csrf_exempt
+@require_POST
+def error_statussubmit(request):
+    print("update_statussubmit", request)
+    try:
+       
+        FID = request.POST.get('FID')
+        statussubmit = request.POST.get('statussubmit','0')  
+        if not FID or statussubmit not in ['1','0', '2' ]:
+            return JsonResponse({'status': 'error', 'message': 'Invalid FID or statussubmit value'}, status=400)
+
+        
+        file = Upload_File.objects.get(FID=FID)
+        
+       
+        file.statussubmit = statussubmit
+        file.save()
+
+        
+        return JsonResponse({'status': 'success', 'message': 'statussubmit updated successfully'})
+
+    except Upload_File.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'File not found'}, status=404)
+    except Exception as e:
+       
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
 # from django.views.decorators.http import require_POST
@@ -5925,7 +5977,24 @@ def confirm_upload(request):
                         )
                         continue  
 
-                # ອັບເດດຕາຕະລາງ B1_Monthly ແລະ B1
+                
+                existing_record = B1.objects.filter(
+                    bnk_code=item.bnk_code,
+                    branch_id=item.branch_id,
+                    customer_id=item.customer_id,
+                    loan_id=item.loan_id
+                ).exists()
+
+               
+                status_data_value = 'u' if existing_record else 'i'
+                b1_monthly_exists = B1_Monthly.objects.filter(
+                    bnk_code=item.bnk_code,
+                    branch_id=item.branch_id,
+                    customer_id=item.customer_id,
+                    loan_id=item.loan_id
+                ).exists()
+                b1_monthly_status_data = 'u' if b1_monthly_exists else 'i'
+
                 b1_monthly, created = B1_Monthly.objects.update_or_create(
                     bnk_code=item.bnk_code,
                     branch_id=item.branch_id,
@@ -5963,60 +6032,332 @@ def confirm_upload(request):
                         'lon_applied_date': item.lon_applied_date,
                         'is_disputed': item.is_disputed,
                         'id_file': FID,
-                        'LCIC_code': item.LCIC_code
+                        'LCIC_code': item.LCIC_code,
+                        'status_data': b1_monthly_status_data
                     }
                 )
                 
-                b1, created = B1.objects.update_or_create(
+                
+                B1.objects.filter(
                     bnk_code=item.bnk_code,
                     branch_id=item.branch_id,
                     customer_id=item.customer_id,
+                    loan_id=item.loan_id
+                ).delete()
+                
+                B1.objects.create(
+                    lcicID=item.lcicID,
+                    com_enterprise_code=item.com_enterprise_code,
+                    segmentType=item.segmentType,
+                    bnk_code=item.bnk_code,
+                    user_id=item.user_id,
+                    customer_id=item.customer_id,
+                    branch_id=item.branch_id,
+                    lon_sys_id=item.lon_sys_id,
                     loan_id=item.loan_id,
-                    defaults={
-                        'lcicID': item.lcicID,
-                        'com_enterprise_code': item.com_enterprise_code,
-                        'segmentType': item.segmentType,
-                        'bnk_code': item.bnk_code,
-                        'user_id': item.user_id,
-                        'customer_id': item.customer_id,
-                        'branch_id': item.branch_id,
-                        'lon_sys_id': item.lon_sys_id,
-                        'loan_id': item.loan_id,
-                        'period': item.period,
-                        'product_type': item.product_type,    
-                        'lon_open_date': item.lon_open_date,
-                        'lon_exp_date': item.lon_exp_date,
-                        'lon_ext_date': item.lon_ext_date,
-                        'lon_int_rate': item.lon_int_rate,
-                        'lon_purpose_code': item.lon_purpose_code,
-                        'lon_credit_line': item.lon_credit_line,
-                        'lon_currency_code': item.lon_currency_code,
-                        'lon_outstanding_balance': item.lon_outstanding_balance,
-                        'lon_account_no': item.lon_account_no,
-                        'lon_no_days_slow': item.lon_no_days_slow,
-                        'lon_class': item.lon_class,
-                        'lon_type': item.lon_type,
-                        'lon_term': item.lon_term,
-                        'lon_status': item.lon_status,
-                        'lon_insert_date': item.lon_insert_date,
-                        'lon_update_date': item.lon_update_date,
-                        'lon_applied_date': item.lon_applied_date,
-                        'is_disputed': item.is_disputed,
-                        'id_file': FID,
-                        'LCIC_code': item.LCIC_code
-                    }
+                    period=item.period,
+                    product_type=item.product_type,    
+                    lon_open_date=item.lon_open_date,
+                    lon_exp_date=item.lon_exp_date,
+                    lon_ext_date=item.lon_ext_date,
+                    lon_int_rate=item.lon_int_rate,
+                    lon_purpose_code=item.lon_purpose_code,
+                    lon_credit_line=item.lon_credit_line,
+                    lon_currency_code=item.lon_currency_code,
+                    lon_outstanding_balance=item.lon_outstanding_balance,
+                    lon_account_no=item.lon_account_no,
+                    lon_no_days_slow=item.lon_no_days_slow,
+                    lon_class=item.lon_class,
+                    lon_type=item.lon_type,
+                    lon_term=item.lon_term,
+                    lon_status=item.lon_status,
+                    lon_insert_date=item.lon_insert_date,
+                    lon_update_date=item.lon_update_date,
+                    lon_applied_date=item.lon_applied_date,
+                    is_disputed=item.is_disputed,
+                    id_file=FID,
+                    LCIC_code=item.LCIC_code,
+                    status_data=status_data_value 
                 )
                 
             except Exception as e:
                 return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
-        # ເພີ່ມການອັບເດດ statussubmit ໃຫ້ເປັນ '0' ເມື່ອສຳເລັດ
         Upload_File.objects.filter(FID=FID).update(statussubmit='0')
 
         return JsonResponse({'status': 'success', 'message': 'Data confirmed successfully'})
     
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+@csrf_exempt
+@require_POST
+def unload_upload(request):
+    try:
+        FID = request.POST.get('FID')
+        if not FID:
+            return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
+
+       
+        upload_file = Upload_File.objects.filter(FID=FID).first()
+        if not upload_file:
+            return JsonResponse({'status': 'error', 'message': 'No upload file found for the given File ID'}, status=404)
+        
+        user_id = upload_file.user_id
+        
+        
+        data_edits = data_edit.objects.filter(id_file=FID)
+        if not data_edits.exists():
+            return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
+        
+      
+        bank_codes = set(data_edits.values_list('bnk_code', flat=True))
+        
+       
+        items_to_process = []
+        for item in data_edits:
+           
+            b1_items = B1.objects.filter(
+                bnk_code=item.bnk_code,
+                customer_id=item.customer_id,
+                loan_id=item.loan_id
+            )
+            
+            status_data = None
+            if b1_items.exists():
+                status_data = b1_items.first().status_data
+            
+            items_to_process.append({
+                'item': item,
+                'status_data': status_data
+            })
+        
+        
+        for process_item in items_to_process:
+            item = process_item['item']
+            status_data = process_item['status_data']
+            
+           
+            if status_data is None or status_data == 'i':
+                
+                B1.objects.filter(
+                    id_file=FID,
+                    bnk_code=item.bnk_code,
+                    customer_id=item.customer_id,
+                    loan_id=item.loan_id
+                ).delete()
+                
+                B1_Monthly.objects.filter(
+                    id_file=FID,
+                    bnk_code=item.bnk_code,
+                    customer_id=item.customer_id,
+                    loan_id=item.loan_id
+                ).delete()
+                
+           
+            elif status_data == 'u':
+             
+                B1.objects.filter(
+                    id_file=FID,
+                    bnk_code=item.bnk_code,
+                    customer_id=item.customer_id,
+                    loan_id=item.loan_id
+                ).delete()
+                
+                B1_Monthly.objects.filter(
+                    id_file=FID,
+                    bnk_code=item.bnk_code,
+                    customer_id=item.customer_id,
+                    loan_id=item.loan_id
+                ).delete()
+                
+                
+                latest_b1_monthly = B1_Monthly.objects.filter(
+                    bnk_code=item.bnk_code,
+                    customer_id=item.customer_id,
+                    loan_id=item.loan_id
+                ).exclude(id_file=FID).order_by('-id').first()
+                
+                if latest_b1_monthly:
+                   
+                    B1.objects.create(
+                        lcicID=latest_b1_monthly.lcicID,
+                        com_enterprise_code=latest_b1_monthly.com_enterprise_code,
+                        segmentType=latest_b1_monthly.segmentType,
+                        bnk_code=latest_b1_monthly.bnk_code,
+                        user_id=latest_b1_monthly.user_id,
+                        customer_id=latest_b1_monthly.customer_id,
+                        branch_id=latest_b1_monthly.branch_id,
+                        lon_sys_id=latest_b1_monthly.lon_sys_id,
+                        loan_id=latest_b1_monthly.loan_id,
+                        period=latest_b1_monthly.period,
+                        product_type=latest_b1_monthly.product_type,    
+                        lon_open_date=latest_b1_monthly.lon_open_date,
+                        lon_exp_date=latest_b1_monthly.lon_exp_date,
+                        lon_ext_date=latest_b1_monthly.lon_ext_date,
+                        lon_int_rate=latest_b1_monthly.lon_int_rate,
+                        lon_purpose_code=latest_b1_monthly.lon_purpose_code,
+                        lon_credit_line=latest_b1_monthly.lon_credit_line,
+                        lon_currency_code=latest_b1_monthly.lon_currency_code,
+                        lon_outstanding_balance=latest_b1_monthly.lon_outstanding_balance,
+                        lon_account_no=latest_b1_monthly.lon_account_no,
+                        lon_no_days_slow=latest_b1_monthly.lon_no_days_slow,
+                        lon_class=latest_b1_monthly.lon_class,
+                        lon_type=latest_b1_monthly.lon_type,
+                        lon_term=latest_b1_monthly.lon_term,
+                        lon_status=latest_b1_monthly.lon_status,
+                        lon_insert_date=latest_b1_monthly.lon_insert_date,
+                        lon_update_date=latest_b1_monthly.lon_update_date,
+                        lon_applied_date=latest_b1_monthly.lon_applied_date,
+                        is_disputed=latest_b1_monthly.is_disputed,
+                        id_file=latest_b1_monthly.id_file,
+                        LCIC_code=latest_b1_monthly.LCIC_code,
+                        status_data=latest_b1_monthly.status_data if hasattr(latest_b1_monthly, 'status_data') else 'u'
+                    )
+        
+       
+        Upload_File.objects.filter(FID=FID).update(statussubmit='5')
+        
+        return JsonResponse({'status': 'success', 'message': 'Data unloaded successfully'})
+    
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+# @csrf_exempt
+# @require_POST
+# def unload_upload(request):
+#     try:
+#         FID = request.POST.get('FID')
+#         if not FID:
+#             return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
+
+       
+#         upload_file = Upload_File.objects.filter(FID=FID).first()
+#         if not upload_file:
+#             return JsonResponse({'status': 'error', 'message': 'No upload file found for the given File ID'}, status=404)
+        
+#         user_id = upload_file.user_id
+        
+        
+#         data_edits = data_edit.objects.filter(id_file=FID)
+#         if not data_edits.exists():
+#             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
+        
+       
+#         bank_codes = set(data_edits.values_list('bnk_code', flat=True))
+        
+        
+#         B1.objects.filter(id_file=FID).delete()
+#         B1_Monthly.objects.filter(id_file=FID).delete()
+        
+        
+#         for item in data_edits:
+#             try:
+                
+#                 previous_period = None
+                
+                
+#                 b1_monthly_periods = B1_Monthly.objects.filter(
+#                     bnk_code=item.bnk_code,
+#                     user_id=user_id
+#                 ).values_list('period', flat=True).distinct().order_by('-period')
+                
+               
+#                 b1_periods = B1.objects.filter(
+#                     bnk_code=item.bnk_code,
+#                     user_id=user_id
+#                 ).values_list('period', flat=True).distinct().order_by('-period')
+                
+                
+#                 all_periods = list(b1_monthly_periods) + list(b1_periods)
+#                 all_periods = sorted(set(all_periods), reverse=True)
+                
+                
+#                 current_period = item.period
+#                 for period in all_periods:
+#                     if period < current_period:
+#                         previous_period = period
+#                         break
+                
+                
+#                 B1_Monthly.objects.create(
+#                     lcicID=item.lcicID,
+#                     com_enterprise_code=item.com_enterprise_code,
+#                     segmentType=item.segmentType,
+#                     bnk_code=item.bnk_code,
+#                     customer_id=item.customer_id,
+#                     branch_id=item.branch_id,
+#                     user_id=user_id,
+#                     period=previous_period if previous_period else item.period,
+#                     product_type=item.product_type,
+#                     lon_sys_id=item.lon_sys_id,
+#                     loan_id=item.loan_id,
+#                     lon_open_date=item.lon_open_date,
+#                     lon_exp_date=item.lon_exp_date,
+#                     lon_ext_date=item.lon_ext_date,
+#                     lon_int_rate=item.lon_int_rate,
+#                     lon_purpose_code=item.lon_purpose_code,
+#                     lon_credit_line=item.lon_credit_line,
+#                     lon_currency_code=item.lon_currency_code,
+#                     lon_outstanding_balance=item.lon_outstanding_balance,
+#                     lon_account_no=item.lon_account_no,
+#                     lon_no_days_slow=item.lon_no_days_slow,
+#                     lon_class=item.lon_class,
+#                     lon_type=item.lon_type,
+#                     lon_term=item.lon_term,
+#                     lon_status=item.lon_status,
+#                     lon_insert_date=item.lon_insert_date,
+#                     lon_update_date=item.lon_update_date,
+#                     lon_applied_date=item.lon_applied_date,
+#                     is_disputed=item.is_disputed,
+#                     id_file=FID,
+#                     LCIC_code=item.LCIC_code
+#                 )
+                
+             
+#                 B1.objects.create(
+#                     lcicID=item.lcicID,
+#                     com_enterprise_code=item.com_enterprise_code,
+#                     segmentType=item.segmentType,
+#                     bnk_code=item.bnk_code,
+#                     user_id=user_id,
+#                     customer_id=item.customer_id,
+#                     branch_id=item.branch_id,
+#                     lon_sys_id=item.lon_sys_id,
+#                     loan_id=item.loan_id,
+#                     period=previous_period if previous_period else item.period,
+#                     product_type=item.product_type,    
+#                     lon_open_date=item.lon_open_date,
+#                     lon_exp_date=item.lon_exp_date,
+#                     lon_ext_date=item.lon_ext_date,
+#                     lon_int_rate=item.lon_int_rate,
+#                     lon_purpose_code=item.lon_purpose_code,
+#                     lon_credit_line=item.lon_credit_line,
+#                     lon_currency_code=item.lon_currency_code,
+#                     lon_outstanding_balance=item.lon_outstanding_balance,
+#                     lon_account_no=item.lon_account_no,
+#                     lon_no_days_slow=item.lon_no_days_slow,
+#                     lon_class=item.lon_class,
+#                     lon_type=item.lon_type,
+#                     lon_term=item.lon_term,
+#                     lon_status=item.lon_status,
+#                     lon_insert_date=item.lon_insert_date,
+#                     lon_update_date=item.lon_update_date,
+#                     lon_applied_date=item.lon_applied_date,
+#                     is_disputed=item.is_disputed,
+#                     id_file=FID,
+#                     LCIC_code=item.LCIC_code
+#                 )
+                
+#             except Exception as e:
+#                 return JsonResponse({'status': 'error', 'message': f'Error processing item: {str(e)}'}, status=500)
+
+      
+#         Upload_File.objects.filter(FID=FID).update(statussubmit='1')
+        
+#         return JsonResponse({'status': 'success', 'message': 'Data unloaded successfully'})
+    
+#     except Exception as e:
+#         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
   
 # from django.http import JsonResponse 
 # from django.views.decorators.http import require_POST    

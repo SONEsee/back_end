@@ -43,7 +43,7 @@ from .views import confirm_upload
 from .views import upload_image, upload_imageprofile
 from .views import get_collaterals
 from .views import get_login3
-from .views import get_last_lcicid, upload_enterprise_info
+from .views import get_last_lcicid, upload_enterprise_info,unload_statussubmit,error_statussubmit
 from .views import confirm_image
 from .views import UserLoginView
 from django.contrib.auth import views as auth_views
@@ -230,6 +230,7 @@ urlpatterns = [
     # path('upload333/', FileUploadView3.as_view(), name='file-upload'),
     path('upload-files/', FileUploadView3.as_view(), name='upload_files_view'),
     path('process-files/', upload_files, name='upload_files'),
+    path('unload-upload/', views.unload_upload, name='unload_upload'),
 
 
 
@@ -239,6 +240,8 @@ urlpatterns = [
 
 
     path('api/update-statussubmit/', update_statussubmit, name='update_statussubmit'),
+    path('api/unload_statussubmit/', unload_statussubmit, name='update_statussubmit'),
+    path('api/error_statussubmit/', error_statussubmit, name='update_statussubmit'),
     path('api/update-statussubmitc/',  update_statussubmitc, name=' update_statussubmitc'),
     path('api/upload_image/', upload_image, name='collateral-update'),
     path('api/upload_imagef/', upload_imageprofile, name='collateral-update'),

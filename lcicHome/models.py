@@ -639,6 +639,7 @@ class B1_Monthly(models.Model):
     user_id = models.CharField(max_length=100)
     is_disputed = models.BigIntegerField(default=0, null=True)
     LCIC_code = models.CharField(max_length=255, blank=True, null=True)
+    status_data = models.CharField(max_length=100, blank=True, null=True)
     # status_customer = models.CharField(max_length=100)
 
     def save(self, *args, **kwargs):
@@ -782,6 +783,7 @@ class B1(models.Model):
     user_id = models.CharField(max_length=100)
     status_customer = models.CharField(max_length=100)
     LCIC_code = models.CharField(max_length=255, blank=True, null=True)
+    status_data = models.CharField(max_length=100, blank=True, null=True)
     def save(self, *args, **kwargs):
         self.lon_no_days_slow = self.lon_no_days_slow or 0
         self.is_disputed = self.is_disputed or 0
