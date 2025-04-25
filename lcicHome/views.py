@@ -6097,7 +6097,7 @@ def unload_upload(request):
         if not FID:
             return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
 
-       
+        
         upload_file = Upload_File.objects.filter(FID=FID).first()
         if not upload_file:
             return JsonResponse({'status': 'error', 'message': 'No upload file found for the given File ID'}, status=404)
@@ -6109,13 +6109,29 @@ def unload_upload(request):
         if not data_edits.exists():
             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
         
-      
+       
         bank_codes = set(data_edits.values_list('bnk_code', flat=True))
+        
+        
+        for data_item in data_edits:
+            
+            existing_records = B1.objects.filter(
+                bnk_code=data_item.bnk_code
+            ).exclude(id_file=FID).order_by('-period')
+            
+            if existing_records.exists():
+                latest_record = existing_records.first()
+                
+                if data_item.period > latest_record.period:
+                    return JsonResponse({
+                        'status': 'error', 
+                        'message': f'Cannot upload data with period greater than existing period for bank code {data_item.bnk_code}. Existing period: {latest_record.period}, Upload period: {data_item.period}'
+                    }, status=406)
         
        
         items_to_process = []
         for item in data_edits:
-           
+            
             b1_items = B1.objects.filter(
                 bnk_code=item.bnk_code,
                 customer_id=item.customer_id,
@@ -6131,12 +6147,12 @@ def unload_upload(request):
                 'status_data': status_data
             })
         
-        
+       
         for process_item in items_to_process:
             item = process_item['item']
             status_data = process_item['status_data']
             
-           
+            
             if status_data is None or status_data == 'i':
                 
                 B1.objects.filter(
@@ -6153,9 +6169,9 @@ def unload_upload(request):
                     loan_id=item.loan_id
                 ).delete()
                 
-           
+            
             elif status_data == 'u':
-             
+                
                 B1.objects.filter(
                     id_file=FID,
                     bnk_code=item.bnk_code,
@@ -6214,7 +6230,7 @@ def unload_upload(request):
                         status_data=latest_b1_monthly.status_data if hasattr(latest_b1_monthly, 'status_data') else 'u'
                     )
         
-       
+        
         Upload_File.objects.filter(FID=FID).update(statussubmit='5')
         
         return JsonResponse({'status': 'success', 'message': 'Data unloaded successfully'})
