@@ -6095,41 +6095,42 @@ def unload_upload(request):
         if not FID:
             return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
 
-        
+        # Get upload file
         upload_file = Upload_File.objects.filter(FID=FID).first()
         if not upload_file:
             return JsonResponse({'status': 'error', 'message': 'No upload file found for the given File ID'}, status=404)
         
         user_id = upload_file.user_id
         
-        
+        # Get data edits
         data_edits = data_edit.objects.filter(id_file=FID)
         if not data_edits.exists():
             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
         
-       
+        # Get all bank codes
         bank_codes = set(data_edits.values_list('bnk_code', flat=True))
         
-        
-        for data_item in data_edits:
+        # ກວດສອບວ່າສຳລັບແຕ່ລະ bnk_code, period ໃນ data_edit ຕ້ອງໃຫຍ່ກວ່າ period ໃຫຍ່ສຸດຂອງ B1
+        for bnk_code in bank_codes:
+            # ຊອກຫາ period ໃຫຍ່ສຸດໃນ B1 ສຳລັບ bnk_code ນີ້
+            max_period_in_b1 = B1.objects.filter(
+                bnk_code=bnk_code
+            ).exclude(id_file=FID).aggregate(Max('period'))['period__max']
             
-            existing_records = B1.objects.filter(
-                bnk_code=data_item.bnk_code
-            ).exclude(id_file=FID).order_by('-period')
-            
-            if existing_records.exists():
-                latest_record = existing_records.first()
-                
-                if data_item.period > latest_record.period:
-                    return JsonResponse({
-                        'status': 'error', 
-                        'message': f'Cannot upload data with period greater than existing period for bank code {data_item.bnk_code}. Existing period: {latest_record.period}, Upload period: {data_item.period}'
-                    }, status=406)
+            if max_period_in_b1 is not None:
+                # ກວດສອບ period ໃນຂໍ້ມູນທີ່ຈະອັບໂຫຼດ
+                data_item_periods = data_edits.filter(bnk_code=bnk_code).values_list('period', flat=True)
+                for period in data_item_periods:
+                    if period <= max_period_in_b1:
+                        return JsonResponse({
+                            'status': 'error', 
+                            'message': f'Cannot upload data with period less than or equal to the maximum existing period for bank code {bnk_code}. Maximum existing period: {max_period_in_b1}, Upload period: {period}'
+                        }, status=406)
         
-       
+        # Process items
         items_to_process = []
         for item in data_edits:
-            
+            # Get B1 items
             b1_items = B1.objects.filter(
                 bnk_code=item.bnk_code,
                 customer_id=item.customer_id,
@@ -6145,14 +6146,14 @@ def unload_upload(request):
                 'status_data': status_data
             })
         
-       
+        # Process each item
         for process_item in items_to_process:
             item = process_item['item']
             status_data = process_item['status_data']
             
-            
+            # If status is None or 'i'
             if status_data is None or status_data == 'i':
-                
+                # Delete records
                 B1.objects.filter(
                     id_file=FID,
                     bnk_code=item.bnk_code,
@@ -6167,9 +6168,9 @@ def unload_upload(request):
                     loan_id=item.loan_id
                 ).delete()
                 
-            
+            # If status is 'u'
             elif status_data == 'u':
-                
+                # Delete records
                 B1.objects.filter(
                     id_file=FID,
                     bnk_code=item.bnk_code,
@@ -6184,7 +6185,7 @@ def unload_upload(request):
                     loan_id=item.loan_id
                 ).delete()
                 
-                
+                # Get latest B1_Monthly
                 latest_b1_monthly = B1_Monthly.objects.filter(
                     bnk_code=item.bnk_code,
                     customer_id=item.customer_id,
@@ -6192,7 +6193,7 @@ def unload_upload(request):
                 ).exclude(id_file=FID).order_by('-id').first()
                 
                 if latest_b1_monthly:
-                   
+                    # Create new B1 record
                     B1.objects.create(
                         lcicID=latest_b1_monthly.lcicID,
                         com_enterprise_code=latest_b1_monthly.com_enterprise_code,
@@ -6228,7 +6229,7 @@ def unload_upload(request):
                         status_data=latest_b1_monthly.status_data if hasattr(latest_b1_monthly, 'status_data') else 'u'
                     )
         
-        
+        # Update upload file status
         Upload_File.objects.filter(FID=FID).update(statussubmit='5')
         
         return JsonResponse({'status': 'success', 'message': 'Data unloaded successfully'})
