@@ -10,7 +10,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include(('lcicHome.urls', 'lcicHome'), namespace='lcic')),
     path('news/', include(('lcicNews.urls', 'lcicNews'), namespace='news')),
-    path('api/', include('lcicHome.urls')),
+    # path('api/', include('lcicHome.urls')),
     path('', home, name='home'),
 
     # path('sql/', include('ned_sql.urls')),

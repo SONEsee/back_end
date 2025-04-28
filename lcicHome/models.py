@@ -908,6 +908,7 @@ class C1 (models.Model):
     insert_date = models.DateTimeField(blank=True)
     update_date = models.DateTimeField(blank=True)
     lcicID = models.CharField(max_length=30)
+    LCIC_code = models.CharField(max_length=255)
     user_id = models.CharField(max_length=100)
     com_enterprise_code = models.CharField(max_length=50)
 
@@ -976,6 +977,7 @@ class C1_disptes (models.Model):
     lcicID = models.CharField(max_length=30)
     user_id = models.CharField(max_length=100)
     com_enterprise_code = models.CharField(max_length=50)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
 
 from django.db import models
 from django.utils import timezone
@@ -998,6 +1000,7 @@ class C_error(models.Model):
     lcicID = models.CharField(max_length=30)
     user_id = models.CharField(max_length=100)
     com_enterprise_code = models.CharField(max_length=50)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
 
     def __str__(self):
         return f"{self.lcicID} - {self.com_enterprise_code} - {self.collateral_status}"
@@ -1010,6 +1013,7 @@ class col_real_estates(models.Model):
     id_file = models.CharField(max_length=255)
     period = models.CharField(max_length=150)
     lcicID = models.CharField(max_length=255)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
     bnk_code = models.CharField(max_length=255)
     bank_customer_ID = models.CharField(max_length=50)
     segmentType = models.CharField(max_length=255)
@@ -1066,6 +1070,7 @@ class col_real_estates(models.Model):
 
 class col_money_mia (models.Model):  #ເອກະສານມີຄ່າ C2.2
     id = models.AutoField(primary_key=True)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
     id_file = models.CharField(max_length=255)
     period = models.CharField(max_length=255)
     lcicID = models.CharField(max_length=255)
@@ -1106,6 +1111,7 @@ class col_equipment_eqi (models.Model):  # ເຄື່ອງຈັກ ແລະ
     bank_customer_ID = models.CharField(max_length=255)
     bnk_code = models.CharField(max_length=255)
     lcicID = models.CharField(max_length=255)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
     com_enterprise_code = models.CharField(max_length=255)
     segmentType = models.CharField(max_length=10)
     col_type = models.CharField(max_length=255)
@@ -1141,6 +1147,7 @@ class col_project_prj (models.Model):  # ເຄື່ອງຈັກ ແລະ �
     bank_customer_ID = models.CharField(max_length=255)
     bnk_code = models.CharField(max_length=255)
     lcicID = models.CharField(max_length=150)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
     com_enterprise_code = models.CharField(max_length=255)
     segmentType = models.CharField(max_length=50)
     col_type = models.CharField(max_length=255)
@@ -1175,6 +1182,7 @@ class col_vechicle_veh (models.Model):  # ຂໍ້ມູນຍານພາຫ�
     id_file = models.CharField(max_length=255)
     period = models.CharField(max_length=255)
     lcicID = models.CharField(max_length=255)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
     bnk_code = models.CharField(max_length=255)
     com_enterprise_code = models.CharField(max_length=255)
     segmentType = models.CharField(max_length=10)
@@ -1214,6 +1222,7 @@ class col_guarantor_gua (models.Model):  # ຂໍ້ມູນຜູ້ຄໍ້�
     id_file = models.CharField(max_length=255) #1
     period = models.CharField(max_length=255) #1
     lcicID = models.CharField(max_length=255) #1
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
     bnk_code = models.CharField(max_length=255)#1
     com_enterprise_code = models.CharField(max_length=255)#1
     segmentType = models.CharField(max_length=10)
@@ -1258,6 +1267,7 @@ class col_goldsilver_gold (models.Model):  # ເງິນ ແລະ ຄຳ C2.7
     id_file = models.CharField(max_length=255)
     period = models.CharField(max_length=255)
     lcicID = models.CharField(max_length=255)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
     bnk_code = models.CharField(max_length=255)
     segmentType = models.CharField(max_length=10)
     com_enterprise_code = models.CharField(max_length=255)
@@ -1290,6 +1300,7 @@ class col_guarantor_com (models.Model):  # ຜູ້ຄໍ້າ C2.8
     id_file = models.CharField(max_length=255) #1
     period = models.CharField(max_length=255) #1
     lcicID = models.CharField(max_length=30) #1
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
     com_enterprise_code = models.CharField(max_length=255) #1
     bnk_code = models.CharField(max_length=255) #1
     col_type = models.CharField(max_length=255) #1
