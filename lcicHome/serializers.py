@@ -741,11 +741,6 @@ class ProvinceSerializer(serializers.ModelSerializer):
         model = edl_province_code
         fields = ['pro_id', 'pro_name']
 
-# class Province_edlSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = edl_province_code
-#         fields = '__all__'
-
 class DistrictSerializer(serializers.ModelSerializer):
     class Meta:
         model = edl_district_code
@@ -757,7 +752,12 @@ class ProvinceWithDistrictsSerializer(serializers.ModelSerializer):
     class Meta:
         model = edl_province_code
         fields = ['pro_id', 'pro_name', 'districts']
-        
+    
+class ProvinceDistrictSerializer(serializers.Serializer):
+    pro_id = serializers.CharField()
+    pro_name = serializers.CharField()
+    dis_id = serializers.CharField()
+    dis_name = serializers.CharField()
 
 from rest_framework import serializers
 from .models import LCICSystemUser

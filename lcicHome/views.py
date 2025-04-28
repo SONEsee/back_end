@@ -11848,7 +11848,34 @@ class EDLProvinceAPIView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
+
+class EDLProvinceDetailAPIView(APIView):
+    def get(self, request):
+        try:
+            # Get all provinces and districts
+            provinces = edl_province_code.objects.all()
+            districts = edl_district_code.objects.all()
+
+            # Manual join (Python-side join)
+            result = []
+            for province in provinces:
+                matching_districts = [d for d in districts if d.pro_id == province.pro_id]
+                for district in matching_districts:
+                    result.append({
+                        'pro_id': province.pro_id,
+                        'pro_name': province.pro_name,
+                        'dis_id': district.dis_id,
+                        'dis_name': district.dis_name
+                    })
+
+            # Sort result if needed
+            result.sort(key=lambda x: (x['pro_id'], x['dis_id']))
+
+            serializer = ProvinceDistrictSerializer(result, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ProvinceDistrictAPIView(APIView):
     def get(self, request, pro_id=None):
