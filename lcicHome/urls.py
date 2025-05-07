@@ -43,7 +43,7 @@ from .views import confirm_upload
 from .views import upload_image, upload_imageprofile
 from .views import get_collaterals
 from .views import get_login3
-from .views import get_last_lcicid, upload_enterprise_info,unload_statussubmit,error_statussubmit
+from .views import get_last_lcicid, upload_enterprise_info,unload_statussubmit,error_statussubmit,unload_data
 from .views import confirm_image
 from .views import UserLoginView
 from django.contrib.auth import views as auth_views
@@ -225,6 +225,7 @@ urlpatterns = [
     path('api/productinfo4/', get_data_by_id_file, name='get_data_by_id_file'),
     path('confirm_upload/', views.confirm_upload, name='confirm_upload'),
     path('confirm_uploadc/', views.confirm_uploadc, name='confirm_uploadc'),
+    path('unload_uploadc/', views.unload_data, name='unload_data'),
 
     # path('upload333/', FileUploadView3.as_view(), name='file-upload'),
     path('upload-files/', FileUploadView3.as_view(), name='upload_files_view'),

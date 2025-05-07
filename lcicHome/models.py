@@ -509,7 +509,7 @@ class Upload_File_C(models.Model):
     statussubmit = models.CharField(max_length=150)     
     status_upload = models.CharField(max_length=150)
     FileType = models.CharField(max_length=10)  
-    percentage = models.FloatField(default=0.0)   
+    percentage = models.FloatField(default=0.0 ,max_length=255)   
 
     def __str__(self):
         return self.fileName  # or self.period
@@ -861,6 +861,7 @@ class disputes(models.Model):
     user_id = models.CharField(max_length=100)
     is_disputed = models.BigIntegerField(default=0, null=True)
     LCIC_code = models.CharField(max_length=255, blank=True, null=True)
+    
 
     
 class B1_Yearly(models.Model):
@@ -911,6 +912,7 @@ class C1 (models.Model):
     LCIC_code = models.CharField(max_length=255)
     user_id = models.CharField(max_length=100)
     com_enterprise_code = models.CharField(max_length=50)
+    data_status = models.CharField(max_length=100, blank=True, null=True)
 
 class CDL (models.Model):
     id = models.AutoField(primary_key=True)
@@ -978,6 +980,7 @@ class C1_disptes (models.Model):
     user_id = models.CharField(max_length=100)
     com_enterprise_code = models.CharField(max_length=50)
     LCIC_code = models.CharField(max_length=255, blank=True, null=True)
+    data_status = models.CharField(max_length=100, blank=True, null=True)
 
 from django.db import models
 from django.utils import timezone
@@ -1036,7 +1039,7 @@ class col_real_estates(models.Model):
     land_document_no = models.CharField(max_length=50)  # ໃບທີ່ດີນເລກທີ່
     land_out_time = models.CharField(max_length=50)  # ອອກຄັ້ງທີ່ດີນເລກທີ່
     land_area = models.DecimalField(max_digits=10, decimal_places=2)  # ເນື້ອທີ
-    land_regis_date = models.CharField()  # ວັນທີອອກໃບຕທດິນ
+    land_regis_date = models.CharField(null=True)  # ວັນທີອອກໃບຕທດິນ
     land_type = models.CharField(max_length=255)  # ປະເພດດິນ
     land_unit = models.CharField(max_length=255)  # ມາດຕາສວນ
     land_insert_date = models.CharField(max_length=255)
@@ -1058,6 +1061,7 @@ class col_real_estates(models.Model):
     rel_status = models.CharField(max_length=255)
     owner_name_lao = models.CharField(max_length=255)
     owner_surname_lao = models.CharField(max_length=255)
+    data_status = models.CharField(max_length=100, blank=True, null=True)
     insert_date = models.CharField()
     update_date = models.CharField()
 
@@ -1095,6 +1099,7 @@ class col_money_mia (models.Model):  #ເອກະສານມີຄ່າ C2.2
     owner_lao_surname = models.CharField(max_length=255)
     value = models.CharField(max_length=255)
     user_id = models.CharField(max_length=255)
+    data_status = models.CharField(max_length=100, blank=True, null=True)
     insert_date = models.CharField()
     update_date = models.CharField()
 
@@ -1130,6 +1135,7 @@ class col_equipment_eqi (models.Model):  # ເຄື່ອງຈັກ ແລະ
     owner_lao_name = models.CharField(max_length=255)
     owner_lao_surname = models.CharField(max_length=255)
     user_id = models.CharField(max_length=255)
+    data_status = models.CharField(max_length=100, blank=True, null=True)
 
     insert_date = models.DateField()
     update_date = models.DateField()
@@ -1169,6 +1175,7 @@ class col_project_prj (models.Model):  # ເຄື່ອງຈັກ ແລະ �
     owner_lao_surname = models.CharField(max_length=255)
     value = models.CharField(max_length=255)
     user_id = models.CharField(max_length=255)
+    data_status = models.CharField(max_length=100, blank=True, null=True)
     insert_date = models.DateField()
     update_date = models.DateField()
 
@@ -1207,6 +1214,7 @@ class col_vechicle_veh (models.Model):  # ຂໍ້ມູນຍານພາຫ�
     model = models.CharField(max_length=255)
     value = models.CharField(max_length=255)
     user_id = models.CharField(max_length=255)
+    data_status = models.CharField(max_length=100, blank=True, null=True)
     insert_date = models.DateField()
     update_date = models.DateField()
     
@@ -1258,6 +1266,7 @@ class col_guarantor_gua (models.Model):  # ຂໍ້ມູນຜູ້ຄໍ້�
     owner_name = models.CharField(max_length=255)#1
     owner_surname = models.CharField(max_length=255)#1
     owner_lao_name = models.CharField(max_length=255)#1
+    data_status = models.CharField(max_length=100, blank=True, null=True)
     owner_lao_surname = models.CharField(max_length=255)
 
 
@@ -1288,6 +1297,7 @@ class col_goldsilver_gold (models.Model):  # ເງິນ ແລະ ຄຳ C2.7
     owner_lao_surname = models.CharField(max_length=255)
     value = models.CharField(max_length=255)
     user_id = models.CharField(max_length=255)
+    data_status = models.CharField(max_length=100, blank=True, null=True)
     insert_date = models.DateField()
     update_date = models.DateField()
     def __str__(self):
@@ -1325,6 +1335,7 @@ class col_guarantor_com (models.Model):  # ຜູ້ຄໍ້າ C2.8
     segmentType = models.CharField(max_length=10)
     owner_lao_surname = models.CharField(max_length=255) #1
     user_id = models.CharField(max_length=255) #1
+    data_status = models.CharField(max_length=100, blank=True, null=True)
     insert_date = models.DateField() #1
     update_date = models.DateField() #1
     def __str__(self):
