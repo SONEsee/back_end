@@ -2730,6 +2730,7 @@ class FileUploadViewC(generics.CreateAPIView):
                         
                         if c1_entries.exists():
                             latest_c1 = c1_entries.order_by('-period').first()
+
                             
                             c1_period = latest_c1.period
                             
@@ -2739,7 +2740,7 @@ class FileUploadViewC(generics.CreateAPIView):
                                 
                                 c1_period_year = c1_period[2:]
                                 
-                                c1_period = int(f"{c1_period_year}{c1_period_month}")
+                                c1_period = int(c1_period) if isinstance(c1_period, str) else c1_period
                                 print("c1_period:", c1_period)
                                 
                             else:
@@ -2870,14 +2871,14 @@ def process_uploaded_file(uploaded_data,  user_id, period, file_period):
             elif LCIC_code and com_enterprise_code:
                 matching_record = EnterpriseInfo.objects.filter(LCIC_code=LCIC_code, EnterpriseID=com_enterprise_code).exists()
                 if not matching_record:
-                    collateral_status = '44'  # ບໍ່ມີຄູ່ກັນລະຫວ່າງ LCIC_code ແລະ com_enterprise_code
+                    collateral_status = '44'  
                 else:
                     collateral_status = '00'
             elif lcic_exists and enterprise_code_exists:
                 collateral_status = '00'
                 datamatch = '' 
             if collateral_status != '00':
-                # error_records += 1  LCICID
+                
 
                 C_error.objects.create(
                     id_file=cid,
@@ -3235,11 +3236,29 @@ def confirm_uploadc(request):
         CID = request.POST.get('CID')
         if not CID:
             return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
+        
+        
 
         
         data_edits = CDL.objects.filter(id_file=CID)
         if not data_edits.exists():
             return JsonResponse({'status': 'error', 'message': 'No data found for the provided File ID'}, status=404)
+        first_item = data_edits.first()
+        current_bnk_code = first_item.c3
+        current_period = first_item.period
+        latest_c1_period = C1.objects.filter(bnk_code=current_bnk_code).order_by('-period').values_list('period', flat=True).first()
+        if latest_c1_period is not None:
+            try:
+                current_period_int = int(current_period)
+                latest_c1_period_int = int(latest_c1_period)
+                if current_period_int < latest_c1_period_int:
+                    Upload_File_C.objects.filter(CID=CID).update(statussubmit='1')
+                    return JsonResponse({'status': 'error', 'message': 'File period is less than existing C1 period'}, status=408)
+                
+            except (ValueError, TypeError):
+                
+
+                pass
 
         
         for item in data_edits:
@@ -3443,14 +3462,14 @@ def confirm_uploadc(request):
                         'guarantor_nationality': item.c12,
                         'gua_national_id': item.c13,
                         'national_id_expiry_date': item.c14,
-                        'gua_passport_id': item.c15,
+                        'gua_passport': item.c15,
                         'passport_expiry_date': item.c16,
                         'gua_familybook_id': item.c17,
                         'familybook_provision_code': item.c18,
                         'familybook_issue_date': item.c19,
                         'gua_birthday': item.c20,
                         'gua_gender': item.c21,
-                        # 'gua_name': item.c22,
+                        'gua_name': item.c22,
                         'gua_surname': item.c23,
                         'gua_lao_name': item.c24,
                         'gua_lao_surname': item.c25,
@@ -3590,6 +3609,25 @@ def unload_data(request):
         c1_records = C1.objects.filter(id_file=CID)
         if not c1_records.exists():
             return JsonResponse({'status': 'error', 'message': 'No data found for the provided File ID'}, status=404)
+        if c1_records.exists():
+            first_record = c1_records.first()
+            bnk_code = first_record.bnk_code
+            current_period = first_record.period
+            latest_period = C1.objects.filter(bnk_code=bnk_code).exclude(id_file=CID).order_by('-period').values_list('period', flat=True).first()
+            if latest_period is not None:
+                try:
+                    current_period_int = int(current_period)
+                    latest_period_int = int(latest_period)
+                    if current_period_int < latest_period_int:
+                        Upload_File_C.objects.filter(CID=CID).update(statussubmit='0')
+                        return JsonResponse({
+                            'status': 'error', 
+                            'message': 'ທ່ານບໍ່ສາມາດອັນໂຫຼດຂໍ້ມູນໄດ້ເພາະວ່າຍັງມີຂໍ້ມູນທີ່ໃໝ່ກວ່າຢູ່ໃນລະບົບ ທ່ານຕອ້ງອັນຂໍ້ມູນຍອ້ນຫຼັງຕາມລຳດັບຈື່ງສາມາດອັນໂຫຼດໄດ້',
+                        }, status=406)
+                    
+                except (ValueError, TypeError):
+                    pass
+            
         
        
         records_info = []
@@ -3626,7 +3664,7 @@ def unload_data(request):
             loan = record_data['loan_id']
             
             try:
-                # ຫາຂໍ້ມູນໃໝ່ສຸດຈາກຕາຕະລາງຍ່ອຍຕາມປະເພດ
+                
                 latest_record = None
                 
                 if col_type == "c2.1":
@@ -3754,7 +3792,7 @@ def unload_data(request):
         col_guarantor_com.objects.filter(id_file=CID).delete()
         
        
-        Upload_File_C.objects.filter(CID=CID).update(statussubmit='2')  
+        Upload_File_C.objects.filter(CID=CID).update(statussubmit='5')  
         
        
         message = f'Unload completed successfully. Restored {restored_count} records with latest data.'
@@ -5490,6 +5528,19 @@ def update_statussubmitc(request):
         CID = request.POST.get('CID')
         file = Upload_File_C.objects.get(CID=CID)
         file.statussubmit = "3"  
+        file.save()
+        return JsonResponse({'status': 'success', 'message': 'statussubmit updated successfully'})
+    except Upload_File_C.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'File not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+@csrf_exempt
+@require_POST
+def unload_statussubmitc(request):
+    try:
+        CID = request.POST.get('CID')
+        file = Upload_File_C.objects.get(CID=CID)
+        file.statussubmit = "4"  
         file.save()
         return JsonResponse({'status': 'success', 'message': 'statussubmit updated successfully'})
     except Upload_File_C.DoesNotExist:

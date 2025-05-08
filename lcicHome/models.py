@@ -1023,6 +1023,8 @@ class col_real_estates(models.Model):
     branch_id_code = models.CharField(max_length=255)
     loan_id = models.CharField(max_length=255)
     col_type = models.CharField(max_length=255)
+    # ຕົວຢ່າງ
+    value = models.CharField(max_length=255, null=True, blank=True)
     value_unit = models.CharField(max_length=255)
     com_enterprise_code = models.CharField(max_length=255)
     plot_vilid = models.CharField(max_length=255)  # ລະຫັດບ້ານທີ່ຕັ້ງຂອງດິນ
@@ -1038,7 +1040,7 @@ class col_real_estates(models.Model):
     land_plot_no = models.CharField(max_length=50)  # ຕອນດີນເລກທີ່
     land_document_no = models.CharField(max_length=50)  # ໃບທີ່ດີນເລກທີ່
     land_out_time = models.CharField(max_length=50)  # ອອກຄັ້ງທີ່ດີນເລກທີ່
-    land_area = models.DecimalField(max_digits=10, decimal_places=2)  # ເນື້ອທີ
+    land_area = models.CharField(max_length=255)  # ເນື້ອທີ
     land_regis_date = models.CharField(null=True)  # ວັນທີອອກໃບຕທດິນ
     land_type = models.CharField(max_length=255)  # ປະເພດດິນ
     land_unit = models.CharField(max_length=255)  # ມາດຕາສວນ
@@ -1228,6 +1230,7 @@ class col_vechicle_veh (models.Model):  # ຂໍ້ມູນຍານພາຫ�
 class col_guarantor_gua (models.Model):  # ຂໍ້ມູນຜູ້ຄໍ້າ C2.6 1
     id = models.AutoField(primary_key=True) #1 
     id_file = models.CharField(max_length=255) #1
+    user_id = models.CharField(max_length=255) #1
     period = models.CharField(max_length=255) #1
     lcicID = models.CharField(max_length=255) #1
     LCIC_code = models.CharField(max_length=255, blank=True, null=True)
@@ -1253,6 +1256,7 @@ class col_guarantor_gua (models.Model):  # ຂໍ້ມູນຜູ້ຄໍ້�
     familybook_issue_date = models.CharField(max_length=255)#1
     gua_birthday = models.CharField(max_length=255)#1
     gua_gender = models.CharField(max_length=255)#1
+    gua_name = models.CharField(max_length=255)#1
     gua_surname = models.CharField(max_length=255)#1
     gua_lao_name = models.CharField(max_length=255)#1
     gua_lao_surname = models.CharField(max_length=255)#1
@@ -1264,6 +1268,9 @@ class col_guarantor_gua (models.Model):  # ຂໍ້ມູນຜູ້ຄໍ້�
     address_district_la = models.CharField(max_length=255)#1
     address_province_code = models.CharField(max_length=255)#1
     owner_name = models.CharField(max_length=255)#1
+    owner_gender = models.CharField(max_length=255)#1
+    insert_date = models.CharField(max_length=255, null=True, blank=True)
+    update_date = models.CharField(max_length=255, null=True, blank=True)
     owner_surname = models.CharField(max_length=255)#1
     owner_lao_name = models.CharField(max_length=255)#1
     data_status = models.CharField(max_length=100, blank=True, null=True)
