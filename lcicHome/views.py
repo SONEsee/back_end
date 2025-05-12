@@ -4866,96 +4866,7 @@ class FileUploadView3(generics.CreateAPIView):
 
         return JsonResponse({'status': 'success', 'message': 'File uploaded successfully'})
 
-# class FileUploadView3(generics.CreateAPIView):
-#     queryset = File.objects.all()
-#     serializer_class = FileSerializer
-#     parser_classes = (MultiPartParser, FormParser)
 
-#     @method_decorator(ensure_csrf_cookie)
-#     def post(self, request, *args, **kwargs):
-#         user_id = request.data.get('user_id')
-#         print("user_id:", user_id)
-#         if user_id is not None:
-#             user_id = str(user_id)
-#             if user_id.isdigit() and int(user_id) < 10 and len(user_id) > 1:
-#                 user_id = user_id[:]  
-#         print("user_id:", user_id)
-#         if not user_id:
-#             print()
-#             return JsonResponse({'status': 'error', 'message': 'User ID is required'}, status=400)
-
-#         files = request.FILES.getlist('file')
-#         csrf_token = request.META.get('CSRF_COOKIE', '')
-
-#         for file in files:
-#             if file.name.endswith('.json'):
-#                 try:
-#                     file_content = file.read().decode('utf-8')
-#                     file_data = json.loads(file_content)
-
-#                     if isinstance(file_data, list):
-#                         file_data = file_data[0]
-                    
-#                     bnk_code = file_data.get('bnk_code')
-#                     print("bnk_code:", bnk_code)
-#                     if bnk_code is None:
-#                         return JsonResponse({'status': 'error', 'message': 'bnk_code not found in the file'}, status=402)
-#                     if str(user_id) != str(bnk_code):
-#                         return JsonResponse({'status': 'error', 'message': 'User ID does not match bnk_code'}, status=401)
-                    
-                    
-#                     if Upload_File.objects.filter(fileName=file.name, user_id=user_id).exists():
-#                         return JsonResponse({'status': 'error', 'message': 'File with this name already exists for this user'}, status=403)
-
-#                     file_name_parts = file.name.split('_')
-#                     if len(file_name_parts) >= 4:
-
-#                         period_str = file_name_parts[3]
-                        
-#                         period_month = int(period_str[1:3])
-#                         period_year = int(period_str[3:])
-#                         file_period = int(f"{period_year:04d}{period_month:02d}")
-#                         print("File Period (Original):", file_period)
-
-                        
-#                         b1_entries = B1.objects.filter(bnk_code=bnk_code)
-#                         if b1_entries.exists():
-#                             latest_b1_entry = b1_entries.order_by('-period').first()
-#                             b1_period_str = str(latest_b1_entry.period)
-#                             if len(b1_period_str) == 6:
-#                                 b1_period_month = b1_period_str[:]
-#                                 b1_period_year = b1_period_str[:]
-#                                 b1_period = int(f"{b1_period_year}{b1_period_month}")
-#                                 print("B1 Period (Converted to YYYYMM):", b1_period)
-#                             else:
-#                                 return JsonResponse({'status': 'error', 'message': 'Invalid B1 period format'}, status=404)
-
-                            
-#                             if file_period < b1_period:
-#                                 return JsonResponse({'status': 'error', 'message': 'Cannot upload data for a previous period'}, status=405)
-#                         else:
-                            
-#                             pass
-
-#                     else:
-#                         return JsonResponse({'status': 'error', 'message': 'Invalid file name format'}, status=400)
-
-                    
-#                     file_instance = File.objects.create(file=file, user_id=user_id)
-#                     file_id = file_instance.id
-
-#                     upload_url = request.build_absolute_uri(reverse('upload_files'))
-#                     with file.open('rb') as f:
-#                         files_data = {'file': f}
-#                         headers = {'X-CSRFToken': csrf_token}
-#                         response = requests.post(upload_url, files=files_data, headers=headers, data={'period': file_period, 'file_id': file_id, 'user_id': user_id})
-#                         if response.status_code != 200:
-#                             return JsonResponse({'status': 'error', 'message': 'Failed to process file'}, status=500)
-
-#                 except json.JSONDecodeError:
-#                     return JsonResponse({'status': 'error', 'message': 'Invalid JSON format in file'}, status=400)
-
-#         return JsonResponse({'status': 'success', 'message': 'File uploaded successfully'})
 
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
@@ -6164,7 +6075,9 @@ def confirm_upload(request):
 
         data_edits = data_edit.objects.filter(id_file=FID)
         if not data_edits.exists():
+            Upload_File.objects.filter(FID=FID).update(statussubmit='2')
             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
+        
 
         for item in data_edits:
             try:
@@ -6359,6 +6272,7 @@ def confirm_upload(request):
                 )
                 
             except Exception as e:
+                Upload_File.objects.filter(FID=FID).update(statussubmit='2')
                 return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
         Upload_File.objects.filter(FID=FID).update(statussubmit='0')
@@ -6366,6 +6280,7 @@ def confirm_upload(request):
         return JsonResponse({'status': 'success', 'message': 'Data confirmed successfully'})
     
     except Exception as e:
+        Upload_File.objects.filter(FID=FID).update(statussubmit='2')
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 @csrf_exempt
 @require_POST
@@ -6373,11 +6288,13 @@ def unload_upload(request):
     try:
         FID = request.POST.get('FID')
         if not FID:
+            Upload_File.objects.filter(FID=FID).update(statussubmit='0')
             return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
 
         
         upload_file = Upload_File.objects.filter(FID=FID).first()
         if not upload_file:
+            Upload_File.objects.filter(FID=FID).update(statussubmit='0')
             return JsonResponse({'status': 'error', 'message': 'No upload file found for the given File ID'}, status=404)
         
         user_id = upload_file.user_id
@@ -6385,6 +6302,7 @@ def unload_upload(request):
         
         data_edits = data_edit.objects.filter(id_file=FID)
         if not data_edits.exists():
+            Upload_File.objects.filter(FID=FID).update(statussubmit='0')
             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
         
         
@@ -6402,6 +6320,7 @@ def unload_upload(request):
                 data_item_periods = data_edits.filter(bnk_code=bnk_code).values_list('period', flat=True)
                 for period in data_item_periods:
                     if period <= max_period_in_b1:
+                        Upload_File.objects.filter(FID=FID).update(statussubmit='0')
                         return JsonResponse({
                             'status': 'error', 
                             'message': f'Cannot upload data with period less than or equal to the maximum existing period for bank code {bnk_code}. Maximum existing period: {max_period_in_b1}, Upload period: {period}'
