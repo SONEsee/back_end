@@ -460,43 +460,62 @@ from .models import Login, User_Group, memberInfo
 from django.core.validators import MinLengthValidator
 
 class LoginSerializer(serializers.ModelSerializer):
-    profile_image = serializers.ImageField(required=False)  # Ensure profile_image is optional
-    password = serializers.CharField(write_only=True, validators=[MinLengthValidator(8)])
-    MID = serializers.PrimaryKeyRelatedField(queryset=memberInfo.objects.all(), allow_null=True, required=False)
-    GID = serializers.PrimaryKeyRelatedField(queryset=User_Group.objects.all(), allow_null=True, required=False)
+    # profile_image = serializers.ImageField(required=False)  # Ensure profile_image is optional
+    # password = serializers.CharField(write_only=True, validators=[MinLengthValidator(8)])
+    # MID = serializers.PrimaryKeyRelatedField(queryset=memberInfo.objects.all(), allow_null=True, required=False)
+    # GID = serializers.PrimaryKeyRelatedField(queryset=User_Group.objects.all(), allow_null=True, required=False)
     
     
+    # class Meta:
+    #     model = Login
+    #     fields = ['UID', 'MID', 'GID', 'username', 'nameL', 'nameE', 'surnameL', 'surnameE', 'profile_image', 'insertDate', 'updateDate', 'is_active', 'is_staff', 'is_superuser', 'password','bnk_code','branch_id']
+    #     extra_kwargs = {'password': {'write_only': True}}
+
+    # def create(self, validated_data):
+    #     # Extract the profile image from validated_data
+    #     profile_image = validated_data.pop('profile_image', None)
+        
+    #     # Ensure the password is hashed
+    #     user = Login.objects.create_user(
+    #         bnk_code=validated_data.get('bnk_code', None),
+    #         branch_id=validated_data.get('branch_id', None),
+    #         username=validated_data['username'],
+    #         password=validated_data['password'],
+    #         MID=validated_data.get('MID', None),
+    #         GID=validated_data.get('GID', None),
+    #         nameL=validated_data['nameL'],
+    #         nameE=validated_data['nameE'],
+    #         surnameL=validated_data['surnameL'],
+    #         surnameE=validated_data['surnameE'],
+    #         is_active=validated_data.get('is_active', True),
+    #         is_staff=validated_data.get('is_staff', False),
+    #         is_superuser=validated_data.get('is_superuser', False),
+    #     )
+        
+    #     # If a profile image was provided, save it to the user instance
+    #     if profile_image:
+    #         user.profile_image = profile_image
+    #         user.save()
+
+    #     return user
     class Meta:
         model = Login
-        fields = ['UID', 'MID', 'GID', 'username', 'nameL', 'nameE', 'surnameL', 'surnameE', 'profile_image', 'insertDate', 'updateDate', 'is_active', 'is_staff', 'is_superuser', 'password','bnk_code','branch_id']
-        extra_kwargs = {'password': {'write_only': True}}
+        fields = [
+            'UID', 'username', 'password',
+            'nameL', 'surnameL', 'nameE', 'surnameE',
+            'MID', 'GID', 'branch_id', 'bnk_code',
+            'profile_image'
+        ]
+        extra_kwargs = {
+            'password': {'write_only': True},
+        }
 
     def create(self, validated_data):
-        # Extract the profile image from validated_data
-        profile_image = validated_data.pop('profile_image', None)
-        
-        # Ensure the password is hashed
-        user = Login.objects.create_user(
-            bnk_code=validated_data.get('bnk_code', None),
-            branch_id=validated_data.get('branch_id', None),
-            username=validated_data['username'],
-            password=validated_data['password'],
-            MID=validated_data.get('MID', None),
-            GID=validated_data.get('GID', None),
-            nameL=validated_data['nameL'],
-            nameE=validated_data['nameE'],
-            surnameL=validated_data['surnameL'],
-            surnameE=validated_data['surnameE'],
-            is_active=validated_data.get('is_active', True),
-            is_staff=validated_data.get('is_staff', False),
-            is_superuser=validated_data.get('is_superuser', False),
-        )
-        
-        # If a profile image was provided, save it to the user instance
-        if profile_image:
-            user.profile_image = profile_image
+        password = validated_data.pop('password', None)
+        user = Login.objects.create(**validated_data)
+        if password:
+            user.set_password(password)
             user.save()
-
         return user
     
     def update(self, instance, validated_data):
@@ -538,7 +557,7 @@ from .models import SidebarItem, SidebarSubItem, Role
 class RoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Role
-        fields = ['id', 'name']
+        fields = ['id', 'name', 'name_lao']
 
 
 # class SidebarItemSerializer(serializers.ModelSerializer):
@@ -703,6 +722,21 @@ class FileDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = FileDetail
         fields = ['id', 'file_name', 'insertDate', 'status']  # Status is now a direct field
+
+    def get_file_name(self, obj):
+        return obj.name
+    
+    def get_insertDate(self, obj):
+        return obj.created_at
+
+from utility.models import File_Electric
+class FileElectricSerializer(serializers.ModelSerializer):
+    file_name = serializers.SerializerMethodField()
+    insertDate = serializers.SerializerMethodField()
+
+    class Meta:
+        model = File_Electric
+        fields = ['id', 'file_name', 'insertDate', 'status']
 
     def get_file_name(self, obj):
         return obj.name

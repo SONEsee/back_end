@@ -286,42 +286,95 @@ class UserManager(BaseUserManager):
 
 #     def _str_(self):
 #         return self.username
-    
-from django.db import models
-from django.contrib.auth.models import AbstractBaseUser
-class Login(AbstractBaseUser):
-    UID = models.AutoField(auto_created=True, primary_key=True, serialize=False)
-    MID = models.ForeignKey(memberInfo, related_name='memberInfo', null=True, blank=True, on_delete=models.CASCADE)
-    branch_id = models.CharField(max_length=100, null=True, blank=True)
-    bnk_code = models.CharField(max_length=100, null=True, blank=True)
-    GID = models.ForeignKey(User_Group, null=True, blank=True , on_delete=models.CASCADE)
-    username = models.CharField(max_length=150, unique=True)
-    nameL = models.CharField(max_length=150)
-    nameE = models.CharField(max_length=150)
-    surnameL = models.CharField(max_length=150)
-    surnameE = models.CharField(max_length=150)
-    profile_image = models.FileField(upload_to='profile_images/', null=True, blank=True)  # New field for profile image
-    insertDate = models.DateTimeField(auto_now_add=True, blank=True)
-    updateDate = models.DateTimeField(auto_now=True, blank=True)
-    is_active = models.BooleanField(default=True)
-    is_staff = models.BooleanField(default=False)
-    is_superuser = models.BooleanField(default=False)
-    last_login = models.DateTimeField(null=True, blank=True)
 
-    objects = UserManager()
+# from django.db import models
+# from django.contrib.auth.models import AbstractBaseUser
+# class Login(AbstractBaseUser):
+#     UID = models.AutoField(auto_created=True, primary_key=True, serialize=False)
+#     MID = models.ForeignKey(memberInfo, related_name='memberInfo', null=True, blank=True, on_delete=models.CASCADE)
+#     branch_id = models.CharField(max_length=100, null=True, blank=True)
+#     bnk_code = models.CharField(max_length=100, null=True, blank=True)
+#     GID = models.ForeignKey(User_Group, null=True, blank=True , on_delete=models.CASCADE)
+#     username = models.CharField(max_length=150, unique=True)
+#     nameL = models.CharField(max_length=150)
+#     nameE = models.CharField(max_length=150)
+#     surnameL = models.CharField(max_length=150)
+#     surnameE = models.CharField(max_length=150)
+#     profile_image = models.FileField(upload_to='profile_images/', null=True, blank=True)  # New field for profile image
+#     insertDate = models.DateTimeField(auto_now_add=True, blank=True)
+#     updateDate = models.DateTimeField(auto_now=True, blank=True)
+#     is_active = models.BooleanField(default=True)
+#     is_staff = models.BooleanField(default=False)
+#     is_superuser = models.BooleanField(default=False)
+#     last_login = models.DateTimeField(null=True, blank=True)
+#     objects = UserManager()
     
+#     def create_user(self, username, password=None, **extra_fields):
+#         if not username:
+#             raise ValueError('The Username must be set')
+#         user = self.model(username=username, **extra_fields)
+#         user.set_password(password)  # Hashes the password
+#         user.save(using=self._db)
+#         return user
+
+#     USERNAME_FIELD = 'username'
+
+#     def _str_(self):
+#         return self.username
+
+from django.db import models
+from django.contrib.auth.models import (
+    AbstractBaseUser, PermissionsMixin, BaseUserManager
+)
+
+class LoginManager(BaseUserManager):
     def create_user(self, username, password=None, **extra_fields):
         if not username:
             raise ValueError('The Username must be set')
         user = self.model(username=username, **extra_fields)
-        user.set_password(password)  # Hashes the password
+        user.set_password(password)
         user.save(using=self._db)
         return user
 
-    USERNAME_FIELD = 'username'
+    def create_superuser(self, username, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        return self.create_user(username, password, **extra_fields)
 
-    def _str_(self):
+class Login(AbstractBaseUser, PermissionsMixin):
+    UID = models.AutoField(primary_key=True)
+    MID = models.ForeignKey(
+        memberInfo, related_name='memberInfo',
+        null=True, blank=True, on_delete=models.CASCADE
+    )
+    branch_id = models.CharField(max_length=100, null=True, blank=True)
+    bnk_code = models.CharField(max_length=100, null=True, blank=True)
+    GID = models.ForeignKey(
+        User_Group, null=True, blank=True,
+        on_delete=models.CASCADE
+    )
+    username     = models.CharField(max_length=150, unique=True)
+    nameL        = models.CharField(max_length=150)
+    nameE        = models.CharField(max_length=150)
+    surnameL     = models.CharField(max_length=150)
+    surnameE     = models.CharField(max_length=150)
+    profile_image = models.FileField(
+        upload_to='profile_images/',
+        null=True, blank=True
+    )
+    insertDate   = models.DateTimeField(auto_now_add=True)
+    updateDate   = models.DateTimeField(auto_now=True)
+    is_active    = models.BooleanField(default=True)
+    is_staff     = models.BooleanField(default=False)
+
+    objects = LoginManager()
+
+    USERNAME_FIELD = 'username'
+    REQUIRED_FIELDS = ['nameL', 'surnameL']
+
+    def __str__(self):
         return self.username
+
 
 class bank_bnk(models.Model):
     bnk_sys_id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
@@ -1512,6 +1565,7 @@ class Collateral(models.Model):
 
 class Role(models.Model):
     name = models.CharField(max_length=100)
+    name_lao = models.CharField(max_length=100, blank=True, null=True)
     can_access_all_paths = models.BooleanField(default=False)
 
     def __str__(self):
@@ -1784,6 +1838,7 @@ class LCICSystemUser(models.Model):
     username = models.CharField(max_length=50, unique=True, null=False, blank=False)
     password = models.CharField(max_length=128, null=False, blank=False)  # Hashed password
     roles = models.CharField(max_length=10, null=False, blank=False)
+    # roles = models.ForeignKey("lcicHome.Role", verbose_name=_("Role"), on_delete=models.CASCADE)
     nameL = models.CharField(max_length=100, null=False, blank=False)  # Local name
     nameE = models.CharField(max_length=100, null=False, blank=False)  # English name
     surnameL = models.CharField(max_length=100, null=False, blank=False)  # Local surname
