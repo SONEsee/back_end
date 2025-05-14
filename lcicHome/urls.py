@@ -58,7 +58,7 @@ from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtility
 from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files,BankUsersView,LoanCountByDate,CountSearchLogbyDate,CountFeebyDate
 from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddLCICSystemUser, SysUserTokenRefresh,LCICSystemUserDetailView, LCICSystemUserListView, BankListCreateView,BankDetailView, EDLProvinceDetailAPIView
 from .views import UserGroupView
-from .views import upload_json
+from .views import upload_json,MemberInfoViewSet
 from .views import SearchBatfileAPIView
 # from .views import FileUploadView, FileDeleteView
 # from .views import upload_files
@@ -67,7 +67,7 @@ from .views import SearchBatfileAPIView
 # router.register(r'enterpriseinfo', EnterpriseInfoViewSet)
 router = DefaultRouter()
 router.register(r'charges', ChargeMatrixViewSet)
-
+router.register(r'members', MemberInfoViewSet)
 router.register(r'investorinfo', InvestorInfoViewSet)
 router.register(r'enterpriseinfo', EnterpriseInfoViewSet)
 @ensure_csrf_cookie
@@ -315,6 +315,10 @@ urlpatterns = [
     #Member Bank
     path('banks/', BankListCreateView.as_view(), name='bank_list_create'),
     path('banks/<int:pk>/', BankDetailView.as_view(), name='bank_detail'),
+    path('', views.location_form, name='location_form'),
+    path('api/provinces/', views.get_all_provinces, name='get_all_provinces'),
+    path('api/districts/', views.get_districts_by_province, name='get_districts_by_province'),
+    path('api/villages/', views.get_villages_by_district, name='get_villages_by_district'),
     
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 if settings.DEBUG:

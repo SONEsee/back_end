@@ -6288,13 +6288,13 @@ def unload_upload(request):
     try:
         FID = request.POST.get('FID')
         if not FID:
-            Upload_File.objects.filter(FID=FID).update(statussubmit='0')
+            Upload_File.objects.filter(FID=FID).update(statussubmit='1')
             return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
 
         
         upload_file = Upload_File.objects.filter(FID=FID).first()
         if not upload_file:
-            Upload_File.objects.filter(FID=FID).update(statussubmit='0')
+            Upload_File.objects.filter(FID=FID).update(statussubmit='1')
             return JsonResponse({'status': 'error', 'message': 'No upload file found for the given File ID'}, status=404)
         
         user_id = upload_file.user_id
@@ -6302,7 +6302,7 @@ def unload_upload(request):
         
         data_edits = data_edit.objects.filter(id_file=FID)
         if not data_edits.exists():
-            Upload_File.objects.filter(FID=FID).update(statussubmit='0')
+            Upload_File.objects.filter(FID=FID).update(statussubmit='1')
             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
         
         
@@ -6320,7 +6320,7 @@ def unload_upload(request):
                 data_item_periods = data_edits.filter(bnk_code=bnk_code).values_list('period', flat=True)
                 for period in data_item_periods:
                     if period <= max_period_in_b1:
-                        Upload_File.objects.filter(FID=FID).update(statussubmit='0')
+                        Upload_File.objects.filter(FID=FID).update(statussubmit='1')
                         return JsonResponse({
                             'status': 'error', 
                             'message': f'Cannot upload data with period less than or equal to the maximum existing period for bank code {bnk_code}. Maximum existing period: {max_period_in_b1}, Upload period: {period}'
@@ -9271,16 +9271,16 @@ class ChargeCountByHourView(APIView):
     def get(self, request):
         
         now = timezone.now()  
-        print(f"Django Timezone now: {now}")
+        
         
         
         now_system_local = datetime.now()  
-        print(f"System Local Time (datetime.now()): {now_system_local}")
+        
 
         
         now_utc = timezone.now()  
         now_local = timezone.localtime(now_utc)  
-        print(f"Local Time (Converted to Django TIME_ZONE): {now_local}")
+        
         
         
         start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -9367,7 +9367,7 @@ class ChargeCountByHourView(APIView):
         days_of_week = ["ວັນເສົາ", "ວັນທິດ","ວັນຈັນ", "ວັນອັງຄານ", "ວັນພຸດ", "ວັນພະຫັດ", "ວັນສຸກ"]
         for day in range(7):
             formatted_result_week[days_of_week[day]] = day_counts_week.get(day, 0)
-            print("resuale",day_counts_week.get(day, 0))
+            
 
         
         for day in range(1, 32):
@@ -12927,3 +12927,69 @@ class BankDetailView(APIView):
         bank = get_object_or_404(bank_bnk, pk=pk)
         bank.delete()
         return Response({'message': 'Bank deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+# views.py
+from rest_framework import viewsets, status
+from rest_framework.response import Response
+from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser, FormParser
+from .models import memberInfo
+from .serializers import MemberInfoSerializer
+
+class MemberInfoViewSet(viewsets.ModelViewSet):
+    queryset = memberInfo.objects.all()
+    serializer_class = MemberInfoSerializer
+    parser_classes = (MultiPartParser, FormParser)
+    
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['get'])
+    def published(self, request):
+        members = memberInfo.objects.filter(published=True)
+        serializer = self.get_serializer(members, many=True)
+        return Response(serializer.data)
+def get_all_provinces(request):
+    provinces = Province.objects.all().order_by('Province_Name')
+    data = [{'id': province.Prov_ID, 'name': province.Province_Name} for province in provinces]
+    return JsonResponse(data, safe=False)
+
+# ຟັງຊັ້ນດຶງຂໍ້ມູນເມືອງຕາມແຂວງທີ່ເລືອກ
+def get_districts_by_province(request):
+    province_id = request.GET.get('province_id')
+    if not province_id:
+        return JsonResponse([], safe=False)
+    
+    districts = District.objects.filter(Prov_ID=province_id).order_by('District_Name')
+    data = [{'id': district.Dstr_ID, 'name': district.District_Name} for district in districts]
+    return JsonResponse(data, safe=False)
+
+# ຟັງຊັ້ນດຶງຂໍ້ມູນບ້ານຕາມເມືອງທີ່ເລືອກ
+def get_villages_by_district(request):
+    district_id = request.GET.get('district_id')
+    province_id = request.GET.get('province_id')
+    if not district_id or not province_id:
+        return JsonResponse([], safe=False)
+    
+    villages = Village.objects.filter(Prov_ID=province_id, Dstr_ID=district_id).order_by('Village_Name')
+    data = [{'id': village.Vill_ID, 'name': village.Village_Name} for village in villages]
+    return JsonResponse(data, safe=False)
+
+# ຟັງຊັ້ນສຳລັບໜ້າຟອມທີ່ສະແດງຕົວເລືອກ dropdown
+def location_form(request):
+    provinces = Province.objects.all().order_by('Province_Name')
+    context = {
+        'provinces': provinces
+    }
+    return render(request, 'location_form.html', context)
