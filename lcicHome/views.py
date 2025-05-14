@@ -7704,43 +7704,44 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# class UserManagementView(APIView):
+#     parser_classes = [MultiPartParser, FormParser]
+    
+#     def post(self, request):
+#         # Your code here to handle POST request
+#         data = request.data.copy()
+#         if 'profile_image' in request.FILES:
+#             data['profile_image'] = request.FILES['profile_image']
+
+#         serializer = LoginSerializer(data=request.data)
+        
+#         if serializer.is_valid():
+#             user = serializer.save()
+
+#             return Response({
+#                 'success': 'User created successfully',
+#                 'user': {
+#                     'UID': user.UID,
+#                     'username': user.username,
+#                     'nameL': user.nameL,
+#                     'surnameL': user.surnameL,
+#                     'nameE': user.nameE,
+#                     'surnameE': user.surnameE,
+#                     'GID': user.GID.pk if user.GID else None,
+#                     'MID': user.MID.pk if user.MID else None,
+#                     'is_active': user.is_active,
+#                     'is_staff': user.is_staff
+#                 }
+#             }, status=status.HTTP_201_CREATED)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 class UserManagementView(APIView):
     parser_classes = [MultiPartParser, FormParser]
-    
-    # def post(self, request):
-    #     # serializer = LoginSerializer(data=request.data)
-    #     serializer = LoginSerializer(data=request.data, files=request.FILES)
-    #     if serializer.is_valid():
-    #         user = serializer.save()
-    #         return Response({
-    #             'success': 'User created successfully',
-    #             'user': {
-    #                 'UID': user.UID,
-    #                 'username': user.username,
-    #                 'nameL': user.nameL,
-    #                 'surnameL': user.surnameL,
-    #                 'nameE': user.nameE,
-    #                 'surnameE': user.surnameE,
-    #                 'GID': user.GID.pk if user.GID else None,
-    #                 'MID': user.MID.pk if user.MID else None,
-    #                 'is_active': user.is_active,
-    #                 'is_staff': user.is_staff,
-    #                 'profile_image_url': user.profile_image.url if user.profile_image else None,  # Return image URL
-    #             }
-    #         }, status=status.HTTP_201_CREATED)
-    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    def post(self, request):
-        # Your code here to handle POST request
-        data = request.data.copy()
-        if 'profile_image' in request.FILES:
-            data['profile_image'] = request.FILES['profile_image']
 
+    def post(self, request, *args, **kwargs):
         serializer = LoginSerializer(data=request.data)
-        
         if serializer.is_valid():
             user = serializer.save()
-
             return Response({
                 'success': 'User created successfully',
                 'user': {
@@ -7752,10 +7753,10 @@ class UserManagementView(APIView):
                     'surnameE': user.surnameE,
                     'GID': user.GID.pk if user.GID else None,
                     'MID': user.MID.pk if user.MID else None,
-                    'is_active': user.is_active,
-                    'is_staff': user.is_staff
+                    'profile_image_url': user.profile_image.url if user.profile_image else None,
                 }
             }, status=status.HTTP_201_CREATED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def get(self, request):
@@ -12167,6 +12168,7 @@ class FileDetailView(APIView):
         serializer = FileDetailSerializer(files, many=True)
         return Response(serializer.data)
 
+
     def post(self, request):
         file_obj = request.FILES.get('file_path')
         user_upload = request.data.get('user_upload', 'anonymous')
@@ -12204,18 +12206,49 @@ class FileDetailView(APIView):
             return Response(status=status.HTTP_204_NO_CONTENT)
 
 class FileElectricView(APIView):
+    # def get(self, request, pk=None):
+    #     if pk:
+    #         try:
+    #             file = File_Electric.objects.get(pk=pk)
+    #             serializer = FileDetailSerializer(file)
+    #             return Response(serializer.data)
+    #         except File_Electric.DoesNotExist:
+    #             return Response(status=status.HTTP_404_NOT_FOUND)
+    #     files = File_Electric.objects.all()
+    #     serializer = FileDetailSerializer(files, many=True)
+    #     return Response(serializer.data)
     def get(self, request, pk=None):
-        if pk:
+        # If a PK is provided, just return that single object
+        if pk is not None:
             try:
-                file = File_Electric.objects.get(pk=pk)
-                serializer = FileDetailSerializer(file)
-                return Response(serializer.data)
-            except File_Electric.DoesNotExist:
+                file = FileDetail.objects.get(pk=pk)
+            except FileDetail.DoesNotExist:
                 return Response(status=status.HTTP_404_NOT_FOUND)
-        files = File_Electric.objects.all()
-        serializer = FileDetailSerializer(files, many=True)
-        return Response(serializer.data)
+            serializer = FileElectricSerializer(file)
+            return Response(serializer.data)
 
+        # Otherwise, build a queryset and apply filters
+        qs = File_Electric.objects.all()
+
+        # 1) filter by name substring (case‐insensitive)
+        name = request.GET.get("name")
+        if name:
+            qs = qs.filter(name__icontains=name)
+
+        # 2) filter by exact status
+        status_param = request.GET.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param)
+
+        # 3) filter by the YYYYMM chunk in the filename
+        date = request.GET.get("date")  # e.g. "202503"
+        if date:
+            # matches any name containing "-YYYYMM"
+            qs = qs.filter(name__contains=f"-{date}")
+
+        serializer = FileElectricSerializer(qs, many=True)
+        return Response(serializer.data)
+    
     def post(self, request):
         file_obj = request.FILES.get('file_path')
         user_upload = request.data.get('user_upload', 'anonymous')
@@ -12651,6 +12684,22 @@ class ProvinceDistrictAPIView(APIView):
                 {'error': f'Province with pro_id {pro_id} not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
+            
+            
+# class EDLUploaded_DetailView(APIView):  
+#     def post(self, request, pro_id=None):
+#         try:
+            
+#             return Response(, status=status.HTTP_200_OK)
+            
+#         except edl_province_code.DoesNotExist:
+#             return Response(
+#                 {'error': f'Province with pro_id {pro_id} not found'},
+#                 status=status.HTTP_404_NOT_FOUND
+#             )
+        
+    
+    
 # views.py
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -12927,6 +12976,7 @@ class BankDetailView(APIView):
         bank = get_object_or_404(bank_bnk, pk=pk)
         bank.delete()
         return Response({'message': 'Bank deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+<<<<<<< HEAD
 # views.py
 from rest_framework import viewsets, status
 from rest_framework.response import Response
@@ -12993,3 +13043,69 @@ def location_form(request):
         'provinces': provinces
     }
     return render(request, 'location_form.html', context)
+=======
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.db.models import Count, Q
+from django.db.models.expressions import RawSQL
+
+class FileElectricListAPIView(APIView):
+    """
+    GET params:
+      - name:   substring to match in `name`
+      - date:   exact 'YYYYMM' to match in the filename
+      - status: one of Pending, Approved, Rejected
+    Response:
+      {
+        "results": […],
+        "counts_by_month": [
+           {"file_month":"202503","cnt": 5},
+           …
+        ]
+      }
+    """
+    def get(self, request, *args, **kwargs):
+        qs = File_Electric.objects.all()
+
+        # filter by name substring
+        name = request.GET.get("name")
+        if name:
+            qs = qs.filter(name__icontains=name)
+
+        # filter by status
+        status = request.GET.get("status")
+        if status:
+            qs = qs.filter(status=status)
+
+        # filter by the YYYYMM chunk in the filename
+        date = request.GET.get("date")  # e.g. "202408"
+        if date:
+            # plain substring-match on "-YYYYMM"
+            qs = qs.filter(name__contains=f"-{date}")
+
+        # serialize the filtered file list
+        files_data = FileElectricSerializer(qs, many=True).data
+
+        # now build counts_by_month on that same (possibly date-scoped) queryset
+        counts_qs = (
+            qs
+            .annotate(
+                # extract exactly the 6-digit YYYYMM after the dash
+                file_month=RawSQL(
+                    "SUBSTRING(name FROM '-([0-9]{6})')",
+                    []
+                )
+            )
+            .values("file_month")
+            .annotate(cnt=Count("id"))
+            .order_by("file_month")
+        )
+
+        return Response({
+            "results": files_data,
+            "counts_by_month": list(counts_qs)
+        })
+        
+        
+>>>>>>> c29d438fd31e66cbe4a1e846f2752b487a0811e1
