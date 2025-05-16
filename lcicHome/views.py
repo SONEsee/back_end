@@ -12976,7 +12976,6 @@ class BankDetailView(APIView):
         bank = get_object_or_404(bank_bnk, pk=pk)
         bank.delete()
         return Response({'message': 'Bank deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
-<<<<<<< HEAD
 # views.py
 from rest_framework import viewsets, status
 from rest_framework.response import Response
@@ -13015,7 +13014,7 @@ def get_all_provinces(request):
     data = [{'id': province.Prov_ID, 'name': province.Province_Name} for province in provinces]
     return JsonResponse(data, safe=False)
 
-# ຟັງຊັ້ນດຶງຂໍ້ມູນເມືອງຕາມແຂວງທີ່ເລືອກ
+
 def get_districts_by_province(request):
     province_id = request.GET.get('province_id')
     if not province_id:
@@ -13025,7 +13024,7 @@ def get_districts_by_province(request):
     data = [{'id': district.Dstr_ID, 'name': district.District_Name} for district in districts]
     return JsonResponse(data, safe=False)
 
-# ຟັງຊັ້ນດຶງຂໍ້ມູນບ້ານຕາມເມືອງທີ່ເລືອກ
+
 def get_villages_by_district(request):
     district_id = request.GET.get('district_id')
     province_id = request.GET.get('province_id')
@@ -13036,14 +13035,13 @@ def get_villages_by_district(request):
     data = [{'id': village.Vill_ID, 'name': village.Village_Name} for village in villages]
     return JsonResponse(data, safe=False)
 
-# ຟັງຊັ້ນສຳລັບໜ້າຟອມທີ່ສະແດງຕົວເລືອກ dropdown
+
 def location_form(request):
     provinces = Province.objects.all().order_by('Province_Name')
     context = {
         'provinces': provinces
     }
     return render(request, 'location_form.html', context)
-=======
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -13108,4 +13106,3 @@ class FileElectricListAPIView(APIView):
         })
         
         
->>>>>>> c29d438fd31e66cbe4a1e846f2752b487a0811e1

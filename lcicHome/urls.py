@@ -307,13 +307,13 @@ urlpatterns = [
     # path('province-district-combined/<str:pro_id>/', ProvinceDistrictCombinedAPIView.as_view(), name='province-district-combined'),
     
     
-    #Logim Method:
+    
     path('systemlogin/', SysUserLogin.as_view(), name='sys_user_login'),
     path('sys-add-user/', AddLCICSystemUser.as_view(), name='add_system_user'),
     path('token/refresh/', SysUserTokenRefresh.as_view(), name='token_refresh'),
     path('sys-list-user/', LCICSystemUserListView.as_view(), name='add_system_user'),
      path('sys-detail-user/<int:pk>/', LCICSystemUserDetailView .as_view(), name='add_system_user'),
-    #Member Bank
+   
     path('banks/', BankListCreateView.as_view(), name='bank_list_create'),
     path('banks/<int:pk>/', BankDetailView.as_view(), name='bank_detail'),
     path('', views.location_form, name='location_form'),
