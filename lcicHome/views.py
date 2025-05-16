@@ -7328,35 +7328,39 @@ from datetime import timedelta
 #             return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
 
-
+from datetime import datetime
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.utils import timezone
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Login
 
 class UserLoginView(APIView):
-    permission_classes = [AllowAny]  # Ensure login is open to unauthenticated users
+    permission_classes = [AllowAny]
 
     def post(self, request):
         username = request.data.get('username')
         password = request.data.get('password')
 
-        # Authenticate user based on your custom model
         try:
             user = Login.objects.get(username=username)
-
             if not user.check_password(password):
                 return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-            
-            # Update last_login to current time
-            user.last_login = datetime.now()
-            user.save()
 
-            # Generate JWT token
+            # Update last_login
+            user.last_login = datetime.now()
+            user.save(update_fields=['last_login'])
+
+            # Create tokens
             refresh = RefreshToken.for_user(user)
+
+            # Build absolute URL for the profile image (if any)
+            profile_url = (
+                request.build_absolute_uri(user.profile_image.url)
+                if user.profile_image
+                else None
+            )
 
             return Response({
                 'detail': 'Successfully logged in.',
@@ -7366,26 +7370,27 @@ class UserLoginView(APIView):
                     'UID': user.UID,
                     'MID': {
                         'id': user.MID.bnk_code if user.MID else None,
-                        'code': user.MID.code if user.MID else None
+                        'code': user.MID.code if user.MID else None,
                     },
                     'GID': {
                         'GID': user.GID.GID if user.GID else None,
-                        'nameL': user.GID.nameL if user.GID else None
+                        'nameL': user.GID.nameL if user.GID else None,
                     },
                     'username': user.username,
                     'nameL': user.nameL,
                     'nameE': user.nameE,
                     'surnameL': user.surnameL,
                     'surnameE': user.surnameE,
+                    'profile_image': profile_url,
                     'is_active': user.is_active,
                     'last_login': user.last_login,
                     'is_staff': user.is_staff,
-                    'is_superuser': user.is_superuser
+                    'is_superuser': user.is_superuser,
                 }
             }, status=status.HTTP_200_OK)
+
         except Login.DoesNotExist:
             return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-
 
 
 
@@ -11408,16 +11413,47 @@ class FileDeleteView(APIView):
 #         )
 
 class FileDetailView(APIView):
+    # def get(self, request, pk=None):
+    #     if pk:
+    #         try:
+    #             file = FileDetail.objects.get(pk=pk)
+    #             serializer = FileDetailSerializer(file)
+    #             return Response(serializer.data)
+    #         except FileDetail.DoesNotExist:
+    #             return Response(status=status.HTTP_404_NOT_FOUND)
+    #     files = FileDetail.objects.all()
+    #     serializer = FileDetailSerializer(files, many=True)
+    #     return Response(serializer.data)
     def get(self, request, pk=None):
-        if pk:
+        # If a PK is provided, just return that single object
+        if pk is not None:
             try:
                 file = FileDetail.objects.get(pk=pk)
-                serializer = FileDetailSerializer(file)
-                return Response(serializer.data)
             except FileDetail.DoesNotExist:
                 return Response(status=status.HTTP_404_NOT_FOUND)
-        files = FileDetail.objects.all()
-        serializer = FileDetailSerializer(files, many=True)
+            serializer = FileDetail(file)
+            return Response(serializer.data)
+
+        # Otherwise, build a queryset and apply filters
+        qs = FileDetail.objects.all()
+
+        # 1) filter by name substring (case‐insensitive)
+        name = request.GET.get("name")
+        if name:
+            qs = qs.filter(name__icontains=name)
+
+        # 2) filter by exact status
+        status_param = request.GET.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param)
+
+        # 3) filter by the YYYYMM chunk in the filename
+        date = request.GET.get("date")  # e.g. "202503"
+        if date:
+            # matches any name containing "-YYYYMM"
+            qs = qs.filter(name__contains=f"-{date}")
+
+        serializer = FileDetailSerializer(qs, many=True)
         return Response(serializer.data)
 
 
@@ -11473,8 +11509,8 @@ class FileElectricView(APIView):
         # If a PK is provided, just return that single object
         if pk is not None:
             try:
-                file = FileDetail.objects.get(pk=pk)
-            except FileDetail.DoesNotExist:
+                file = File_Electric.objects.get(pk=pk)
+            except File_Electric.DoesNotExist:
                 return Response(status=status.HTTP_404_NOT_FOUND)
             serializer = FileElectricSerializer(file)
             return Response(serializer.data)
