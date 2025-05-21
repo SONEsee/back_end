@@ -301,6 +301,7 @@ from .models import Login, User_Group, memberInfo
 from django.core.validators import MinLengthValidator
 
 class LoginSerializer(serializers.ModelSerializer):
+    profile_image = serializers.SerializerMethodField()
     MID = MemberInfoSerializer(read_only=True)
     GID = UserGroupSerializer(read_only=True)
 
@@ -326,7 +327,15 @@ class LoginSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'password': {'write_only': True},
         }
-
+    def get_profile_image(self, obj):
+        """
+        Return only the path under MEDIA_ROOT, e.g.
+        "/profile_images/your_file.png"
+        """
+        if not obj.profile_image:
+            return None
+        # obj.profile_image.name is e.g. "profile_images/your_file.png"
+        return '/' + obj.profile_image.name
     def create(self, validated_data):
         password = validated_data.pop('password', None)
         user = Login.objects.create(**validated_data)
@@ -335,25 +344,41 @@ class LoginSerializer(serializers.ModelSerializer):
             user.save()
         return user
     
+
     def update(self, instance, validated_data):
         # Handle password hashing if password is being updated
         password = validated_data.get('password', None)
         if password:
             instance.set_password(password)  # Hash the password using set_password()
+         # handle profile_image
+        if 'profile_image' in validated_data:
+            instance.profile_image = validated_data.pop('profile_image')
+        # handle branch_id + bnk_code
+        if 'branch_id' in validated_data:
+            instance.branch_id = validated_data.pop('branch_id')
+        if 'bnk_code' in validated_data:
+            instance.bnk_code = validated_data.pop('bnk_code')
 
-        # Update the other fields normally
-        instance.username = validated_data.get('username', instance.username)
-        instance.nameL = validated_data.get('nameL', instance.nameL)
-        instance.nameE = validated_data.get('nameE', instance.nameE)
-        instance.surnameL = validated_data.get('surnameL', instance.surnameL)
-        instance.surnameE = validated_data.get('surnameE', instance.surnameE)
-        instance.MID = validated_data.get('MID', instance.MID)
-        instance.GID = validated_data.get('GID', instance.GID)
-        instance.is_active = validated_data.get('is_active', instance.is_active)
-        instance.is_staff = validated_data.get('is_staff', instance.is_staff)
-        instance.is_superuser = validated_data.get('is_superuser', instance.is_superuser)
-        bnk_code = validated_data.get('bnk_code', instance.bnk_code)
-        branch_id = validated_data.get('branch_id', instance.branch_id)
+        # handle MID/GID only if present
+        if 'MID' in validated_data:
+            instance.MID = validated_data.pop('MID')
+        if 'GID' in validated_data:
+            instance.GID = validated_data.pop('GID')
+        # # Update the other fields normally
+        # instance.username = validated_data.get('username', instance.username)
+        # instance.nameL = validated_data.get('nameL', instance.nameL)
+        # instance.nameE = validated_data.get('nameE', instance.nameE)
+        # instance.surnameL = validated_data.get('surnameL', instance.surnameL)
+        # instance.surnameE = validated_data.get('surnameE', instance.surnameE)
+        # instance.MID = validated_data.get('MID', instance.MID)
+        # instance.GID = validated_data.get('GID', instance.GID)
+        # instance.is_active = validated_data.get('is_active', instance.is_active)
+        # instance.is_staff = validated_data.get('is_staff', instance.is_staff)
+        # instance.is_superuser = validated_data.get('is_superuser', instance.is_superuser)
+        # bnk_code = validated_data.get('bnk_code', instance.bnk_code)
+        # branch_id = validated_data.get('branch_id', instance.branch_id)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
 
         # Save the updated user object
         instance.save()

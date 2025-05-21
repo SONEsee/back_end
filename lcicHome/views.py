@@ -2278,7 +2278,12 @@ class GetUserByUIDView(APIView):
         except Exception as e:
             return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
 class UpdateUserView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
     def put(self, request, UID):
         try:
             user = Login.objects.get(UID=UID)
@@ -7335,7 +7340,6 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Login
-
 class UserLoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -7355,12 +7359,8 @@ class UserLoginView(APIView):
             # Create tokens
             refresh = RefreshToken.for_user(user)
 
-            # Build absolute URL for the profile image (if any)
-            profile_url = (
-                request.build_absolute_uri(user.profile_image.url)
-                if user.profile_image
-                else None
-            )
+            # Return only the path under MEDIA_ROOT, e.g. "/profile_images/foo.png"
+            profile_path = f"/{user.profile_image.name}" if user.profile_image else None
 
             return Response({
                 'detail': 'Successfully logged in.',
@@ -7381,7 +7381,7 @@ class UserLoginView(APIView):
                     'nameE': user.nameE,
                     'surnameL': user.surnameL,
                     'surnameE': user.surnameE,
-                    'profile_image': profile_url,
+                    'profile_image': profile_path,
                     'is_active': user.is_active,
                     'last_login': user.last_login,
                     'is_staff': user.is_staff,
