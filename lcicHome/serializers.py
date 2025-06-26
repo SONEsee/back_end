@@ -601,6 +601,22 @@ class UtilityBillSerializer(serializers.ModelSerializer):
                  'PaymentType', 'Payment_Date', 'InvoiceMonth', 'InvoiceDate',
                  'DisID', 'ProID', 'InsertDate', 'UpdateDate', 'UserID']
 
+from utility.models import edl_customer_info
+class EDLCustomerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = edl_customer_info
+        fields = ['Customer_ID', 'Company_name', 'Name', 'Surname', 'National_ID', 
+                 'Passport', 'Address', 'Dustrict_ID', 'Province_ID', 'Tel', 
+                 'Email', 'Cus_type', 'Regis_date']
+from utility.models import Electric_Bill       
+class ElectricBillSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Electric_Bill
+        fields = ['BillID', 'Customer_ID', 'InvoiceNo', 'TypeOfPro', 'Outstanding',
+                 'Basic_Tax', 'Bill_Amount', 'Debt_Amount', 'Payment_ID',
+                 'PaymentType', 'Payment_Date', 'InvoiceMonth', 'InvoiceDate',
+                 'DisID', 'ProID', 'InsertDate', 'UpdateDate', 'UserID']
+
 from utility.models import searchlog_utility
 class SearchLogUtilitySerializer(serializers.ModelSerializer):
     class Meta:
