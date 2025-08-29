@@ -6,10 +6,10 @@ def get_tokens_for_user(user):
     """
     refresh = RefreshToken()
     
-    # Manually set the user ID in the token payload using the 'id' field
-    refresh['user_id'] = user.id  # Use the 'id' field from LCICSystemUser
+ 
+    refresh['user_id'] = user.id  
     
-    # Optionally add additional claims to the token
+    
     refresh['username'] = user.username
     refresh['roles'] = user.roles
     

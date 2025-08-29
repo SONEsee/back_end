@@ -43,7 +43,7 @@ from .views import confirm_upload
 from .views import upload_image, upload_imageprofile
 from .views import get_collaterals
 from .views import get_login3
-from .views import get_last_lcicid, upload_enterprise_info
+from .views import get_last_lcicid, upload_enterprise_info,unload_statussubmit,error_statussubmit,unload_data,unload_statussubmitc
 from .views import confirm_image
 from .views import UserLoginView
 from django.contrib.auth import views as auth_views
@@ -58,7 +58,7 @@ from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtility
 from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files,BankUsersView,LoanCountByDate,CountSearchLogbyDate,CountFeebyDate
 from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddLCICSystemUser, SysUserTokenRefresh,LCICSystemUserDetailView, LCICSystemUserListView, BankListCreateView,BankDetailView, EDLProvinceDetailAPIView, FileElectricListAPIView,ElectricReportAPIView
 from .views import UserGroupView
-from .views import upload_json
+from .views import upload_json,MemberInfoViewSet
 from .views import SearchBatfileAPIView
 # from .views import FileUploadView, FileDeleteView
 # from .views import upload_files
@@ -67,7 +67,7 @@ from .views import SearchBatfileAPIView
 # router.register(r'enterpriseinfo', EnterpriseInfoViewSet)
 router = DefaultRouter()
 router.register(r'charges', ChargeMatrixViewSet)
-
+router.register(r'members', MemberInfoViewSet)
 router.register(r'investorinfo', InvestorInfoViewSet)
 router.register(r'enterpriseinfo', EnterpriseInfoViewSet)
 @ensure_csrf_cookie
@@ -225,10 +225,12 @@ urlpatterns = [
     path('api/productinfo4/', get_data_by_id_file, name='get_data_by_id_file'),
     path('confirm_upload/', views.confirm_upload, name='confirm_upload'),
     path('confirm_uploadc/', views.confirm_uploadc, name='confirm_uploadc'),
+    path('unload_uploadc/', views.unload_data, name='unload_data'),
 
     # path('upload333/', FileUploadView3.as_view(), name='file-upload'),
     path('upload-files/', FileUploadView3.as_view(), name='upload_files_view'),
     path('process-files/', upload_files, name='upload_files'),
+    path('unload-upload/', views.unload_upload, name='unload_upload'),
 
 
 
@@ -238,7 +240,11 @@ urlpatterns = [
 
 
     path('api/update-statussubmit/', update_statussubmit, name='update_statussubmit'),
+    path('api/unload_statussubmit/', unload_statussubmit, name='update_statussubmit'),
+    path('api/error_statussubmit/', error_statussubmit, name='update_statussubmit'),
     path('api/update-statussubmitc/',  update_statussubmitc, name=' update_statussubmitc'),
+    path('api/unload-statussubmitc/',  unload_statussubmitc, name=' update_statussubmitc'),
+
     path('api/upload_image/', upload_image, name='collateral-update'),
     path('api/upload_imagef/', upload_imageprofile, name='collateral-update'),
     path('api/get_collaterals/', get_collaterals, name='get_collaterals'),
@@ -303,15 +309,19 @@ urlpatterns = [
     # path('province-district-combined/<str:pro_id>/', ProvinceDistrictCombinedAPIView.as_view(), name='province-district-combined'),
     
     
-    #Logim Method:
+    
     path('systemlogin/', SysUserLogin.as_view(), name='sys_user_login'),
     path('sys-add-user/', AddLCICSystemUser.as_view(), name='add_system_user'),
     path('token/refresh/', SysUserTokenRefresh.as_view(), name='token_refresh'),
     path('sys-list-user/', LCICSystemUserListView.as_view(), name='add_system_user'),
      path('sys-detail-user/<int:pk>/', LCICSystemUserDetailView .as_view(), name='add_system_user'),
-    #Member Bank
+   
     path('banks/', BankListCreateView.as_view(), name='bank_list_create'),
     path('banks/<int:pk>/', BankDetailView.as_view(), name='bank_detail'),
+    path('', views.location_form, name='location_form'),
+    path('api/provinces/', views.get_all_provinces, name='get_all_provinces'),
+    path('api/districts/', views.get_districts_by_province, name='get_districts_by_province'),
+    path('api/villages/', views.get_villages_by_district, name='get_villages_by_district'),
     
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 if settings.DEBUG:
