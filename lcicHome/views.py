@@ -2415,85 +2415,346 @@ class CustomerInfoINDView(APIView):
 
 
 
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from rest_framework import status
+# from .models import EnterpriseInfo, InvestorInfo, searchLog
+# from .serializers import EnterpriseInfoSerializer
+# from datetime import datetime
+
+
+
+# class EnterpriseInfoSearch(APIView):
+    
+#     permission_classes = [IsAuthenticated]
+
+#     def post(self, request):
+        
+#         user = request.user
+#         UID = user.UID 
+#         bank = user.MID
+        
+#         bank_info = bank_bnk.objects.get(bnk_code=bank.bnk_code)
+      
+#         LCIC_code = request.data.get('LCIC_code')
+#         EnterpriseID = request.data.get('EnterpriseID')
+#         loan_purpose = request.data.get('CatalogID')
+#         sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
+        
+    
+#         if LCIC_code is not None and EnterpriseID is not None:
+#             try:
+#                 enterprise_info = EnterpriseInfo.objects.filter(LCIC_code=LCIC_code, EnterpriseID=EnterpriseID)
+#                 investor_info = InvestorInfo.objects.filter(EnterpriseID=EnterpriseID)
+#                 for i in investor_info:
+#                     invesinfo = i.investorName
+                    
+                
+#                 serializer = EnterpriseInfoSerializer(enterprise_info, many=True)
+                
+#                 inquiry_month = datetime.now().strftime('%Y-%m')
+               
+#                 search_log = searchLog.objects.create(
+#                     enterprise_ID=EnterpriseID,
+#                     LCIC_code=LCIC_code,
+#                     bnk_code=bank_info.bnk_code,
+#                     bnk_type=bank_info.bnk_type,
+#                     branch='',
+#                     cus_ID='',
+#                     cusType='enterprise',
+#                     credit_type='Full Loan Report',
+#                     inquiry_month=inquiry_month,
+#                     com_tel='',
+#                     com_location='',
+#                     rec_loan_amount=0.0,
+#                     rec_loan_amount_currency='',
+#                     rec_loan_purpose=loan_purpose,
+#                     rec_enquiry_type='',
+#                     sys_usr=sys_usr  
+#                 )
+
+#                 search_log.save()
+#                 print("Searchlog Insert Successfully ======>")
+                
+#                 return Response(serializer.data, status=status.HTTP_200_OK)
+#             except EnterpriseInfo.DoesNotExist:
+#                 return Response({'error': 'EnterpriseInfo not found'}, status=status.HTTP_404_NOT_FOUND)
+#             except Exception as e:
+#                 return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import EnterpriseInfo, InvestorInfo, searchLog
+from rest_framework.permissions import IsAuthenticated
+from .models import EnterpriseInfo, InvestorInfo, searchLog, bank_bnk
 from .serializers import EnterpriseInfoSerializer
 from datetime import datetime
+from django.db.models import Q
 
 
-# Search Enterprise 30/09/2024
 class EnterpriseInfoSearch(APIView):
-    # authentication_classes = [JWTAuthentication]
+    
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        
-        user = request.user
-        UID = user.UID 
-        bank = user.MID
-        # bank = str(user.MID.id)
-        # branch = str(user.GID.GID)  
-        # sys_usr = str(user.UID) + str(bank) + str(branch)
-        
-        # print("Bank COde: ===>", bank.bnk_code)
-        # print("Bank COde: ===>", bank.code)
-        bank_info = bank_bnk.objects.get(bnk_code=bank.bnk_code)
-        # print("---->",bank_info.bnk_code)
-        # print("Bank_Type",bank_info.bnk_type)
-        LCIC_code = request.data.get('LCIC_code')
-        EnterpriseID = request.data.get('EnterpriseID')
-        loan_purpose = request.data.get('CatalogID')
-        sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
-        
-        # print("============> Loan Purpose: ",loan_purpose )
-        # print("Authenticated User ID (UID):", UID)
-        # print("Authenticated Bankname:", bank)
-        # print("LCICID:", LCICID)
-        # print("EnterpriseID:", EnterpriseID)
-        # print("Login :",Login._meta.get_fields())
-        if LCIC_code is not None and EnterpriseID is not None:
-            try:
-                enterprise_info = EnterpriseInfo.objects.filter(LCIC_code=LCIC_code, EnterpriseID=EnterpriseID)
-                investor_info = InvestorInfo.objects.filter(EnterpriseID=EnterpriseID)
-                for i in investor_info:
-                    invesinfo = i.investorName
-                    # print(invesinfo)
-                
-                serializer = EnterpriseInfoSerializer(enterprise_info, many=True)
-                # inquiry_month = datetime(year=2024, month=10, day=1).date()  # October 2024
-                inquiry_month = datetime.now().strftime('%Y-%m')
-                # Insert log
-                search_log = searchLog.objects.create(
-                    enterprise_ID=EnterpriseID,
-                    LCIC_code=LCIC_code,
-                    bnk_code=bank_info.bnk_code,
-                    bnk_type=bank_info.bnk_type,
-                    branch='',
-                    cus_ID='',
-                    cusType='enterprise',
-                    credit_type='Full Loan Report',
-                    inquiry_month=inquiry_month,
-                    com_tel='',
-                    com_location='',
-                    rec_loan_amount=0.0,
-                    rec_loan_amount_currency='',
-                    rec_loan_purpose=loan_purpose,
-                    rec_enquiry_type='',
-                    sys_usr=sys_usr  # Save sys_usr to the model if needed
+        try:
+            user = request.user
+            UID = user.UID 
+            bank = user.MID
+            
+            # Get bank information
+            bank_info = bank_bnk.objects.get(bnk_code=bank.bnk_code)
+          
+            # Extract request data
+            LCIC_code = request.data.get('LCIC_code', '').strip()
+            EnterpriseID = request.data.get('EnterpriseID', '').strip()
+            loan_purpose = request.data.get('CatalogID', '')
+            sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
+            
+            # Validate that at least one search parameter is provided
+            if not LCIC_code and not EnterpriseID:
+                return Response(
+                    {'error': 'At least LCIC_code or EnterpriseID is required'}, 
+                    status=status.HTTP_400_BAD_REQUEST
                 )
-
-                search_log.save()
-                print("Searchlog Insert Successfully ======>")
+        
+            # Build dynamic query using Q objects for OR condition
+            query = Q()
+            if LCIC_code:
+                query |= Q(LCIC_code=LCIC_code)
+            if EnterpriseID:
+                query |= Q(EnterpriseID=EnterpriseID)
                 
-                return Response(serializer.data, status=status.HTTP_200_OK)
-            except EnterpriseInfo.DoesNotExist:
-                return Response({'error': 'EnterpriseInfo not found'}, status=status.HTTP_404_NOT_FOUND)
-            except Exception as e:
-                return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # Get all matching records first
+            all_enterprise_info = EnterpriseInfo.objects.filter(query).order_by('EnterpriseID', 'LCIC_code', '-LCICID')
+            
+            if not all_enterprise_info.exists():
+                return Response(
+                    {'error': 'EnterpriseInfo not found'}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Manual deduplication - keep the one with the highest LCICID (or non-zero LCICID)
+            seen_combinations = set()
+            unique_enterprises = []
+            
+            for enterprise in all_enterprise_info:
+                # Create a unique key based on EnterpriseID and LCIC_code
+                unique_key = (enterprise.EnterpriseID, enterprise.LCIC_code)
+                
+                if unique_key not in seen_combinations:
+                    # Prefer records with non-zero LCICID
+                    if enterprise.LCICID and enterprise.LCICID > 0:
+                        unique_enterprises.append(enterprise)
+                        seen_combinations.add(unique_key)
+                    else:
+                        # Check if we haven't found a better record yet
+                        has_better_record = False
+                        for existing in all_enterprise_info:
+                            if (existing.EnterpriseID == enterprise.EnterpriseID and 
+                                existing.LCIC_code == enterprise.LCIC_code and 
+                                existing.LCICID and existing.LCICID > 0):
+                                has_better_record = True
+                                break
+                        
+                        if not has_better_record:
+                            unique_enterprises.append(enterprise)
+                            seen_combinations.add(unique_key)
+            
+            # Alternative approach using dictionary for cleaner deduplication
+            enterprise_dict = {}
+            for enterprise in all_enterprise_info:
+                key = f"{enterprise.EnterpriseID}_{enterprise.LCIC_code}"
+                
+                # If we haven't seen this combination before, or if current record has better LCICID
+                if (key not in enterprise_dict or 
+                    (enterprise.LCICID and enterprise.LCICID > 0 and 
+                     (not enterprise_dict[key].LCICID or enterprise_dict[key].LCICID == 0))):
+                    enterprise_dict[key] = enterprise
+            
+            # Use the cleaner approach
+            unique_enterprises = list(enterprise_dict.values())
+            
+            print(f"Found {all_enterprise_info.count()} total records, {len(unique_enterprises)} unique enterprises")
+            
+            # Get unique enterprise IDs from deduplicated results
+            enterprise_ids = [enterprise.EnterpriseID for enterprise in unique_enterprises]
+            
+            # Get investor information for these enterprises
+            investor_info = InvestorInfo.objects.filter(EnterpriseID__in=enterprise_ids)
+            
+            # Process investor information and remove duplicates
+            investor_names = []
+            seen_names = set()
+            for investor in investor_info:
+                if investor.investorName and investor.investorName.strip():
+                    clean_name = investor.investorName.strip()
+                    if clean_name not in seen_names:
+                        investor_names.append(clean_name)
+                        seen_names.add(clean_name)
+                
+            # Serialize enterprise data
+            serializer = EnterpriseInfoSerializer(unique_enterprises, many=True)
+            
+            # Create search log entry using the first enterprise result
+            first_enterprise = unique_enterprises[0]
+            log_enterprise_id = EnterpriseID if EnterpriseID else first_enterprise.EnterpriseID
+            log_lcic_code = LCIC_code if LCIC_code else first_enterprise.LCIC_code
+            
+            inquiry_month = datetime.now().strftime('%Y-%m')
+           
+            search_log = searchLog.objects.create(
+                enterprise_ID=log_enterprise_id,
+                LCIC_code=log_lcic_code,
+                bnk_code=bank_info.bnk_code,
+                bnk_type=bank_info.bnk_type,
+                branch='',
+                cus_ID='',
+                cusType='enterprise',
+                credit_type='Full Loan Report',
+                inquiry_month=inquiry_month,
+                com_tel='',
+                com_location='',
+                rec_loan_amount=0.0,
+                rec_loan_amount_currency='',
+                rec_loan_purpose=loan_purpose or '',
+                rec_enquiry_type='',
+                sys_usr=sys_usr  
+            )
+
+            print(f"Searchlog Insert Successfully ======> Returning {len(unique_enterprises)} unique enterprise(s)")
+            
+            # Prepare response data
+            response_data = {
+                'enterprise_info': serializer.data,
+                'investor_names': investor_names,
+                'total_found': len(unique_enterprises),
+                'debug_info': {
+                    'total_raw_records': all_enterprise_info.count(),
+                    'unique_records_returned': len(unique_enterprises),
+                    'search_criteria': {
+                        'LCIC_code': LCIC_code,
+                        'EnterpriseID': EnterpriseID
+                    }
+                }
+            }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except bank_bnk.DoesNotExist:
+            return Response(
+                {'error': 'Bank information not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            print(f"Error in EnterpriseInfoSearch: {str(e)}")
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+class EnterpriseByLCICView(APIView):
+    """
+    ດືງຂໍ້ມູນ Enterprise ID ຈາກ LCIC code
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, lcic_code):
+        try:
+            lcic_code = lcic_code.strip()
+            
+            # ລອງຫາດ້ວຍ LCIC code ຕົງໆ ກ່ອນ
+            enterprise = EnterpriseInfo.objects.filter(
+                LCIC_code=lcic_code
+            ).order_by('-LCICID').first()
+            
+            # ຖ້າບໍ່ເຈົ້າ, ລອງຫາດ້ວຍ LCIC code ທີ່ມີ prefix
+            if not enterprise:
+                enterprise = EnterpriseInfo.objects.filter(
+                    LCIC_code__icontains=lcic_code
+                ).order_by('-LCICID').first()
+            
+            # ຖ້າຍັງບໍ່ເຈົ້າ, ລອງຫາດ້ວຍ LCICID ຖ້າເປັນຕົວເລກ
+            if not enterprise and lcic_code.isdigit():
+                enterprise = EnterpriseInfo.objects.filter(
+                    LCICID=int(lcic_code)
+                ).first()
+            
+            if not enterprise:
+                return Response(
+                    {'error': 'Enterprise not found for this LCIC code'}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # ເອົາຊື່ວິສາຫະກິດ
+            enterprise_name = ''
+            if hasattr(enterprise, 'enterpriseNameLao') and enterprise.enterpriseNameLao:
+                enterprise_name = enterprise.enterpriseNameLao
+            elif hasattr(enterprise, 'eneterpriseNameEnglish') and enterprise.eneterpriseNameEnglish:
+                enterprise_name = enterprise.eneterpriseNameEnglish
+            
+            return Response(
+                {
+                    'lcic_code': enterprise.LCIC_code or '',
+                    'enterprise_id': enterprise.EnterpriseID or '',
+                    'enterprise_name': enterprise_name,
+                    'lcic_id': enterprise.LCICID,
+                    'success': True
+                }, 
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            print(f"Error in EnterpriseByLCICView: {str(e)}")
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
+class LCICByEnterpriseView(APIView):
+    """
+    ດືງຂໍ້ມູນ LCIC code ຈາກ Enterprise ID
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, enterprise_id):
+        try:
+            enterprise_id = enterprise_id.strip()
+            
+            # ຫາຂໍ້ມູນວິສາຫະກິດຈາກ Enterprise ID
+            enterprise = EnterpriseInfo.objects.filter(
+                EnterpriseID=enterprise_id
+            ).order_by('-LCICID').first()
+            
+            if not enterprise:
+                return Response(
+                    {'error': 'Enterprise not found for this Enterprise ID'}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # ເອົາຊື່ວິສາຫະກິດ
+            enterprise_name = ''
+            if hasattr(enterprise, 'enterpriseNameLao') and enterprise.enterpriseNameLao:
+                enterprise_name = enterprise.enterpriseNameLao
+            elif hasattr(enterprise, 'eneterpriseNameEnglish') and enterprise.eneterpriseNameEnglish:
+                enterprise_name = enterprise.eneterpriseNameEnglish
+            
+            return Response(
+                {
+                    'enterprise_id': enterprise.EnterpriseID or '',
+                    'lcic_code': enterprise.LCIC_code or '',
+                    'enterprise_name': enterprise_name,
+                    'lcic_id': enterprise.LCICID,
+                    'success': True
+                }, 
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            print(f"Error in LCICByEnterpriseView: {str(e)}")
+            return Response(
+                {'error': 'Internal server error'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 class EnterpriseInfoMatch(APIView):
     # authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -10223,43 +10484,84 @@ from .models import Village, Province, District
 from django.db.models import Q
 
 def filter_villages(request):
-   
+    """
+    Simple but fast village filter - ແກ້ບັນຫາ performance ໂດຍບໍ່ໃຊ້ raw SQL
+    """
     village_name = request.GET.get('village_name', '')  
     province_id = request.GET.get('province_id', None)  
     district_id = request.GET.get('district_id', None)  
 
+    # ໃຊ້ values() ເພື່ອດືງແຕ່ຂໍ້ມູນທີ່ຕ້ອງການ - ໄວກວ່າການສ້າງ objects
+    # ໃຊ້ pk ເພື່ອໃຫ້ Django auto ເລືອກ primary key
+    query = Village.objects.values(
+        'pk', 'Prov_ID', 'Dstr_ID', 'Vill_ID', 'Village_Name'
+    )
     
-    query = Village.objects.filter(Village_Name__icontains=village_name)
-
-   
+    # ເພີ່ມ filters
+    if village_name:
+        query = query.filter(Village_Name__icontains=village_name)
     if province_id:
         query = query.filter(Prov_ID=province_id)
-
-   
     if district_id:
         query = query.filter(Dstr_ID=district_id)
 
+    # ດຶງຂໍ້ມູນ villages ກ່ອນ
+    villages = list(query)
+    
+    if not villages:
+        return JsonResponse([], safe=False)
+    
+    # ເກັບ province_ids ແລະ district_ids ທີ່ບໍ່ຊ້ໍາກັນ
+    prov_ids = set(v['Prov_ID'] for v in villages)
+    dstr_keys = set((v['Dstr_ID'], v['Prov_ID']) for v in villages)
+    
+    # ດຶງ provinces ທັງໝົດໃນຄັ້ງດຽວ (bulk query)
+    provinces = {
+        p['Prov_ID']: p['Province_Name'] 
+        for p in Province.objects.filter(
+            Prov_ID__in=prov_ids
+        ).values('Prov_ID', 'Province_Name')
+    }
+    
+    # ດຶງ districts ທັງໝົດໃນຄັ້ງດຽວ (bulk query)
+    district_filters = Q()
+    for dstr_id, prov_id in dstr_keys:
+        district_filters |= (Q(Dstr_ID=dstr_id) & Q(Prov_ID=prov_id))
+    
+    districts = {}
+    if district_filters:
+        districts = {
+            (d['Dstr_ID'], d['Prov_ID']): d['District_Name'] 
+            for d in District.objects.filter(
+                district_filters
+            ).values('Dstr_ID', 'Prov_ID', 'District_Name')
+        }
+    
+    # ລວມຂໍ້ມູນ
     village_data = []
-    for village in query:
-        # Fetch all matching provinces and districts
-        provinces = Province.objects.filter(Prov_ID=village.Prov_ID)
-        districts = District.objects.filter(Dstr_ID=village.Dstr_ID,Prov_ID=village.Prov_ID)
-        
-        # If there are multiple provinces/districts, you can loop through them and append
-        for province in provinces:
-            for district in districts:
-                village_data.append({
-                    'ID': village.ID,
-                    'Prov_ID': village.Prov_ID,
-                    'Province_Name': province.Province_Name if province else None,
-                    'Dstr_ID': village.Dstr_ID,
-                    'District_Name': district.District_Name if district else None,
-                    'Vill_ID': village.Vill_ID,
-                    'Village_Name': village.Village_Name
-                })
-
-
+    for village in villages:
+        village_data.append({
+            'ID': village['pk'],  # ໃຊ້ pk ແທນ ID
+            'Prov_ID': village['Prov_ID'],
+            'Province_Name': provinces.get(village['Prov_ID']),
+            'Dstr_ID': village['Dstr_ID'], 
+            'District_Name': districts.get((village['Dstr_ID'], village['Prov_ID'])),
+            'Vill_ID': village['Vill_ID'],
+            'Village_Name': village['Village_Name']
+        })
+    
     return JsonResponse(village_data, safe=False)
+
+
+# ຖ້າທ່ານຢາກໃຊ້ caching ເພີ່ມເຕີມ
+from django.views.decorators.cache import cache_page
+
+@cache_page(60 * 5)  # Cache 5 minutes
+def filter_villages_cached(request):
+    """
+    Version ມີ caching - ໃຊ້ເມື່ອຂໍ້ມູນບໍ່ຄ່ອຍປ່ຽນ
+    """
+    return filter_villages(request)
 
 
 from .models import ReportCatalog

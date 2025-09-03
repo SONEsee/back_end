@@ -1659,6 +1659,13 @@ class Village(models.Model):
     Dstr_ID = models.CharField(max_length=255, blank=True, null=True)
     Vill_ID = models.CharField(max_length=255, blank=True, null=True)
     Village_Name = models.CharField(max_length=2500, blank=True, null=True)
+    class Meta:
+        indexes = [
+            models.Index(fields=['Village_Name']),
+            models.Index(fields=['Prov_ID']),  
+            models.Index(fields=['Dstr_ID']),
+            models.Index(fields=['Prov_ID', 'Dstr_ID']),  # composite index
+        ]
 
 # class Province(models.Model):
 #     # Use a more typical AutoField for the primary key unless Prov_ID is required to be a CharField
