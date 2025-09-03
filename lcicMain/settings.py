@@ -120,17 +120,17 @@ DATABASES = {
         'HOST': '192.168.45.230',
         'PORT': '5432',
     },
-    'ned_sql': {
-        'ENGINE': 'sql_server.pyodbc',
-        'NAME': 'LCIC_Fingers_old',
-        'USER': 'sa',
-        'PASSWORD': 'Lcic@12345',
-        'HOST': '192.168.45.245\EXPRESS',
-        'PORT': '57004',
-        'OPTIONS': {
-            'driver': 'ODBC Driver 17 for SQL Server',
-        },
-    },
+    # 'ned_sql': {
+    #     'ENGINE': 'sql_server.pyodbc',
+    #     'NAME': 'LCIC_Fingers_old',
+    #     'USER': 'sa',
+    #     'PASSWORD': 'Lcic@12345',
+    #     'HOST': '192.168.45.245\EXPRESS',
+    #     'PORT': '57004',
+    #     'OPTIONS': {
+    #         'driver': 'ODBC Driver 17 for SQL Server',
+    #     },
+    # },
 }
 
 

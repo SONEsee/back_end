@@ -7739,59 +7739,126 @@ logger = logging.getLogger(__name__)
 #                 }
 #             }, status=status.HTTP_201_CREATED)
 #         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
+from django.core.exceptions import ValidationError
+import logging
+
+logger = logging.getLogger(__name__)
 
 class UserManagementView(APIView):
-    parser_classes = [MultiPartParser, FormParser]
+    """
+    Clean and secure user management view with proper error handling
+    """
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    permission_classes = [IsAuthenticated]  # Add authentication
 
+    @transaction.atomic
     def post(self, request, *args, **kwargs):
-        serializer = LoginSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
+        """
+        Create new user with bank code validation and comprehensive error handling
+        """
+        try:
+            # Fix field name mismatch - handle both profile_image and profile_image_url
+            data = request.data.copy()
+            
+            # If profile_image_url is provided instead of profile_image, fix it
+            if 'profile_image_url' in request.FILES and 'profile_image' not in request.FILES:
+                data['profile_image'] = request.FILES['profile_image_url']
+            
+            serializer = LoginSerializer(data=data)
+            
+            if serializer.is_valid():
+                user = serializer.save()
+                
+                # Log successful creation
+                logger.info(f'User created successfully: {user.username} by {request.user.username}')
+                
+                return Response({
+                    'success': True,
+                    'message': 'User created successfully',
+                    'data': {
+                        'UID': user.UID,
+                        'username': user.username,
+                        'nameL': user.nameL,
+                        'surnameL': user.surnameL,
+                        'nameE': user.nameE,
+                        'surnameE': user.surnameE,
+                        'bnk_code': user.bnk_code,
+                        'branch_id': user.branch_id,
+                        'GID': user.GID.GID if user.GID else None,
+                        'MID': user.MID.pk if user.MID else None,
+                        'profile_image_url': f'/{user.profile_image.name}' if user.profile_image else None,
+                        'is_active': user.is_active,
+                        'created_at': user.insertDate.isoformat()
+                    }
+                }, status=status.HTTP_201_CREATED)
+            
+            # Handle validation errors
             return Response({
-                'success': 'User created successfully',
-                'user': {
-                    'UID': user.UID,
-                    'username': user.username,
-                    'nameL': user.nameL,
-                    'surnameL': user.surnameL,
-                    'nameE': user.nameE,
-                    'surnameE': user.surnameE,
-                    'GID': user.GID.pk if user.GID else None,
-                    'MID': user.MID.pk if user.MID else None,
-                    'profile_image_url': user.profile_image.url if user.profile_image else None,
-                }
-            }, status=status.HTTP_201_CREATED)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    def get(self, request):
-        try:
-            all_user = Login.objects.all()
-            if not all_user.exists():
-                return Response({"detail": "No bank information found."}, status=status.HTTP_404_NOT_FOUND)
+                'success': False,
+                'message': 'Validation failed',
+                'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
             
-            logger.info(f"Retrieved {all_user.count()} bank records.")
-            serializer = LoginSerializer(all_user, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+        except ValidationError as e:
+            logger.error(f'Validation error creating user: {str(e)}')
+            return Response({
+                'success': False,
+                'message': 'Validation error',
+                'errors': {'non_field_errors': [str(e)]}
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
         except Exception as e:
-            logger.error(f"Error occurred: {e}")
-            return Response({"detail": "An error occurred while retrieving bank information."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-    def delete(self, request, uid, format=None):
+            logger.error(f'Unexpected error creating user: {str(e)}')
+            return Response({
+                'success': False,
+                'message': 'Internal server error',
+                'errors': {'non_field_errors': ['An unexpected error occurred']}
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get(self, request, *args, **kwargs):
+        """
+        Get user details or list users (optional enhancement)
+        """
         try:
-            # Get the user by UID
-            user = Login.objects.get(UID=uid)
+            user_id = request.query_params.get('uid')
             
-            # Delete the user
-            user.delete()
+            if user_id:
+                # Get specific user
+                try:
+                    user = Login.objects.select_related('MID', 'GID').get(UID=user_id)
+                    serializer = LoginSerializer(user)
+                    return Response({
+                        'success': True,
+                        'data': serializer.data
+                    })
+                except Login.DoesNotExist:
+                    return Response({
+                        'success': False,
+                        'message': 'User not found'
+                    }, status=status.HTTP_404_NOT_FOUND)
             
-            # Return a success response
-            return Response({'detail': 'User deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
-        
-        except Login.DoesNotExist:
-            # Return a 404 response if the user doesn't exist
-            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-        
+            # List users (with pagination in real implementation)
+            users = Login.objects.select_related('MID', 'GID').filter(is_active=True)[:20]
+            serializer = LoginSerializer(users, many=True)
+            
+            return Response({
+                'success': True,
+                'data': serializer.data,
+                'count': users.count()
+            })
+            
+        except Exception as e:
+            logger.error(f'Error retrieving user(s): {str(e)}')
+            return Response({
+                'success': False,
+                'message': 'Error retrieving user data'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     
 from rest_framework.views import APIView
@@ -7800,6 +7867,8 @@ from rest_framework import status
 from .models import EnterpriseInfo, B1_Yearly, InvestorInfo, B1_Monthly, C1, request_charge
 from django.forms.models import model_to_dict
 from .serializers import EnterpriseInfoSerializer, B1_YearlySerializer, InvestorInfoSerializer, B1Serializer, RequestChargeSerializer
+from datetime import date, timedelta
+from django.db.models import Q
 
 class FCR_reportView(APIView):    
     def get(self, request):
@@ -7812,10 +7881,27 @@ class FCR_reportView(APIView):
         status_inactive = "INACTIVE"
         status_active = "ACTIVE"
 
+        # --- Get dynamic years from catalog ---
+        year_record = Main_catalog_cat.objects.filter(ct_type="FRY").first()
+        inactive_years = int(year_record.cat_value) if year_record else 3  # fallback 3 years
+        cutoff_date = date.today() - timedelta(days=inactive_years * 365)
+        
+        # --- Apply loan filters ---
+        loan_info = B1.objects.filter(
+            com_enterprise_code=enterprise_id
+        ).exclude(
+            Q(lon_status="INACTIVE") & Q(lon_exp_date__lt=cutoff_date)
+        ).order_by('lon_status')
+        # -------------------------------------
+        
         try:
            
             ent_info = EnterpriseInfo.objects.filter(EnterpriseID=enterprise_id, LCIC_code=lcic_id)
-            loan_info = B1.objects.filter(com_enterprise_code=enterprise_id, lon_status=status_active).order_by('lon_status')
+            loan_info = B1.objects.filter(
+            com_enterprise_code=enterprise_id
+                ).exclude(
+                    Q(lon_status="INACTIVE") & Q(lon_exp_date__lt=cutoff_date)
+                ).order_by('lon_status')
             inves_info = InvestorInfo.objects.filter(EnterpriseID=enterprise_id)
             search_history = request_charge.objects.filter(LCIC_code=lcic_id)
             
@@ -7840,14 +7926,13 @@ class FCR_reportView(APIView):
             }
             
             for loan in loan_info:
-                if loan.lon_status == status_active:  # Ensure processing only active loans
                     lon_class_history = B1_Monthly.objects.filter(
                         com_enterprise_code=enterprise_id,
                         bnk_code=loan.bnk_code,
                         customer_id=loan.customer_id,
                         branch_id=loan.branch_id,
                         loan_id=loan.loan_id,
-                    ).order_by('-period')
+                    ).order_by('-period')[:12]
                     
                   
                     
@@ -7924,8 +8009,6 @@ class FCR_reportView(APIView):
 
                     loan_info_list_active.append(loan_data_active)
                     print("Loan Data For Active: -------> ", loan_info_list_active)
-                else:
-                    print("Non Active List")
                     
             lon_search_history_list = []
             for lon_search in search_history:
