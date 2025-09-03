@@ -106,10 +106,10 @@ import pyodbc
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'lcicwebsitedb',
+        'NAME': 'LCICDB',
         'USER': 'postgres', 
         'PASSWORD': 'Lcic@123',
-        'HOST': '192.168.45.230',
+        'HOST': '10.0.32.2',
         'PORT': '5432',
     },
     'utility': {
