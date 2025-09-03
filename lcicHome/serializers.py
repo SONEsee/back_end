@@ -296,66 +296,131 @@ class MemberInfoSerializer(serializers.ModelSerializer):
     class Meta:
         model = memberInfo
         fields = ['code', 'nameL','nameE']  
+
+# serializers.py
+# serializers.py
 from rest_framework import serializers
+from django.contrib.auth.hashers import make_password
+from django.core.exceptions import ValidationError
 from .models import Login, User_Group, memberInfo
-from django.core.validators import MinLengthValidator
 
 class LoginSerializer(serializers.ModelSerializer):
-    MID = MemberInfoSerializer(read_only=True)
-    GID = UserGroupSerializer(read_only=True)
-
-    # write-only fields for accepting PKs
-    MID_id = serializers.PrimaryKeyRelatedField(
+    """
+    Clean and secure serializer for Login (User) model with bank code validation
+    """
+    profile_image = serializers.ImageField(required=False, allow_null=True)
+    profile_image_url = serializers.SerializerMethodField(read_only=True)
+    MID = serializers.PrimaryKeyRelatedField(
         queryset=memberInfo.objects.all(),
-        source='MID',
-        write_only=True
+        required=False,
+        allow_null=True
     )
-    GID_id = serializers.PrimaryKeyRelatedField(
+    GID = serializers.PrimaryKeyRelatedField(
         queryset=User_Group.objects.all(),
-        source='GID',
-        write_only=True
+        required=False,
+        allow_null=True
     )
+    password = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True)
+
     class Meta:
         model = Login
         fields = [
-            'UID', 'username', 'password',
+            'UID', 'username', 'password', 'confirm_password',
             'nameL', 'surnameL', 'nameE', 'surnameE',
-            'MID', 'GID','MID_id', 'GID_id','branch_id', 'bnk_code',
-            'profile_image'
+            'MID', 'GID', 'branch_id', 'bnk_code',
+            'profile_image', 'profile_image_url', 'is_active'
         ]
         extra_kwargs = {
-            'password': {'write_only': True},
+            'username': {'required': True},
+            'nameL': {'required': True},
+            'surnameL': {'required': True},
         }
 
+    def get_profile_image_url(self, obj):
+        """Return profile image URL if exists"""
+        return f'/{obj.profile_image.name}' if obj.profile_image else None
+
+    def validate(self, attrs):
+        """Custom validation for password matching and bank code consistency"""
+        # Password validation
+        if attrs.get('password') != attrs.get('confirm_password'):
+            raise serializers.ValidationError({
+                'password': 'Passwords do not match.'
+            })
+        
+        # Profile image validation
+        profile_image = attrs.get('profile_image')
+        if profile_image:
+            # Check file size (5MB limit)
+            if profile_image.size > 5 * 1024 * 1024:
+                raise serializers.ValidationError({
+                    'profile_image': 'File size must be less than 5MB.'
+                })
+            
+            # Check file type
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif']
+            if hasattr(profile_image, 'content_type') and profile_image.content_type not in allowed_types:
+                raise serializers.ValidationError({
+                    'profile_image': 'Only JPEG, PNG and GIF files are allowed.'
+                })
+        
+        # Bank code validation - ensure consistency with memberInfo
+        bnk_code = attrs.get('bnk_code')
+        mid = attrs.get('MID')
+        
+        if bnk_code and mid:
+            if mid.bnk_code != bnk_code:
+                raise serializers.ValidationError({
+                    'bnk_code': f'Bank code mismatch. Expected: {mid.bnk_code}, Got: {bnk_code}'
+                })
+        
+        # If MID is provided but no bnk_code, auto-assign from memberInfo
+        if mid and not bnk_code:
+            attrs['bnk_code'] = mid.bnk_code
+            
+        return attrs
+
+    def validate_username(self, value):
+        """Ensure username is unique and follows rules"""
+        if Login.objects.filter(username=value).exists():
+            raise serializers.ValidationError('Username already exists.')
+        return value.strip().lower()
+
     def create(self, validated_data):
-        password = validated_data.pop('password', None)
+        """Create user with proper password hashing and bank code handling"""
+        validated_data.pop('confirm_password', None)
+        password = validated_data.pop('password')
+        
+        # Create user instance
         user = Login.objects.create(**validated_data)
-        if password:
-            user.set_password(password)
-            user.save()
+        user.set_password(password)  # Properly hash password
+        user.save()
+        
         return user
-    
+
     def update(self, instance, validated_data):
-        # Handle password hashing if password is being updated
-        password = validated_data.get('password', None)
+        """Update user with proper validation"""
+        validated_data.pop('confirm_password', None)
+        password = validated_data.pop('password', None)
+        
+        # Handle password update
         if password:
-            instance.set_password(password)  # Hash the password using set_password()
-
-        # Update the other fields normally
-        instance.username = validated_data.get('username', instance.username)
-        instance.nameL = validated_data.get('nameL', instance.nameL)
-        instance.nameE = validated_data.get('nameE', instance.nameE)
-        instance.surnameL = validated_data.get('surnameL', instance.surnameL)
-        instance.surnameE = validated_data.get('surnameE', instance.surnameE)
-        instance.MID = validated_data.get('MID', instance.MID)
-        instance.GID = validated_data.get('GID', instance.GID)
-        instance.is_active = validated_data.get('is_active', instance.is_active)
-        instance.is_staff = validated_data.get('is_staff', instance.is_staff)
-        instance.is_superuser = validated_data.get('is_superuser', instance.is_superuser)
-        bnk_code = validated_data.get('bnk_code', instance.bnk_code)
-        branch_id = validated_data.get('branch_id', instance.branch_id)
-
-        # Save the updated user object
+            instance.set_password(password)
+        
+        # Handle bank code consistency on update
+        bnk_code = validated_data.get('bnk_code')
+        mid = validated_data.get('MID')
+        
+        if mid and bnk_code and mid.bnk_code != bnk_code:
+            raise serializers.ValidationError({
+                'bnk_code': 'Bank code must match the selected member info.'
+            })
+        
+        # Update other fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
         instance.save()
         return instance
 
@@ -571,6 +636,22 @@ from utility.models import Utility_Bill
 class UtilityBillSerializer(serializers.ModelSerializer):
     class Meta:
         model = Utility_Bill
+        fields = ['BillID', 'Customer_ID', 'InvoiceNo', 'TypeOfPro', 'Outstanding',
+                 'Basic_Tax', 'Bill_Amount', 'Debt_Amount', 'Payment_ID',
+                 'PaymentType', 'Payment_Date', 'InvoiceMonth', 'InvoiceDate',
+                 'DisID', 'ProID', 'InsertDate', 'UpdateDate', 'UserID']
+
+from utility.models import edl_customer_info
+class EDLCustomerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = edl_customer_info
+        fields = ['Customer_ID', 'Company_name', 'Name', 'Surname', 'National_ID', 
+                 'Passport', 'Address', 'Dustrict_ID', 'Province_ID', 'Tel', 
+                 'Email', 'Cus_type', 'Regis_date']
+from utility.models import Electric_Bill       
+class ElectricBillSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Electric_Bill
         fields = ['BillID', 'Customer_ID', 'InvoiceNo', 'TypeOfPro', 'Outstanding',
                  'Basic_Tax', 'Bill_Amount', 'Debt_Amount', 'Payment_ID',
                  'PaymentType', 'Payment_Date', 'InvoiceMonth', 'InvoiceDate',

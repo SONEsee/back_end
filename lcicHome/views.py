@@ -2278,7 +2278,12 @@ class GetUserByUIDView(APIView):
         except Exception as e:
             return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
 class UpdateUserView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
     def put(self, request, UID):
         try:
             user = Login.objects.get(UID=UID)
@@ -7995,59 +8000,126 @@ logger = logging.getLogger(__name__)
 #                 }
 #             }, status=status.HTTP_201_CREATED)
 #         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
+from django.core.exceptions import ValidationError
+import logging
+
+logger = logging.getLogger(__name__)
 
 class UserManagementView(APIView):
-    parser_classes = [MultiPartParser, FormParser]
+    """
+    Clean and secure user management view with proper error handling
+    """
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    permission_classes = [IsAuthenticated]  # Add authentication
 
+    @transaction.atomic
     def post(self, request, *args, **kwargs):
-        serializer = LoginSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
+        """
+        Create new user with bank code validation and comprehensive error handling
+        """
+        try:
+            # Fix field name mismatch - handle both profile_image and profile_image_url
+            data = request.data.copy()
+            
+            # If profile_image_url is provided instead of profile_image, fix it
+            if 'profile_image_url' in request.FILES and 'profile_image' not in request.FILES:
+                data['profile_image'] = request.FILES['profile_image_url']
+            
+            serializer = LoginSerializer(data=data)
+            
+            if serializer.is_valid():
+                user = serializer.save()
+                
+                # Log successful creation
+                logger.info(f'User created successfully: {user.username} by {request.user.username}')
+                
+                return Response({
+                    'success': True,
+                    'message': 'User created successfully',
+                    'data': {
+                        'UID': user.UID,
+                        'username': user.username,
+                        'nameL': user.nameL,
+                        'surnameL': user.surnameL,
+                        'nameE': user.nameE,
+                        'surnameE': user.surnameE,
+                        'bnk_code': user.bnk_code,
+                        'branch_id': user.branch_id,
+                        'GID': user.GID.GID if user.GID else None,
+                        'MID': user.MID.pk if user.MID else None,
+                        'profile_image_url': f'/{user.profile_image.name}' if user.profile_image else None,
+                        'is_active': user.is_active,
+                        'created_at': user.insertDate.isoformat()
+                    }
+                }, status=status.HTTP_201_CREATED)
+            
+            # Handle validation errors
             return Response({
-                'success': 'User created successfully',
-                'user': {
-                    'UID': user.UID,
-                    'username': user.username,
-                    'nameL': user.nameL,
-                    'surnameL': user.surnameL,
-                    'nameE': user.nameE,
-                    'surnameE': user.surnameE,
-                    'GID': user.GID.pk if user.GID else None,
-                    'MID': user.MID.pk if user.MID else None,
-                    'profile_image_url': user.profile_image.url if user.profile_image else None,
-                }
-            }, status=status.HTTP_201_CREATED)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    def get(self, request):
-        try:
-            all_user = Login.objects.all()
-            if not all_user.exists():
-                return Response({"detail": "No bank information found."}, status=status.HTTP_404_NOT_FOUND)
+                'success': False,
+                'message': 'Validation failed',
+                'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
             
-            logger.info(f"Retrieved {all_user.count()} bank records.")
-            serializer = LoginSerializer(all_user, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+        except ValidationError as e:
+            logger.error(f'Validation error creating user: {str(e)}')
+            return Response({
+                'success': False,
+                'message': 'Validation error',
+                'errors': {'non_field_errors': [str(e)]}
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
         except Exception as e:
-            logger.error(f"Error occurred: {e}")
-            return Response({"detail": "An error occurred while retrieving bank information."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-    def delete(self, request, uid, format=None):
+            logger.error(f'Unexpected error creating user: {str(e)}')
+            return Response({
+                'success': False,
+                'message': 'Internal server error',
+                'errors': {'non_field_errors': ['An unexpected error occurred']}
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get(self, request, *args, **kwargs):
+        """
+        Get user details or list users (optional enhancement)
+        """
         try:
-            # Get the user by UID
-            user = Login.objects.get(UID=uid)
+            user_id = request.query_params.get('uid')
             
-            # Delete the user
-            user.delete()
+            if user_id:
+                # Get specific user
+                try:
+                    user = Login.objects.select_related('MID', 'GID').get(UID=user_id)
+                    serializer = LoginSerializer(user)
+                    return Response({
+                        'success': True,
+                        'data': serializer.data
+                    })
+                except Login.DoesNotExist:
+                    return Response({
+                        'success': False,
+                        'message': 'User not found'
+                    }, status=status.HTTP_404_NOT_FOUND)
             
-            # Return a success response
-            return Response({'detail': 'User deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
-        
-        except Login.DoesNotExist:
-            # Return a 404 response if the user doesn't exist
-            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-        
+            # List users (with pagination in real implementation)
+            users = Login.objects.select_related('MID', 'GID').filter(is_active=True)[:20]
+            serializer = LoginSerializer(users, many=True)
+            
+            return Response({
+                'success': True,
+                'data': serializer.data,
+                'count': users.count()
+            })
+            
+        except Exception as e:
+            logger.error(f'Error retrieving user(s): {str(e)}')
+            return Response({
+                'success': False,
+                'message': 'Error retrieving user data'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     
 from rest_framework.views import APIView
@@ -8056,6 +8128,8 @@ from rest_framework import status
 from .models import EnterpriseInfo, B1_Yearly, InvestorInfo, B1_Monthly, C1, request_charge
 from django.forms.models import model_to_dict
 from .serializers import EnterpriseInfoSerializer, B1_YearlySerializer, InvestorInfoSerializer, B1Serializer, RequestChargeSerializer
+from datetime import date, timedelta
+from django.db.models import Q
 
 class FCR_reportView(APIView):    
     def get(self, request):
@@ -8068,10 +8142,27 @@ class FCR_reportView(APIView):
         status_inactive = "INACTIVE"
         status_active = "ACTIVE"
 
+        # --- Get dynamic years from catalog ---
+        year_record = Main_catalog_cat.objects.filter(ct_type="FRY").first()
+        inactive_years = int(year_record.cat_value) if year_record else 3  # fallback 3 years
+        cutoff_date = date.today() - timedelta(days=inactive_years * 365)
+        
+        # --- Apply loan filters ---
+        loan_info = B1.objects.filter(
+            com_enterprise_code=enterprise_id
+        ).exclude(
+            Q(lon_status="INACTIVE") & Q(lon_exp_date__lt=cutoff_date)
+        ).order_by('lon_status')
+        # -------------------------------------
+        
         try:
            
             ent_info = EnterpriseInfo.objects.filter(EnterpriseID=enterprise_id, LCIC_code=lcic_id)
-            loan_info = B1.objects.filter(com_enterprise_code=enterprise_id, lon_status=status_active).order_by('lon_status')
+            loan_info = B1.objects.filter(
+            com_enterprise_code=enterprise_id
+                ).exclude(
+                    Q(lon_status="INACTIVE") & Q(lon_exp_date__lt=cutoff_date)
+                ).order_by('lon_status')
             inves_info = InvestorInfo.objects.filter(EnterpriseID=enterprise_id)
             search_history = request_charge.objects.filter(LCIC_code=lcic_id)
             
@@ -8096,14 +8187,13 @@ class FCR_reportView(APIView):
             }
             
             for loan in loan_info:
-                if loan.lon_status == status_active:  # Ensure processing only active loans
                     lon_class_history = B1_Monthly.objects.filter(
                         com_enterprise_code=enterprise_id,
                         bnk_code=loan.bnk_code,
                         customer_id=loan.customer_id,
                         branch_id=loan.branch_id,
                         loan_id=loan.loan_id,
-                    ).order_by('-period')
+                    ).order_by('-period')[:12]
                     
                   
                     
@@ -8180,8 +8270,6 @@ class FCR_reportView(APIView):
 
                     loan_info_list_active.append(loan_data_active)
                     print("Loan Data For Active: -------> ", loan_info_list_active)
-                else:
-                    print("Non Active List")
                     
             lon_search_history_list = []
             for lon_search in search_history:
@@ -8344,7 +8432,6 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Login
-
 class UserLoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -8364,12 +8451,8 @@ class UserLoginView(APIView):
             # Create tokens
             refresh = RefreshToken.for_user(user)
 
-            # Build absolute URL for the profile image (if any)
-            profile_url = (
-                request.build_absolute_uri(user.profile_image.url)
-                if user.profile_image
-                else None
-            )
+            # Return only the path under MEDIA_ROOT, e.g. "/profile_images/foo.png"
+            profile_path = f"/{user.profile_image.name}" if user.profile_image else None
 
             return Response({
                 'detail': 'Successfully logged in.',
@@ -8390,7 +8473,7 @@ class UserLoginView(APIView):
                     'nameE': user.nameE,
                     'surnameL': user.surnameL,
                     'surnameE': user.surnameE,
-                    'profile_image': profile_url,
+                    'profile_image': profile_path,
                     'is_active': user.is_active,
                     'last_login': user.last_login,
                     'is_staff': user.is_staff,
@@ -12908,6 +12991,122 @@ class UtilityReportAPIView(APIView):
             return Response({"error": "Charge configuration not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+      
+from utility.models import edl_customer_info, Electric_Bill, searchlog_utility, request_charge_utility
+from .serializers import EDLCustomerSerializer, ElectricBillSerializer, SearchLogUtilitySerializer
+import uuid
+from django.db.models import Func, F, Value
+
+class ElectricReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            customer_id = request.query_params.get('edl')
+            if not customer_id:
+                return Response({"error": "water parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+            user = request.user
+            bank = user.MID
+            sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
+
+            bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
+            charge_bank_type = bank_info.bnk_type
+            if charge_bank_type == 1:
+                chargeType = ChargeMatrix.objects.get(chg_sys_id=9)
+            else:
+                chargeType = ChargeMatrix.objects.get(chg_sys_id=10)
+            charge_amount_com = chargeType.chg_amount
+
+            customer = edl_customer_info.objects.get(Customer_ID=customer_id)
+
+            # edl = edl_customer_info.objects.get(Customer_ID=customer_id)
+            # Custom function to convert MM-YYYY to YYYY-MM for sorting (PostgreSQL)
+            class ReorderMonthYear(Func):
+                function = "TO_CHAR"
+                template = "SUBSTRING(%(expressions)s FROM 4 FOR 4) || '-' || SUBSTRING(%(expressions)s FROM 1 FOR 2)"
+
+            # Sort bills by InvoiceMonth in descending order
+            bills = Electric_Bill.objects.filter(Customer_ID=customer_id).annotate(
+                year_month=ReorderMonthYear(F('InvoiceMonth'))
+            ).order_by('-year_month')
+
+            # edl_bill = Electric_Bill.objects.filter(Customer_ID=customer_id_2).annotate(
+            #     year_month=ReorderMonthYear(F('InvoiceMonth'))
+            # ).order_by('-year_month')
+            
+            # Log the search
+            search_log = searchlog_utility.objects.create(
+                bnk_code=bank.bnk_code,
+                sys_usr=sys_usr,
+                wt_cusid=customer_id,
+                edl_cusid='',
+                tel_cusid='',
+                proID_edl='',
+                proID_wt='',
+                proID_tel='',
+                credittype='edl',
+                inquiry_date=timezone.now(),
+                inquiry_time=timezone.now()
+            )
+
+            # Get current timestamp for rec_insert_date
+            rec_insert_date = timezone.now()
+            date_str = rec_insert_date.strftime('%d%m%Y')
+            report_date = rec_insert_date.strftime('%d-%m-%Y')
+            rec_reference_code = f"{chargeType.chg_code}-0-{bank.bnk_code}-{date_str}-{search_log.search_id}"
+            rec_reference_code = rec_reference_code[:100]
+
+            # Log the charge request
+            request_charge_utility.objects.create(
+                usr_session_id=str(uuid.uuid4()),
+                search_id=search_log,
+                bnk_code=bank.bnk_code,
+                chg_code=chargeType.chg_code,
+                chg_amount=charge_amount_com,
+                chg_unit='LAK',
+                sys_usr=sys_usr,
+                credit_type='edl',
+                wt_cusid=customer_id,
+                edl_cusid='',
+                tel_cusid='',
+                proID_edl='',
+                proID_wt='',
+                proID_tel='',
+                rec_reference_code=rec_reference_code
+            )
+
+            customer_serializer = EDLCustomerSerializer(customer)
+            bill_serializer = ElectricBillSerializer(bills, many=True)
+            search_log_serializer = SearchLogUtilitySerializer(search_log)
+
+            # Construct reference_data as a tuple
+            reference_data = (
+                rec_reference_code,
+                customer_id,
+                report_date,
+                search_log_serializer.data,  # Serialized search_log
+                rec_insert_date.isoformat()  # Convert datetime to ISO string
+            )
+
+            # Return response with reference_data as a list (JSON-compatible)
+            return Response({
+                "reference_data": reference_data,
+                "customer": [customer_serializer.data],
+                "bill": bill_serializer.data
+            }, status=status.HTTP_200_OK)
+
+        except w_customer_info.DoesNotExist:
+            return Response({"error": "Customer not found"}, status=status.HTTP_404_NOT_FOUND)
+        except memberInfo.DoesNotExist:
+            return Response({"error": "Bank information not found"}, status=status.HTTP_400_BAD_REQUEST)
+        except ChargeMatrix.DoesNotExist:
+            return Response({"error": "Charge configuration not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    
 from .models import ChargeMatrix
 from .serializers import ChargeMatrixSerializer
 
