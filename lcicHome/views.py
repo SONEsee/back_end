@@ -8271,19 +8271,24 @@ class FCR_reportView(APIView):
                     loan_info_list_active.append(loan_data_active)
                     print("Loan Data For Active: -------> ", loan_info_list_active)
                     
+            # Exclude bnk_code=01 directly in query
+            search_history = request_charge.objects.filter(
+                LCIC_code=lcic_id
+            ).exclude(bnk_code="01")
+
             lon_search_history_list = []
             for lon_search in search_history:
                 print(lon_search.lon_purpose)
                 lon_purpose_detail = Main_catalog_cat.objects.filter(cat_value=lon_search.lon_purpose)
                 
                 for lon_pur_code in lon_purpose_detail:
-                    print("Loan_purpose:-->",lon_pur_code.cat_lao_name)
+                    print("Loan_purpose:-->", lon_pur_code.cat_lao_name)
+
                 search_data = {
-                    "id":lon_search.insert_date,
-                    "bnk_code":lon_search.bnk_code,
-                    "lon_purpose":lon_pur_code.cat_lao_name
+                    "id": lon_search.insert_date,
+                    "bnk_code": lon_search.bnk_code,
+                    "lon_purpose": lon_pur_code.cat_lao_name if lon_purpose_detail.exists() else None
                 }
-            
                 lon_search_history_list.append(search_data)
 
             ent_info_serializer = EnterpriseInfoSerializer(ent_info, many=True)
