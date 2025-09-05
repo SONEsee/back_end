@@ -11067,21 +11067,20 @@ from rest_framework import status
 from .models import Search_batfile
 from .serializers import SearchBatfileSerializer
 
-# class SearchBatfileAPIView(APIView):
-#     def get(self, request):
-        
-#         files = Search_batfile.objects.all()
-#         serializer = SearchBatfileSerializer(files, many=True)
-#         return Response(serializer.data, status=status.HTTP_200_OK)
-
 class SearchBatfileAPIView(APIView):
     def get(self, request):
         user_id = request.query_params.get('user_id')
         
-        if user_id:
-            files = Search_batfile.objects.filter(user_id=user_id)
-        else:
+        if not user_id:
+            return Response(
+                {"error": "user_id parameter is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if user_id == "01":
             files = Search_batfile.objects.all()
+        else:
+            files = Search_batfile.objects.filter(user_id=user_id)
         
         serializer = SearchBatfileSerializer(files, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -13646,5 +13645,448 @@ class FileElectricListAPIView(APIView):
             "results": files_data,
             "counts_by_month": list(counts_qs)
         })
-        
+# InvestorInfo Backend Functions
+from django.db import models
+from django.core.exceptions import ObjectDoesNotExist
+from django.http import JsonResponse
+from django.core.paginator import Paginator
+from django.db.models import Q
+from datetime import datetime
+import json
+
+class InvestorInfoService:
+    """ບໍລິການສຳລັບຈັດການຂໍ້ມູນນັກລົງທຶນ"""
+    
+    @staticmethod
+    def get_all_investors(page=None, per_page=None):
+        """ດຶງຂໍ້ມູນນັກລົງທຶນທັງໝົດ (ແບບແບ່ງໜ້າຫຼືທັງໝົດ)"""
+        try:
+            investors = InvestorInfo.objects.all().order_by('-InsertDate')
+            
+            # ຖ້າບໍ່ມີການແບ່ງໜ້າ ດຶງທັງໝົດ
+            if page is None or per_page is None:
+                data = []
+                for investor in investors:
+                    data.append({
+                        'id': investor.ID,
+                        'enterprise_id': investor.EnterpriseID,
+                        'name': investor.investorName,
+                        'ownership_percentage': investor.investorOwnerPercentage,
+                        'nationality': investor.investorNationality,
+                        'card_number': investor.investorcardNumber,
+                        'mobile': investor.investorMobile,
+                        'insert_date': investor.InsertDate.strftime('%Y-%m-%d %H:%M:%S') if investor.InsertDate else None,
+                        'update_date': investor.UpdateDate.strftime('%Y-%m-%d %H:%M:%S') if investor.UpdateDate else None,
+                    })
+                
+                return {
+                    'success': True,
+                    'data': data,
+                    'total_items': investors.count(),
+                }
+            
+            # ແບ່ງໜ້າ - ຕັ້ງຄ່າເລີ່ມຕົ້ນຖ້າເປັນ None
+            page = 1 if page is None else page
+            per_page = 10 if per_page is None else per_page
+            
+            paginator = Paginator(investors, per_page)
+            page_obj = paginator.get_page(page)
+            
+            data = []
+            for investor in page_obj:
+                data.append({
+                    'id': investor.ID,
+                    'enterprise_id': investor.EnterpriseID,
+                    'name': investor.investorName,
+                    'ownership_percentage': investor.investorOwnerPercentage,
+                    'nationality': investor.investorNationality,
+                    'card_number': investor.investorcardNumber,
+                    'mobile': investor.investorMobile,
+                    'insert_date': investor.InsertDate.strftime('%Y-%m-%d %H:%M:%S') if investor.InsertDate else None,
+                    'update_date': investor.UpdateDate.strftime('%Y-%m-%d %H:%M:%S') if investor.UpdateDate else None,
+                })
+            
+            return {
+                'success': True,
+                'data': data,
+                'pagination': {
+                    'current_page': page_obj.number,
+                    'total_pages': paginator.num_pages,
+                    'total_items': paginator.count,
+                    'has_next': page_obj.has_next(),
+                    'has_previous': page_obj.has_previous(),
+                }
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    @staticmethod
+    def get_investor_by_id(investor_id):
+        """ດຶງຂໍ້ມູນນັກລົງທຶນຕາມ ID"""
+        try:
+            # ກວດສອບວ່າ investor_id ມີຄ່າແລະສາມາດແປງເປັນ int ໄດ້
+            if investor_id is None:
+                return {'success': False, 'error': 'Investor ID is required'}
+            
+            # ພະຍາຍາມແປງເປັນ int
+            try:
+                investor_id = int(investor_id)
+            except (ValueError, TypeError):
+                return {'success': False, 'error': 'Invalid Investor ID format'}
+            
+            investor = InvestorInfo.objects.get(ID=investor_id)
+            return {
+                'success': True,
+                'data': {
+                    'id': investor.ID,
+                    'enterprise_id': investor.EnterpriseID,
+                    'name': investor.investorName,
+                    'ownership_percentage': investor.investorOwnerPercentage,
+                    'nationality': investor.investorNationality,
+                    'card_number': investor.investorcardNumber,
+                    'mobile': investor.investorMobile,
+                    'insert_date': investor.InsertDate.strftime('%Y-%m-%d %H:%M:%S') if investor.InsertDate else None,
+                    'update_date': investor.UpdateDate.strftime('%Y-%m-%d %H:%M:%S') if investor.UpdateDate else None,
+                }
+            }
+        except ObjectDoesNotExist:
+            return {'success': False, 'error': 'ບໍ່ພົບຂໍ້ມູນນັກລົງທຶນ'}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    @staticmethod
+    def get_investors_by_enterprise(enterprise_id, page=None, per_page=None):
+        """ດຶງຂໍ້ມູນນັກລົງທຶນຕາມ Enterprise ID"""
+        try:
+            investors = InvestorInfo.objects.filter(
+                EnterpriseID=enterprise_id
+            ).order_by('-InsertDate')
+            
+            # ຖ້າບໍ່ມີການແບ່ງໜ້າ ດຶງທັງໝົດ
+            if page is None or per_page is None:
+                data = []
+                for investor in investors:
+                    data.append({
+                        'id': investor.ID,
+                        'enterprise_id': investor.EnterpriseID,
+                        'name': investor.investorName,
+                        'ownership_percentage': investor.investorOwnerPercentage,
+                        'nationality': investor.investorNationality,
+                        'card_number': investor.investorcardNumber,
+                        'mobile': investor.investorMobile,
+                        'insert_date': investor.InsertDate.strftime('%Y-%m-%d %H:%M:%S') if investor.InsertDate else None,
+                        'update_date': investor.UpdateDate.strftime('%Y-%m-%d %H:%M:%S') if investor.UpdateDate else None,
+                    })
+                
+                return {
+                    'success': True,
+                    'data': data,
+                    'total_items': investors.count(),
+                }
+            
+            # ແບ່ງໜ້າ - ຕັ້ງຄ່າເລີ່ມຕົ້ນຖ້າເປັນ None
+            page = 1 if page is None else page
+            per_page = 10 if per_page is None else per_page
+            
+            paginator = Paginator(investors, per_page)
+            page_obj = paginator.get_page(page)
+            
+            data = []
+            for investor in page_obj:
+                data.append({
+                    'id': investor.ID,
+                    'enterprise_id': investor.EnterpriseID,
+                    'name': investor.investorName,
+                    'ownership_percentage': investor.investorOwnerPercentage,
+                    'nationality': investor.investorNationality,
+                    'card_number': investor.investorcardNumber,
+                    'mobile': investor.investorMobile,
+                    'insert_date': investor.InsertDate.strftime('%Y-%m-%d %H:%M:%S') if investor.InsertDate else None,
+                    'update_date': investor.UpdateDate.strftime('%Y-%m-%d %H:%M:%S') if investor.UpdateDate else None,
+                })
+            
+            return {
+                'success': True,
+                'data': data,
+                'pagination': {
+                    'current_page': page_obj.number,
+                    'total_pages': paginator.num_pages,
+                    'total_items': paginator.count,
+                    'has_next': page_obj.has_next(),
+                    'has_previous': page_obj.has_previous(),
+                }
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    @staticmethod
+    def search_investors(search_term, page=None, per_page=None):
+        """ຄົ້ນຫານັກລົງທຶນຕາມຊື່, ເບີໂທ, ຫຼືບັດປະຊາຊົນ"""
+        try:
+            investors = InvestorInfo.objects.filter(
+                Q(investorName__icontains=search_term) |
+                Q(investorMobile__icontains=search_term) |
+                Q(investorcardNumber__icontains=search_term) |
+                Q(investorNationality__icontains=search_term) |
+                Q(EnterpriseID__icontains=search_term)
+            ).order_by('-InsertDate')
+            
+            # ຖ້າບໍ່ມີການແບ່ງໜ້າ ດຶງທັງໝົດ
+            if page is None or per_page is None:
+                data = []
+                for investor in investors:
+                    data.append({
+                        'id': investor.ID,
+                        'enterprise_id': investor.EnterpriseID,
+                        'name': investor.investorName,
+                        'ownership_percentage': investor.investorOwnerPercentage,
+                        'nationality': investor.investorNationality,
+                        'card_number': investor.investorcardNumber,
+                        'mobile': investor.investorMobile,
+                        'insert_date': investor.InsertDate.strftime('%Y-%m-%d %H:%M:%S') if investor.InsertDate else None,
+                        'update_date': investor.UpdateDate.strftime('%Y-%m-%d %H:%M:%S') if investor.UpdateDate else None,
+                    })
+                
+                return {
+                    'success': True,
+                    'data': data,
+                    'total_items': investors.count(),
+                    'search_term': search_term
+                }
+            
+            # ແບ່ງໜ້າ - ຕັ້ງຄ່າເລີ່ມຕົ້ນຖ້າເປັນ None
+            page = 1 if page is None else page
+            per_page = 10 if per_page is None else per_page
+            
+            paginator = Paginator(investors, per_page)
+            page_obj = paginator.get_page(page)
+            
+            data = []
+            for investor in page_obj:
+                data.append({
+                    'id': investor.ID,
+                    'enterprise_id': investor.EnterpriseID,
+                    'name': investor.investorName,
+                    'ownership_percentage': investor.investorOwnerPercentage,
+                    'nationality': investor.investorNationality,
+                    'card_number': investor.investorcardNumber,
+                    'mobile': investor.investorMobile,
+                    'insert_date': investor.InsertDate.strftime('%Y-%m-%d %H:%M:%S') if investor.InsertDate else None,
+                    'update_date': investor.UpdateDate.strftime('%Y-%m-%d %H:%M:%S') if investor.UpdateDate else None,
+                })
+            
+            return {
+                'success': True,
+                'data': data,
+                'pagination': {
+                    'current_page': page_obj.number,
+                    'total_pages': paginator.num_pages,
+                    'total_items': paginator.count,
+                    'has_next': page_obj.has_next(),
+                    'has_previous': page_obj.has_previous(),
+                },
+                'search_term': search_term
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    @staticmethod
+    def get_investors_by_nationality(nationality, page=None, per_page=None):
+        """ດຶງຂໍ້ມູນນັກລົງທຶນຕາມສັນຊາດ"""
+        try:
+            investors = InvestorInfo.objects.filter(
+                investorNationality__icontains=nationality
+            ).order_by('-InsertDate')
+            
+            # ຖ້າບໍ່ມີການແບ່ງໜ້າ ດຶງທັງໝົດ
+            if page is None or per_page is None:
+                data = []
+                for investor in investors:
+                    data.append({
+                        'id': investor.ID,
+                        'enterprise_id': investor.EnterpriseID,
+                        'name': investor.investorName,
+                        'ownership_percentage': investor.investorOwnerPercentage,
+                        'nationality': investor.investorNationality,
+                        'card_number': investor.investorcardNumber,
+                        'mobile': investor.investorMobile,
+                        'insert_date': investor.InsertDate.strftime('%Y-%m-%d %H:%M:%S') if investor.InsertDate else None,
+                        'update_date': investor.UpdateDate.strftime('%Y-%m-%d %H:%M:%S') if investor.UpdateDate else None,
+                    })
+                
+                return {
+                    'success': True,
+                    'data': data,
+                    'total_items': investors.count(),
+                }
+            
+            # ແບ່ງໜ້າ - ຕັ້ງຄ່າເລີ່ມຕົ້ນຖ້າເປັນ None
+            page = 1 if page is None else page
+            per_page = 10 if per_page is None else per_page
+            
+            paginator = Paginator(investors, per_page)
+            page_obj = paginator.get_page(page)
+            
+            data = []
+            for investor in page_obj:
+                data.append({
+                    'id': investor.ID,
+                    'enterprise_id': investor.EnterpriseID,
+                    'name': investor.investorName,
+                    'ownership_percentage': investor.investorOwnerPercentage,
+                    'nationality': investor.investorNationality,
+                    'card_number': investor.investorcardNumber,
+                    'mobile': investor.investorMobile,
+                    'insert_date': investor.InsertDate.strftime('%Y-%m-%d %H:%M:%S') if investor.InsertDate else None,
+                    'update_date': investor.UpdateDate.strftime('%Y-%m-%d %H:%M:%S') if investor.UpdateDate else None,
+                })
+            
+            return {
+                'success': True,
+                'data': data,
+                'pagination': {
+                    'current_page': page_obj.number,
+                    'total_pages': paginator.num_pages,
+                    'total_items': paginator.count,
+                    'has_next': page_obj.has_next(),
+                    'has_previous': page_obj.has_previous(),
+                }
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    @staticmethod
+    def get_investor_statistics():
+        """ສະຖິຕິຂອງນັກລົງທຶນ"""
+        try:
+            total_investors = InvestorInfo.objects.count()
+            
+            # ນັບຕາມສັນຊາດ
+            nationality_stats = InvestorInfo.objects.values('investorNationality').annotate(
+                count=models.Count('investorNationality')
+            ).order_by('-count')
+            
+            # ນັກລົງທຶນໃໝ່ໃນເດືອນນີ້
+            current_month = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            new_investors_this_month = InvestorInfo.objects.filter(
+                InsertDate__gte=current_month
+            ).count()
+            
+            # ວິສາຫະກິດທີ່ມີນັກລົງທຶນ
+            enterprises_with_investors = InvestorInfo.objects.values('EnterpriseID').distinct().count()
+            
+            return {
+                'success': True,
+                'data': {
+                    'total_investors': total_investors,
+                    'new_investors_this_month': new_investors_this_month,
+                    'enterprises_with_investors': enterprises_with_investors,
+                    'nationality_distribution': list(nationality_stats),
+                }
+            }
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+# Django Views ສຳລັບ API
+def get_investors_by_enterprise_api(request, enterprise_id):
+    """API endpoint ສຳລັບດຶງຂໍ້ມູນນັກລົງທຶນຕາມວິສາຫະກິດ"""
+    page = request.GET.get('page')
+    per_page = request.GET.get('per_page')
+    
+    # ແປງເປັນ integer ຖ້າມີຄ່າ
+    if page is not None:
+        try:
+            page = int(page)
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Invalid page parameter'})
+    
+    if per_page is not None:
+        try:
+            per_page = int(per_page)
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Invalid per_page parameter'})
+    
+    result = InvestorInfoService.get_investors_by_enterprise(enterprise_id, page=page, per_page=per_page)
+    return JsonResponse(result)
+
+def get_investors_by_nationality_api(request, nationality):
+    """API endpoint ສຳລັບດຶງຂໍ້ມູນນັກລົງທຶນຕາມສັນຊາດ"""
+    page = request.GET.get('page')
+    per_page = request.GET.get('per_page')
+    
+    # ແປງເປັນ integer ຖ້າມີຄ່າ
+    if page is not None:
+        try:
+            page = int(page)
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Invalid page parameter'})
+    
+    if per_page is not None:
+        try:
+            per_page = int(per_page)
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Invalid per_page parameter'})
+    
+    result = InvestorInfoService.get_investors_by_nationality(nationality, page=page, per_page=per_page)
+    return JsonResponse(result)
+
+def get_all_investors_api(request):
+    """API endpoint ສຳລັບດຶງຂໍ້ມູນນັກລົງທຶນທັງໝົດ"""
+    page = request.GET.get('page')
+    per_page = request.GET.get('per_page')
+    
+    # ແປງເປັນ integer ຖ້າມີຄ່າ
+    if page is not None:
+        try:
+            page = int(page)
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Invalid page parameter'})
+    
+    if per_page is not None:
+        try:
+            per_page = int(per_page)
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Invalid per_page parameter'})
+    
+    result = InvestorInfoService.get_all_investors(page=page, per_page=per_page)
+    return JsonResponse(result)
+
+def get_investor_by_id_api(request, investor_id):
+    """API endpoint ສຳລັບດຶງຂໍ້ມູນນັກລົງທຶນຕາມ ID"""
+    # ກວດສອບວ່າ investor_id ມີຄ່າ
+    if investor_id is None:
+        return JsonResponse({'success': False, 'error': 'Investor ID is required'})
+    
+    result = InvestorInfoService.get_investor_by_id(investor_id)
+    return JsonResponse(result)
+
+def search_investors_api(request):
+    """API endpoint ສຳລັບຄົ້ນຫານັກລົງທຶນ"""
+    search_term = request.GET.get('q', '')
+    page = request.GET.get('page')
+    per_page = request.GET.get('per_page')
+    
+    if not search_term:
+        return JsonResponse({'success': False, 'error': 'Search term is required'})
+    
+    # ແປງເປັນ integer ຖ້າມີຄ່າ
+    if page is not None:
+        try:
+            page = int(page)
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Invalid page parameter'})
+    
+    if per_page is not None:
+        try:
+            per_page = int(per_page)
+        except ValueError:
+            return JsonResponse({'success': False, 'error': 'Invalid per_page parameter'})
+    
+    result = InvestorInfoService.search_investors(search_term, page=page, per_page=per_page)
+    return JsonResponse(result)
+
+def get_investor_statistics_api(request):
+    """API endpoint ສຳລັບສະຖິຕິນັກລົງທຶນ"""
+    result = InvestorInfoService.get_investor_statistics()
+    return JsonResponse(result)    
         

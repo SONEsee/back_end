@@ -106,10 +106,10 @@ import pyodbc
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'LCICDB',
+        'NAME': 'lcicwebsitedb',
         'USER': 'postgres', 
         'PASSWORD': 'Lcic@123',
-        'HOST': '10.0.32.2',
+        'HOST': '192.168.45.230',
         'PORT': '5432',
     },
     'utility': {
@@ -120,17 +120,17 @@ DATABASES = {
         'HOST': '192.168.45.230',
         'PORT': '5432',
     },
-    # 'ned_sql': {
-    #     'ENGINE': 'sql_server.pyodbc',
-    #     'NAME': 'LCIC_Fingers_old',
-    #     'USER': 'sa',
-    #     'PASSWORD': 'Lcic@12345',
-    #     'HOST': '192.168.45.245\EXPRESS',
-    #     'PORT': '57004',
-    #     'OPTIONS': {
-    #         'driver': 'ODBC Driver 17 for SQL Server',
-    #     },
-    # },
+    'ned_sql': {
+        'ENGINE': 'sql_server.pyodbc',
+        'NAME': 'LCIC_Fingers_old',
+        'USER': 'sa',
+        'PASSWORD': 'Lcic@12345',
+        'HOST': '192.168.45.245\EXPRESS',
+        'PORT': '57004',
+        'OPTIONS': {
+            'driver': 'ODBC Driver 17 for SQL Server',
+        },
+    },
 }
 
 

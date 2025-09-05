@@ -324,7 +324,12 @@ urlpatterns = [
     path('api/provinces/', views.get_all_provinces, name='get_all_provinces'),
     path('api/districts/', views.get_districts_by_province, name='get_districts_by_province'),
     path('api/villages/', views.get_villages_by_district, name='get_villages_by_district'),
-    
+    path('api/investors/', views.get_all_investors_api, name='get_all_investors'),
+    path('api/investors/<int:investor_id>/', views.get_investor_by_id_api, name='get_investor_by_id'),
+    path('api/investors/search/', views.search_investors_api, name='search_investors'),
+    path('api/investors/statistics/', views.get_investor_statistics_api, name='investor_statistics'),
+    path('api/investors/enterprise/<str:enterprise_id>/', views.get_investors_by_enterprise_api, name='get_investors_by_enterprise'),
+    path('api/investors/nationality/<str:nationality>/', views.get_investors_by_nationality_api, name='get_investors_by_nationality'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
