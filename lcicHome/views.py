@@ -14035,7 +14035,7 @@ def get_all_investors_api(request):
     page = request.GET.get('page')
     per_page = request.GET.get('per_page')
     
-    # ແປງເປັນ integer ຖ້າມີຄ່າ
+    
     if page is not None:
         try:
             page = int(page)
