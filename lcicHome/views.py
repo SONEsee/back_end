@@ -11078,6 +11078,7 @@ from .serializers import SearchBatfileSerializer
 class SearchBatfileAPIView(APIView):
     def get(self, request):
         user_id = request.query_params.get('user_id')
+        filter_user_id = request.query_params.get('filter_user_id')  # ເພີ່ມ parameter ໃໝ່
         
         if not user_id:
             return Response(
@@ -11085,9 +11086,16 @@ class SearchBatfileAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # ຖ້າເປັນ admin user (01)
         if user_id == "01":
-            files = Search_batfile.objects.all()
+            # ຖ້າມີ filter_user_id ຈະ filter ຕາມນັ້ນ
+            if filter_user_id:
+                files = Search_batfile.objects.filter(user_id=filter_user_id)
+            else:
+                # ຖ້າບໍ່ມີ filter_user_id ຈະສະແດງທັງໝົດ
+                files = Search_batfile.objects.all()
         else:
+            # ຖ້າບໍ່ແມ່ນ admin ຈະເບິ່ງໄດ້ແຕ່ຂອງຕົນເອງ
             files = Search_batfile.objects.filter(user_id=user_id)
         
         serializer = SearchBatfileSerializer(files, many=True)
