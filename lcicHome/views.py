@@ -7960,14 +7960,14 @@ class UserLoginView(APIView):
     
 
 # Paylay Pherm
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from .models import Login, User_Group, memberInfo
-from .serializers import LoginSerializer
-from django.contrib.auth.hashers import make_password
-import logging
-logger = logging.getLogger(__name__)
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from rest_framework import status
+# from .models import Login, User_Group, memberInfo
+# from .serializers import LoginSerializer
+# from django.contrib.auth.hashers import make_password
+# import logging
+# logger = logging.getLogger(__name__)
 
 
 # class UserManagementView(APIView):
@@ -8242,6 +8242,13 @@ class FCR_reportView(APIView):
                         else:
                             print(f"Unrecognized col_type: {col_type} for collateral ID {col_id}")
                     
+                    lon_purpose_detail = (
+                        Main_catalog_cat.objects.filter(ct_type="LPR", cat_value=loan.lon_purpose_code)
+                        .first()
+                    )
+
+                    lon_purpose_detail = lon_purpose_detail.cat_lao_name if lon_purpose_detail else None
+                        
                     loan_data_active = {
                         "id": loan.loan_id,
                         "lon_update_date": loan.lon_update_date,
@@ -8257,7 +8264,8 @@ class FCR_reportView(APIView):
                         "lon_exp_date": loan.lon_exp_date,
                         "lon_ext_date": loan.lon_ext_date,
                         "lon_int_rate": loan.lon_int_rate,
-                        "lon_purpose_code": loan.lon_purpose_code,
+                        # "lon_purpose_code": loan.lon_purpose_code,
+                        "lon_purpose_code": lon_purpose_detail,
                         "lon_account_no": loan.lon_account_no,
                         "lon_status": loan.lon_status,
                         "lon_type": loan.lon_type,
@@ -12884,16 +12892,112 @@ def electric_progress_view(request, pk):
             status=500
         )
         
+        
+        
 from utility.models import w_customer_info, Utility_Bill, searchlog_utility, request_charge_utility
 from .serializers import WaterCustomerSerializer, UtilityBillSerializer, SearchLogUtilitySerializer
 import uuid
-from django.db.models import Func, F, Value
+import re
+import logging
+from datetime import datetime
+from django.db.models import Q
+from django.core.exceptions import ValidationError
+from django.utils import timezone
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+
+logger = logging.getLogger(__name__)
+
+
+class SafeUtilityBillSerializer(UtilityBillSerializer):
+    """Custom serializer that safely handles problematic date fields"""
+    
+    def to_representation(self, instance):
+        try:
+            # Get the original representation
+            data = super().to_representation(instance)
+            
+            # List of date fields that might have year 1 issues
+            problematic_date_fields = ['created_at', 'updated_at', 'created', 'modified']
+            
+            for field_name in problematic_date_fields:
+                if field_name in data:
+                    try:
+                        field_value = getattr(instance, field_name, None)
+                        if field_value and hasattr(field_value, 'year'):
+                            # Check for problematic years (year 1, year 0, negative years)
+                            if field_value.year <= 1900:
+                                data[field_name] = None  # Set problematic dates to None
+                            else:
+                                data[field_name] = field_value.isoformat() if hasattr(field_value, 'isoformat') else str(field_value)
+                    except Exception as e:
+                        logger.warning(f"Error processing date field {field_name}: {str(e)}")
+                        data[field_name] = None
+            
+            return data
+            
+        except Exception as e:
+            logger.error(f"Error in SafeUtilityBillSerializer: {str(e)}")
+            # Return basic bill data even if serialization fails
+            return {
+                'id': getattr(instance, 'id', None),
+                'Customer_ID': getattr(instance, 'Customer_ID', None),
+                'InvoiceMonth': getattr(instance, 'InvoiceMonth', None),
+                'Total_amount': getattr(instance, 'Total_amount', 0),
+                'Water_rate': getattr(instance, 'Water_rate', 0),
+                'Service_charge': getattr(instance, 'Service_charge', 0),
+                'Paid_amount': getattr(instance, 'Paid_amount', 0)
+            }
 
 class UtilityReportAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def serialize_bills_safely(self, bills):
+        """Serialize bills one by one, skipping any that fail"""
+        serialized_bills = []
+        
+        for bill in bills:
+            try:
+                # Try normal serialization first
+                serializer = UtilityBillSerializer(bill)
+                bill_data = serializer.data
+                serialized_bills.append(bill_data)
+                
+            except Exception as e:
+                # If normal serialization fails, create manual safe data
+                logger.warning(f"Serialization failed for bill {bill.BillID}: {str(e)}")
+                
+                # Create safe manual data without problematic fields
+                safe_bill_data = {
+                    'BillID': bill.BillID,
+                    'Customer_ID': bill.Customer_ID,
+                    'InvoiceNo': bill.InvoiceNo or '',
+                    'TypeOfPro': bill.TypeOfPro or '',
+                    'Outstanding': float(bill.Outstanding or 0),
+                    'Basic_Tax': float(bill.Basic_Tax or 0),
+                    'Bill_Amount': float(bill.Bill_Amount or 0),
+                    'Debt_Amount': float(bill.Debt_Amount or 0),
+                    'Payment_ID': bill.Payment_ID or '',
+                    'PaymentType': bill.PaymentType or '',
+                    'Payment_Date': bill.Payment_Date or '',
+                    'InvoiceMonth': bill.InvoiceMonth or '',
+                    'InvoiceDate': bill.InvoiceDate or '',
+                    'DisID': bill.DisID or '',
+                    'ProID': bill.ProID or '',
+                    'UserID': bill.UserID or '',
+                    # Skip InsertDate and UpdateDate - these cause the error
+                    'InsertDate': None,  
+                    'UpdateDate': None
+                }
+                serialized_bills.append(safe_bill_data)
+        
+        return serialized_bills
+
     def get(self, request):
         try:
+            # Input validation
             customer_id = request.query_params.get('water')
             if not customer_id:
                 return Response({"error": "water parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -12902,6 +13006,7 @@ class UtilityReportAPIView(APIView):
             bank = user.MID
             sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
 
+            # Get bank info
             bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
             charge_bank_type = bank_info.bnk_type
             if charge_bank_type == 1:
@@ -12910,23 +13015,30 @@ class UtilityReportAPIView(APIView):
                 chargeType = ChargeMatrix.objects.get(chg_sys_id=10)
             charge_amount_com = chargeType.chg_amount
 
+            # Get customer
             customer = w_customer_info.objects.get(Customer_ID=customer_id)
 
-            # edl = edl_customer_info.objects.get(Customer_ID=customer_id)
-            # Custom function to convert MM-YYYY to YYYY-MM for sorting (PostgreSQL)
-            class ReorderMonthYear(Func):
-                function = "TO_CHAR"
-                template = "SUBSTRING(%(expressions)s FROM 4 FOR 4) || '-' || SUBSTRING(%(expressions)s FROM 1 FOR 2)"
+            # Get bills - focus only on InvoiceMonth validation (which is fine)
+            bills = Utility_Bill.objects.filter(Customer_ID=customer_id).exclude(
+                InvoiceMonth__isnull=True
+            ).exclude(
+                InvoiceMonth=""
+            )
 
-            # Sort bills by InvoiceMonth in descending order
-            bills = Utility_Bill.objects.filter(Customer_ID=customer_id).annotate(
-                year_month=ReorderMonthYear(F('InvoiceMonth'))
-            ).order_by('-year_month')
-
-            # edl_bill = Electric_Bill.objects.filter(Customer_ID=customer_id_2).annotate(
-            #     year_month=ReorderMonthYear(F('InvoiceMonth'))
-            # ).order_by('-year_month')
+            # Sort by InvoiceMonth manually (since your format is MM-YYYY)
+            bills_list = list(bills)
+            def sort_key(bill):
+                try:
+                    invoice_month = bill.InvoiceMonth
+                    if invoice_month and re.match(r'^(0[1-9]|1[0-2])-(\d{4})$', invoice_month):
+                        month, year = invoice_month.split('-')
+                        return f"{year}-{month.zfill(2)}"
+                    return "0000-00"  # Put invalid dates at the end
+                except:
+                    return "0000-00"
             
+            bills_list.sort(key=sort_key, reverse=True)  # Most recent first
+
             # Log the search
             search_log = searchlog_utility.objects.create(
                 bnk_code=bank.bnk_code,
@@ -12968,24 +13080,26 @@ class UtilityReportAPIView(APIView):
                 rec_reference_code=rec_reference_code
             )
 
+            # Serialize safely
             customer_serializer = WaterCustomerSerializer(customer)
-            bill_serializer = UtilityBillSerializer(bills, many=True)
+            bill_data = self.serialize_bills_safely(bills_list)
             search_log_serializer = SearchLogUtilitySerializer(search_log)
 
-            # Construct reference_data as a tuple
-            reference_data = (
+            # Construct reference_data
+            reference_data = [
                 rec_reference_code,
                 customer_id,
                 report_date,
-                search_log_serializer.data,  # Serialized search_log
-                rec_insert_date.isoformat()  # Convert datetime to ISO string
-            )
+                search_log_serializer.data,
+                rec_insert_date.isoformat()
+            ]
 
-            # Return response with reference_data as a list (JSON-compatible)
+            logger.info(f"Successfully returning {len(bill_data)} bills for customer {customer_id}")
+
             return Response({
                 "reference_data": reference_data,
                 "customer": [customer_serializer.data],
-                "bill": bill_serializer.data
+                "bill": bill_data
             }, status=status.HTTP_200_OK)
 
         except w_customer_info.DoesNotExist:
@@ -12995,7 +13109,168 @@ class UtilityReportAPIView(APIView):
         except ChargeMatrix.DoesNotExist:
             return Response({"error": "Charge configuration not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"Unexpected error: {str(e)}")
+            return Response({"error": "An unexpected error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# Optional: Database cleanup function to fix the year 1 dates
+def fix_problematic_dates():
+    """
+    Run this to fix the problematic InsertDate and UpdateDate fields
+    WARNING: This will update database records
+    """
+    from django.utils import timezone
+    
+    current_time = timezone.now()
+    
+    # Fix bills with year 1 dates - using your actual model field names
+    problematic_bills = Utility_Bill.objects.filter(
+        Q(InsertDate__year=1) | Q(UpdateDate__year=1)
+    )
+    
+    count = 0
+    total_bills = problematic_bills.count()
+    print(f"Found {total_bills} bills with problematic dates")
+    
+    for bill in problematic_bills:
+        try:
+            updated = False
+            if hasattr(bill, 'InsertDate') and bill.InsertDate and bill.InsertDate.year == 1:
+                bill.InsertDate = current_time
+                updated = True
+                print(f"Fixed InsertDate for bill {bill.BillID}")
+            
+            if hasattr(bill, 'UpdateDate') and bill.UpdateDate and bill.UpdateDate.year == 1:
+                bill.UpdateDate = current_time
+                updated = True
+                print(f"Fixed UpdateDate for bill {bill.BillID}")
+            
+            if updated:
+                bill.save(update_fields=['InsertDate', 'UpdateDate'])
+                count += 1
+                
+        except Exception as e:
+            logger.error(f"Error fixing bill {bill.BillID}: {e}")
+            print(f"Error fixing bill {bill.BillID}: {e}")
+    
+    print(f"Successfully fixed {count} bills with problematic dates")
+    return count
+
+# from utility.models import w_customer_info, Utility_Bill, searchlog_utility, request_charge_utility
+# from .serializers import WaterCustomerSerializer, UtilityBillSerializer, SearchLogUtilitySerializer
+# import uuid
+# from django.db.models import Func, F, Value
+
+# class UtilityReportAPIView(APIView):
+#     permission_classes = [IsAuthenticated]
+
+#     def get(self, request):
+#         try:
+#             customer_id = request.query_params.get('water')
+#             if not customer_id:
+#                 return Response({"error": "water parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+#             user = request.user
+#             bank = user.MID
+#             sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
+
+#             bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
+#             charge_bank_type = bank_info.bnk_type
+#             if charge_bank_type == 1:
+#                 chargeType = ChargeMatrix.objects.get(chg_sys_id=9)
+#             else:
+#                 chargeType = ChargeMatrix.objects.get(chg_sys_id=10)
+#             charge_amount_com = chargeType.chg_amount
+
+#             customer = w_customer_info.objects.get(Customer_ID=customer_id)
+
+#             # Custom function to convert MM-YYYY to YYYY-MM for sorting (PostgreSQL)
+#             class ReorderMonthYear(Func):
+#                 function = "TO_CHAR"
+#                 template = (
+#                     "CASE WHEN LENGTH(%(expressions)s) = 7 THEN "
+#                     "SUBSTRING(%(expressions)s FROM 4 FOR 4) || '-' || SUBSTRING(%(expressions)s FROM 1 FOR 2) "
+#                     "ELSE NULL END"
+#                 )
+
+#             # Filter and validate bills
+#             bills = Utility_Bill.objects.filter(Customer_ID=customer_id).exclude(
+#                 InvoiceMonth__isnull=True
+#             ).exclude(
+#                 InvoiceMonth=""
+#             ).annotate(
+#                 year_month=ReorderMonthYear(F('InvoiceMonth'))
+#             ).order_by('-year_month')
+
+#             # Log the search
+#             search_log = searchlog_utility.objects.create(
+#                 bnk_code=bank.bnk_code,
+#                 sys_usr=sys_usr,
+#                 wt_cusid=customer_id,
+#                 edl_cusid='',
+#                 tel_cusid='',
+#                 proID_edl='',
+#                 proID_wt='',
+#                 proID_tel='',
+#                 credittype='water',
+#                 inquiry_date=timezone.now(),
+#                 inquiry_time=timezone.now()
+#             )
+
+#             # Get current timestamp for rec_insert_date
+#             rec_insert_date = timezone.now()
+#             date_str = rec_insert_date.strftime('%d%m%Y')
+#             report_date = rec_insert_date.strftime('%d-%m-%Y')
+#             rec_reference_code = f"{chargeType.chg_code}-0-{bank.bnk_code}-{date_str}-{search_log.search_id}"
+#             rec_reference_code = rec_reference_code[:100]
+
+#             # Log the charge request
+#             request_charge_utility.objects.create(
+#                 usr_session_id=str(uuid.uuid4()),
+#                 search_id=search_log,
+#                 bnk_code=bank.bnk_code,
+#                 chg_code=chargeType.chg_code,
+#                 chg_amount=charge_amount_com,
+#                 chg_unit='LAK',
+#                 sys_usr=sys_usr,
+#                 credit_type='water',
+#                 wt_cusid=customer_id,
+#                 edl_cusid='',
+#                 tel_cusid='',
+#                 proID_edl='',
+#                 proID_wt='',
+#                 proID_tel='',
+#                 rec_reference_code=rec_reference_code
+#             )
+
+#             customer_serializer = WaterCustomerSerializer(customer)
+#             bill_serializer = UtilityBillSerializer(bills, many=True)
+#             search_log_serializer = SearchLogUtilitySerializer(search_log)
+
+#             # Construct reference_data as a tuple
+#             reference_data = (
+#                 rec_reference_code,
+#                 customer_id,
+#                 report_date,
+#                 search_log_serializer.data,
+#                 rec_insert_date.isoformat()
+#             )
+
+#             # Return response with reference_data as a list (JSON-compatible)
+#             return Response({
+#                 "reference_data": reference_data,
+#                 "customer": [customer_serializer.data],
+#                 "bill": bill_serializer.data
+#             }, status=status.HTTP_200_OK)
+
+#         except w_customer_info.DoesNotExist:
+#             return Response({"error": "Customer not found"}, status=status.HTTP_404_NOT_FOUND)
+#         except memberInfo.DoesNotExist:
+#             return Response({"error": "Bank information not found"}, status=status.HTTP_400_BAD_REQUEST)
+#         except ChargeMatrix.DoesNotExist:
+#             return Response({"error": "Charge configuration not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+#         except Exception as e:
+#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
       
 from utility.models import edl_customer_info, Electric_Bill, searchlog_utility, request_charge_utility
