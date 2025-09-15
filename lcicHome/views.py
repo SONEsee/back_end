@@ -3093,10 +3093,6 @@ def process_uploaded_file(uploaded_data,  user_id, period, file_period):
         print("total_records",total_records)
         print("period",period)
 
-       
-
-        result = {'status': 'success'}
-
         for item in json_content:
             LCIC_code = item.get('LCIC_code', None)
             if LCIC_code == '':
@@ -3143,9 +3139,8 @@ def process_uploaded_file(uploaded_data,  user_id, period, file_period):
             elif lcic_exists and enterprise_code_exists:
                 collateral_status = '00'
                 datamatch = '' 
-            if collateral_status != '00':
                 
-
+            if collateral_status != '00':
                 C_error.objects.create(
                     id_file=cid,
                     LCIC_code=LCIC_code,
@@ -3164,39 +3159,91 @@ def process_uploaded_file(uploaded_data,  user_id, period, file_period):
                     collateral_update_date=timezone.now()
                 )
                 error_records += 1
-                
-                
                 print("error_records",error_records)
                 continue
 
+            # ການກວດສອບຄວາມບໍ່ສອດຄ່ອງຂອງຂໍ້ມູນ (Data Inconsistency Check)
             bank_customer_ID = item.get('bank_customer_ID', '')
-            existing_c1_record = C1.objects.filter(LCIC_code=LCIC_code, com_enterprise_code=com_enterprise_code).first()
-            if existing_c1_record and existing_c1_record.bank_customer_ID != bank_customer_ID:
+            bnk_code = item.get('bnk_code', '')
+            loan_id = item.get('loan_id', '')
+            col_id = item.get('col_id', '')
+
+            inconsistency_found = False
+
+            # ກໍລະນີທີ 1: bank_customer_ID, bnk_code, loan_id, col_id ຄືກັນ ແຕ່ com_enterprise_code ຫຼື LCIC_code ຕ່າງກັນ
+            # ໝາຍຄວາມວ່າ: ລູກຄ້າຄົນດຽວກັນ ໃນທະນາຄານດຽວກັນ ມີເງິນກູ້ ແລະ collateral ດຽວກັນ 
+            # ແຕ່ລະຫັດວິສາຫະກິດບໍ່ກົງກັນ (ຂໍ້ມູນບໍ່ສອດຄ່ອງ)
+            case1_inconsistent = C1.objects.filter(
+                bank_customer_ID=bank_customer_ID,
+                bnk_code=bnk_code,
+                loan_id=loan_id,
+                col_id=col_id
+            ).exclude(
+                com_enterprise_code=com_enterprise_code,
+                LCIC_code=LCIC_code
+            )
+
+            # ກໍລະນີທີ 2: bank_customer_ID, loan_id, col_id, com_enterprise_code, LCIC_code ຄືກັນ ແຕ່ bnk_code ຕ່າງກັນ
+            # ໝາຍຄວາມວ່າ: ລູກຄ້າ, ເງິນກູ້, collateral, ວິສາຫະກິດດຽວກັນ ແຕ່ປະກົດຢູ່ໃນທະນາຄານຕ່າງກັນ
+            # (ອາດເປັນຂໍ້ມູນຜິດພາດ ຫຼື ການປ່ຽນທະນາຄານທີ່ບໍ່ໄດ້ອັບເດດ)
+            case2_inconsistent = C1.objects.filter(
+                bank_customer_ID=bank_customer_ID,
+                loan_id=loan_id,
+                col_id=col_id,
+                com_enterprise_code=com_enterprise_code,
+                LCIC_code=LCIC_code
+            ).exclude(
+                bnk_code=bnk_code
+            )
+
+            # ບັນທຶກຂໍ້ມູນທີ່ບໍ່ສອດຄ່ອງ (Data Inconsistency)
+            # ກໍລະນີທີ 1: ລະຫັດວິສາຫະກິດບໍ່ກົງກັນ
+            if case1_inconsistent.exists():
                 C1_disptes.objects.create(
                     LCIC_code=LCIC_code,
                     id_file=cid,
                     user_id=user_id,
-                    period = file_period,
+                    period=file_period,
                     com_enterprise_code=com_enterprise_code,
                     bank_customer_ID=bank_customer_ID,
-                    bnk_code=item.get('bnk_code', ''),
+                    bnk_code=bnk_code,
                     branch_id_code=item.get('branch_id_code', ''),
-                    loan_id=item.get('loan_id', ''),
-                    col_id=item.get('col_id', ''),
+                    loan_id=loan_id,
+                    col_id=col_id,
                     col_type=item.get('col_type', ''),
                     insert_date=timezone.now(),
                     update_date=timezone.now()
                 )
+                inconsistency_found = True
+
+            # ກໍລະນີທີ 2: ລະຫັດທະນາຄານບໍ່ກົງກັນ
+            if case2_inconsistent.exists():
+                C1_disptes.objects.create(
+                    LCIC_code=LCIC_code,
+                    id_file=cid,
+                    user_id=user_id,
+                    period=file_period,
+                    com_enterprise_code=com_enterprise_code,
+                    bank_customer_ID=bank_customer_ID,
+                    bnk_code=bnk_code,
+                    branch_id_code=item.get('branch_id_code', ''),
+                    loan_id=loan_id,
+                    col_id=col_id,
+                    col_type=item.get('col_type', ''),
+                    insert_date=timezone.now(),
+                    update_date=timezone.now()
+                )
+                inconsistency_found = True
+
+            # ຖ້າພົບຄວາມບໍ່ສອດຄ່ອງ ໃຫ້ຂ້າມການບັນທຶກເລກອດ໌ນີ້
+            if inconsistency_found:
                 continue
 
-
-        
             try:
                 mia_insert_date = datetime.strptime(item.get('mia_insert_date', ''), '%Y-%m-%d')
             except ValueError:
                 mia_insert_date = None
 
-           
             if item.get('col_type', '').lower() == "c2.2":
                 CDL.objects.create(
                     id_file=cid,
@@ -3265,7 +3312,6 @@ def process_uploaded_file(uploaded_data,  user_id, period, file_period):
                     c33=item.get('spous_acquisition', ''),
                     c39=item.get('segmentType',''),
                     c42=item.get('rel_insert_date', ''),
-
                     user_id=user_id,
                     period = file_period,
                     c40=timezone.now().date(),
@@ -3328,7 +3374,6 @@ def process_uploaded_file(uploaded_data,  user_id, period, file_period):
                     period = file_period,
                     c40=timezone.now().date(),
                     c41=timezone.now().date()
-
                 )
             elif item.get('col_type', '').lower() == "c2.5":
                 CDL.objects.create(
@@ -3434,7 +3479,6 @@ def process_uploaded_file(uploaded_data,  user_id, period, file_period):
                     period = file_period,
                     c40=timezone.now().date(),
                     c41=timezone.now().date()
-
                 )
             elif item.get('col_type', '').lower() == "c2.8":
                 CDL.objects.create(
@@ -3467,28 +3511,28 @@ def process_uploaded_file(uploaded_data,  user_id, period, file_period):
                     period = file_period,
                     c40=timezone.now().date(),
                     c41=timezone.now().date()
-
                 )
 
-            
+        # ຄິດໄລ່ເປີເຊັນ error
         t2 = (error_records/total_records)*100 
-
 
         uploaded_data.percentage = t2
         uploaded_data.statussubmit = "2" if t2> 15 else "1"
         uploaded_data.save()
         
         print("t2",t2)
-        return JsonResponse({'status': 'success', 
-                            'message': 'File uploaded successfully',
-                            'warning': total_records,
-                            'error_records': error_records
-                            })
-        return result
+        
+        # ແກ້ບັນຫາ: return ຄັ້ງດຽວເທົ່ານັ້ນ
+        return JsonResponse({
+            'status': 'success', 
+            'message': 'File uploaded successfully',
+            'warning': total_records,
+            'error_records': error_records
+        })
+        
     except Exception as e:
-                print(f"An error occurred: {e}")
-                return {'status': 'error', 'message': str(e)}
-
+        print(f"An error occurred: {e}")
+        return {'status': 'error', 'message': str(e)}
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -6333,6 +6377,222 @@ def safe_parse_datetime(value):
 #         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 @csrf_exempt
 @require_POST
+# def confirm_upload(request):
+#     try:
+#         FID = request.POST.get('FID')
+#         if not FID:
+#             return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
+
+#         data_edits = data_edit.objects.filter(id_file=FID)
+#         if not data_edits.exists():
+#             Upload_File.objects.filter(FID=FID).update(statussubmit='2')
+#             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
+        
+
+#         for item in data_edits:
+#             try:
+#                 latest_b1 = B1.objects.filter(
+#                     bnk_code=item.bnk_code,
+#                 ).order_by('-period').first()
+#                 print("B1", latest_b1)
+#                 print("item", item.period)
+#                 if latest_b1 and item.period < latest_b1.period:
+#                     Upload_File.objects.filter(FID=FID).update(statussubmit='2')
+#                     return JsonResponse({
+#                         'status': 'error',
+#                         'message': f'The uploaded period {item.period} is earlier than the latest period {latest_b1.period} in B1.'
+#                     }, status=400)
+
+#                 b1_monthly_match = B1_Monthly.objects.filter(
+#                     bnk_code=item.bnk_code,
+#                     branch_id=item.branch_id,
+#                     customer_id=item.customer_id,
+#                     loan_id=item.loan_id,
+#                     period=item.period
+#                 ).exists()
+                
+#                 b1_match = B1.objects.filter(
+#                     bnk_code=item.bnk_code,
+#                     branch_id=item.branch_id,
+#                     customer_id=item.customer_id,
+#                     loan_id=item.loan_id,
+#                     period=item.period
+#                 ).exists()
+
+#                 if b1_monthly_match or b1_match:
+#                     b1_monthly_mismatch = B1_Monthly.objects.filter(
+#                         bnk_code=item.bnk_code,
+#                         branch_id=item.branch_id,
+#                         customer_id=item.customer_id,
+#                         loan_id=item.loan_id,
+#                         period=item.period
+#                     ).exclude(
+#                         com_enterprise_code=item.com_enterprise_code,
+#                         lcicID=item.lcicID
+#                     ).exists()
+
+#                     b1_mismatch = B1.objects.filter(
+#                         bnk_code=item.bnk_code,
+#                         branch_id=item.branch_id,
+#                         customer_id=item.customer_id,
+#                         loan_id=item.loan_id,
+#                         period=item.period
+#                     ).exclude(
+#                         com_enterprise_code=item.com_enterprise_code,
+#                         lcicID=item.lcicID
+#                     ).exists()
+
+#                     if b1_monthly_mismatch or b1_mismatch:
+#                         disputes.objects.create(
+#                             id_file=FID,
+#                             lcicID=item.lcicID,
+#                             user_id=item.user_id,
+#                             com_enterprise_code=item.com_enterprise_code,
+#                             segmentType=item.segmentType,
+#                             bnk_code=item.bnk_code,
+#                             customer_id=item.customer_id,
+#                             branch_id=item.branch_id,
+#                             period=item.period,
+#                             product_type=item.product_type,
+#                             lon_sys_id=item.lon_sys_id,
+#                             loan_id=item.loan_id,
+#                             lon_open_date=item.lon_open_date,
+#                             lon_exp_date=item.lon_exp_date,
+#                             lon_ext_date=item.lon_ext_date,
+#                             lon_int_rate=item.lon_int_rate,
+#                             lon_purpose_code=item.lon_purpose_code,
+#                             lon_credit_line=item.lon_credit_line,
+#                             lon_currency_code=item.lon_currency_code,
+#                             lon_outstanding_balance=item.lon_outstanding_balance,
+#                             lon_account_no=item.lon_account_no,
+#                             lon_no_days_slow=item.lon_no_days_slow,
+#                             lon_class=item.lon_class,
+#                             lon_type=item.lon_type,
+#                             lon_term=item.lon_term,
+#                             lon_status=item.lon_status,
+#                             lon_insert_date=item.lon_insert_date,
+#                             lon_update_date=item.lon_update_date,
+#                             lon_applied_date=item.lon_applied_date,
+#                             is_disputed=item.is_disputed,
+#                             LCIC_code=item.LCIC_code
+#                         )
+#                         continue  
+
+                
+#                 existing_record = B1.objects.filter(
+#                     bnk_code=item.bnk_code,
+#                     branch_id=item.branch_id,
+#                     customer_id=item.customer_id,
+#                     loan_id=item.loan_id
+#                 ).exists()
+
+               
+#                 status_data_value = 'u' if existing_record else 'i'
+#                 b1_monthly_exists = B1_Monthly.objects.filter(
+#                     bnk_code=item.bnk_code,
+#                     branch_id=item.branch_id,
+#                     customer_id=item.customer_id,
+#                     loan_id=item.loan_id
+#                 ).exists()
+#                 b1_monthly_status_data = 'u' if b1_monthly_exists else 'i'
+
+#                 b1_monthly, created = B1_Monthly.objects.update_or_create(
+#                     bnk_code=item.bnk_code,
+#                     branch_id=item.branch_id,
+#                     customer_id=item.customer_id,
+#                     loan_id=item.loan_id,
+#                     period=item.period,
+#                     defaults={
+#                         'lcicID': item.lcicID,
+#                         'com_enterprise_code': item.com_enterprise_code,
+#                         'segmentType': item.segmentType,
+#                         'bnk_code': item.bnk_code,
+#                         'customer_id': item.customer_id,
+#                         'branch_id': item.branch_id,
+#                         'user_id': item.user_id,
+#                         'period': item.period,
+#                         'product_type': item.product_type,
+#                         'lon_sys_id': item.lon_sys_id,
+#                         'loan_id': item.loan_id,
+#                         'lon_open_date': item.lon_open_date,
+#                         'lon_exp_date': item.lon_exp_date,
+#                         'lon_ext_date': item.lon_ext_date,
+#                         'lon_int_rate': item.lon_int_rate,
+#                         'lon_purpose_code': item.lon_purpose_code,
+#                         'lon_credit_line': item.lon_credit_line,
+#                         'lon_currency_code': item.lon_currency_code,
+#                         'lon_outstanding_balance': item.lon_outstanding_balance,
+#                         'lon_account_no': item.lon_account_no,
+#                         'lon_no_days_slow': item.lon_no_days_slow,
+#                         'lon_class': item.lon_class,
+#                         'lon_type': item.lon_type,
+#                         'lon_term': item.lon_term,
+#                         'lon_status': item.lon_status,
+#                         'lon_insert_date': item.lon_insert_date,
+#                         'lon_update_date': item.lon_update_date,
+#                         'lon_applied_date': item.lon_applied_date,
+#                         'is_disputed': item.is_disputed,
+#                         'id_file': FID,
+#                         'LCIC_code': item.LCIC_code,
+#                         'status_data': b1_monthly_status_data
+#                     }
+#                 )
+                
+                
+#                 B1.objects.filter(
+#                     bnk_code=item.bnk_code,
+#                     branch_id=item.branch_id,
+#                     customer_id=item.customer_id,
+#                     loan_id=item.loan_id
+#                 ).delete()
+                
+#                 B1.objects.create(
+#                     lcicID=item.lcicID,
+#                     com_enterprise_code=item.com_enterprise_code,
+#                     segmentType=item.segmentType,
+#                     bnk_code=item.bnk_code,
+#                     user_id=item.user_id,
+#                     customer_id=item.customer_id,
+#                     branch_id=item.branch_id,
+#                     lon_sys_id=item.lon_sys_id,
+#                     loan_id=item.loan_id,
+#                     period=item.period,
+#                     product_type=item.product_type,    
+#                     lon_open_date=item.lon_open_date,
+#                     lon_exp_date=item.lon_exp_date,
+#                     lon_ext_date=item.lon_ext_date,
+#                     lon_int_rate=item.lon_int_rate,
+#                     lon_purpose_code=item.lon_purpose_code,
+#                     lon_credit_line=item.lon_credit_line,
+#                     lon_currency_code=item.lon_currency_code,
+#                     lon_outstanding_balance=item.lon_outstanding_balance,
+#                     lon_account_no=item.lon_account_no,
+#                     lon_no_days_slow=item.lon_no_days_slow,
+#                     lon_class=item.lon_class,
+#                     lon_type=item.lon_type,
+#                     lon_term=item.lon_term,
+#                     lon_status=item.lon_status,
+#                     lon_insert_date=item.lon_insert_date,
+#                     lon_update_date=item.lon_update_date,
+#                     lon_applied_date=item.lon_applied_date,
+#                     is_disputed=item.is_disputed,
+#                     id_file=FID,
+#                     LCIC_code=item.LCIC_code,
+#                     status_data=status_data_value 
+#                 )
+                
+#             except Exception as e:
+#                 Upload_File.objects.filter(FID=FID).update(statussubmit='2')
+#                 return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+#         Upload_File.objects.filter(FID=FID).update(statussubmit='0')
+
+#         return JsonResponse({'status': 'success', 'message': 'Data confirmed successfully'})
+    
+#     except Exception as e:
+#         Upload_File.objects.filter(FID=FID).update(statussubmit='2')
+#         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+    
 def confirm_upload(request):
     try:
         FID = request.POST.get('FID')
@@ -6344,7 +6604,6 @@ def confirm_upload(request):
             Upload_File.objects.filter(FID=FID).update(statussubmit='2')
             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
         
-
         for item in data_edits:
             try:
                 latest_b1 = B1.objects.filter(
@@ -6376,6 +6635,7 @@ def confirm_upload(request):
                 ).exists()
 
                 if b1_monthly_match or b1_match:
+                    # ປ່ຽນການເຊັກຈາກ lcicID ມາເປັນ LCIC_code
                     b1_monthly_mismatch = B1_Monthly.objects.filter(
                         bnk_code=item.bnk_code,
                         branch_id=item.branch_id,
@@ -6384,7 +6644,7 @@ def confirm_upload(request):
                         period=item.period
                     ).exclude(
                         com_enterprise_code=item.com_enterprise_code,
-                        lcicID=item.lcicID
+                        LCIC_code=item.LCIC_code  # ປ່ຽນຈາກ lcicID → LCIC_code
                     ).exists()
 
                     b1_mismatch = B1.objects.filter(
@@ -6395,7 +6655,7 @@ def confirm_upload(request):
                         period=item.period
                     ).exclude(
                         com_enterprise_code=item.com_enterprise_code,
-                        lcicID=item.lcicID
+                        LCIC_code=item.LCIC_code  # ປ່ຽນຈາກ lcicID → LCIC_code
                     ).exists()
 
                     if b1_monthly_mismatch or b1_mismatch:
@@ -6434,7 +6694,6 @@ def confirm_upload(request):
                         )
                         continue  
 
-                
                 existing_record = B1.objects.filter(
                     bnk_code=item.bnk_code,
                     branch_id=item.branch_id,
@@ -6442,7 +6701,6 @@ def confirm_upload(request):
                     loan_id=item.loan_id
                 ).exists()
 
-               
                 status_data_value = 'u' if existing_record else 'i'
                 b1_monthly_exists = B1_Monthly.objects.filter(
                     bnk_code=item.bnk_code,
@@ -6493,7 +6751,6 @@ def confirm_upload(request):
                         'status_data': b1_monthly_status_data
                     }
                 )
-                
                 
                 B1.objects.filter(
                     bnk_code=item.bnk_code,
@@ -7285,29 +7542,405 @@ class LoginView1(APIView):
 # class UploadFileList(generics.ListAPIView):
 #     queryset = Upload_File.objects.all()
 #     serializer_class = UploadFileSerializer
-
-from rest_framework import generics
-from .models import Upload_File
-from .serializers import UploadFileSerializer
+from rest_framework import generics, serializers
+from rest_framework.response import Response
+from rest_framework import status
+from django.db.models import Q
+from datetime import datetime
 
 class UploadFileList(generics.ListAPIView):
     serializer_class = UploadFileSerializer
     
     def get_queryset(self):
+        # ດຶງ parameters ຈາກ request
         user_id = self.request.query_params.get('user_id')
-        if user_id:
-            return Upload_File.objects.filter(user_id=user_id)
-        return Upload_File.objects.all()
+        period = self.request.query_params.get('period')
+        request_user_id = self.request.query_params.get('request_user_id')
+        file_type = self.request.query_params.get('file_type')  # json, xml
+        status_filter = self.request.query_params.get('status')
+        
+        # ເລີ່ມຕົ້ນດ້ວຍ queryset ທັງໝົດ
+        queryset = Upload_File.objects.all()
+        
+        # ກວດສອບສິດທິ່ຜູ້ໃຊ້
+        if request_user_id and request_user_id != "01":
+            # ຖ້າບໍ່ແມ່ນ admin (01) ເຫັນໄດ້ແຕ່ຂອງຕົວເອງ
+            queryset = queryset.filter(user_id=request_user_id)
+        elif request_user_id == "01":
+            # ຖ້າເປັນ admin (01) ສາມາດເຫັນທັງໝົດ
+            # ຖ້າມີການລະບຸ user_id ໃຫ້ filter ຕາມນັ້ນ
+            if user_id:
+                queryset = queryset.filter(user_id=user_id)
+        
+        # Filter ຕາມ period ຖ້າມີ
+        if period:
+            queryset = queryset.filter(period=period)
+            
+        # Filter ຕາມປະເພດໄຟລ໌
+        if file_type:
+            queryset = queryset.filter(FileType=file_type)
+            
+        # Filter ຕາມສະຖານະ
+        if status_filter:
+            queryset = queryset.filter(statussubmit=status_filter)
+            
+        return queryset.order_by('-insertDate')  # ຈັດຮຽງຕາມວັນທີໃໝ່ສຸດ
     
+    def list(self, request, *args, **kwargs):
+        """
+        Custom list method ພ້ອມການຈັດການ error ແລະ metadata
+        """
+        try:
+            queryset = self.get_queryset()
+            serializer = self.get_serializer(queryset, many=True)
+            
+            # ຄິດໄລ່ສະຖິຕິເບື້ອງຕົ້ນ
+            total_files = queryset.count()
+            json_files = queryset.filter(FileType='json').count()
+            xml_files = queryset.filter(FileType='xml').count()
+            
+            response_data = {
+                'count': total_files,
+                'results': serializer.data,
+                'summary': {
+                    'total_files': total_files,
+                    'json_files': json_files,
+                    'xml_files': xml_files,
+                    'status_breakdown': self._get_status_breakdown(queryset)
+                },
+                'filters_applied': {
+                    'user_id': request.query_params.get('user_id'),
+                    'period': request.query_params.get('period'),
+                    'request_user_id': request.query_params.get('request_user_id'),
+                    'file_type': request.query_params.get('file_type'),
+                    'status': request.query_params.get('status')
+                }
+            }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {'error': f'ເກີດຂໍ້ຜິດພາດໃນການດຶງຂໍ້ມູນ: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def _get_status_breakdown(self, queryset):
+        """ຄິດໄລ່ຈຳນວນຕາມສະຖານະ"""
+        status_map = ['0', '1', '2', '3', '4', '5', 'Pending']
+        breakdown = {}
+        for status_code in status_map:
+            breakdown[status_code] = queryset.filter(statussubmit=status_code).count()
+        return breakdown
 
+
+class UploadFileSerializer(serializers.ModelSerializer):
+    # ເພີ່ມ computed fields
+    file_size_formatted = serializers.SerializerMethodField()
+    upload_date_formatted = serializers.SerializerMethodField()
+    status_display = serializers.SerializerMethodField()
+    period_formatted = serializers.SerializerMethodField()
+    days_since_upload = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Upload_File
+        fields = [
+            'FID', 'user_id', 'file_id', 'fileName', 'fileUpload', 
+            'fileSize', 'path', 'insertDate', 'updateDate', 'period',
+            'status', 'statussubmit', 'status_upload', 'FileType', 
+            'percentage', 'MID', 'GID', 'SType', 'UType',
+            # Computed fields
+            'file_size_formatted', 'upload_date_formatted', 
+            'status_display', 'period_formatted', 'days_since_upload'
+        ]
+    
+    def get_file_size_formatted(self, obj):
+        """ຈັດຮູບແບບຂະໜາດຟາຍ"""
+        if obj.fileSize:
+            # ຖ້າ fileSize ເປັນ string ແລ້ວ (ເຊັ່ນ "4.49 KB")
+            if isinstance(obj.fileSize, str):
+                return obj.fileSize
+            # ຖ້າເປັນ number ໃຫ້ແປງເປັນ KB/MB
+            elif isinstance(obj.fileSize, (int, float)):
+                if obj.fileSize < 1024:
+                    return f"{obj.fileSize} B"
+                elif obj.fileSize < 1024 * 1024:
+                    return f"{round(obj.fileSize / 1024, 2)} KB"
+                else:
+                    return f"{round(obj.fileSize / (1024 * 1024), 2)} MB"
+        return "0 B"
+    
+    def get_upload_date_formatted(self, obj):
+        """ຈັດຮູບແບບວັນທີອັບໂຫຼດ"""
+        if obj.insertDate:
+            return obj.insertDate.strftime('%d/%m/%Y %H:%M')
+        return None
+    
+    def get_status_display(self, obj):
+        """ແປງ status code ເປັນຂໍ້ຄວາມພາສາລາວ"""
+        status_map = {
+            'Pending': 'ກຳລັງນຳສົ່ງຂໍ້ມູນ',
+            '1': 'ນຳສົ່ງຂໍ້ມູນສຳເລັດ',
+            '2': 'ປະຕິເສດ',
+            '3': 'ນຳສົ່ງຂໍ້ມູນສຳເລັດ',
+            '4': 'ຂໍ້ມູນຖືກອັນໂຫຼດ',
+            '5': 'ຂໍ້ມູນຖືກອັນໂຫຼດ',
+            '0': 'ສຳເລັດການໂຫຼດ'
+        }
+        return status_map.get(str(obj.statussubmit), 'ບໍ່ຮູ້ສະຖານະ')
+    
+    def get_period_formatted(self, obj):
+        """ຈັດຮູບແບບ period (ເຊັ່ນ 201712 -> ທັນວາ 2017)"""
+        if obj.period and len(str(obj.period)) == 6:
+            year = str(obj.period)[:4]
+            month = str(obj.period)[4:]
+            
+            month_names = {
+                '01': 'ມັງກອນ', '02': 'ກຸມພາ', '03': 'ມີນາ',
+                '04': 'ເມສາ', '05': 'ພຶດສະພາ', '06': 'ມິຖຸນາ',
+                '07': 'ກໍລະກົດ', '08': 'ສິງຫາ', '09': 'ກັນຍາ',
+                '10': 'ຕຸລາ', '11': 'ພະຈິກ', '12': 'ທັນວາ'
+            }
+            
+            month_name = month_names.get(month, month)
+            return f"{month_name} {year}"
+        return obj.period
+    
+    def get_days_since_upload(self, obj):
+        """ຄິດໄລ່ວັນທີ່ຜ່ານມາຕັ້ງແຕ່ອັບໂຫຼດ"""
+        if obj.insertDate:
+            from django.utils import timezone
+            now = timezone.now()
+            diff = now - obj.insertDate
+            return diff.days
+        return None
+
+
+class AvailablePeriodsView(generics.ListAPIView):
+    """API ສຳລັບດຶງລາຍການ periods ທີ່ມີໃນລະບົບ"""
+    
+    def get(self, request, *args, **kwargs):
+        try:
+            request_user_id = request.query_params.get('request_user_id')
+            
+            # ໃຊ້ logic ດຽວກັນກັບການກວດສອບສິດທິ່
+            queryset = Upload_File.objects.all()
+            if request_user_id and request_user_id != "01":
+                queryset = queryset.filter(user_id=request_user_id)
+            
+            # ດຶງ periods ທີ່ແຕກຕ່າງກັນ
+            periods = queryset.values_list('period', flat=True).distinct()
+            periods = [p for p in periods if p]  # ກຳຈັດ null values
+            
+            # ຈັດຮູບແບບ periods
+            formatted_periods = []
+            for period in periods:
+                if period and len(str(period)) == 6:
+                    year = str(period)[:4]
+                    month = str(period)[4:]
+                    formatted_periods.append({
+                        'value': period,
+                        'display': f"{month}/{year}",
+                        'year': year,
+                        'month': month
+                    })
+                else:
+                    formatted_periods.append({
+                        'value': period,
+                        'display': str(period),
+                        'year': None,
+                        'month': None
+                    })
+            
+            # ຈັດຮຽງຕາມລຳດັບເວລາ
+            formatted_periods.sort(key=lambda x: x['value'], reverse=True)
+            
+            return Response({
+                'periods': formatted_periods,
+                'count': len(formatted_periods)
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {'error': f'ເກີດຂໍ້ຜິດພາດໃນການດຶງຂໍ້ມູນ period: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class UploadFileStatsView(generics.GenericAPIView):
+    """API ສຳລັບດຶງສະຖິຕິການອັບໂຫຼດ"""
+    
+    def get(self, request, *args, **kwargs):
+        try:
+            user_id = request.query_params.get('user_id')
+            period = request.query_params.get('period')
+            request_user_id = request.query_params.get('request_user_id')
+            
+            # ໃຊ້ logic ດຽວກັນກັບ UploadFileList ສຳລັບສິດທິ່
+            queryset = Upload_File.objects.all()
+            
+            if request_user_id and request_user_id != "01":
+                queryset = queryset.filter(user_id=request_user_id)
+            elif request_user_id == "01" and user_id:
+                queryset = queryset.filter(user_id=user_id)
+            
+            if period:
+                queryset = queryset.filter(period=period)
+            
+            # ຄິດໄລ່ສະຖິຕິ
+            total_files = queryset.count()
+            successful_uploads = queryset.filter(statussubmit__in=['1', '3']).count()
+            pending_uploads = queryset.filter(statussubmit='Pending').count()
+            rejected_uploads = queryset.filter(statussubmit='2').count()
+            uploaded_data = queryset.filter(statussubmit__in=['4', '5']).count()
+            completed_loads = queryset.filter(statussubmit='0').count()
+            
+            # ສະຖິຕິຕາມປະເພດໄຟລ໌
+            json_files = queryset.filter(FileType='json').count()
+            xml_files = queryset.filter(FileType='xml').count()
+            
+            # ສະຖິຕິຕາມ user (ສຳລັບ admin ເທົ່ານັ້ນ)
+            user_stats = {}
+            if request_user_id == "01":
+                user_counts = queryset.values('user_id').annotate(
+                    count=models.Count('id')
+                ).order_by('-count')
+                user_stats = {item['user_id']: item['count'] for item in user_counts}
+            
+            stats = {
+                'summary': {
+                    'total_files': total_files,
+                    'successful_uploads': successful_uploads,
+                    'pending_uploads': pending_uploads,
+                    'rejected_uploads': rejected_uploads,
+                    'uploaded_data': uploaded_data,
+                    'completed_loads': completed_loads,
+                    'success_rate': round((successful_uploads / total_files * 100), 2) if total_files > 0 else 0
+                },
+                'file_types': {
+                    'json_files': json_files,
+                    'xml_files': xml_files
+                },
+                'user_breakdown': user_stats,
+                'filters_applied': {
+                    'user_id': user_id,
+                    'period': period,
+                    'request_user_id': request_user_id
+                }
+            }
+            
+            return Response(stats, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {'error': f'ເກີດຂໍ້ຜິດພາດໃນການຄິດໄລ່ສະຖິຕິ: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+# from rest_framework import generics
+# from .models import Upload_File
+# from .serializers import UploadFileSerializer
+
+# class UploadFileList(generics.ListAPIView):
+#     serializer_class = UploadFileSerializer
+    
+#     def get_queryset(self):
+#         user_id = self.request.query_params.get('user_id')
+#         if user_id:
+#             return Upload_File.objects.filter(user_id=user_id)
+#         return Upload_File.objects.all()
+    
 class UploadFilecList(generics.ListAPIView):
     serializer_class = UploadFilecSerializer
     
     def get_queryset(self):
+        # ດຶງ parameters ຈາກ request
         user_id = self.request.query_params.get('user_id')
-        if user_id:
-            return Upload_File_C.objects.filter(user_id=user_id)
-        return Upload_File_C.objects.all()
+        period = self.request.query_params.get('period')
+        request_user_id = self.request.query_params.get('request_user_id')
+        file_type = self.request.query_params.get('file_type')  # json, xml
+        status_filter = self.request.query_params.get('status')
+        
+        # ເລີ່ມຕົ້ນດ້ວຍ queryset ທັງໝົດ
+        queryset = Upload_File_C.objects.all()
+        
+        # ກວດສອບສິດທິ່ຜູ້ໃຊ້
+        if request_user_id and request_user_id != "01":
+            # ຖ້າບໍ່ແມ່ນ admin (01) ເຫັນໄດ້ແຕ່ຂອງຕົວເອງ
+            queryset = queryset.filter(user_id=request_user_id)
+        elif request_user_id == "01":
+            # ຖ້າເປັນ admin (01) ສາມາດເຫັນທັງໝົດ
+            # ຖ້າມີການລະບຸ user_id ໃຫ້ filter ຕາມນັ້ນ
+            if user_id:
+                queryset = queryset.filter(user_id=user_id)
+        
+        # Filter ຕາມ period ຖ້າມີ
+        if period:
+            queryset = queryset.filter(period=period)
+            
+        # Filter ຕາມປະເພດໄຟລ໌
+        if file_type:
+            queryset = queryset.filter(FileType=file_type)
+            
+        # Filter ຕາມສະຖານະ
+        if status_filter:
+            queryset = queryset.filter(statussubmit=status_filter)
+            
+        return queryset.order_by('-insertDate')  # ຈັດຮຽງຕາມວັນທີໃໝ່ສຸດ
+    
+    def list(self, request, *args, **kwargs):
+        """
+        Custom list method ພ້ອມການຈັດການ error ແລະ metadata
+        """
+        try:
+            queryset = self.get_queryset()
+            serializer = self.get_serializer(queryset, many=True)
+            
+            # ຄິດໄລ່ສະຖິຕິເບື້ອງຕົ້ນ
+            total_files = queryset.count()
+            json_files = queryset.filter(FileType='json').count()
+            xml_files = queryset.filter(FileType='xml').count()
+            
+            response_data = {
+                'count': total_files,
+                'results': serializer.data,
+                'summary': {
+                    'total_files': total_files,
+                    'json_files': json_files,
+                    'xml_files': xml_files,
+                    'status_breakdown': self._get_status_breakdown(queryset)
+                },
+                'filters_applied': {
+                    'user_id': request.query_params.get('user_id'),
+                    'period': request.query_params.get('period'),
+                    'request_user_id': request.query_params.get('request_user_id'),
+                    'file_type': request.query_params.get('file_type'),
+                    'status': request.query_params.get('status')
+                }
+            }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {'error': f'ເກີດຂໍ້ຜິດພາດໃນການດຶງຂໍ້ມູນ: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def _get_status_breakdown(self, queryset):
+        """ຄິດໄລ່ຈຳນວນຕາມສະຖານະ"""
+        status_map = ['0', '1', '2', '3', '4', '5', 'Pending']
+        breakdown = {}
+        for status_code in status_map:
+            breakdown[status_code] = queryset.filter(statussubmit=status_code).count()
+        return breakdown
+# class UploadFilecList(generics.ListAPIView):
+#     serializer_class = UploadFilecSerializer
+    
+#     def get_queryset(self):
+#         user_id = self.request.query_params.get('user_id')
+#         if user_id:
+#             return Upload_File_C.objects.filter(user_id=user_id)
+#         return Upload_File_C.objects.all()
 
 
 # from rest_framework import generics
@@ -11087,6 +11720,7 @@ from .serializers import SearchBatfileSerializer
 class SearchBatfileAPIView(APIView):
     def get(self, request):
         user_id = request.query_params.get('user_id')
+        filter_user_id = request.query_params.get('filter_user_id')  # ເພີ່ມ parameter ໃໝ່
         
         if not user_id:
             return Response(
@@ -11094,9 +11728,16 @@ class SearchBatfileAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # ຖ້າເປັນ admin user (01)
         if user_id == "01":
-            files = Search_batfile.objects.all()
+            # ຖ້າມີ filter_user_id ຈະ filter ຕາມນັ້ນ
+            if filter_user_id:
+                files = Search_batfile.objects.filter(user_id=filter_user_id)
+            else:
+                # ຖ້າບໍ່ມີ filter_user_id ຈະສະແດງທັງໝົດ
+                files = Search_batfile.objects.all()
         else:
+            # ຖ້າບໍ່ແມ່ນ admin ຈະເບິ່ງໄດ້ແຕ່ຂອງຕົນເອງ
             files = Search_batfile.objects.filter(user_id=user_id)
         
         serializer = SearchBatfileSerializer(files, many=True)
@@ -14319,7 +14960,7 @@ def get_all_investors_api(request):
     page = request.GET.get('page')
     per_page = request.GET.get('per_page')
     
-    # ແປງເປັນ integer ຖ້າມີຄ່າ
+    
     if page is not None:
         try:
             page = int(page)
