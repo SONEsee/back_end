@@ -297,6 +297,15 @@ class MemberInfoSerializer(serializers.ModelSerializer):
         model = memberInfo
         fields = ['code', 'nameL','nameE']  
 
+from rest_framework import serializers
+from .models import User_Group
+
+class UserGroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User_Group
+        fields = ['GID', 'nameL', 'nameE']
+
+
 # serializers.py
 # serializers.py
 from rest_framework import serializers
@@ -820,3 +829,398 @@ class BankSerializer(serializers.ModelSerializer):
                 instance.bnk_images.delete(save=False)  # Delete old image
             instance.bnk_images = validated_data['bnk_images']
         return super().update(instance, validated_data)
+    
+    
+# # API Tracking EDL ----------------------------------
+from rest_framework import serializers
+from utility.models import UploadDataTracking, UploadLog
+
+class UploadLogSerializer(serializers.ModelSerializer):
+    """Serializer for upload logs"""
+    
+    class Meta:
+        model = UploadLog
+        fields = ['id', 'log_level', 'message', 'timestamp']
+        read_only_fields = ['id', 'timestamp']
+
+class UploadTrackingSerializer(serializers.ModelSerializer):
+    upload_duration = serializers.SerializerMethodField()
+    status_color = serializers.SerializerMethodField()
+    formatted_size = serializers.SerializerMethodField()
+    success_rate_formatted = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = UploadDataTracking
+        fields = [
+            'id', 'pro_id', 'pro_name', 'dis_id', 'dis_name', 
+            'upload_month', 'status', 'status_color', 'total_records', 
+            'processed_records', 'failed_records', 'success_rate_formatted',
+            'data_size_mb', 'formatted_size', 'upload_started', 
+            'upload_completed', 'upload_duration', 'user_upload', 
+            'created_at', 'updated_at'
+        ]
+    
+    def get_upload_duration(self, obj):
+        duration = obj.upload_duration
+        if duration:
+            if duration < 60:
+                return f"{duration:.1f}s"
+            elif duration < 3600:
+                return f"{duration/60:.1f}m"
+            else:
+                return f"{duration/3600:.1f}h"
+        return None
+    
+    def get_status_color(self, obj):
+        colors = {
+            'pending': 'orange',
+            'in_progress': 'blue',
+            'completed': 'green',
+            'failed': 'red',
+            'partial': 'amber'
+        }
+        return colors.get(obj.status, 'grey')
+    
+    def get_formatted_size(self, obj):
+        if obj.data_size_mb < 1:
+            return f"{obj.data_size_mb * 1024:.1f} KB"
+        elif obj.data_size_mb < 1024:
+            return f"{obj.data_size_mb:.1f} MB"
+        else:
+            return f"{obj.data_size_mb / 1024:.1f} GB"
+    
+    def get_success_rate_formatted(self, obj):
+        return f"{obj.success_rates:.1f}%"
+
+
+class UploadTrackingDetailSerializer(serializers.ModelSerializer):
+    """Detailed serializer for upload tracking with logs"""
+    logs = UploadLogSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = UploadDataTracking
+        fields = [
+            'id', 'pro_id', 'pro_name', 'dis_id', 'dis_name', 
+            'upload_month', 'status', 'total_records', 'processed_records', 
+            'failed_records', 'data_size_mb', 'upload_started', 
+            'upload_completed', 'user_upload', 'success_rates',
+            'error_message', 'api_response_code', 'logs',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+class ProvinceDistrictSerializer(serializers.Serializer):
+    """Serializer for province/district data from external API"""
+    pro_id = serializers.CharField(max_length=10)
+    pro_name = serializers.CharField(max_length=100)
+    dis_id = serializers.CharField(max_length=10)
+    dis_name = serializers.CharField(max_length=100)
+
+
+
+    
+    
+# minimal_serializers.py - Use this for initial setup
+
+from rest_framework import serializers
+from utility.models import UploadDataTracking, UploadLog
+
+class MinimalUploadTrackingSerializer(serializers.ModelSerializer):
+    """Minimal serializer that handles missing fields gracefully"""
+    
+    upload_duration = serializers.SerializerMethodField()
+    status_color = serializers.SerializerMethodField()
+    formatted_size = serializers.SerializerMethodField()
+    success_rate_formatted = serializers.SerializerMethodField()
+    
+    # Handle potentially missing fields
+    processed_records = serializers.SerializerMethodField()
+    failed_records = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = UploadDataTracking
+        fields = [
+            'id', 'pro_id', 'pro_name', 'dis_id', 'dis_name', 
+            'upload_month', 'status', 'status_color', 'total_records', 
+            'processed_records', 'failed_records', 'success_rate_formatted',
+            'data_size_mb', 'formatted_size', 'upload_started', 
+            'upload_completed', 'upload_duration', 'user_upload', 
+            'created_at', 'updated_at'
+        ]
+    
+    def get_processed_records(self, obj):
+        """Handle missing processed_records field"""
+        try:
+            return getattr(obj, 'processed_records', 0)
+        except AttributeError:
+            return 0
+    
+    def get_failed_records(self, obj):
+        """Handle missing failed_records field"""
+        try:
+            return getattr(obj, 'failed_records', 0)
+        except AttributeError:
+            return 0
+    
+    def get_upload_duration(self, obj):
+        try:
+            duration = obj.upload_duration
+            if duration:
+                if duration < 60:
+                    return f"{duration:.1f}s"
+                elif duration < 3600:
+                    return f"{duration/60:.1f}m"
+                else:
+                    return f"{duration/3600:.1f}h"
+            return None
+        except Exception:
+            return None
+    
+    def get_status_color(self, obj):
+        colors = {
+            'pending': 'orange',
+            'in_progress': 'blue',
+            'completed': 'green',
+            'failed': 'red',
+            'partial': 'amber'
+        }
+        return colors.get(obj.status, 'grey')
+    
+    def get_formatted_size(self, obj):
+        try:
+            size_mb = getattr(obj, 'data_size_mb', 0) or 0
+            if size_mb < 1:
+                return f"{size_mb * 1024:.1f} KB"
+            elif size_mb < 1024:
+                return f"{size_mb:.1f} MB"
+            else:
+                return f"{size_mb / 1024:.1f} GB"
+        except Exception:
+            return "0 KB"
+    
+    def get_success_rate_formatted(self, obj):
+        try:
+            processed = self.get_processed_records(obj)
+            total = getattr(obj, 'total_records', 0) or 0
+            if total > 0:
+                rate = (processed / total) * 100
+                return f"{rate:.1f}%"
+            return "0.0%"
+        except Exception:
+            return "0.0%"
+
+class MinimalUploadLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UploadLog
+        fields = ['id', 'log_level', 'message', 'timestamp']
+
+class MinimalUploadTrackingDetailSerializer(MinimalUploadTrackingSerializer):
+    logs = MinimalUploadLogSerializer(many=True, read_only=True)
+    
+    class Meta(MinimalUploadTrackingSerializer.Meta):
+        fields = MinimalUploadTrackingSerializer.Meta.fields + [
+            'error_message', 'api_response_code', 'logs'
+        ]
+
+
+
+# Water Supply Data Load Tracking --------------------------------------------------
+
+from utility.models import WaterUploadDataTracking, WaterUploadLog
+
+class WaterUploadTrackingSerializer(serializers.ModelSerializer):
+    """Serializer for water supply upload tracking list view"""
+    
+    formatted_month = serializers.ReadOnlyField()
+    success_rate_percentage = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = WaterUploadDataTracking
+        fields = [
+            'id',
+            'upload_month',
+            'formatted_month',
+            'status',
+            'description',
+            'total_records',
+            'processed_records',
+            'failed_records',
+            'success_rates',
+            'success_rate_percentage',
+            'data_size_mb',
+            'api_response_code',
+            'upload_started',
+            'upload_completed', 
+            'upload_duration',
+            'user_upload',
+            'error_message',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = [
+            'id', 
+            'created_at', 
+            'updated_at',
+            'formatted_month',
+            'success_rate_percentage'
+        ]
+
+class WaterUploadLogSerializer(serializers.ModelSerializer):
+    """Serializer for water supply upload logs"""
+    
+    formatted_timestamp = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = WaterUploadLog
+        fields = [
+            'id',
+            'timestamp',
+            'formatted_timestamp',
+            'log_level',
+            'message',
+            'context_data'
+        ]
+        read_only_fields = ['id', 'timestamp', 'formatted_timestamp']
+
+class WaterUploadTrackingDetailSerializer(serializers.ModelSerializer):
+    """Detailed serializer for water supply upload tracking with logs"""
+    
+    logs = WaterUploadLogSerializer(many=True, read_only=True)
+    formatted_month = serializers.ReadOnlyField()
+    success_rate_percentage = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = WaterUploadDataTracking
+        fields = [
+            'id',
+            'upload_month',
+            'formatted_month',
+            'status',
+            'description',
+            'total_records',
+            'processed_records',
+            'failed_records',
+            'success_rates',
+            'success_rate_percentage',
+            'data_size_mb',
+            'api_response_code',
+            'upload_started',
+            'upload_completed',
+            'upload_duration',
+            'user_upload',
+            'error_message',
+            'created_at',
+            'updated_at',
+            'logs'
+        ]
+        read_only_fields = [
+            'id', 
+            'created_at', 
+            'updated_at',
+            'formatted_month',
+            'success_rate_percentage',
+            'logs'
+        ]
+
+class WaterSupplyUploadRequestSerializer(serializers.Serializer):
+    """Serializer for water supply upload request"""
+    
+    month = serializers.CharField(
+        max_length=6,
+        help_text="Month in MMYYYY format (e.g., 122024)"
+    )
+    username = serializers.CharField(
+        max_length=100,
+        default='system'
+    )
+    api_token = serializers.CharField(
+        max_length=500,
+        help_text="Bearer token for water supply API authentication",
+        style={'input_type': 'password'}  # Hide token in browsable API
+    )
+    
+    def validate_month(self, value):
+        """Validate month format"""
+        if not value or len(value) != 6:
+            raise serializers.ValidationError("Month must be in MMYYYY format (e.g., 122024)")
+        
+        try:
+            month_part = value[:2]
+            year_part = value[2:]
+            
+            # Validate month (01-12)
+            month_int = int(month_part)
+            if month_int < 1 or month_int > 12:
+                raise serializers.ValidationError("Month part must be between 01 and 12")
+            
+            # Validate year (reasonable range)
+            year_int = int(year_part)
+            if year_int < 2020 or year_int > 2030:
+                raise serializers.ValidationError("Year part must be between 2020 and 2030")
+                
+        except ValueError:
+            raise serializers.ValidationError("Month must contain only numeric characters")
+        
+        return value
+    
+    def validate_api_token(self, value):
+        """Basic validation for API token"""
+        if not value or len(value.strip()) < 10:
+            raise serializers.ValidationError("API token is required and must be at least 10 characters")
+        return value.strip()
+
+class WaterTrackingInitializationSerializer(serializers.Serializer):
+    """Serializer for initializing water supply tracking"""
+    
+    month = serializers.CharField(
+        max_length=6,
+        help_text="Month in MMYYYY format (e.g., 122024)"
+    )
+    username = serializers.CharField(
+        max_length=100,
+        default='system'
+    )
+    
+    def validate_month(self, value):
+        """Validate month format"""
+        if not value or len(value) != 6:
+            raise serializers.ValidationError("Month must be in MMYYYY format (e.g., 122024)")
+        
+        try:
+            month_part = value[:2]
+            year_part = value[2:]
+            
+            month_int = int(month_part)
+            if month_int < 1 or month_int > 12:
+                raise serializers.ValidationError("Month part must be between 01 and 12")
+            
+            year_int = int(year_part)
+            if year_int < 2020 or year_int > 2030:
+                raise serializers.ValidationError("Year part must be between 2020 and 2030")
+                
+        except ValueError:
+            raise serializers.ValidationError("Month must contain only numeric characters")
+        
+        return value
+
+# Statistics serializers for dashboard
+class WaterSupplyStatisticsSerializer(serializers.Serializer):
+    """Serializer for water supply statistics"""
+    
+    total_uploads = serializers.IntegerField()
+    status_breakdown = serializers.DictField()
+    total_data_size_mb = serializers.FloatField()
+    total_records = serializers.IntegerField()
+    
+    # Additional computed fields
+    avg_success_rate = serializers.FloatField(required=False)
+    avg_upload_duration = serializers.FloatField(required=False)
+    last_upload_date = serializers.DateTimeField(required=False)
+
+class WaterSupplyDashboardSerializer(serializers.Serializer):
+    """Serializer for water supply dashboard response"""
+    
+    data = WaterUploadTrackingSerializer(many=True)
+    statistics = WaterSupplyStatisticsSerializer()
+    month = serializers.CharField()
+    total_count = serializers.IntegerField()
