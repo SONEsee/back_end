@@ -15699,7 +15699,8 @@ class InitializeTrackingAPIView(APIView):
                 )
             
             # Get provinces and districts from external API
-            api_url = getattr(settings, 'PROVINCE_API_URL', 'http://192.169.45.56:8000/api/province-edldetail/')
+            # api_url = getattr(settings, 'PROVINCE_API_URL', 'http://192.169.45.56:8000/api/province-edldetail/')
+            api_url = f"{request.scheme}://{request.get_host()}/api/province-edldetail/"
             
             try:
                 response = requests.get(api_url, timeout=30)
