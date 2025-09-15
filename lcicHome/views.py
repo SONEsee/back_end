@@ -17616,8 +17616,6 @@ class WaterAPITestView(APIView):
 # Water Supply Summary API Views -------------------------------------
 
 
-
-
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -17850,6 +17848,7 @@ class WaterSummaryByMonthAPIView(APIView):
                 'records_per_second': round(tracking.processed_records / tracking.upload_duration, 2) if tracking.upload_duration else 0,
                 'data_processing_rate_mb_per_min': round((tracking.data_size_mb * 60) / tracking.upload_duration, 2) if tracking.upload_duration else 0
             }
+            
             
             return Response({
                 'month_info': {
