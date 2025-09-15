@@ -15027,7 +15027,6 @@ def filter_data_by_criteria(id_file, **kwargs):
         filter_criteria = {'id_file': id_file}
         filter_criteria.update(kwargs)
         
-<<<<<<< HEAD
         result['b1_data'] = B1.objects.filter(**filter_criteria)
         result['data_edit'] = data_edit.objects.filter(**filter_criteria)
         result['disputes'] = disputes.objects.filter(**filter_criteria)
@@ -15099,7 +15098,6 @@ def get_data_api(request):
     }
     
     return JsonResponse(response_data, safe=False)
-=======
 # # API Tracking Edl ----------------------------------
 
 
@@ -18077,4 +18075,3 @@ class WaterSummaryStatsAPIView(APIView):
         except Exception as e:
             logger.error(f"Error in water summary stats: {str(e)}")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
->>>>>>> 1c7707e37435f3ac01ade932da01d9b60ecbfe2e
