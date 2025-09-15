@@ -56,7 +56,9 @@ from rest_framework_simplejwt.views import (
 from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView,ChargeMatrixViewSet, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files,BankUsersView,LoanCountByDate,CountSearchLogbyDate,CountFeebyDate
 from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView
 from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files,BankUsersView,LoanCountByDate,CountSearchLogbyDate,CountFeebyDate
-from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddLCICSystemUser, SysUserTokenRefresh,LCICSystemUserDetailView, LCICSystemUserListView, BankListCreateView,BankDetailView, EDLProvinceDetailAPIView, FileElectricListAPIView, ElectricReportAPIView
+from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddLCICSystemUser, SysUserTokenRefresh,LCICSystemUserDetailView, LCICSystemUserListView, BankListCreateView,BankDetailView, EDLProvinceDetailAPIView, FileElectricListAPIView, ElectricReportAPIView, UserGroupViewSet,UploadTrackingListAPIView,UploadDataAPIView,UploadTrackingDetailAPIView,InitializeTrackingAPIView, DebugAPIView,InitializeTestDataAPIView, TestRealUploadAPIView, InitializeDistrictsAPIView
+
+
 from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView
 from .views import upload_json,MemberInfoViewSet
 from .views import SearchBatfileAPIView
@@ -70,9 +72,44 @@ router.register(r'charges', ChargeMatrixViewSet)
 router.register(r'members', MemberInfoViewSet)
 router.register(r'investorinfo', InvestorInfoViewSet)
 router.register(r'enterpriseinfo', EnterpriseInfoViewSet)
+router.register(r'user-groups', UserGroupViewSet, basename='usergroup')
 @ensure_csrf_cookie
 def get_csrf_token(request):
     return JsonResponse({'csrfToken': request.META.get('CSRF_COOKIE')})
+
+
+water_supply_patterns = [
+    # Step 1: Initialize Month Tracking
+    path('initialize/', views.InitializeWaterTrackingAPIView.as_view(), name='water-initialize'),
+    
+    # Step 2: Upload Water Supply Data (Fetches from Water API → Inserts into Utility_Bill)
+    path('upload/', views.WaterUploadDataAPIView.as_view(), name='water-upload'),
+    
+    # Step 3: Monitor Progress - Get Tracking Status for Month
+    path('tracking/', views.WaterUploadTrackingListAPIView.as_view(), name='water-tracking-list'),
+    
+    # Step 4: Monitor Progress - Get Detailed Logs  
+    path('tracking/<int:tracking_id>/', views.WaterUploadTrackingDetailAPIView.as_view(), name='water-tracking-detail'),
+    
+    # Debug and Testing endpoints
+    # path('debug/', views.WaterDebugAPIView.as_view(), name='water-debug'),
+    # path('test-upload/', views.WaterTestUploadAPIView.as_view(), name='water-test-upload'),
+]
+
+# Water Supply Summary URL patterns
+water_summary_patterns = [
+    # Overview endpoint - overall statistics and trends
+    path('overview/', views.WaterSummaryOverviewAPIView.as_view(), name='water-summary-overview'),
+    
+    # Month detail endpoint - detailed view for specific month  
+    path('month/', views.WaterSummaryByMonthAPIView.as_view(), name='water-summary-month'),
+    
+    # Export endpoint - export summary data
+    path('export/', views.WaterSummaryExportAPIView.as_view(), name='water-summary-export'),
+    
+    # Quick stats endpoint - dashboard widgets data
+    path('stats/', views.WaterSummaryStatsAPIView.as_view(), name='water-summary-stats'),
+]
 
 urlpatterns = [
    path('', include(router.urls)),
@@ -310,6 +347,47 @@ urlpatterns = [
     path('province-edldetail/', EDLProvinceDetailAPIView.as_view(), name='province-edldetail'),
     path('filedetail-edl/', FileElectricListAPIView.as_view(), name='filedetail-edl'),
     # path('province-district-combined/<str:pro_id>/', ProvinceDistrictCombinedAPIView.as_view(), name='province-district-combined'),
+    
+    #Tracking API Edl --------------------------
+    # Step 1: Load Provinces
+    path('provinces/', views.ProvinceListAPIView.as_view(), name='province-list'),
+    
+    # Step 2: Load Districts for Selected Province  
+    path('districts/', views.DistrictListAPIView.as_view(), name='district-list'),
+    
+    # Step 3: Initialize Districts Tracking for Province + Month
+    path('initialize-districts/', views.InitializeDistrictsAPIView.as_view(), name='initialize-districts'),
+    
+    # Step 4: Load Individual District Data (Upload Data → Fetches from EDL API → Inserts into Electric_Bill)
+    path('upload-data/', views.UploadDataAPIView.as_view(), name='upload-data'),
+    
+    # Step 5: Monitor Progress - Get Tracking Status for Province
+    path('upload-tracking/', views.UploadTrackingListAPIView.as_view(), name='upload-tracking-list'),
+    
+    # Step 6: Monitor Progress - Get Detailed Logs  
+    path('upload-tracking/<int:tracking_id>/', views.UploadTrackingDetailAPIView.as_view(), name='upload-tracking-detail'),
+    
+    path('initialize-tracking/', InitializeTrackingAPIView.as_view(), name='initialize-tracking'),
+    path('debug/', DebugAPIView.as_view(), name='debug-api'),
+    path('init-test-data/', InitializeTestDataAPIView.as_view(), name='init-test-data'),
+    path('api/test-real-upload/', TestRealUploadAPIView.as_view(), name='test-real-upload'),
+    
+    # Test DATA EDL
+    path('initialize-districts-alt/', views.InitializeDistrictsAlternativeView.as_view(), name='initialize-districts-alt'),
+    path('initialize-districts-func/', views.initialize_districts_function, name='initialize-districts-func'),
+    path('debug-edl/', views.debug_edl_api, name='debug-edl'),
+    
+    # Summarize EDL Data Loaded
+    # EDL Summary APIs
+    path('edl-summary/overview/', views.EDLSummaryOverviewAPIView.as_view(), name='edl-summary-overview'),
+    path('edl-summary/province/', views.EDLSummaryByProvinceAPIView.as_view(), name='edl-summary-province'),
+    path('edl-summary/district/', views.EDLSummaryByDistrictAPIView.as_view(), name='edl-summary-district'),
+    path('edl-summary/export/', views.EDLExportSummaryAPIView.as_view(), name='edl-summary-export'),
+    path('overview/', views.EDLSummaryOverviewAPIView.as_view(), name='overview'),
+    
+    # Water Supoply Dat Load Tracking
+    path('water/', include(water_supply_patterns)),
+    path('water-summary/', include(water_summary_patterns)),
     
     
     

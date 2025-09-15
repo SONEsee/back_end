@@ -9150,6 +9150,15 @@ class UserLoginView(APIView):
 #         serializer = MemberInfoSerializer(member_info, many=True)
 #         return Response(serializer.data, status=status.HTTP_200_OK)
 
+from rest_framework import viewsets
+from .models import User_Group
+from .serializers import UserGroupSerializer
+
+class UserGroupViewSet(viewsets.ModelViewSet):
+    queryset = User_Group.objects.all().order_by('GID')
+    serializer_class = UserGroupSerializer
+
+
 from django.db.models import IntegerField
 from django.db.models.functions import Cast
 from rest_framework.views import APIView
@@ -15018,6 +15027,7 @@ def filter_data_by_criteria(id_file, **kwargs):
         filter_criteria = {'id_file': id_file}
         filter_criteria.update(kwargs)
         
+<<<<<<< HEAD
         result['b1_data'] = B1.objects.filter(**filter_criteria)
         result['data_edit'] = data_edit.objects.filter(**filter_criteria)
         result['disputes'] = disputes.objects.filter(**filter_criteria)
@@ -15089,3 +15099,2982 @@ def get_data_api(request):
     }
     
     return JsonResponse(response_data, safe=False)
+=======
+# # API Tracking Edl ----------------------------------
+
+
+import requests
+import json
+from django.utils import timezone
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db.models import Q, Count, Sum, Avg
+from django.core.paginator import Paginator
+from datetime import datetime
+from django.conf import settings
+import logging
+from django.db import transaction
+from utility.models import UploadDataTracking, UploadLog
+from utility.models import Electric_Bill
+from utility.models import edl_province_code, edl_district_code  # Update with your actual app name
+from .serializers import (
+    UploadTrackingSerializer, 
+    UploadTrackingDetailSerializer,
+    ProvinceSerializer,
+    DistrictSerializer
+)
+
+logger = logging.getLogger(__name__)
+
+class ProvinceListAPIView(APIView):
+    """Get list of provinces from edl_province_code model"""
+    
+    def get(self, request):
+        try:
+            provinces = edl_province_code.objects.all().order_by('pro_id')
+            serializer = ProvinceSerializer(provinces, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error fetching provinces: {str(e)}")
+            return Response(
+                {"error": "Failed to fetch provinces"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class DistrictListAPIView(APIView):
+    """Get districts for a specific province from edl_district_code model"""
+    
+    def get(self, request):
+        province_id = request.GET.get('province_id')
+        if not province_id:
+            return Response(
+                {"error": "province_id parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Get province info
+            try:
+                province = edl_province_code.objects.get(pro_id=province_id)
+            except edl_province_code.DoesNotExist:
+                return Response(
+                    {"error": f"Province with ID {province_id} not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get districts for this province
+            districts = edl_district_code.objects.filter(
+                pro_id=province_id
+            ).order_by('dis_id')
+            
+            if not districts.exists():
+                return Response(
+                    {"error": f"No districts found for province {province_id}"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Add province name to each district
+            result = []
+            for district in districts:
+                result.append({
+                    'pro_id': district.pro_id,
+                    'pro_name': province.pro_name,
+                    'dis_id': district.dis_id,
+                    'dis_name': district.dis_name
+                })
+            
+            return Response(result, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error fetching districts: {str(e)}")
+            return Response(
+                {"error": "Failed to fetch districts"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class UploadTrackingListAPIView(APIView):
+    """List tracking records for specific province and month"""
+    
+    def get(self, request):
+        try:        
+            month = request.GET.get('month', timezone.now().strftime('%Y%m'))
+            province_id = request.GET.get('province_id')
+            
+            if not province_id:
+                return Response(
+                    {"error": "province_id parameter is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate month format
+            try:
+                datetime.strptime(month, '%Y%m')
+            except ValueError:
+                return Response(
+                    {"error": "Invalid month format. Use YYYYMM (e.g., 202509)"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get tracking records for the specific province and month
+            queryset = UploadDataTracking.objects.filter(
+                upload_month=month,
+                pro_id=province_id
+            ).order_by('dis_id')
+            
+            # Serialize data
+            serialized_data = []
+            for item in queryset:
+                data = UploadTrackingSerializer(item).data
+                data['success_rate_formatted'] = f"{item.success_rates:.1f}" if item.success_rates else "0.0"
+                data['formatted_size'] = self.format_file_size(item.data_size_mb)
+                data['upload_duration'] = self.format_duration(item.upload_duration) if item.upload_duration else None
+                serialized_data.append(data)
+            
+            # Get statistics
+            stats = self.get_statistics(month, province_id)
+            
+            return Response({
+                'data': serialized_data,
+                'statistics': stats
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch tracking data: {str(e)}")
+            return Response(
+                {"error": "Failed to fetch tracking data"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def get_statistics(self, month, province_id):
+        """Calculate statistics for the dashboard"""
+        try:
+            queryset = UploadDataTracking.objects.filter(
+                upload_month=month,
+                pro_id=province_id
+            )
+            
+            total_count = queryset.count()
+            if total_count == 0:
+                return {
+                    'total_locations': 0,
+                    'status_breakdown': {},
+                    'total_data_size_mb': 0.0,
+                    'average_records': 0
+                }
+            
+            # Status breakdown
+            status_data = queryset.values('status').annotate(count=Count('id'))
+            status_counts = {item['status']: item['count'] for item in status_data}
+            
+            # Aggregated data
+            aggregated = queryset.aggregate(
+                total_size=Sum('data_size_mb'),
+                avg_records=Avg('total_records')
+            )
+            
+            return {
+                'total_locations': total_count,
+                'status_breakdown': status_counts,
+                'total_data_size_mb': round(float(aggregated['total_size'] or 0), 2),
+                'average_records': round(float(aggregated['avg_records'] or 0))
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in get_statistics: {str(e)}")
+            return {
+                'total_locations': 0,
+                'status_breakdown': {},
+                'total_data_size_mb': 0.0,
+                'average_records': 0
+            }
+    
+    def format_file_size(self, size_mb):
+        """Format file size for display"""
+        if not size_mb or size_mb < 1:
+            return f"{(size_mb or 0) * 1024:.1f} KB"
+        elif size_mb < 1024:
+            return f"{size_mb:.1f} MB"
+        else:
+            return f"{size_mb / 1024:.1f} GB"
+    
+    def format_duration(self, seconds):
+        """Format duration for display"""
+        if not seconds:
+            return None
+        if seconds < 60:
+            return f"{seconds:.0f}s"
+        elif seconds < 3600:
+            return f"{seconds / 60:.1f}m"
+        else:
+            return f"{seconds / 3600:.1f}h"
+
+from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
+
+class InitializeDistrictsAPIView(APIView):
+    """Initialize tracking records for districts in a specific province"""
+    parser_classes = [JSONParser, FormParser, MultiPartParser]  
+    
+    def post(self, request):
+        try:
+            # Force JSON parsing if content type is application/json
+            if request.content_type == 'application/json' and not request.data:
+                import json
+                data = json.loads(request.body.decode('utf-8'))
+            else:
+                data = request.data
+            
+            month = data.get('month', timezone.now().strftime('%Y%m'))
+            province_id = data.get('province_id')
+            username = data.get('username', 'system')
+            
+            if not province_id:
+                return Response(
+                    {
+                        "error": "province_id is required",
+                        "received_data": dict(data) if hasattr(data, 'items') else str(data),
+                        "debug_info": {
+                            "request_data": dict(request.data) if hasattr(request.data, 'items') else str(request.data),
+                            "content_type": request.content_type,
+                            "body": request.body.decode('utf-8') if request.body else None
+                        }
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not month:
+                return Response(
+                    {"error": "month is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not username:
+                return Response(
+                    {"error": "username is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate month format
+            try:
+                datetime.strptime(month, '%Y%m')
+            except ValueError:
+                return Response(
+                    {"error": "Invalid month format. Use YYYYMM (e.g., 202509)"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get province info
+            try:
+                province = edl_province_code.objects.get(pro_id=province_id)
+            except edl_province_code.DoesNotExist:
+                return Response(
+                    {"error": f"Province with ID {province_id} not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get districts for this province
+            districts = edl_district_code.objects.filter(pro_id=province_id)
+            
+            if not districts.exists():
+                return Response(
+                    {"error": f"No districts found for province {province_id}"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            created_count = 0
+            
+            # Create tracking records for each district
+            for district in districts:
+                tracking, created = UploadDataTracking.objects.get_or_create(
+                    pro_id=district.pro_id,
+                    dis_id=district.dis_id,
+                    upload_month=month,
+                    defaults={
+                        'pro_name': province.pro_name,
+                        'dis_name': district.dis_name,
+                        'status': 'pending',
+                        'user_upload': username
+                    }
+                )
+                if created:
+                    created_count += 1
+            
+            return Response({
+                'message': f'Initialized {created_count} districts for {province.pro_name} - {month}',
+                'total_districts': districts.count(),
+                'created_count': created_count
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Initialization failed: {str(e)}")
+            return Response({
+                'error': f'Initialization failed: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class UploadDataAPIView(APIView):
+    """Handle individual district data upload"""
+    
+    def post(self, request):
+        try:
+            # Extract parameters
+            province_code = request.data.get('province_code')
+            district_code = request.data.get('district_code')
+            date_request = request.data.get('dateRequest')
+            username = request.data.get('username', 'system')
+            
+            if not all([province_code, district_code, date_request]):
+                return Response({
+                    'error': 'Missing required parameters: province_code, district_code, dateRequest'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Validate date format
+            try:
+                datetime.strptime(date_request, '%Y%m')
+            except ValueError:
+                return Response(
+                    {"error": "Invalid dateRequest format. Use YYYYMM (e.g., 202509)"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate province and district exist in our models
+            try:
+                province = edl_province_code.objects.get(pro_id=province_code)
+            except edl_province_code.DoesNotExist:
+                return Response({
+                    'error': f'Province with ID {province_code} not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Handle district_code format - try exact match first, then with padding
+            district = None
+            try:
+                district = edl_district_code.objects.get(
+                    pro_id=province_code, 
+                    dis_id=district_code
+                )
+            except edl_district_code.DoesNotExist:
+                # Try with leading zero padding (01 -> 0101)
+                padded_district_code = f"{province_code}{district_code.zfill(2)}"
+                try:
+                    district = edl_district_code.objects.get(
+                        pro_id=province_code, 
+                        dis_id=padded_district_code
+                    )
+                    district_code = padded_district_code  # Update to use the correct format
+                except edl_district_code.DoesNotExist:
+                    return Response({
+                        'error': f'District with ID {district_code} not found in province {province_code}. Available districts: {list(edl_district_code.objects.filter(pro_id=province_code).values_list("dis_id", flat=True))}'
+                    }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Get tracking record
+            try:
+                tracking = UploadDataTracking.objects.get(
+                    pro_id=province_code,
+                    dis_id=district_code,
+                    upload_month=date_request
+                )
+            except UploadDataTracking.DoesNotExist:
+                return Response({
+                    'error': 'Tracking record not found. Please initialize districts first.'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Check if already completed
+            if tracking.status == 'completed':
+                return Response({
+                    'message': 'Data already uploaded successfully',
+                    'tracking_id': tracking.id,
+                    'total_records': tracking.total_records,
+                    'processed_records': tracking.processed_records
+                }, status=status.HTTP_200_OK)
+            
+            # Update status to in_progress
+            tracking.status = 'in_progress'
+            tracking.upload_started = timezone.now()
+            tracking.user_upload = username
+            tracking.save()
+            
+            # Log start
+            UploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Upload started by {username} for {province.pro_name} - {district.dis_name}'
+            )
+            
+            # Fetch and process data
+            result = self.fetch_and_process_data(tracking)
+            
+            return Response(result, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Upload failed: {str(e)}")
+            return Response({
+                'error': f'Upload failed: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def fetch_and_process_data(self, tracking):
+        """Fetch data from EDL API and insert into Electric_Bill table"""
+        try:
+            # EDL API endpoint
+            api_url = "https://edl-inside-api.edl.com.la/api_v1/wattmonitor-bol/billing-svc/billing/getpaymenthistory"
+            page = 1
+            limit = 100000  # As per your requirement
+            
+            # Log API call start
+            UploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Fetching data from EDL API: province={tracking.pro_id}, district={tracking.dis_id}, month={tracking.upload_month}'
+            )
+            
+            # Make API call
+            params = {
+                'province_code': tracking.pro_id,
+                'district_code': tracking.dis_id,
+                'dateRequest': tracking.upload_month,
+                'page': page,
+                'limit': limit
+            }
+            
+            response = requests.get(api_url, params=params, timeout=300)  # 5 minute timeout
+            tracking.api_response_code = response.status_code
+            tracking.save()
+            
+            if response.status_code != 200:
+                error_msg = f'EDL API request failed with status {response.status_code}: {response.text}'
+                raise Exception(error_msg)
+            
+            # Parse response
+            data = response.json()
+            if isinstance(data, dict) and 'data' in data:
+                data_section = data['data']
+                if isinstance(data_section, dict) and 'paymentHistory' in data_section:
+                    records = data_section['paymentHistory']
+                    UploadLog.objects.create(
+                        tracking=tracking,
+                        log_level='INFO',
+                        message=f'Extracted {len(records)} records from paymentHistory'
+                    )
+                else:
+                    UploadLog.objects.create(
+                        tracking=tracking,
+                        log_level='ERROR',
+                        message=f'No paymentHistory found. Data section keys: {list(data_section.keys()) if isinstance(data_section, dict) else type(data_section)}'
+                    )
+                    records = []
+            else:
+                UploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='ERROR',
+                    message=f'No data section found. Top level keys: {list(data.keys()) if isinstance(data, dict) else type(data)}'
+                )
+                records = []
+            
+            UploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Received {len(records)} records from EDL API'
+            )
+            
+            if not records:
+                tracking.status = 'completed'
+                tracking.upload_completed = timezone.now()
+                tracking.total_records = 0
+                tracking.save()
+                
+                UploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='INFO',
+                    message='No data received from EDL API - marked as completed'
+                )
+                
+                return {
+                    'message': 'No data available for this district and month',
+                    'tracking_id': tracking.id,
+                    'total_records': 0
+                }
+            
+            # Process and insert data into Electric_Bill table
+            processed, failed = self.insert_electric_bill_data(records, tracking)
+            
+            # Calculate data size
+            data_size_mb = len(json.dumps(records).encode('utf-8')) / (1024 * 1024)
+            
+            # Update tracking with final results
+            tracking.status = 'completed' if failed == 0 else 'partial'
+            tracking.upload_completed = timezone.now()
+            tracking.total_records = len(records)
+            tracking.processed_records = processed
+            tracking.failed_records = failed
+            tracking.data_size_mb = round(data_size_mb, 2)
+            tracking.success_rates = (processed / len(records)) * 100 if records else 0
+            tracking.save()
+            
+            UploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Upload completed successfully. Total: {len(records)}, Processed: {processed}, Failed: {failed}, Success Rate: {tracking.success_rates:.1f}%'
+            )
+            
+            return {
+                'message': 'Data upload completed successfully',
+                'tracking_id': tracking.id,
+                'total_records': len(records),
+                'processed_records': processed,
+                'failed_records': failed,
+                'data_size_mb': tracking.data_size_mb,
+                'success_rate': tracking.success_rates
+            }
+            
+        except Exception as e:
+            # Handle any errors
+            tracking.status = 'failed'
+            tracking.error_message = str(e)
+            tracking.upload_completed = timezone.now()
+            tracking.save()
+            
+            UploadLog.objects.create(
+                tracking=tracking,
+                log_level='ERROR',
+                message=f'Upload failed: {str(e)}'
+            )
+            
+            return {
+                'error': f'Failed to fetch and process data: {str(e)}',
+                'tracking_id': tracking.id
+            }
+    
+    def insert_electric_bill_data(self, records, tracking):
+        """Insert records into Electric_Bill table"""
+        processed_count = 0
+        failed_count = 0
+        batch_size = 1000
+        
+        try:
+            UploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Starting to insert {len(records)} records into Electric_Bill table'
+            )
+            
+            with transaction.atomic():
+                batch = []
+                
+                for i, item in enumerate(records):
+                    try:
+                        # Validate that item is a dictionary
+                        if not isinstance(item, dict):
+                            UploadLog.objects.create(
+                                tracking=tracking,
+                                log_level='ERROR',
+                                message=f'Record {i} is not a dictionary: {type(item)} - {str(item)[:100]}'
+                            )
+                            failed_count += 1
+                            continue
+                        
+                        # Helper function to safely get values
+                        def safe_get(key, default=''):
+                            value = item.get(key, default)
+                            return value if value is not None else default
+                        
+                        # Create Electric_Bill object according to your mapping
+                        bill = Electric_Bill(
+                            Customer_ID=self.truncate(safe_get('MASTER_BILL_ID', ''), 255),
+                            InvoiceNo=self.truncate(safe_get('INDEX_NO', ''), 255),
+                            TypeOfPro=self.truncate(safe_get('SUPPLY_TYPE', ''), 100),
+                            Outstanding=self.safe_decimal(safe_get('OUTSTANDING', 0)),
+                            Basic_Tax=self.safe_decimal(safe_get('FACT_TOTAL', 0)),
+                            Bill_Amount=self.safe_decimal(safe_get('BILL_AMOUNT', 0)),
+                            Debt_Amount=0.00,
+                            Payment_ID=safe_get('PAYMENT_ID', ''),
+                            PaymentType=safe_get('PAYMENT_WAY', ''),
+                            Payment_Date=safe_get('PAYMENTDAY', ''),
+                            InvoiceMonth=self.truncate(safe_get('INVM', ''), 50),
+                            InvoiceDate=self.truncate(safe_get('INVD', ''), 100),
+                            DisID=self.truncate(safe_get('DIS_ID', ''), 100),
+                            ProID=self.truncate(safe_get('PROVINCE_CODE', ''), 100),
+                            UserID=tracking.user_upload
+                        )
+                        
+                        batch.append(bill)
+                        
+                        # Bulk insert when batch is full
+                        if len(batch) >= batch_size:
+                            Electric_Bill.objects.bulk_create(batch, ignore_conflicts=True)
+                            processed_count += len(batch)
+                            batch = []
+                            
+                            # Log progress
+                            UploadLog.objects.create(
+                                tracking=tracking,
+                                log_level='INFO',
+                                message=f'Inserted batch: {processed_count}/{len(records)} records processed'
+                            )
+                    
+                    except Exception as e:
+                        failed_count += 1
+                        UploadLog.objects.create(
+                            tracking=tracking,
+                            log_level='ERROR',
+                            message=f'Failed to process record {i}: {str(e)} - Record: {str(item)[:200] if isinstance(item, dict) else str(type(item))}'
+                        )
+                        continue
+                
+                # Insert remaining batch
+                if batch:
+                    Electric_Bill.objects.bulk_create(batch, ignore_conflicts=True)
+                    processed_count += len(batch)
+            
+            UploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Data insertion completed. Processed: {processed_count}, Failed: {failed_count}'
+            )
+            
+            return processed_count, failed_count
+            
+        except Exception as e:
+            UploadLog.objects.create(
+                tracking=tracking,
+                log_level='ERROR',
+                message=f'Bulk insert failed: {str(e)}'
+            )
+            raise e
+    
+    def truncate(self, value, max_length):
+        """Safely truncate string to max length"""
+        if value is None:
+            return ''
+        return str(value)[:max_length]
+    
+    def safe_decimal(self, value):
+        """Safely convert to decimal"""
+        try:
+            return float(value or 0)
+        except (ValueError, TypeError):
+            return 0.0
+
+class UploadTrackingDetailAPIView(APIView):
+    """Get detailed tracking information with logs"""
+    
+    def get(self, request, tracking_id):
+        try:
+            tracking = UploadDataTracking.objects.get(id=tracking_id)
+            serializer = UploadTrackingDetailSerializer(tracking)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except UploadDataTracking.DoesNotExist:
+            return Response(
+                {'error': 'Tracking record not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+class InitializeTrackingAPIView(APIView):
+    """Initialize tracking records for a month"""
+    
+    def post(self, request):
+        try:
+            month = request.data.get('month', timezone.now().strftime('%Y%m'))
+            username = request.data.get('username', 'system')
+            
+            # Validate month format
+            try:
+                datetime.strptime(month, '%Y%m')
+            except ValueError:
+                return Response(
+                    {"error": "Invalid month format. Use YYYYMM (e.g., 202509)"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get provinces and districts from external API
+            api_url = getattr(settings, 'PROVINCE_API_URL', 'http://192.169.45.56:8000/api/province-edldetail/')
+            
+            try:
+                response = requests.get(api_url, timeout=30)
+                response.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Failed to fetch province/district data: {str(e)}")
+                return Response({
+                    'error': 'Failed to fetch province/district data'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            province_districts = response.json()
+            created_count = 0
+            
+            # Create tracking records
+            for item in province_districts:
+                tracking, created = UploadDataTracking.objects.get_or_create(
+                    pro_id=item['pro_id'],
+                    dis_id=item['dis_id'],
+                    upload_month=month,
+                    defaults={
+                        'pro_name': item['pro_name'],
+                        'dis_name': item['dis_name'],
+                        'status': 'pending',
+                        'user_upload': username
+                    }
+                )
+                if created:
+                    created_count += 1
+            
+            return Response({
+                'message': f'Initialized {created_count} tracking records for month {month}',
+                'total_locations': len(province_districts),
+                'created_count': created_count
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Initialization failed: {str(e)}")
+            return Response({
+                'error': f'Initialization failed: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+# End API Tracking Edl ----------------------------------           
+import json
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.utils.decorators import method_decorator
+from django.views import View
+
+@method_decorator(csrf_exempt, name='dispatch')
+class InitializeDistrictsAlternativeView(View):
+    """Alternative implementation that should work with any JSON request"""
+    
+    def post(self, request):
+        try:
+            # Parse JSON manually to ensure it works
+            if request.content_type == 'application/json':
+                data = json.loads(request.body.decode('utf-8'))
+            else:
+                # Fallback for form data
+                data = request.POST.dict()
+            
+            print(f"Parsed data: {data}")  # Debug print
+            
+            month = data.get('month', timezone.now().strftime('%Y%m'))
+            province_id = data.get('province_id')
+            username = data.get('username', 'system')
+            
+            if not province_id:
+                return JsonResponse({
+                    'error': 'province_id is required',
+                    'received_data': data,
+                    'content_type': request.content_type
+                }, status=400)
+            
+            # Validate month format
+            try:
+                datetime.strptime(month, '%Y%m')
+            except ValueError:
+                return JsonResponse({
+                    'error': 'Invalid month format. Use YYYYMM (e.g., 202509)'
+                }, status=400)
+            
+            # Get province info
+            try:
+                province = edl_province_code.objects.get(pro_id=province_id)
+            except edl_province_code.DoesNotExist:
+                return JsonResponse({
+                    'error': f'Province with ID {province_id} not found'
+                }, status=404)
+            
+            # Get districts for this province
+            districts = edl_district_code.objects.filter(pro_id=province_id)
+            
+            if not districts.exists():
+                return JsonResponse({
+                    'error': f'No districts found for province {province_id}'
+                }, status=404)
+            
+            created_count = 0
+            
+            # Create tracking records for each district
+            for district in districts:
+                tracking, created = UploadDataTracking.objects.get_or_create(
+                    pro_id=district.pro_id,
+                    dis_id=district.dis_id,
+                    upload_month=month,
+                    defaults={
+                        'pro_name': province.pro_name,
+                        'dis_name': district.dis_name,
+                        'status': 'pending',
+                        'user_upload': username
+                    }
+                )
+                if created:
+                    created_count += 1
+            
+            return JsonResponse({
+                'message': f'Initialized {created_count} districts for {province.pro_name} - {month}',
+                'total_districts': districts.count(),
+                'created_count': created_count
+            })
+            
+        except Exception as e:
+            return JsonResponse({
+                'error': f'Initialization failed: {str(e)}'
+            }, status=500)
+
+# Function-based alternative
+@csrf_exempt
+@require_http_methods(["POST"])
+def initialize_districts_function(request):
+    """Function-based view alternative"""
+    try:
+        # Parse JSON data
+        data = json.loads(request.body.decode('utf-8'))
+        
+        month = data.get('month', timezone.now().strftime('%Y%m'))
+        province_id = data.get('province_id')
+        username = data.get('username', 'system')
+        
+        if not province_id:
+            return JsonResponse({
+                'error': 'province_id is required',
+                'received_data': data
+            }, status=400)
+        
+        # Rest of the logic same as above...
+        # Get province
+        try:
+            province = edl_province_code.objects.get(pro_id=province_id)
+        except edl_province_code.DoesNotExist:
+            return JsonResponse({
+                'error': f'Province with ID {province_id} not found'
+            }, status=404)
+        
+        # Get districts and create tracking records
+        districts = edl_district_code.objects.filter(pro_id=province_id)
+        created_count = 0
+        
+        for district in districts:
+            tracking, created = UploadDataTracking.objects.get_or_create(
+                pro_id=district.pro_id,
+                dis_id=district.dis_id,
+                upload_month=month,
+                defaults={
+                    'pro_name': province.pro_name,
+                    'dis_name': district.dis_name,
+                    'status': 'pending',
+                    'user_upload': username
+                }
+            )
+            if created:
+                created_count += 1
+        
+        return JsonResponse({
+            'message': f'Initialized {created_count} districts for {province.pro_name} - {month}',
+            'total_districts': districts.count(),
+            'created_count': created_count
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON data'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': f'Initialization failed: {str(e)}'}, status=500)
+# Endf Point Test EDL ----------------------------------
+
+
+from django.http import JsonResponse
+from django.db import connection
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from utility.models import UploadDataTracking, UploadLog
+
+class DebugAPIView(APIView):
+    """Debug view to check database state and models"""
+    
+    def get(self, request):
+        debug_info = {}
+        
+        try:
+            # Check if table exists
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name='upload_data_tracking';
+                """)
+                table_exists = cursor.fetchone() is not None
+                debug_info['table_exists'] = table_exists
+                
+                if table_exists:
+                    # Get table structure
+                    cursor.execute("PRAGMA table_info(upload_data_tracking);")
+                    columns = cursor.fetchall()
+                    debug_info['table_columns'] = [col[1] for col in columns]
+                    
+                    # Get record count
+                    cursor.execute("SELECT COUNT(*) FROM upload_data_tracking;")
+                    record_count = cursor.fetchone()[0]
+                    debug_info['record_count'] = record_count
+        
+        except Exception as e:
+            debug_info['table_error'] = str(e)
+        
+        try:
+            # Test model query
+            tracking_count = UploadDataTracking.objects.count()
+            debug_info['model_count'] = tracking_count
+            
+            # Get sample records
+            sample_records = UploadDataTracking.objects.all()[:3]
+            debug_info['sample_records'] = [
+                {
+                    'id': record.id,
+                    'pro_id': record.pro_id,
+                    'pro_name': record.pro_name,
+                    'dis_id': record.dis_id,
+                    'dis_name': record.dis_name,
+                    'upload_month': record.upload_month,
+                    'status': record.status
+                }
+                for record in sample_records
+            ]
+            
+        except Exception as e:
+            debug_info['model_error'] = str(e)
+        
+        # Check current month format
+        from django.utils import timezone
+        current_month = timezone.now().strftime('%Y%m')
+        debug_info['current_month'] = current_month
+        
+        # Check request parameters
+        debug_info['request_params'] = dict(request.GET)
+        
+        return Response({
+            'debug_info': debug_info,
+            'status': 'debug_complete'
+        })
+
+class InitializeTestDataAPIView(APIView):
+    """Create some test tracking records for debugging"""
+    
+    def post(self, request):
+        try:
+            month = request.data.get('month', '202509')
+            
+            # Sample test data
+            test_districts = [
+                {'pro_id': '01', 'pro_name': 'Vientiane Capital', 'dis_id': '01', 'dis_name': 'Chanthabouly'},
+                {'pro_id': '01', 'pro_name': 'Vientiane Capital', 'dis_id': '02', 'dis_name': 'Sikhottabong'},
+                {'pro_id': '01', 'pro_name': 'Vientiane Capital', 'dis_id': '03', 'dis_name': 'Xaysettha'},
+                {'pro_id': '02', 'pro_name': 'Phongsaly', 'dis_id': '01', 'dis_name': 'Phongsaly'},
+                {'pro_id': '02', 'pro_name': 'Phongsaly', 'dis_id': '02', 'dis_name': 'May'},
+            ]
+            
+            created_count = 0
+            for district_data in test_districts:
+                tracking, created = UploadDataTracking.objects.get_or_create(
+                    pro_id=district_data['pro_id'],
+                    dis_id=district_data['dis_id'],
+                    upload_month=month,
+                    defaults={
+                        'pro_name': district_data['pro_name'],
+                        'dis_name': district_data['dis_name'],
+                        'status': 'pending',
+                        'user_upload': 'test_user',
+                        'total_records': 0,
+                        'processed_records': 0,
+                        'failed_records': 0,
+                        'data_size_mb': 0.0
+                    }
+                )
+                if created:
+                    created_count += 1
+            
+            return Response({
+                'message': f'Created {created_count} test tracking records for month {month}',
+                'total_records': UploadDataTracking.objects.filter(upload_month=month).count()
+            })
+            
+        except Exception as e:
+            return Response({
+                'error': f'Failed to create test data: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class TestRealUploadAPIView(APIView):
+    """Test real upload with EDL API"""
+    
+    def post(self, request):
+        try:
+            username = request.data.get('username', 'test_user')
+            
+            # Use the first test record for testing
+            test_record = UploadDataTracking.objects.filter(status='pending').first()
+            
+            if not test_record:
+                return Response({
+                    'error': 'No pending test records found. Create test data first.'
+                }, status=400)
+            
+            print(f"DEBUG: Testing upload for {test_record.pro_name} - {test_record.dis_name}")
+            
+            # Update status to in_progress
+            test_record.status = 'in_progress'
+            test_record.upload_started = timezone.now()
+            test_record.user_upload = username
+            test_record.save()
+            
+            # Log start
+            UploadLog.objects.create(
+                tracking=test_record,
+                log_level='INFO',
+                message=f'Test upload started by {username}'
+            )
+            
+            # Test the real EDL API call
+            result = self.test_edl_api_call(test_record, username)
+            
+            return Response(result)
+            
+        except Exception as e:
+            return Response({
+                'error': f'Test upload failed: {str(e)}'
+            }, status=500)
+    
+    def test_edl_api_call(self, tracking, username):
+        """Test actual EDL API call with real parameters"""
+        try:
+            import requests
+            
+            # Real EDL API endpoint
+            api_url = "https://edl-inside-api.edl.com.la/api_v1/wattmonitor-bol/billing-svc/billing/getpaymenthistory"
+            
+            params = {
+                'province_code': tracking.pro_id,
+                'district_code': tracking.dis_id,
+                'dateRequest': tracking.upload_month,
+                'page': 1,
+                'limit': 100  # Small limit for testing
+            }
+            
+            print(f"DEBUG: Calling EDL API with params: {params}")
+            
+            # Make the actual API call
+            response = requests.get(api_url, params=params, timeout=60)
+            tracking.api_response_code = response.status_code
+            
+            print(f"DEBUG: EDL API Response Status: {response.status_code}")
+            print(f"DEBUG: Response size: {len(response.text)} characters")
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                # Log the response structure
+                print(f"DEBUG: Response keys: {list(data.keys()) if isinstance(data, dict) else type(data)}")
+                
+                # Calculate data size
+                data_size_mb = len(json.dumps(data).encode('utf-8')) / (1024 * 1024)
+                
+                # Extract records with flexible structure handling
+                records = []
+                if isinstance(data, dict):
+                    if 'data' in data and 'paymentHistory' in data['data']:
+                        records = data['data']['paymentHistory']
+                    elif 'data' in data and isinstance(data['data'], list):
+                        records = data['data']
+                    elif 'paymentHistory' in data:
+                        records = data['paymentHistory']
+                    elif isinstance(data.get('data'), list):
+                        records = data['data']
+                elif isinstance(data, list):
+                    records = data
+                
+                total_records = len(records)
+                print(f"DEBUG: Extracted {total_records} records")
+                
+                # Log sample record structure if available
+                if records and len(records) > 0:
+                    sample_record = records[0]
+                    print(f"DEBUG: Sample record keys: {list(sample_record.keys()) if isinstance(sample_record, dict) else type(sample_record)}")
+                
+                # Update tracking
+                tracking.total_records = total_records
+                tracking.data_size_mb = round(data_size_mb, 2)
+                tracking.upload_completed = timezone.now()
+                
+                if total_records > 0:
+                    tracking.status = 'completed'
+                    # For testing, we'll simulate processing without actually saving to Electric_Bill
+                    tracking.processed_records = min(total_records, 10)  # Simulate processing first 10 records
+                    tracking.failed_records = 0
+                    
+                    message = f'Test completed successfully. Found {total_records} records, simulated processing of {tracking.processed_records} records'
+                else:
+                    tracking.status = 'completed'
+                    tracking.processed_records = 0
+                    tracking.failed_records = 0
+                    message = 'Test completed - No records found for this location/month'
+                
+                tracking.save()
+                
+                # Log completion
+                UploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='INFO',
+                    message=message
+                )
+                
+                return {
+                    'success': True,
+                    'message': message,
+                    'api_response': {
+                        'status_code': response.status_code,
+                        'total_records': total_records,
+                        'data_size_mb': tracking.data_size_mb,
+                        'response_structure': self.analyze_response_structure(data),
+                        'sample_record_fields': list(records[0].keys()) if records else []
+                    },
+                    'tracking_info': {
+                        'id': tracking.id,
+                        'province': tracking.pro_name,
+                        'district': tracking.dis_name,
+                        'month': tracking.upload_month,
+                        'duration_seconds': tracking.upload_duration
+                    }
+                }
+            
+            else:
+                # Handle API errors
+                tracking.status = 'failed'
+                error_text = response.text[:500] if response.text else 'No response text'
+                tracking.error_message = f'API returned status {response.status_code}: {error_text}'
+                tracking.upload_completed = timezone.now()
+                tracking.save()
+                
+                UploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='ERROR',
+                    message=f'API test failed: {response.status_code} - {error_text}'
+                )
+                
+                return {
+                    'success': False,
+                    'error': f'EDL API returned status {response.status_code}',
+                    'api_response': {
+                        'status_code': response.status_code,
+                        'error_text': error_text
+                    }
+                }
+        
+        except requests.exceptions.Timeout:
+            tracking.status = 'failed'
+            tracking.error_message = 'API request timeout'
+            tracking.upload_completed = timezone.now()
+            tracking.save()
+            
+            return {
+                'success': False,
+                'error': 'API request timeout after 60 seconds'
+            }
+            
+        except requests.exceptions.ConnectionError:
+            tracking.status = 'failed'
+            tracking.error_message = 'Cannot connect to EDL API'
+            tracking.upload_completed = timezone.now()
+            tracking.save()
+            
+            return {
+                'success': False,
+                'error': 'Cannot connect to EDL API server'
+            }
+            
+        except Exception as e:
+            tracking.status = 'failed'
+            tracking.error_message = f'Processing error: {str(e)}'
+            tracking.upload_completed = timezone.now()
+            tracking.save()
+            
+            UploadLog.objects.create(
+                tracking=tracking,
+                log_level='ERROR',
+                message=f'Processing exception: {str(e)}'
+            )
+            
+            return {
+                'success': False,
+                'error': f'Processing error: {str(e)}'
+            }
+    
+    def analyze_response_structure(self, data):
+        """Analyze and return the structure of API response"""
+        if isinstance(data, dict):
+            structure = {}
+            for key, value in data.items():
+                if isinstance(value, list) and len(value) > 0:
+                    structure[key] = f"array[{len(value)}] of {type(value[0]).__name__}"
+                elif isinstance(value, dict):
+                    structure[key] = f"object with {len(value)} keys"
+                else:
+                    structure[key] = type(value).__name__
+            return structure
+        elif isinstance(data, list):
+            return f"array[{len(data)}] of {type(data[0]).__name__ if data else 'unknown'}"
+        else:
+            return type(data).__name__
+@csrf_exempt
+def debug_edl_api(request):
+    """Debug endpoint to test EDL API response parsing"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+    
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+        province_code = data.get('province_code')
+        district_code = data.get('district_code') 
+        date_request = data.get('dateRequest')
+        
+        if not all([province_code, district_code, date_request]):
+            return JsonResponse({
+                'error': 'Missing required parameters: province_code, district_code, dateRequest'
+            }, status=400)
+        
+        # Make API call
+        api_url = "https://edl-inside-api.edl.com.la/api_v1/wattmonitor-bol/billing-svc/billing/getpaymenthistory"
+        params = {
+            'province_code': province_code,
+            'district_code': district_code,
+            'dateRequest': date_request,
+            'page': 1,
+            'limit': 5  # Just get first 5 records for testing
+        }
+        
+        response = requests.get(api_url, params=params, timeout=60)
+        
+        if response.status_code != 200:
+            return JsonResponse({
+                'error': f'API request failed with status {response.status_code}',
+                'response_text': response.text
+            }, status=response.status_code)
+        
+        # Parse response
+        api_data = response.json()
+        
+        # Extract records using the new logic
+        records = []
+        if isinstance(api_data, dict):
+            data_section = api_data.get('data', {})
+            if isinstance(data_section, dict) and 'paymentHistory' in data_section:
+                records = data_section.get('paymentHistory', [])
+        
+        # Get sample record info
+        sample_record = records[0] if records else None
+        sample_keys = list(sample_record.keys()) if sample_record else []
+        
+        return JsonResponse({
+            'success': True,
+            'api_status_code': response.status_code,
+            'response_structure': {
+                'type': str(type(api_data)),
+                'top_level_keys': list(api_data.keys()) if isinstance(api_data, dict) else 'not a dict',
+                'data_section_type': str(type(data_section)) if 'data_section' in locals() else 'not found',
+                'data_section_keys': list(data_section.keys()) if isinstance(data_section, dict) else 'not a dict'
+            },
+            'records_info': {
+                'total_found': len(records),
+                'sample_record_keys': sample_keys,
+                'sample_record': sample_record
+            },
+            'extraction_path': 'api_response["data"]["paymentHistory"]',
+            'parameters_sent': params
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON data'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': f'Debug failed: {str(e)}'}, status=500)
+
+
+# EDL API Summarize Endpoint ----------------------------------
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db.models import Sum, Count, Avg, Max, Min, Q
+from django.db.models.functions import TruncMonth, TruncYear
+from datetime import datetime, timedelta
+from django.utils import timezone
+import calendar
+from utility.models import UploadDataTracking
+from utility.models import Electric_Bill
+from utility.models import edl_province_code, edl_district_code
+import logging
+
+logger = logging.getLogger(__name__)
+
+class EDLSummaryOverviewAPIView(APIView):
+    """Get overall EDL summary statistics"""
+    
+    def get(self, request):
+        try:
+            # Get query parameters
+            start_month = request.GET.get('start_month')  # YYYYMM format
+            end_month = request.GET.get('end_month')      # YYYYMM format
+            province_id = request.GET.get('province_id')
+            district_id = request.GET.get('district_id')
+            
+            # Build base queryset
+            queryset = UploadDataTracking.objects.all()
+            
+            # Apply filters
+            if start_month and end_month:
+                queryset = queryset.filter(upload_month__gte=start_month, upload_month__lte=end_month)
+            elif start_month:
+                queryset = queryset.filter(upload_month__gte=start_month)
+            elif end_month:
+                queryset = queryset.filter(upload_month__lte=end_month)
+            
+            if province_id:
+                queryset = queryset.filter(pro_id=province_id)
+            
+            if district_id:
+                queryset = queryset.filter(dis_id=district_id)
+            
+            # Overall statistics
+            overall_stats = queryset.aggregate(
+                total_uploads=Count('id'),
+                total_records=Sum('total_records'),
+                total_processed=Sum('processed_records'),
+                total_failed=Sum('failed_records'),
+                total_data_size=Sum('data_size_mb'),
+                avg_success_rate=Avg('success_rates'),
+                completed_uploads=Count('id', filter=Q(status='completed')),
+                failed_uploads=Count('id', filter=Q(status='failed')),
+                in_progress_uploads=Count('id', filter=Q(status='in_progress'))
+            )
+            
+            # Calculate derived metrics
+            success_rate = (overall_stats['total_processed'] / overall_stats['total_records'] * 100) if overall_stats['total_records'] else 0
+            completion_rate = (overall_stats['completed_uploads'] / overall_stats['total_uploads'] * 100) if overall_stats['total_uploads'] else 0
+            
+            # Monthly trends (last 12 months)
+            monthly_trends = self.get_monthly_trends(queryset)
+            
+            # Province breakdown
+            province_breakdown = self.get_province_breakdown(queryset)
+            
+            # Recent activity
+            recent_activity = self.get_recent_activity()
+            
+            return Response({
+                'overview': {
+                    'total_uploads': overall_stats['total_uploads'] or 0,
+                    'total_records': overall_stats['total_records'] or 0,
+                    'total_processed': overall_stats['total_processed'] or 0,
+                    'total_failed': overall_stats['total_failed'] or 0,
+                    'total_data_size_mb': round(overall_stats['total_data_size'] or 0, 2),
+                    'overall_success_rate': round(success_rate, 2),
+                    'completion_rate': round(completion_rate, 2),
+                    'completed_uploads': overall_stats['completed_uploads'] or 0,
+                    'failed_uploads': overall_stats['failed_uploads'] or 0,
+                    'in_progress_uploads': overall_stats['in_progress_uploads'] or 0
+                },
+                'monthly_trends': monthly_trends,
+                'province_breakdown': province_breakdown,
+                'recent_activity': recent_activity
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error in EDL summary overview: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get_monthly_trends(self, base_queryset):
+        """Get monthly upload trends for the last 12 months"""
+        try:
+            # Get last 12 months
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=365)
+            
+            monthly_data = []
+            for i in range(12):
+                month_date = end_date - timedelta(days=30 * i)
+                month_str = month_date.strftime('%Y%m')
+                
+                month_stats = base_queryset.filter(upload_month=month_str).aggregate(
+                    total_records=Sum('total_records'),
+                    total_processed=Sum('processed_records'),
+                    total_uploads=Count('id'),
+                    total_data_size=Sum('data_size_mb')
+                )
+                
+                monthly_data.append({
+                    'month': month_str,
+                    'month_name': month_date.strftime('%b %Y'),
+                    'total_records': month_stats['total_records'] or 0,
+                    'total_processed': month_stats['total_processed'] or 0,
+                    'total_uploads': month_stats['total_uploads'] or 0,
+                    'total_data_size_mb': round(month_stats['total_data_size'] or 0, 2)
+                })
+            
+            return list(reversed(monthly_data))
+        except Exception as e:
+            logger.error(f"Error getting monthly trends: {str(e)}")
+            return []
+    
+    def get_province_breakdown(self, base_queryset):
+        """Get breakdown by province"""
+        try:
+            province_stats = base_queryset.values('pro_id', 'pro_name').annotate(
+                total_records=Sum('total_records'),
+                total_processed=Sum('processed_records'),
+                total_uploads=Count('id'),
+                total_data_size=Sum('data_size_mb'),
+                avg_success_rate=Avg('success_rates'),
+                completed_uploads=Count('id', filter=Q(status='completed'))
+            ).order_by('-total_records')
+            
+            return [
+                {
+                    'pro_id': item['pro_id'],
+                    'pro_name': item['pro_name'],
+                    'total_records': item['total_records'] or 0,
+                    'total_processed': item['total_processed'] or 0,
+                    'total_uploads': item['total_uploads'] or 0,
+                    'total_data_size_mb': round(item['total_data_size'] or 0, 2),
+                    'avg_success_rate': round(item['avg_success_rate'] or 0, 2),
+                    'completed_uploads': item['completed_uploads'] or 0
+                }
+                for item in province_stats
+            ]
+        except Exception as e:
+            logger.error(f"Error getting province breakdown: {str(e)}")
+            return []
+    
+    def get_recent_activity(self):
+        """Get recent upload activity"""
+        try:
+            recent_uploads = UploadDataTracking.objects.filter(
+                upload_completed__isnull=False
+            ).order_by('-upload_completed')[:10]
+            
+            return [
+                {
+                    'id': upload.id,
+                    'pro_name': upload.pro_name,
+                    'dis_name': upload.dis_name,
+                    'upload_month': upload.upload_month,
+                    'total_records': upload.total_records,
+                    'status': upload.status,
+                    'upload_completed': upload.upload_completed.isoformat() if upload.upload_completed else None,
+                    'data_size_mb': round(upload.data_size_mb, 2),
+                    'success_rate': round(upload.success_rates, 2) if upload.success_rates else 0
+                }
+                for upload in recent_uploads
+            ]
+        except Exception as e:
+            logger.error(f"Error getting recent activity: {str(e)}")
+            return []
+
+class EDLSummaryByProvinceAPIView(APIView):
+    """Get detailed summary by province"""
+    
+    def get(self, request):
+        try:
+            province_id = request.GET.get('province_id')
+            start_month = request.GET.get('start_month')
+            end_month = request.GET.get('end_month')
+            
+            if not province_id:
+                return Response({'error': 'province_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get province info
+            try:
+                province = edl_province_code.objects.get(pro_id=province_id)
+            except edl_province_code.DoesNotExist:
+                return Response({'error': 'Province not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+            # Build queryset
+            queryset = UploadDataTracking.objects.filter(pro_id=province_id)
+            
+            if start_month and end_month:
+                queryset = queryset.filter(upload_month__gte=start_month, upload_month__lte=end_month)
+            
+            # Province summary
+            province_summary = queryset.aggregate(
+                total_uploads=Count('id'),
+                total_records=Sum('total_records'),
+                total_processed=Sum('processed_records'),
+                total_failed=Sum('failed_records'),
+                total_data_size=Sum('data_size_mb'),
+                avg_success_rate=Avg('success_rates')
+            )
+            
+            # District breakdown
+            district_breakdown = queryset.values('dis_id', 'dis_name').annotate(
+                total_records=Sum('total_records'),
+                total_processed=Sum('processed_records'),
+                total_uploads=Count('id'),
+                total_data_size=Sum('data_size_mb'),
+                avg_success_rate=Avg('success_rates'),
+                completed_uploads=Count('id', filter=Q(status='completed'))
+            ).order_by('-total_records')
+            
+            # Monthly breakdown for this province
+            monthly_breakdown = self.get_province_monthly_data(queryset)
+            
+            return Response({
+                'province_info': {
+                    'pro_id': province.pro_id,
+                    'pro_name': province.pro_name
+                },
+                'summary': {
+                    'total_uploads': province_summary['total_uploads'] or 0,
+                    'total_records': province_summary['total_records'] or 0,
+                    'total_processed': province_summary['total_processed'] or 0,
+                    'total_failed': province_summary['total_failed'] or 0,
+                    'total_data_size_mb': round(province_summary['total_data_size'] or 0, 2),
+                    'avg_success_rate': round(province_summary['avg_success_rate'] or 0, 2)
+                },
+                'district_breakdown': [
+                    {
+                        'dis_id': item['dis_id'],
+                        'dis_name': item['dis_name'],
+                        'total_records': item['total_records'] or 0,
+                        'total_processed': item['total_processed'] or 0,
+                        'total_uploads': item['total_uploads'] or 0,
+                        'total_data_size_mb': round(item['total_data_size'] or 0, 2),
+                        'avg_success_rate': round(item['avg_success_rate'] or 0, 2),
+                        'completed_uploads': item['completed_uploads'] or 0
+                    }
+                    for item in district_breakdown
+                ],
+                'monthly_breakdown': monthly_breakdown
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error in province summary: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get_province_monthly_data(self, queryset):
+        """Get monthly data for a specific province"""
+        try:
+            monthly_data = queryset.values('upload_month').annotate(
+                total_records=Sum('total_records'),
+                total_processed=Sum('processed_records'),
+                total_uploads=Count('id'),
+                total_data_size=Sum('data_size_mb')
+            ).order_by('upload_month')
+            
+            return [
+                {
+                    'month': item['upload_month'],
+                    'month_name': self.format_month_name(item['upload_month']),
+                    'total_records': item['total_records'] or 0,
+                    'total_processed': item['total_processed'] or 0,
+                    'total_uploads': item['total_uploads'] or 0,
+                    'total_data_size_mb': round(item['total_data_size'] or 0, 2)
+                }
+                for item in monthly_data
+            ]
+        except Exception as e:
+            logger.error(f"Error getting province monthly data: {str(e)}")
+            return []
+    
+    def format_month_name(self, month_str):
+        """Convert YYYYMM to readable format"""
+        try:
+            if len(month_str) == 6:
+                year = int(month_str[:4])
+                month = int(month_str[4:6])
+                return f"{calendar.month_abbr[month]} {year}"
+        except:
+            pass
+        return month_str
+
+class EDLSummaryByDistrictAPIView(APIView):
+    """Get detailed summary by district"""
+    
+    def get(self, request):
+        try:
+            province_id = request.GET.get('province_id')
+            district_id = request.GET.get('district_id')
+            start_month = request.GET.get('start_month')
+            end_month = request.GET.get('end_month')
+            
+            if not district_id:
+                return Response({'error': 'district_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Debug logging
+            logger.info(f"District summary request: district_id={district_id}, province_id={province_id}")
+            
+            # Get district info - MUST use both pro_id and dis_id for unique identification
+            district = None
+            try:
+                if province_id:
+                    # Use both province_id and district_id for unique identification
+                    district = edl_district_code.objects.get(pro_id=province_id, dis_id=district_id)
+                    logger.info(f"Found district by pro_id+dis_id: {district.dis_name}")
+                else:
+                    # If no province_id provided, we can't uniquely identify the district
+                    return Response({
+                        'error': 'province_id is required when district_id is provided',
+                        'reason': f'District ID "{district_id}" exists in multiple provinces. Need province_id for unique identification.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                    
+            except edl_district_code.DoesNotExist:
+                # Get available districts for this province for debugging
+                available_districts = list(edl_district_code.objects.filter(
+                    pro_id=province_id
+                ).values_list('dis_id', 'dis_name'))
+                
+                return Response({
+                    'error': f'District with ID "{district_id}" not found in province "{province_id}"',
+                    'debug_info': {
+                        'requested_district_id': district_id,
+                        'requested_province_id': province_id,
+                        'available_districts_in_province': available_districts
+                    }
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Build queryset for tracking data using BOTH pro_id and dis_id
+            queryset = UploadDataTracking.objects.filter(
+                pro_id=province_id,
+                dis_id=district_id
+            )
+            
+            if start_month and end_month:
+                queryset = queryset.filter(upload_month__gte=start_month, upload_month__lte=end_month)
+            elif start_month:
+                queryset = queryset.filter(upload_month__gte=start_month)
+            elif end_month:
+                queryset = queryset.filter(upload_month__lte=end_month)
+            
+            logger.info(f"Queryset count: {queryset.count()} records found for pro_id={province_id}, dis_id={district_id}")
+            
+            # District summary
+            district_summary = queryset.aggregate(
+                total_uploads=Count('id'),
+                total_records=Sum('total_records'),
+                total_processed=Sum('processed_records'),
+                total_failed=Sum('failed_records'),
+                total_data_size=Sum('data_size_mb'),
+                avg_success_rate=Avg('success_rates')
+            )
+            
+            # Monthly breakdown for this district
+            monthly_breakdown = queryset.values('upload_month').annotate(
+                total_records=Sum('total_records'),
+                total_processed=Sum('processed_records'),
+                total_uploads=Count('id'),
+                total_data_size=Sum('data_size_mb'),
+                success_rate=Avg('success_rates')
+            ).order_by('upload_month')
+            
+            # Upload history
+            upload_history = queryset.order_by('-upload_completed')[:20]
+            
+            return Response({
+                'district_info': {
+                    'dis_id': district.dis_id,
+                    'dis_name': district.dis_name,
+                    'pro_id': district.pro_id
+                },
+                'summary': {
+                    'total_uploads': district_summary['total_uploads'] or 0,
+                    'total_records': district_summary['total_records'] or 0,
+                    'total_processed': district_summary['total_processed'] or 0,
+                    'total_failed': district_summary['total_failed'] or 0,
+                    'total_data_size_mb': round(district_summary['total_data_size'] or 0, 2),
+                    'avg_success_rate': round(district_summary['avg_success_rate'] or 0, 2)
+                },
+                'monthly_breakdown': [
+                    {
+                        'month': item['upload_month'],
+                        'month_name': EDLSummaryByProvinceAPIView().format_month_name(item['upload_month']),
+                        'total_records': item['total_records'] or 0,
+                        'total_processed': item['total_processed'] or 0,
+                        'total_uploads': item['total_uploads'] or 0,
+                        'total_data_size_mb': round(item['total_data_size'] or 0, 2),
+                        'success_rate': round(item['success_rate'] or 0, 2)
+                    }
+                    for item in monthly_breakdown
+                ],
+                'upload_history': [
+                    {
+                        'id': upload.id,
+                        'upload_month': upload.upload_month,
+                        'total_records': upload.total_records,
+                        'processed_records': upload.processed_records,
+                        'status': upload.status,
+                        'upload_completed': upload.upload_completed.isoformat() if upload.upload_completed else None,
+                        'data_size_mb': round(upload.data_size_mb, 2),
+                        'success_rate': round(upload.success_rates, 2) if upload.success_rates else 0,
+                        'user_upload': upload.user_upload
+                    }
+                    for upload in upload_history
+                ]
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error in district summary: {str(e)}", exc_info=True)
+            return Response({
+                'error': f'Internal server error: {str(e)}',
+                'debug_info': {
+                    'district_id': request.GET.get('district_id'),
+                    'province_id': request.GET.get('province_id'),
+                    'error_type': type(e).__name__
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class EDLExportSummaryAPIView(APIView):
+    """Export summary data to different formats"""
+    
+    def post(self, request):
+        try:
+            export_type = request.data.get('export_type', 'overview')  # overview, province, district
+            format_type = request.data.get('format', 'json')  # json, csv
+            filters = request.data.get('filters', {})
+            
+            if export_type == 'overview':
+                overview_view = EDLSummaryOverviewAPIView()
+                mock_request = type('MockRequest', (), {'GET': filters})()
+                response_data = overview_view.get(mock_request).data
+            elif export_type == 'province':
+                province_view = EDLSummaryByProvinceAPIView()
+                mock_request = type('MockRequest', (), {'GET': filters})()
+                response_data = province_view.get(mock_request).data
+            elif export_type == 'district':
+                district_view = EDLSummaryByDistrictAPIView()
+                mock_request = type('MockRequest', (), {'GET': filters})()
+                response_data = district_view.get(mock_request).data
+            else:
+                return Response({'error': 'Invalid export_type'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Add metadata
+            export_data = {
+                'export_info': {
+                    'export_type': export_type,
+                    'exported_at': timezone.now().isoformat(),
+                    'filters_applied': filters
+                },
+                'data': response_data
+            }
+            
+            return Response(export_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error in export summary: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        
+# water supply data load tracking views ----------------------------------
+import requests
+import json
+from django.utils import timezone
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db.models import Q, Count, Sum, Avg
+from django.core.paginator import Paginator
+from datetime import datetime
+from django.conf import settings
+import logging
+from django.db import transaction
+from utility.models import WaterUploadDataTracking, WaterUploadLog
+from utility.models import Utility_Bill
+from .serializers import (
+    WaterUploadTrackingSerializer, 
+    WaterUploadTrackingDetailSerializer,
+)
+import threading
+from django.http import JsonResponse
+
+logger = logging.getLogger(__name__)
+
+class WaterUploadTrackingListAPIView(APIView):
+    """List water supply tracking records for specific month"""
+    
+    def get(self, request):
+        try:        
+            month = request.GET.get('month', timezone.now().strftime('%m%Y'))
+            
+            # Validate month format (MMYYYY)
+            try:
+                datetime.strptime(month, '%m%Y')
+            except ValueError:
+                return Response(
+                    {"error": "Invalid month format. Use MMYYYY (e.g., 122024)"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get tracking records for the specific month
+            queryset = WaterUploadDataTracking.objects.filter(
+                upload_month=month
+            ).order_by('-created_at')
+            
+            # Serialize data
+            serialized_data = []
+            for item in queryset:
+                data = WaterUploadTrackingSerializer(item).data
+                data['success_rate_formatted'] = f"{item.success_rates:.1f}" if item.success_rates else "0.0"
+                data['formatted_size'] = self.format_file_size(item.data_size_mb)
+                data['upload_duration'] = self.format_duration(item.upload_duration) if item.upload_duration else None
+                serialized_data.append(data)
+            
+            # Get statistics
+            stats = self.get_statistics(month)
+            
+            return Response({
+                'data': serialized_data,
+                'statistics': stats
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch water tracking data: {str(e)}")
+            return Response(
+                {"error": "Failed to fetch water tracking data"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def get_statistics(self, month):
+        """Calculate statistics for the dashboard"""
+        try:
+            queryset = WaterUploadDataTracking.objects.filter(upload_month=month)
+            
+            total_count = queryset.count()
+            if total_count == 0:
+                return {
+                    'total_uploads': 0,
+                    'status_breakdown': {},
+                    'total_data_size_mb': 0.0,
+                    'total_records': 0
+                }
+            
+            # Status breakdown
+            status_data = queryset.values('status').annotate(count=Count('id'))
+            status_counts = {item['status']: item['count'] for item in status_data}
+            
+            # Aggregated data
+            aggregated = queryset.aggregate(
+                total_size=Sum('data_size_mb'),
+                total_records=Sum('total_records')
+            )
+            
+            return {
+                'total_uploads': total_count,
+                'status_breakdown': status_counts,
+                'total_data_size_mb': round(float(aggregated['total_size'] or 0), 2),
+                'total_records': int(aggregated['total_records'] or 0)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in get_statistics: {str(e)}")
+            return {
+                'total_uploads': 0,
+                'status_breakdown': {},
+                'total_data_size_mb': 0.0,
+                'total_records': 0
+            }
+    
+    def format_file_size(self, size_mb):
+        """Format file size for display"""
+        if not size_mb or size_mb < 1:
+            return f"{(size_mb or 0) * 1024:.1f} KB"
+        elif size_mb < 1024:
+            return f"{size_mb:.1f} MB"
+        else:
+            return f"{size_mb / 1024:.1f} GB"
+    
+    def format_duration(self, seconds):
+        """Format duration for display"""
+        if not seconds:
+            return None
+        if seconds < 60:
+            return f"{seconds:.0f}s"
+        elif seconds < 3600:
+            return f"{seconds / 60:.1f}m"
+        else:
+            return f"{seconds / 3600:.1f}h"
+
+class InitializeWaterTrackingAPIView(APIView):
+    """Initialize water supply tracking record for a specific month"""
+    
+    def post(self, request):
+        try:
+            month = request.data.get('month', timezone.now().strftime('%m%Y'))
+            username = request.data.get('username', 'system')
+            
+            if not month:
+                return Response(
+                    {"error": "month is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if not username:
+                return Response(
+                    {"error": "username is required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate month format (MMYYYY)
+            try:
+                datetime.strptime(month, '%m%Y')
+            except ValueError:
+                return Response(
+                    {"error": "Invalid month format. Use MMYYYY (e.g., 122024)"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Create tracking record for the month
+            tracking, created = WaterUploadDataTracking.objects.get_or_create(
+                upload_month=month,
+                defaults={
+                    'status': 'pending',
+                    'user_upload': username,
+                    'description': f'Water supply data upload for {month}'
+                }
+            )
+            
+            action = 'created' if created else 'already exists'
+            
+            return Response({
+                'message': f'Water supply tracking for {month} {action}',
+                'tracking_id': tracking.id,
+                'created': created
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Water tracking initialization failed: {str(e)}")
+            return Response({
+                'error': f'Water tracking initialization failed: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class WaterUploadDataAPIView(APIView):
+    """Handle water supply data upload with background processing for large datasets"""
+    
+    def post(self, request):
+        try:
+            # Extract parameters
+            month = request.data.get('month')
+            username = request.data.get('username', 'system')
+            api_token = request.data.get('api_token')  # Optional - we use fixed token
+
+            # Fixed API token from supplier
+            api_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbiI6IlUyRnNkR1ZrWDErdE9ja29vVDV0NXdqWlBqTzhVc0V1ZnR2QytPUXp3Z2ljWkFPdkhNUkNqdzh0NUhOSENBRVZsVXVNWHBrc1RudUFxaUE3R0VtVExRSTZMaWNTVUlaN1BMb0xGOVczMWtjWnFoQmxFUThHVUFwSFpNS0NDVjN1RURhWDJSSjFwZDNqaFRGc2lmdUF3Zz09IiwiaWF0IjoxNzA5MDEwNjU0fQ.mhmfUuasPQnAtxTQmwIyofClMuOAKVKZloNskpG9fHo'
+                        
+            if not month:
+                return Response({
+                    'error': 'Missing required parameter: month'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Validate month format (MMYYYY)
+            try:
+                datetime.strptime(month, '%m%Y')
+            except ValueError:
+                return Response(
+                    {"error": "Invalid month format. Use MMYYYY (e.g., 122024)"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get tracking record
+            try:
+                tracking = WaterUploadDataTracking.objects.get(upload_month=month)
+            except WaterUploadDataTracking.DoesNotExist:
+                return Response({
+                    'error': 'Tracking record not found. Please initialize tracking first.'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Check if already completed
+            if tracking.status == 'completed':
+                return Response({
+                    'message': 'Water supply data already uploaded successfully',
+                    'tracking_id': tracking.id,
+                    'total_records': tracking.total_records,
+                    'processed_records': tracking.processed_records
+                }, status=status.HTTP_200_OK)
+            
+            # Check if already in progress
+            if tracking.status == 'in_progress':
+                return Response({
+                    'message': 'Water supply data upload is already in progress',
+                    'tracking_id': tracking.id,
+                    'status': tracking.status
+                }, status=status.HTTP_200_OK)
+            
+            # Update status to in_progress
+            tracking.status = 'in_progress'
+            tracking.upload_started = timezone.now()
+            tracking.user_upload = username
+            tracking.error_message = None  # Clear any previous errors
+            tracking.save()
+            
+            # Log start
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Water supply upload started by {username} for month {month}'
+            )
+            
+            # Start background processing for large datasets
+            thread = threading.Thread(
+                target=self.process_water_data_background,
+                args=(tracking.id, api_token)
+            )
+            thread.daemon = True
+            thread.start()
+            
+            return Response({
+                'message': 'Water supply data upload started in background',
+                'tracking_id': tracking.id,
+                'status': 'in_progress',
+                'note': 'Large dataset processing initiated. Check tracking status for updates.'
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Water upload failed: {str(e)}")
+            return Response({
+                'error': f'Water upload failed: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def process_water_data_background(self, tracking_id, api_token):
+        """Background processing for large water supply datasets"""
+        try:
+            tracking = WaterUploadDataTracking.objects.get(id=tracking_id)
+            
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message='Background processing started for water supply data'
+            )
+            
+            # Fetch and process data with optimized handling
+            result = self.fetch_and_process_water_data_optimized(tracking, api_token)
+            
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Background processing completed: {result.get("message", "Unknown result")}'
+            )
+            
+        except Exception as e:
+            logger.error(f"Background water processing failed: {str(e)}")
+            try:
+                tracking = WaterUploadDataTracking.objects.get(id=tracking_id)
+                tracking.status = 'failed'
+                tracking.error_message = f'Background processing failed: {str(e)}'
+                tracking.upload_completed = timezone.now()
+                tracking.save()
+                
+                WaterUploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='ERROR',
+                    message=f'Background processing failed: {str(e)}'
+                )
+            except Exception as save_error:
+                logger.error(f"Failed to save error state: {str(save_error)}")
+    
+    def fetch_and_process_water_data_optimized(self, tracking, api_token):
+        """Optimized fetch for large water supply datasets"""
+        try:
+            # Water Supply API endpoint
+            water_api_base = getattr(settings, 'WATER_API_BASE_URL', 'http://202.137.141.244:3000')
+            api_url = f"{water_api_base}/v3/api/loans/allbillmonth/{tracking.upload_month}"
+            
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Fetching large water supply dataset from: {api_url}'
+            )
+            
+            # Optimized headers and request settings
+            headers = {
+                'Auth': api_token,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Connection': 'close'  # Prevent connection reuse issues
+            }
+            
+            # Use streaming request with larger timeout for big datasets
+            response = requests.get(
+                api_url, 
+                headers=headers, 
+                timeout=600,  # 10 minute timeout for large datasets
+                stream=True   # Stream the response to handle large data
+            )
+            
+            tracking.api_response_code = response.status_code
+            tracking.save()
+            
+            if response.status_code != 200:
+                error_msg = f'Water API request failed with status {response.status_code}'
+                
+                # Try to get error details but limit size
+                try:
+                    error_content = response.text[:1000]  # Limit error message size
+                    error_msg += f': {error_content}'
+                except:
+                    error_msg += ': Unable to read error response'
+                
+                raise Exception(error_msg)
+            
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'API responded successfully. Processing large JSON response...'
+            )
+            
+            # Parse JSON response in chunks for large datasets
+            try:
+                # For very large responses, we need to be careful about memory
+                content = response.content
+                response.close()  # Close connection immediately
+                
+                # Log the response size
+                content_size_mb = len(content) / (1024 * 1024)
+                WaterUploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='INFO',
+                    message=f'Received {content_size_mb:.2f} MB of data from Water API'
+                )
+                
+                # Parse JSON
+                data = json.loads(content.decode('utf-8'))
+                
+            except json.JSONDecodeError as e:
+                raise Exception(f'Invalid JSON response from Water API: {str(e)}')
+            except MemoryError:
+                raise Exception('Response too large to process. Consider API pagination.')
+            
+            # Extract records with comprehensive handling
+            records = []
+            total_estimated = 0
+            
+            if isinstance(data, dict):
+                # Log the complete structure for debugging
+                top_keys = list(data.keys())
+                WaterUploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='INFO',
+                    message=f'Response structure - all keys: {top_keys}'
+                )
+                
+                # Log sample values for each key (first few characters)
+                for key in top_keys:
+                    value = data[key]
+                    if isinstance(value, (str, int, float, bool)):
+                        WaterUploadLog.objects.create(
+                            tracking=tracking,
+                            log_level='INFO',
+                            message=f'Key "{key}": {str(value)[:100]}'
+                        )
+                    elif isinstance(value, list):
+                        WaterUploadLog.objects.create(
+                            tracking=tracking,
+                            log_level='INFO',
+                            message=f'Key "{key}": list with {len(value)} items'
+                        )
+                    elif isinstance(value, dict):
+                        nested_keys = list(value.keys())[:5]  # First 5 nested keys
+                        WaterUploadLog.objects.create(
+                            tracking=tracking,
+                            log_level='INFO',
+                            message=f'Key "{key}": dict with keys: {nested_keys}'
+                        )
+                
+                # Comprehensive search for data arrays
+                def find_data_recursively(obj, path="root"):
+                    """Recursively search for arrays that might contain the data"""
+                    found_arrays = []
+                    
+                    if isinstance(obj, list):
+                        if len(obj) > 0:
+                            found_arrays.append((path, len(obj), type(obj[0]).__name__))
+                    elif isinstance(obj, dict):
+                        for key, value in obj.items():
+                            new_path = f"{path}.{key}"
+                            if isinstance(value, list) and len(value) > 0:
+                                found_arrays.append((new_path, len(value), type(value[0]).__name__))
+                            elif isinstance(value, dict):
+                                found_arrays.extend(find_data_recursively(value, new_path))
+                    
+                    return found_arrays
+                
+                # Find all arrays in the response
+                found_arrays = find_data_recursively(data)
+                
+                if found_arrays:
+                    WaterUploadLog.objects.create(
+                        tracking=tracking,
+                        log_level='INFO',
+                        message=f'Found arrays: {found_arrays}'
+                    )
+                    
+                    # Select the largest array as it's most likely to contain the data
+                    largest_array = max(found_arrays, key=lambda x: x[1])
+                    path, size, item_type = largest_array
+                    
+                    WaterUploadLog.objects.create(
+                        tracking=tracking,
+                        log_level='INFO',
+                        message=f'Selecting largest array: {path} with {size} items of type {item_type}'
+                    )
+                    
+                    # Extract the data using the path
+                    try:
+                        current = data
+                        for part in path.split('.')[1:]:  # Skip 'root'
+                            current = current[part]
+                        
+                        if isinstance(current, list):
+                            records = current
+                            total_estimated = len(records)
+                            
+                            # Log sample record structure
+                            if records and isinstance(records[0], dict):
+                                sample_keys = list(records[0].keys())[:10]
+                                WaterUploadLog.objects.create(
+                                    tracking=tracking,
+                                    log_level='INFO',
+                                    message=f'Sample record keys: {sample_keys}'
+                                )
+                                
+                    except (KeyError, TypeError, IndexError) as e:
+                        WaterUploadLog.objects.create(
+                            tracking=tracking,
+                            log_level='ERROR',
+                            message=f'Failed to extract data from path {path}: {str(e)}'
+                        )
+                else:
+                    WaterUploadLog.objects.create(
+                        tracking=tracking,
+                        log_level='WARNING',
+                        message='No arrays found in API response'
+                    )
+                
+                # Fallback: try common key patterns if no arrays found
+                if not records:
+                    common_keys = [
+                        'data', 'records', 'bills', 'items', 'results', 'content', 'payload',
+                        'response', 'body', 'list', 'entries', 'loans', 'payments'
+                    ]
+                    
+                    for key in common_keys:
+                        if key in data:
+                            value = data[key]
+                            if isinstance(value, list):
+                                records = value
+                                total_estimated = len(records)
+                                WaterUploadLog.objects.create(
+                                    tracking=tracking,
+                                    log_level='INFO',
+                                    message=f'Found data using fallback key: {key}'
+                                )
+                                break
+                            elif isinstance(value, dict):
+                                # Check nested structure
+                                for nested_key in common_keys:
+                                    if nested_key in value and isinstance(value[nested_key], list):
+                                        records = value[nested_key]
+                                        total_estimated = len(records)
+                                        WaterUploadLog.objects.create(
+                                            tracking=tracking,
+                                            log_level='INFO',
+                                            message=f'Found data using nested key: {key}.{nested_key}'
+                                        )
+                                        break
+                                if records:
+                                    break
+                    
+            elif isinstance(data, list):
+                records = data
+                total_estimated = len(records)
+                WaterUploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='INFO',
+                    message='Data is direct array format'
+                )
+            
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Extracted {len(records)} records from Water Supply API (estimated: {total_estimated})'
+            )
+            
+            if not records:
+                tracking.status = 'completed'
+                tracking.upload_completed = timezone.now()
+                tracking.total_records = 0
+                tracking.save()
+                
+                WaterUploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='WARNING',
+                    message='No water supply data found in API response'
+                )
+                
+                return {
+                    'message': 'No water supply data available for this month',
+                    'tracking_id': tracking.id,
+                    'total_records': 0
+                }
+            
+            # Process data in optimized batches
+            processed, failed = self.insert_water_bill_data_optimized(records, tracking)
+            
+            # Calculate data size (limit memory usage)
+            data_size_mb = content_size_mb  # Use already calculated size
+            
+            # Update tracking with results
+            tracking.status = 'completed' if failed == 0 else ('partial' if processed > 0 else 'failed')
+            tracking.upload_completed = timezone.now()
+            tracking.total_records = len(records)
+            tracking.processed_records = processed
+            tracking.failed_records = failed
+            tracking.data_size_mb = round(data_size_mb, 2)
+            tracking.success_rates = (processed / len(records)) * 100 if records else 0
+            
+            # Calculate upload duration
+            if tracking.upload_started:
+                duration = (tracking.upload_completed - tracking.upload_started).total_seconds()
+                tracking.upload_duration = duration
+            
+            tracking.save()
+            
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Water supply processing completed. Total: {len(records)}, Processed: {processed}, Failed: {failed}, Success Rate: {tracking.success_rates:.1f}%, Size: {data_size_mb:.2f} MB'
+            )
+            
+            return {
+                'message': 'Water supply data processing completed successfully',
+                'tracking_id': tracking.id,
+                'total_records': len(records),
+                'processed_records': processed,
+                'failed_records': failed,
+                'data_size_mb': tracking.data_size_mb,
+                'success_rate': tracking.success_rates
+            }
+            
+        except Exception as e:
+            # Handle any errors
+            tracking.status = 'failed'
+            tracking.error_message = str(e)
+            tracking.upload_completed = timezone.now()
+            tracking.save()
+            
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='ERROR',
+                message=f'Water supply processing failed: {str(e)}'
+            )
+            
+            return {
+                'error': f'Failed to process water supply data: {str(e)}',
+                'tracking_id': tracking.id
+            }
+    
+    def insert_water_bill_data_optimized(self, records, tracking):
+        """Optimized insert for large datasets"""
+        processed_count = 0
+        failed_count = 0
+        batch_size = 500  # Smaller batches for memory efficiency
+        total_items = len(records)
+        
+        try:
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Starting optimized insert of {total_items} water supply records'
+            )
+            
+            batch = []
+            
+            for i, item in enumerate(records):
+                try:
+                    # Progress logging for large datasets
+                    if i > 0 and i % 5000 == 0:  # Log every 5000 records
+                        progress_percent = (i / total_items) * 100
+                        WaterUploadLog.objects.create(
+                            tracking=tracking,
+                            log_level='INFO',
+                            message=f'Processing progress: {i}/{total_items} ({progress_percent:.1f}%)'
+                        )
+                    
+                    # Validate record
+                    if not isinstance(item, dict):
+                        failed_count += 1
+                        continue
+                    
+                    # Helper function for safe value extraction
+                    def safe_get(key, default=''):
+                        value = item.get(key, default)
+                        return value if value is not None else default
+                    
+                    # Create bill record with your exact mapping
+                    payment_id = safe_get('PAYMENT_ID', '')
+                    
+                    bill = Utility_Bill(
+                        Customer_ID=self.truncate(safe_get('CUSTOMER_ID', ''), 255),
+                        InvoiceNo=self.truncate(safe_get('NO', ''), 255),
+                        TypeOfPro=self.truncate(safe_get('SUPPLY_TYPE', ''), 100),
+                        Outstanding=self.safe_decimal(safe_get('OUTSTANDING', 0)),
+                        Basic_Tax=self.safe_decimal(safe_get('BASIC+TAX', 0)),
+                        Bill_Amount=self.safe_decimal(safe_get('BILL_AMOUNT', 0)),
+                        Debt_Amount=0.00,
+                        Payment_ID=payment_id,
+                        PaymentType=self.truncate(safe_get('PAY_TYPE', ''), 255),
+                        Payment_Date=self.truncate(safe_get('PAYMENT_DATE', ''), 255),
+                        InvoiceMonth=self.truncate(safe_get('BILL_OF_MONTH', ''), 50),
+                        InvoiceDate=self.truncate(safe_get('DATE_OF_ISSUE', ''), 100),
+                        DisID=self.truncate(safe_get('DIS_ID', ''), 100),
+                        ProID=self.truncate(safe_get('PRO_ID', ''), 100),
+                        UserID=tracking.user_upload
+                    )
+                    
+                    batch.append(bill)
+                    
+                    # Process batch when full
+                    if len(batch) >= batch_size:
+                        with transaction.atomic():
+                            Utility_Bill.objects.bulk_create(batch, ignore_conflicts=True)
+                        processed_count += len(batch)
+                        batch = []
+                        
+                        # Update progress in tracking
+                        tracking.processed_records = processed_count
+                        tracking.save()
+                
+                except Exception as e:
+                    failed_count += 1
+                    # Log only first few errors to avoid log spam
+                    if failed_count <= 10:
+                        WaterUploadLog.objects.create(
+                            tracking=tracking,
+                            log_level='ERROR',
+                            message=f'Record {i} failed: {str(e)[:200]}'
+                        )
+                    continue
+            
+            # Process remaining records
+            if batch:
+                with transaction.atomic():
+                    Utility_Bill.objects.bulk_create(batch, ignore_conflicts=True)
+                processed_count += len(batch)
+            
+            # Final update
+            tracking.processed_records = processed_count
+            tracking.save()
+            
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Insert completed. Processed: {processed_count}, Failed: {failed_count}'
+            )
+            
+            return processed_count, failed_count
+            
+        except Exception as e:
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='ERROR',
+                message=f'Bulk insert failed: {str(e)}'
+            )
+            raise e
+    
+    def truncate(self, value, max_length):
+        """Safely truncate string to max length"""
+        if value is None:
+            return ''
+        return str(value)[:max_length]
+    
+    def safe_decimal(self, value):
+        """Safely convert to decimal"""
+        try:
+            return float(value or 0)
+        except (ValueError, TypeError):
+            return 0.0
+
+class WaterUploadTrackingDetailAPIView(APIView):
+    """Get detailed water supply tracking information with logs"""
+    
+    def get(self, request, tracking_id):
+        try:
+            tracking = WaterUploadDataTracking.objects.get(id=tracking_id)
+            serializer = WaterUploadTrackingDetailSerializer(tracking)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except WaterUploadDataTracking.DoesNotExist:
+            return Response(
+                {'error': 'Water supply tracking record not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+# Debug Views
+class WaterDebugAPIView(APIView):
+    """Debug view for water supply API testing"""
+    
+    def get(self, request):
+        debug_info = {}
+        
+        try:
+            # Test model counts
+            tracking_count = WaterUploadDataTracking.objects.count()
+            bill_count = Utility_Bill.objects.count()
+            
+            debug_info['water_tracking_count'] = tracking_count
+            debug_info['total_utility_bills'] = bill_count
+            
+            # Recent tracking records
+            recent_tracking = WaterUploadDataTracking.objects.all()[:3]
+            debug_info['recent_tracking'] = [
+                {
+                    'id': record.id,
+                    'upload_month': record.upload_month,
+                    'status': record.status,
+                    'total_records': record.total_records,
+                    'processed_records': record.processed_records,
+                    'data_size_mb': record.data_size_mb,
+                    'user_upload': record.user_upload
+                }
+                for record in recent_tracking
+            ]
+            
+        except Exception as e:
+            debug_info['model_error'] = str(e)
+        
+        # Current month
+        current_month = timezone.now().strftime('%m%Y')
+        debug_info['current_month'] = current_month
+        debug_info['api_base_url'] = getattr(settings, 'WATER_API_BASE_URL', 'http://202.137.141.244:3000')
+        
+        return Response({
+            'debug_info': debug_info,
+            'status': 'water_debug_complete'
+        })
+
+class WaterAPITestView(APIView):
+    """Test water supply API connection and response"""
+    
+    def post(self, request):
+        try:
+            month = request.data.get('month', timezone.now().strftime('%m%Y'))
+            
+            # Fixed API token
+            api_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbiI6IlUyRnNkR1ZrWDErdE9ja29vVDV0NXdqWlBqTzhVc0V1ZnR2QytPUXp3Z2ljWkFPdkhNUkNqdzh0NUhOSENBRVZsVXVNWHBrc1RudUFxaUE3R0VtVExRSTZMaWNTVUlaN1BMb0xGOVczMWtjWnFoQmxFUThHVUFwSFpNS0NDVjN1RURhWDJSSjFwZDNqaFRGc2lmdUF3Zz09IiwiaWF0IjoxNzA5MDEwNjU0fQ.mhmfUuasPQnAtxTQmwIyofClMuOAKVKZloNskpG9fHo'
+            
+            # API endpoint
+            water_api_base = getattr(settings, 'WATER_API_BASE_URL', 'http://202.137.141.244:3000')
+            api_url = f"{water_api_base}/v3/api/loans/allbillmonth/{month}"
+            
+            headers = {
+                'Auth': api_token,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+            
+            # Test with shorter timeout and head request first
+            try:
+                # First, try a HEAD request to check if endpoint exists
+                head_response = requests.head(api_url, headers=headers, timeout=30)
+                
+                return JsonResponse({
+                    'success': True,
+                    'api_url': api_url,
+                    'head_status_code': head_response.status_code,
+                    'head_headers': dict(head_response.headers),
+                    'message': f'API endpoint accessible. HEAD request returned {head_response.status_code}',
+                    'note': 'GET request not attempted due to large response size. Use upload endpoint for full processing.'
+                })
+                
+            except requests.exceptions.Timeout:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'API request timeout (30 seconds)',
+                    'api_url': api_url,
+                    'suggestion': 'API may have large response. Use background upload process.'
+                })
+            except requests.exceptions.ConnectionError:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Cannot connect to water supply API',
+                    'api_url': api_url
+                })
+                
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': f'API test failed: {str(e)}'
+            })
+            
+            
+# Water Supply Summary API Views -------------------------------------
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db.models import Sum, Count, Avg, Max, Min, Q
+from datetime import datetime, timedelta
+from django.utils import timezone
+import calendar
+from utility.models import WaterUploadDataTracking, WaterUploadLog
+from utility.models import Utility_Bill
+import logging
+
+logger = logging.getLogger(__name__)
+
+class WaterSummaryOverviewAPIView(APIView):
+    """Get overall Water Supply summary statistics"""
+    
+    def get(self, request):
+        try:
+            # Get query parameters
+            start_month = request.GET.get('start_month')  # MMYYYY format
+            end_month = request.GET.get('end_month')      # MMYYYY format
+            
+            # Build base queryset
+            queryset = WaterUploadDataTracking.objects.all()
+            
+            # Apply month filters
+            if start_month and end_month:
+                queryset = queryset.filter(upload_month__gte=start_month, upload_month__lte=end_month)
+            elif start_month:
+                queryset = queryset.filter(upload_month__gte=start_month)
+            elif end_month:
+                queryset = queryset.filter(upload_month__lte=end_month)
+            
+            # Overall statistics
+            overall_stats = queryset.aggregate(
+                total_uploads=Count('id'),
+                total_records=Sum('total_records'),
+                total_processed=Sum('processed_records'),
+                total_failed=Sum('failed_records'),
+                total_data_size=Sum('data_size_mb'),
+                avg_success_rate=Avg('success_rates'),
+                completed_uploads=Count('id', filter=Q(status='completed')),
+                failed_uploads=Count('id', filter=Q(status='failed')),
+                in_progress_uploads=Count('id', filter=Q(status='in_progress')),
+                partial_uploads=Count('id', filter=Q(status='partial'))
+            )
+            
+            # Calculate derived metrics
+            success_rate = (overall_stats['total_processed'] / overall_stats['total_records'] * 100) if overall_stats['total_records'] else 0
+            completion_rate = (overall_stats['completed_uploads'] / overall_stats['total_uploads'] * 100) if overall_stats['total_uploads'] else 0
+            
+            # Monthly trends (last 12 months)
+            monthly_trends = self.get_monthly_trends(queryset)
+            
+            # Recent activity
+            recent_activity = self.get_recent_activity()
+            
+            # Monthly breakdown
+            monthly_breakdown = self.get_monthly_breakdown(queryset)
+            
+            return Response({
+                'overview': {
+                    'total_uploads': overall_stats['total_uploads'] or 0,
+                    'total_records': overall_stats['total_records'] or 0,
+                    'total_processed': overall_stats['total_processed'] or 0,
+                    'total_failed': overall_stats['total_failed'] or 0,
+                    'total_data_size_mb': round(overall_stats['total_data_size'] or 0, 2),
+                    'overall_success_rate': round(success_rate, 2),
+                    'completion_rate': round(completion_rate, 2),
+                    'completed_uploads': overall_stats['completed_uploads'] or 0,
+                    'failed_uploads': overall_stats['failed_uploads'] or 0,
+                    'in_progress_uploads': overall_stats['in_progress_uploads'] or 0,
+                    'partial_uploads': overall_stats['partial_uploads'] or 0,
+                    'avg_success_rate': round(overall_stats['avg_success_rate'] or 0, 2)
+                },
+                'monthly_trends': monthly_trends,
+                'recent_activity': recent_activity,
+                'monthly_breakdown': monthly_breakdown
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error in Water summary overview: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get_monthly_trends(self, base_queryset):
+        """Get monthly upload trends for the last 12 months"""
+        try:
+            # Get last 12 months in MMYYYY format
+            monthly_data = []
+            current_date = datetime.now()
+            
+            for i in range(12):
+                # Calculate month and year for i months ago
+                month_date = datetime(current_date.year, current_date.month, 1) - timedelta(days=30*i)
+                month_str = f"{month_date.month:02d}{month_date.year}"
+                
+                month_stats = base_queryset.filter(upload_month=month_str).aggregate(
+                    total_records=Sum('total_records'),
+                    total_processed=Sum('processed_records'),
+                    total_uploads=Count('id'),
+                    total_data_size=Sum('data_size_mb'),
+                    avg_success_rate=Avg('success_rates')
+                )
+                
+                monthly_data.append({
+                    'month': month_str,
+                    'month_name': month_date.strftime('%b %Y'),
+                    'total_records': month_stats['total_records'] or 0,
+                    'total_processed': month_stats['total_processed'] or 0,
+                    'total_uploads': month_stats['total_uploads'] or 0,
+                    'total_data_size_mb': round(month_stats['total_data_size'] or 0, 2),
+                    'avg_success_rate': round(month_stats['avg_success_rate'] or 0, 2)
+                })
+            
+            return list(reversed(monthly_data))
+        except Exception as e:
+            logger.error(f"Error getting monthly trends: {str(e)}")
+            return []
+    
+    def get_monthly_breakdown(self, base_queryset):
+        """Get detailed breakdown by month"""
+        try:
+            monthly_stats = base_queryset.values('upload_month').annotate(
+                total_records=Sum('total_records'),
+                total_processed=Sum('processed_records'),
+                total_uploads=Count('id'),
+                total_data_size=Sum('data_size_mb'),
+                avg_success_rate=Avg('success_rates'),
+                completed_uploads=Count('id', filter=Q(status='completed')),
+                failed_uploads=Count('id', filter=Q(status='failed')),
+                latest_upload=Max('upload_completed')
+            ).order_by('-upload_month')
+            
+            return [
+                {
+                    'upload_month': item['upload_month'],
+                    'month_name': self.format_month_name(item['upload_month']),
+                    'total_records': item['total_records'] or 0,
+                    'total_processed': item['total_processed'] or 0,
+                    'total_uploads': item['total_uploads'] or 0,
+                    'total_data_size_mb': round(item['total_data_size'] or 0, 2),
+                    'avg_success_rate': round(item['avg_success_rate'] or 0, 2),
+                    'completed_uploads': item['completed_uploads'] or 0,
+                    'failed_uploads': item['failed_uploads'] or 0,
+                    'latest_upload': item['latest_upload'].isoformat() if item['latest_upload'] else None
+                }
+                for item in monthly_stats
+            ]
+        except Exception as e:
+            logger.error(f"Error getting monthly breakdown: {str(e)}")
+            return []
+    
+    def get_recent_activity(self):
+        """Get recent upload activity"""
+        try:
+            recent_uploads = WaterUploadDataTracking.objects.filter(
+                upload_completed__isnull=False
+            ).order_by('-upload_completed')[:15]
+            
+            return [
+                {
+                    'id': upload.id,
+                    'upload_month': upload.upload_month,
+                    'month_name': self.format_month_name(upload.upload_month),
+                    'total_records': upload.total_records,
+                    'processed_records': upload.processed_records,
+                    'status': upload.status,
+                    'upload_started': upload.upload_started.isoformat() if upload.upload_started else None,
+                    'upload_completed': upload.upload_completed.isoformat() if upload.upload_completed else None,
+                    'data_size_mb': round(upload.data_size_mb, 2) if upload.data_size_mb else 0,
+                    'success_rate': round(upload.success_rates, 2) if upload.success_rates else 0,
+                    'user_upload': upload.user_upload,
+                    'upload_duration': upload.upload_duration
+                }
+                for upload in recent_uploads
+            ]
+        except Exception as e:
+            logger.error(f"Error getting recent activity: {str(e)}")
+            return []
+    
+    def format_month_name(self, month_str):
+        """Convert MMYYYY to readable format"""
+        try:
+            if len(month_str) == 6:
+                month = int(month_str[:2])
+                year = int(month_str[2:])
+                return f"{calendar.month_abbr[month]} {year}"
+        except:
+            pass
+        return month_str
+
+class WaterSummaryByMonthAPIView(APIView):
+    """Get detailed summary for a specific month"""
+    
+    def get(self, request):
+        try:
+            month = request.GET.get('month')
+            
+            if not month:
+                return Response({'error': 'month parameter is required (MMYYYY format)'}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+            
+            # Validate month format
+            try:
+                datetime.strptime(month, '%m%Y')
+            except ValueError:
+                return Response({'error': 'Invalid month format. Use MMYYYY (e.g., 122024)'}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get tracking record for this month
+            try:
+                tracking = WaterUploadDataTracking.objects.get(upload_month=month)
+            except WaterUploadDataTracking.DoesNotExist:
+                return Response({'error': f'No tracking record found for month {month}'}, 
+                              status=status.HTTP_404_NOT_FOUND)
+            
+            # Get detailed logs for this month
+            logs = WaterUploadLog.objects.filter(
+                tracking=tracking
+            ).order_by('-timestamp')[:50]
+            
+            # Get utility bill count for this month
+            bill_count = Utility_Bill.objects.filter(
+                InvoiceMonth=month
+            ).count()
+            
+            # Calculate processing stats
+            processing_stats = {
+                'upload_duration_minutes': round(tracking.upload_duration / 60, 2) if tracking.upload_duration else 0,
+                'records_per_second': round(tracking.processed_records / tracking.upload_duration, 2) if tracking.upload_duration else 0,
+                'data_processing_rate_mb_per_min': round((tracking.data_size_mb * 60) / tracking.upload_duration, 2) if tracking.upload_duration else 0
+            }
+            
+            
+            return Response({
+                'month_info': {
+                    'upload_month': tracking.upload_month,
+                    'month_name': WaterSummaryOverviewAPIView().format_month_name(tracking.upload_month),
+                    'description': tracking.description
+                },
+                'summary': {
+                    'total_records': tracking.total_records,
+                    'processed_records': tracking.processed_records,
+                    'failed_records': tracking.failed_records,
+                    'success_rate': round(tracking.success_rates, 2),
+                    'data_size_mb': round(tracking.data_size_mb, 2),
+                    'status': tracking.status,
+                    'user_upload': tracking.user_upload,
+                    'upload_started': tracking.upload_started.isoformat() if tracking.upload_started else None,
+                    'upload_completed': tracking.upload_completed.isoformat() if tracking.upload_completed else None,
+                    'upload_duration': tracking.upload_duration,
+                    'api_response_code': tracking.api_response_code,
+                    'error_message': tracking.error_message
+                },
+                'processing_stats': processing_stats,
+                'database_stats': {
+                    'utility_bills_count': bill_count
+                },
+                'logs': [
+                    {
+                        'id': log.id,
+                        'timestamp': log.timestamp.isoformat(),
+                        'log_level': log.log_level,
+                        'message': log.message,
+                        'context_data': log.context_data
+                    }
+                    for log in logs
+                ]
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error in water summary by month: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class WaterSummaryExportAPIView(APIView):
+    """Export water supply summary data"""
+    
+    def post(self, request):
+        try:
+            export_type = request.data.get('export_type', 'overview')  # overview, month
+            format_type = request.data.get('format', 'json')  # json, csv
+            filters = request.data.get('filters', {})
+            
+            if export_type == 'overview':
+                overview_view = WaterSummaryOverviewAPIView()
+                mock_request = type('MockRequest', (), {'GET': filters})()
+                response_data = overview_view.get(mock_request).data
+            elif export_type == 'month':
+                month_view = WaterSummaryByMonthAPIView()
+                mock_request = type('MockRequest', (), {'GET': filters})()
+                response_data = month_view.get(mock_request).data
+            else:
+                return Response({'error': 'Invalid export_type. Use: overview, month'}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+            
+            # Add export metadata
+            export_data = {
+                'export_info': {
+                    'export_type': export_type,
+                    'exported_at': timezone.now().isoformat(),
+                    'filters_applied': filters,
+                    'data_source': 'Water Supply Tracking System'
+                },
+                'data': response_data
+            }
+            
+            return Response(export_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error in water summary export: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class WaterSummaryStatsAPIView(APIView):
+    """Get quick stats for dashboard widgets"""
+    
+    def get(self, request):
+        try:
+            # Get current month stats
+            current_month = timezone.now().strftime('%m%Y')
+            
+            # Overall counts
+            total_months = WaterUploadDataTracking.objects.count()
+            completed_months = WaterUploadDataTracking.objects.filter(status='completed').count()
+            total_utility_bills = Utility_Bill.objects.count()
+            
+            # Current month status
+            current_month_tracking = None
+            try:
+                current_month_tracking = WaterUploadDataTracking.objects.get(upload_month=current_month)
+            except WaterUploadDataTracking.DoesNotExist:
+                pass
+            
+            # Recent 30 days activity
+            thirty_days_ago = timezone.now() - timedelta(days=30)
+            recent_activity = WaterUploadDataTracking.objects.filter(
+                created_at__gte=thirty_days_ago
+            ).count()
+            
+            # Data size trends (last 6 months)
+            data_size_trend = []
+            for i in range(6):
+                month_date = datetime.now() - timedelta(days=30*i)
+                month_str = f"{month_date.month:02d}{month_date.year}"
+                
+                month_data = WaterUploadDataTracking.objects.filter(
+                    upload_month=month_str
+                ).aggregate(total_size=Sum('data_size_mb'))
+                
+                data_size_trend.append({
+                    'month': month_str,
+                    'month_name': month_date.strftime('%b %Y'),
+                    'data_size_mb': round(month_data['total_size'] or 0, 2)
+                })
+            
+            return Response({
+                'quick_stats': {
+                    'total_months_tracked': total_months,
+                    'completed_months': completed_months,
+                    'completion_percentage': round((completed_months / total_months * 100), 1) if total_months else 0,
+                    'total_utility_bills': total_utility_bills,
+                    'recent_activity_30_days': recent_activity
+                },
+                'current_month': {
+                    'month': current_month,
+                    'month_name': WaterSummaryOverviewAPIView().format_month_name(current_month),
+                    'has_tracking': current_month_tracking is not None,
+                    'status': current_month_tracking.status if current_month_tracking else None,
+                    'total_records': current_month_tracking.total_records if current_month_tracking else 0,
+                    'data_size_mb': round(current_month_tracking.data_size_mb, 2) if current_month_tracking and current_month_tracking.data_size_mb else 0
+                },
+                'data_size_trend': list(reversed(data_size_trend))
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error in water summary stats: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+>>>>>>> 1c7707e37435f3ac01ade932da01d9b60ecbfe2e
