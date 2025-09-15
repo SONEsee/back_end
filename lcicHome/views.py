@@ -15039,7 +15039,7 @@ def filter_data_by_criteria(id_file, **kwargs):
     
     return result
 
-# View ຟັງຊັ້ນ (ໃສ່ໃນ views.py)
+
 def get_data_api(request):
     """
     API ສຳລັບດຶງຂໍ້ມູນ
