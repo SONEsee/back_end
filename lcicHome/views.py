@@ -9170,7 +9170,7 @@ from .serializers import MemberInfoSerializer  # Make sure to import your serial
 class memberinfolistView(APIView):
     def get(self, request):
         # Exclude records where bnk_code is '01' and cast bnk_code as integer
-        member_info = memberInfo.objects.exclude(bnk_code='01').annotate(
+        member_info = memberInfo.objects.annotate(
             bnk_code_as_int=Cast('bnk_code', IntegerField())
         ).order_by('bnk_code_as_int')
         
