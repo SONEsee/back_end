@@ -15053,7 +15053,7 @@ def get_data_api(request):
             'example': '/api/data/?id_file=10'
         }, status=400)
     
-    # ດຶງ filter parameters ອື່ນໆ
+   
     filter_params = {}
     allowed_filters = ['bnk_code', 'period', 'customer_id', 'loan_id', 'branch_id', 
                       'segmentType', 'com_enterprise_code', 'product_type', 'lcicID']
