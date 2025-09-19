@@ -11711,16 +11711,56 @@ class InsertSearchLogView(APIView):
        
         
         
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from rest_framework import status
+# from .models import Search_batfile
+# from .serializers import SearchBatfileSerializer
+
+# class SearchBatfileAPIView(APIView):
+#     def get(self, request):
+#         user_id = request.query_params.get('user_id')
+#         filter_user_id = request.query_params.get('filter_user_id')  
+        
+#         if not user_id:
+#             return Response(
+#                 {"error": "user_id parameter is required"}, 
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+        
+        
+#         if user_id == "01":
+           
+#             if filter_user_id:
+#                 files = Search_batfile.objects.filter(user_id=filter_user_id)
+#             else:
+              
+#                 files = Search_batfile.objects.all()
+#         else:
+            
+#             files = Search_batfile.objects.filter(user_id=user_id)
+        
+#         serializer = SearchBatfileSerializer(files, many=True)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Search_batfile
 from .serializers import SearchBatfileSerializer
+from django.db.models import Q
+from datetime import datetime, date
 
 class SearchBatfileAPIView(APIView):
     def get(self, request):
         user_id = request.query_params.get('user_id')
-        filter_user_id = request.query_params.get('filter_user_id')  # ເພີ່ມ parameter ໃໝ່
+        filter_user_id = request.query_params.get('filter_user_id')
+        
+        # Date filtering parameters
+        year = request.query_params.get('year')
+        month = request.query_params.get('month')
+        day = request.query_params.get('day')
+        start_date = request.query_params.get('start_date')  # YYYY-MM-DD
+        end_date = request.query_params.get('end_date')      # YYYY-MM-DD
         
         if not user_id:
             return Response(
@@ -11730,19 +11770,44 @@ class SearchBatfileAPIView(APIView):
         
         # ຖ້າເປັນ admin user (01)
         if user_id == "01":
-            # ຖ້າມີ filter_user_id ຈະ filter ຕາມນັ້ນ
             if filter_user_id:
                 files = Search_batfile.objects.filter(user_id=filter_user_id)
             else:
-                # ຖ້າບໍ່ມີ filter_user_id ຈະສະແດງທັງໝົດ
                 files = Search_batfile.objects.all()
         else:
-            # ຖ້າບໍ່ແມ່ນ admin ຈະເບິ່ງໄດ້ແຕ່ຂອງຕົນເອງ
             files = Search_batfile.objects.filter(user_id=user_id)
+        
+        # Apply date filters
+        try:
+            # Filter by year
+            if year:
+                files = files.filter(insertDate__year=int(year))
+            
+            # Filter by month (requires year or will filter all records with that month)
+            if month:
+                files = files.filter(insertDate__month=int(month))
+            
+            # Filter by day (requires year and month or will filter all records with that day)
+            if day:
+                files = files.filter(insertDate__day=int(day))
+            
+            # Filter by date range
+            if start_date:
+                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+                files = files.filter(insertDate__date__gte=start_date_obj)
+            
+            if end_date:
+                end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+                files = files.filter(insertDate__date__lte=end_date_obj)
+                
+        except (ValueError, TypeError) as e:
+            return Response(
+                {"error": "Invalid date format. Use YYYY for year, MM for month, DD for day, YYYY-MM-DD for dates"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
         serializer = SearchBatfileSerializer(files, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-
 from django.http import JsonResponse
 
 from django.shortcuts import get_object_or_404
@@ -14443,19 +14508,64 @@ class BankDetailView(APIView):
         bank.delete()
         return Response({'message': 'Bank deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
 # views.py
+# from rest_framework import viewsets, status
+# from rest_framework.response import Response
+# from rest_framework.decorators import action
+# from rest_framework.parsers import MultiPartParser, FormParser
+# from .models import memberInfo
+# from .serializers import MemberInfoSerializer
+
+# class MemberInfoViewSet(viewsets.ModelViewSet):
+#     queryset = memberInfo.objects.all()
+#     serializer_class = MemberInfoSerializer
+#     parser_classes = (MultiPartParser, FormParser)
+    
+#     def create(self, request, *args, **kwargs):
+#         serializer = self.get_serializer(data=request.data)
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response(serializer.data, status=status.HTTP_201_CREATED)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+#     def update(self, request, *args, **kwargs):
+#         instance = self.get_object()
+#         serializer = self.get_serializer(instance, data=request.data, partial=True)
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response(serializer.data)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+#     @action(detail=False, methods=['get'])
+#     def published(self, request):
+#         members = memberInfo.objects.filter(published=True)
+#         serializer = self.get_serializer(members, many=True)
+#         return Response(serializer.data)
 from rest_framework import viewsets, status
-from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from .models import memberInfo
-from .serializers import MemberInfoSerializer
+from django.db.models import IntegerField
+from django.db.models.functions import Cast
+
 
 class MemberInfoViewSet(viewsets.ModelViewSet):
-    queryset = memberInfo.objects.all()
+    queryset = memberInfo.objects.all()  # ຈຳເປັນສຳລັບ Router
     serializer_class = MemberInfoSerializer
     parser_classes = (MultiPartParser, FormParser)
     
+    def get_queryset(self):
+        """
+        ກຳນົດ queryset ທີ່ຈັດລຽງຕາມ bnk_code ແຕ່ນ້ອຍຫາໃຫຍ່
+        ແປງ bnk_code ເປັນ integer ກ່ອນຈັດລຽງເພື່ອໃຫ້ຖືກຕ້ອງ
+        """
+        return memberInfo.objects.annotate(
+            bnk_code_int=Cast('bnk_code', IntegerField())
+        ).order_by('bnk_code_int')
+    
     def create(self, request, *args, **kwargs):
+        """
+        ສ້າງສະມາຊິກໃໝ່
+        """
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -14463,6 +14573,9 @@ class MemberInfoViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def update(self, request, *args, **kwargs):
+        """
+        ອັບເດດຂໍ້ມູນສະມາຊິກ
+        """
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         if serializer.is_valid():
@@ -14472,7 +14585,10 @@ class MemberInfoViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def published(self, request):
-        members = memberInfo.objects.filter(published=True)
+        """
+        ດຶງສະມາຊິກທີ່ published ເທົ່ານັ້ນ ແລະຈັດລຽງຕາມ bnk_code
+        """
+        members = self.get_queryset().filter(published=True)
         serializer = self.get_serializer(members, many=True)
         return Response(serializer.data)
 def get_all_provinces(request):
@@ -14532,30 +14648,30 @@ class FileElectricListAPIView(APIView):
     def get(self, request, *args, **kwargs):
         qs = File_Electric.objects.all()
 
-        # filter by name substring
+        
         name = request.GET.get("name")
         if name:
             qs = qs.filter(name__icontains=name)
 
-        # filter by status
+        
         status = request.GET.get("status")
         if status:
             qs = qs.filter(status=status)
 
-        # filter by the YYYYMM chunk in the filename
-        date = request.GET.get("date")  # e.g. "202408"
+       
+        date = request.GET.get("date")  
         if date:
-            # plain substring-match on "-YYYYMM"
+            
             qs = qs.filter(name__contains=f"-{date}")
 
-        # serialize the filtered file list
+        
         files_data = FileElectricSerializer(qs, many=True).data
 
-        # now build counts_by_month on that same (possibly date-scoped) queryset
+        
         counts_qs = (
             qs
             .annotate(
-                # extract exactly the 6-digit YYYYMM after the dash
+               
                 file_month=RawSQL(
                     "SUBSTRING(name FROM '-([0-9]{6})')",
                     []
@@ -14570,7 +14686,7 @@ class FileElectricListAPIView(APIView):
             "results": files_data,
             "counts_by_month": list(counts_qs)
         })
-# InvestorInfo Backend Functions
+
 from django.db import models
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import JsonResponse
