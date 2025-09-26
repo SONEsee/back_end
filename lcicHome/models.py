@@ -1535,6 +1535,7 @@ class request_charge(models.Model):
     chg_unit = models.CharField(max_length=255, blank=True, null=True)
     user_sys_id = models.CharField(max_length=255, blank=True, null=True)
     LCIC_ID = models.CharField(max_length=255, blank=True, null=True)
+
     cusType = models.CharField(max_length=255, blank=True, null=True)
     user_session_id = models.CharField(max_length=255, blank=True, null=True)
     rec_reference_code = models.CharField(max_length=255, blank=True, null=True)

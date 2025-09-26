@@ -9874,10 +9874,11 @@ class charge_reportView(APIView):
                 bank_info_name = None
 
                 # Retrieve the relevant enterprise information if available
-                enterprise_list = EnterpriseInfo.objects.filter(LCICID=charge_field.LCIC_ID)
+                enterprise_list = EnterpriseInfo.objects.filter(LCIC_code=charge_field.LCIC_code)
                 for enterprise_data in enterprise_list:
                     enterprise_name = enterprise_data.enterpriseNameLao
-
+                
+                
                 # Retrieve the relevant loan purpose information if available
                 loan_purpose_list = Main_catalog_cat.objects.filter(cat_value=charge_field.lon_purpose)
                 for loan_purpose_data in loan_purpose_list:
@@ -9902,7 +9903,7 @@ class charge_reportView(APIView):
                     "lon_purpose": loan_purpose_name,  # Specific loan purpose
                     "chg_unit": charge_field.chg_unit,
                     "user_sys_id": charge_field.user_sys_id,
-                    "LCIC_ID": enterprise_name,  # Specific enterprise name
+                    "LCIC_ID": f"{charge_field.LCIC_code} - {enterprise_name}",  # Specific enterprise name
                     "cusType": charge_field.cusType,
                     "user_session_id": "",
                     "rec_reference_code": charge_field.rec_reference_code,
@@ -11651,7 +11652,11 @@ class InsertSearchLogView(APIView):
         charge_amount_com = chargeType.chg_amount
         EnterpriseID = request.data.get('EnterpriseID')
         LCIC_code = request.data.get('LCIC_code')
-        search_loan = B1.objects.filter(LCIC_code=LCIC_code)
+        # search_loan = B1.objects.filter(LCIC_code=LCIC_code or EnterpriseID=EnterpriseID)
+        search_loan = B1.objects.filter(Q(LCIC_code=LCIC_code) | Q(EnterpriseID=EnterpriseID))
+        print("LCIC_code: =-=============================>", LCIC_code)
+        print("EnterpriseID: =-=============================>", EnterpriseID)
+        
         for loan_log in search_loan:
          sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
         if EnterpriseID and LCIC_code:
@@ -11689,8 +11694,6 @@ class InsertSearchLogView(APIView):
                     user_sys_id=sys_usr,
                     LCIC_code=LCIC_code,
                     cusType=loan_log.segmentType,
-                   
-                   
                     user_session_id='',
                     rec_reference_code='',
                     search_log=search_log
