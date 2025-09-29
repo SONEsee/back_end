@@ -11770,7 +11770,7 @@ class InsertSearchLogView(APIView):
         EnterpriseID = request.data.get('EnterpriseID')
         LCIC_code = request.data.get('LCIC_code')
         # search_loan = B1.objects.filter(LCIC_code=LCIC_code or EnterpriseID=EnterpriseID)
-        search_loan = B1.objects.filter(Q(LCIC_code=LCIC_code) | Q(EnterpriseID=EnterpriseID))
+        search_loan = B1.objects.filter(Q(LCIC_code=LCIC_code) | Q(com_enterprise_code=EnterpriseID))
         print("LCIC_code: =-=============================>", LCIC_code)
         print("EnterpriseID: =-=============================>", EnterpriseID)
         
@@ -15334,7 +15334,9 @@ def get_data_api(request):
     }
     
     return JsonResponse(response_data, safe=False)
-# # API Tracking Edl ----------------------------------
+
+
+# API Tracking Edl ----------------------------------
 
 
 import requests
@@ -15751,6 +15753,7 @@ class UploadDataAPIView(APIView):
             api_url = "https://edl-inside-api.edl.com.la/api_v1/wattmonitor-bol/billing-svc/billing/getpaymenthistory"
             page = 1
             limit = 100000  # As per your requirement
+            
             
             # Log API call start
             UploadLog.objects.create(
