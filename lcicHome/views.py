@@ -11957,17 +11957,78 @@ from .serializers import SearchBatfileSerializer
 from django.db.models import Q
 from datetime import datetime, date
 
+# class SearchBatfileAPIView(APIView):
+#     def get(self, request):
+#         user_id = request.query_params.get('user_id')
+#         filter_user_id = request.query_params.get('filter_user_id')
+        
+        
+#         year = request.query_params.get('year')
+#         month = request.query_params.get('month')
+#         day = request.query_params.get('day')
+#         start_date = request.query_params.get('start_date')  # YYYY-MM-DD
+#         end_date = request.query_params.get('end_date')      # YYYY-MM-DD
+        
+#         if not user_id:
+#             return Response(
+#                 {"error": "user_id parameter is required"}, 
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+        
+       
+#         if user_id == "01":
+#             if filter_user_id:
+#                 files = Search_batfile.objects.filter(user_id=filter_user_id)
+#             else:
+#                 files = Search_batfile.objects.all()
+#         else:
+#             files = Search_batfile.objects.filter(user_id=user_id)
+        
+       
+#         try:
+           
+#             if year:
+#                 files = files.filter(insertDate__year=int(year))
+            
+           
+#             if month:
+#                 files = files.filter(insertDate__month=int(month))
+            
+           
+#             if day:
+#                 files = files.filter(insertDate__day=int(day))
+            
+#             # Filter by date range
+#             if start_date:
+#                 start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+#                 files = files.filter(insertDate__date__gte=start_date_obj)
+            
+#             if end_date:
+#                 end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+#                 files = files.filter(insertDate__date__lte=end_date_obj)
+                
+#         except (ValueError, TypeError) as e:
+#             return Response(
+#                 {"error": "Invalid date format. Use YYYY for year, MM for month, DD for day, YYYY-MM-DD for dates"}, 
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+        
+#         serializer = SearchBatfileSerializer(files, many=True)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+from datetime import date
+from django.utils import timezone
+
 class SearchBatfileAPIView(APIView):
     def get(self, request):
         user_id = request.query_params.get('user_id')
         filter_user_id = request.query_params.get('filter_user_id')
         
-        # Date filtering parameters
+        # Date filters
         year = request.query_params.get('year')
         month = request.query_params.get('month')
         day = request.query_params.get('day')
-        start_date = request.query_params.get('start_date')  # YYYY-MM-DD
-        end_date = request.query_params.get('end_date')      # YYYY-MM-DD
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
         
         if not user_id:
             return Response(
@@ -11975,7 +12036,7 @@ class SearchBatfileAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # ຖ້າເປັນ admin user (01)
+        # Permission logic
         if user_id == "01":
             if filter_user_id:
                 files = Search_batfile.objects.filter(user_id=filter_user_id)
@@ -11984,28 +12045,35 @@ class SearchBatfileAPIView(APIView):
         else:
             files = Search_batfile.objects.filter(user_id=user_id)
         
-        # Apply date filters
         try:
-            # Filter by year
-            if year:
-                files = files.filter(insertDate__year=int(year))
+            # ກວດສອບວ່າມີການປ້ອນ filter ໃດໆເຂົ້າມາບໍ່
+            has_any_filter = any([year, month, day, start_date, end_date])
             
-            # Filter by month (requires year or will filter all records with that month)
-            if month:
-                files = files.filter(insertDate__month=int(month))
-            
-            # Filter by day (requires year and month or will filter all records with that day)
-            if day:
-                files = files.filter(insertDate__day=int(day))
-            
-            # Filter by date range
-            if start_date:
-                start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
-                files = files.filter(insertDate__date__gte=start_date_obj)
-            
-            if end_date:
-                end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
-                files = files.filter(insertDate__date__lte=end_date_obj)
+            if not has_any_filter:
+                # ຖ້າບໍ່ມີ filter ໃດໆ, ໃຊ້ວັນປະຈຸບັນເປັນຄ່າພື້ນຖານ
+                today = date.today()
+                files = files.filter(
+                    insertDate__date__gte=today,
+                    insertDate__date__lte=today
+                )
+            else:
+                # ມີການປ້ອນ filter, ດຳເນີນການຕາມປົກກະຕິ
+                if year:
+                    files = files.filter(insertDate__year=int(year))
+                
+                if month:
+                    files = files.filter(insertDate__month=int(month))
+                
+                if day:
+                    files = files.filter(insertDate__day=int(day))
+                
+                if start_date:
+                    start_date_obj = datetime.strptime(start_date, '%Y-%m-%d').date()
+                    files = files.filter(insertDate__date__gte=start_date_obj)
+                
+                if end_date:
+                    end_date_obj = datetime.strptime(end_date, '%Y-%m-%d').date()
+                    files = files.filter(insertDate__date__lte=end_date_obj)
                 
         except (ValueError, TypeError) as e:
             return Response(
