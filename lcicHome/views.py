@@ -11699,6 +11699,58 @@ from django.utils.decorators import method_decorator
 from django.views import View
 import json
 from .models import SearchResult
+# @csrf_exempt
+# @require_http_methods(["PATCH"])
+# def update_multiple_search_results_status(request):
+  
+#     try:
+#         # ອ່ານ JSON data
+#         data = json.loads(request.body)
+#         ids = data.get('ids', [])
+        
+#         if not ids or not isinstance(ids, list):
+#             return JsonResponse({
+#                 'success': False,
+#                 'message': 'IDs list is required and must be an array'
+#             }, status=400)
+        
+        
+#         search_results = SearchResult.objects.filter(id__in=ids)
+#         found_ids = list(search_results.values_list('id', flat=True))
+#         not_found_ids = [id for id in ids if id not in found_ids]
+        
+#         # ອັບເດດ status ເປັນ 'Found'
+#         updated_count = search_results.update(status='Not Found')
+        
+#         # ດຶງຂໍ້ມູນທີ່ອັບເດດແລ້ວ
+#         updated_results = list(search_results.values(
+#             'id', 'status', 'lcicID', 'LCIC_code', 
+#             'com_enterprise_code', 'enterpriseNameLao'
+#         ))
+        
+#         return JsonResponse({
+#             'success': True,
+#             'message': f'Successfully updated {updated_count} records',
+#             'data': {
+#                 'updated_count': updated_count,
+#                 'updated_results': updated_results,
+#                 'requested_ids': ids,
+#                 'found_ids': found_ids,
+#                 'not_found_ids': not_found_ids
+#             }
+#         }, status=200)
+        
+#     except json.JSONDecodeError:
+#         return JsonResponse({
+#             'success': False,
+#             'message': 'Invalid JSON format'
+#         }, status=400)
+        
+#     except Exception as e:
+#         return JsonResponse({
+#             'success': False,
+#             'message': f'Error updating status: {str(e)}'
+#         }, status=500)
 @csrf_exempt
 @require_http_methods(["PATCH"])
 def update_multiple_search_results_status(request):
@@ -11714,19 +11766,52 @@ def update_multiple_search_results_status(request):
                 'message': 'IDs list is required and must be an array'
             }, status=400)
         
-        
+        # ຄົ້ນຫາ records ທີ່ຈະອັບເດດ
         search_results = SearchResult.objects.filter(id__in=ids)
         found_ids = list(search_results.values_list('id', flat=True))
         not_found_ids = [id for id in ids if id not in found_ids]
         
-        # ອັບເດດ status ເປັນ 'Found'
-        updated_count = search_results.update(status='Not Found')
+        # ອັບເດດ status ເປັນ 'Not Found'
+        updated_count = search_results.update(status='Not_Report')
         
         # ດຶງຂໍ້ມູນທີ່ອັບເດດແລ້ວ
         updated_results = list(search_results.values(
             'id', 'status', 'lcicID', 'LCIC_code', 
-            'com_enterprise_code', 'enterpriseNameLao'
+            'com_enterprise_code', 'enterpriseNameLao', 'search_batch_id'
         ))
+        
+        # ອັບເດດ not_report ໃນ Search_batfile
+        # ຫາ search_batch_id ທີ່ຖືກຕ້ອງ (ສົມມຸດວ່າທຸກ records ມາຈາກ batch ດຽວກັນ)
+        if search_results.exists():
+            # ດຶງ search_batch_id ຈາກ record ທຳອິດ
+            first_result = search_results.first()
+            search_batch_id = first_result.search_batch_id
+            
+            # ຊອກຫາ Search_batfile
+            search_batch = Search_batfile.objects.filter(id=search_batch_id).first()
+            
+            if search_batch:
+                # ນັບຈຳນວນທັງໝົດຂອງ Not Found ໃນ batch ນີ້
+                total_not_found = SearchResult.objects.filter(
+                    search_batch_id=search_batch_id,
+                    status='Not_Report'
+                ).count()
+                
+                # ອັບເດດ not_report
+                search_batch.not_report = str(total_not_found)
+                search_batch.save()
+                
+                batch_info = {
+                    'search_batch_id': search_batch_id,
+                    'not_report_updated': total_not_found
+                }
+            else:
+                batch_info = {
+                    'search_batch_id': search_batch_id,
+                    'message': 'Search_batfile not found'
+                }
+        else:
+            batch_info = None
         
         return JsonResponse({
             'success': True,
@@ -11736,7 +11821,8 @@ def update_multiple_search_results_status(request):
                 'updated_results': updated_results,
                 'requested_ids': ids,
                 'found_ids': found_ids,
-                'not_found_ids': not_found_ids
+                'not_found_ids': not_found_ids,
+                'batch_update': batch_info
             }
         }, status=200)
         
@@ -11750,7 +11836,8 @@ def update_multiple_search_results_status(request):
         return JsonResponse({
             'success': False,
             'message': f'Error updating status: {str(e)}'
-        }, status=500)
+        }, status=500)    
+
 from .models import ChargeMatrix, B1
 
 
