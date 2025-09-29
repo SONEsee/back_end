@@ -11503,7 +11503,10 @@ from django.http import JsonResponse
 from .models import Search_batfile, SearchResult, EnterpriseInfo
 import json
 from collections import Counter
+from datetime import date
+import os
 
+@csrf_exempt
 @csrf_exempt
 def upload_json(request):
     if request.method == 'POST':
@@ -11515,11 +11518,37 @@ def upload_json(request):
         if not file:
             return JsonResponse({"error": "No file provided"}, status=400)
 
+        
+        def generate_filename(original_filename):
+            
+            name_without_ext = os.path.splitext(original_filename)[0]
+            extension = os.path.splitext(original_filename)[1]
+            
+            
+            today = date.today().strftime("%Y%m%d")
+            
+            # ຄົ້ນຫາໄຟລ໌ທີ່ມີຊື່ຄ້າຍກັນໃນມື້ນີ້
+            today_files = Search_batfile.objects.filter(
+                fileName__startswith=f"{name_without_ext}-{today}-",
+                insertDate__date=date.today()
+            ).count()
+            
+            # ກຳນົດລຳດັບໃຫມ່
+            sequence = today_files + 1
+            sequence_str = f"{sequence:03d}"  # ແປງເປັນ 3 ໂຕເລກ 001, 002, 003...
+            
+            # ສ້າງຊື່ໄຟລ໌ໃຫມ່
+            new_filename = f"{name_without_ext}-{today}-{sequence_str}{extension}"
+            return new_filename
+
+        # ສ້າງຊື່ໄຟລ໌ໃຫມ່
+        new_filename = generate_filename(file.name)
+
         search_batfile = Search_batfile(
-            fileName=file.name,
+            fileName=new_filename,  # ໃຊ້ຊື່ໄຟລ໌ໃຫມ່
             fileUpload=file,
             fileSize=f"{file.size} bytes",
-            path=f"searchfile/{file.name}",
+            path=f"searchfile/{new_filename}",  # path ກໍໃຊ້ຊື່ໃຫມ່ເຊັ່ນກັນ
             status="Uploaded",
             FileType="json",
             user_id=user_id,
@@ -11533,54 +11562,72 @@ def upload_json(request):
         except json.JSONDecodeError as e:
             return JsonResponse({"error": f"Invalid JSON file: {str(e)}"}, status=400)
 
-       
         unique_records = set()
         results = []
         found_count = 0  
         not_found_count = 0 
 
-        
         record_counter = Counter()
 
         for record in data:
             lcic_id = record.get('LCIC_code') or "" 
             com_code = record.get('com_enterprise_code') or "" 
             
-            
             unique_key = (lcic_id, com_code)
-            
-            
             record_counter[unique_key] += 1
 
             if unique_key in unique_records:
                 continue
             
-            
             unique_records.add(unique_key)
 
             enterprise = None
-            search_criteria = "" 
+            search_criteria = ""
+            final_lcic_id = lcic_id  # ເກັບຄ່າສຸດທ້າຍທີ່ຈະບັນທຶກ
+            final_com_code = com_code  # ເກັບຄ່າສຸດທ້າຍທີ່ຈະບັນທຶກ
 
             if lcic_id and com_code:
+                # ລອງຄົ້ນຫາດ້ວຍທັງສອງຄ່າກ່ອນ
                 enterprise = EnterpriseInfo.objects.filter(
                     LCIC_code=lcic_id, 
                     EnterpriseID=com_code
                 ).first()
                 search_criteria = "both"
+                
+                # ຖ້າບໍ່ເຈົ້າ, ລອງຄົ້ນຫາແຍກ ແລະດຶງຄ່າທີ່ຂາດໄປ
+                if not enterprise:
+                    # ລອງຄົ້ນຫາດ້ວຍ LCIC_code ກ່ອນ
+                    enterprise_by_lcic = EnterpriseInfo.objects.filter(LCIC_code=lcic_id).first()
+                    if enterprise_by_lcic:
+                        enterprise = enterprise_by_lcic
+                        final_com_code = enterprise_by_lcic.EnterpriseID  # ດຶງ com_code ທີ່ຖືກຈາກ DB
+                        search_criteria = "found_by_lcic_updated_com_code"
+                    else:
+                        # ຖ້າບໍ່ເຈົ້າດ້ວຍ LCIC, ລອງຄົ້ນຫາດ້ວຍ com_code
+                        enterprise_by_com = EnterpriseInfo.objects.filter(EnterpriseID=com_code).first()
+                        if enterprise_by_com:
+                            enterprise = enterprise_by_com
+                            final_lcic_id = enterprise_by_com.LCIC_code  # ດຶງ LCIC_code ທີ່ຖືກຈາກ DB
+                            search_criteria = "found_by_com_code_updated_lcic"
+                        
             elif lcic_id:
                 enterprise = EnterpriseInfo.objects.filter(
                     LCIC_code=lcic_id
                 ).first()
+                if enterprise:
+                    final_com_code = enterprise.EnterpriseID  
                 search_criteria = "lcic_only"
             elif com_code:
                 enterprise = EnterpriseInfo.objects.filter(
                     EnterpriseID=com_code
                 ).first()
+                if enterprise:
+                    final_lcic_id = enterprise.LCIC_code 
                 search_criteria = "com_code_only"
             
             result_data = {
-                "LCIC_code": lcic_id,  
-                "com_enterprise_code": com_code, 
+                "LCIC_code": final_lcic_id,  
+                "com_enterprise_code": final_com_code,  
                 "search_criteria": search_criteria,  
                 "status": "Found" if enterprise else "Not Found",
                 "enterpriseNameLao": enterprise.enterpriseNameLao if enterprise else None,
@@ -11596,12 +11643,18 @@ def upload_json(request):
                 bank_code=user_id,
                 UID=UID,
                 search_batch=search_batfile,
-                LCIC_code=lcic_id,
-                com_enterprise_code=com_code,
+                LCIC_code=final_lcic_id,  
+                com_enterprise_code=final_com_code,  
                 status=result_data["status"],
                 enterpriseNameLao=result_data["enterpriseNameLao"],
                 investmentCurrency=result_data["investmentCurrency"],
-                duplicates=json.dumps({"LCIC_code": lcic_id, "com_enterprise_code": com_code, "total": record_counter[unique_key]})  
+                duplicates=json.dumps({
+                    "original_LCIC_code": lcic_id,  
+                    "original_com_enterprise_code": com_code,  
+                    "final_LCIC_code": final_lcic_id, 
+                    "final_com_enterprise_code": final_com_code,  
+                    "total": record_counter[unique_key]
+                })  
             )
            
             results.append({
@@ -11620,7 +11673,6 @@ def upload_json(request):
         search_batfile.searchfals = not_found_count
         search_batfile.save()
 
-        
         duplicates = {f"{key[0]}-{key[1]}": count for key, count in record_counter.items() if count > 1}
         duplicate_counts = list(duplicates.values())
         total_duplicates = sum(duplicate_counts)
@@ -11631,9 +11683,74 @@ def upload_json(request):
         search_batfile.count_duplicates = total_duplicates
         search_batfile.save()
 
-        return JsonResponse({"results": results, "search_batfile_id": search_batfile.id, "duplicates": total_duplicates}, status=200)
+        return JsonResponse({
+            "results": results, 
+            "search_batfile_id": search_batfile.id, 
+            "duplicates": total_duplicates,
+            "filename": new_filename  
+        }, status=200)
 
     return JsonResponse({"error": "Invalid request method"}, status=405)
+from django.shortcuts import get_object_or_404
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.utils.decorators import method_decorator
+from django.views import View
+import json
+from .models import SearchResult
+@csrf_exempt
+@require_http_methods(["PATCH"])
+def update_multiple_search_results_status(request):
+  
+    try:
+        # ອ່ານ JSON data
+        data = json.loads(request.body)
+        ids = data.get('ids', [])
+        
+        if not ids or not isinstance(ids, list):
+            return JsonResponse({
+                'success': False,
+                'message': 'IDs list is required and must be an array'
+            }, status=400)
+        
+        
+        search_results = SearchResult.objects.filter(id__in=ids)
+        found_ids = list(search_results.values_list('id', flat=True))
+        not_found_ids = [id for id in ids if id not in found_ids]
+        
+        # ອັບເດດ status ເປັນ 'Found'
+        updated_count = search_results.update(status='Not Found')
+        
+        # ດຶງຂໍ້ມູນທີ່ອັບເດດແລ້ວ
+        updated_results = list(search_results.values(
+            'id', 'status', 'lcicID', 'LCIC_code', 
+            'com_enterprise_code', 'enterpriseNameLao'
+        ))
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Successfully updated {updated_count} records',
+            'data': {
+                'updated_count': updated_count,
+                'updated_results': updated_results,
+                'requested_ids': ids,
+                'found_ids': found_ids,
+                'not_found_ids': not_found_ids
+            }
+        }, status=200)
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid JSON format'
+        }, status=400)
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error updating status: {str(e)}'
+        }, status=500)
 from .models import ChargeMatrix, B1
 
 

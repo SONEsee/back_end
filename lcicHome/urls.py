@@ -254,6 +254,9 @@ urlpatterns = [
    
   
 #    path('api/upload_files1', FileUploadView.as_view(), name='file-upload'),
+    path('api/search-results/bulk-update-status/', 
+         views.update_multiple_search_results_status, 
+         name='bulk_update_search_results'),
 
 
     path('upload-files2/', UploadFileList.as_view(), name='upload-file-list'),

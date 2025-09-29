@@ -1739,6 +1739,7 @@ class Search_batfile(models.Model):
     statussubmit = models.CharField(max_length=150)
     searchtrue = models.CharField(max_length=150)
     searchfals = models.CharField(max_length=150)
+    not_report = models.CharField(max_length=150 ,null=True)
     status_upload = models.CharField(max_length=150)
     FileType = models.CharField(max_length=10)
     percentage = models.FloatField(default=0.0)
