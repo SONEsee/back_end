@@ -269,6 +269,7 @@ urlpatterns = [
     path('confirm_upload/', views.confirm_upload, name='confirm_upload'),
     path('confirm_uploadc/', views.confirm_uploadc, name='confirm_uploadc'),
     path('unload_uploadc/', views.unload_data, name='unload_data'),
+    # path('check-upload-status/<str:FID>/', views.check_upload_status, name='check_upload_status'),
 
     # path('upload333/', FileUploadView3.as_view(), name='file-upload'),
     path('upload-files/', FileUploadView3.as_view(), name='upload_files_view'),
@@ -301,7 +302,7 @@ urlpatterns = [
     path('api/user-profile/', UserProfileView.as_view(), name='user-profile'),
     path('api/upload-json/', upload_json, name='upload-json'),
     path('api/search-files/', SearchBatfileAPIView.as_view(), name='search_files_api'),
-    
+    # path('api/confirm_upload/', views.confirm_upload,)
     path("api/get-search-results/<int:id>/", views.get_search_results, name="get_search_results"),
     path('update_searchlog_status/', update_searchlog_status, name='update_searchlog_status'),
     path('upload-enterprise-info/', upload_enterprise_info, name='upload-enterprise-info'),
