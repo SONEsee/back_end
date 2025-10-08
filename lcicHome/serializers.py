@@ -492,10 +492,23 @@ class Bank_InfoINDSerializer(serializers.ModelSerializer):
         model = bank_bnk 
         fields = '__all__'
         
+# serializers.py
+from rest_framework import serializers
+from .models import EnterpriseInfo
+
 class EnterpriseInfoSerializer(serializers.ModelSerializer):
+    # ເພີ່ມ field ນີ້ເພື່ອຮັບ collateral_id (ແຕ່ບໍ່ບັນທຶກລົງ database)
+    collateral_id = serializers.IntegerField(write_only=True, required=False)
+    
     class Meta:
         model = EnterpriseInfo
         fields = '__all__'
+        read_only_fields = ['LCICID', 'InsertDate', 'LCIC_code']  # LCIC_code ຈະຖືກສ້າງອັດຕະໂນມັດ
+    
+    def create(self, validated_data):
+        # ລຶບ collateral_id ອອກກ່ອນສ້າງ Enterprise
+        validated_data.pop('collateral_id', None)
+        return super().create(validated_data)
         
 class B1_YearlySerializer(serializers.ModelSerializer):
     class Meta:

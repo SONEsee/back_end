@@ -6382,16 +6382,16 @@ def upload_image(request):
 
         file = request.FILES['image']
         
-        # ຮັບຄ່າ user_mid_id ຈາກ Frontend
+      
         user_mid_id = request.POST.get('user_mid_id')
         if not user_mid_id:
             return JsonResponse({'status': 'error', 'message': 'No user_mid_id provided'}, status=400)
         
         try:
-            # ບັນທຶກໄຟລ໌ໄວ້ທີ່ directory
+           
             file_path = default_storage.save(f'collaterals/{file.name}', ContentFile(file.read()))
             
-            # ບັນທຶກເຂົ້າຖານຂໍ້ມູນ Collateral
+            
             collateral = Collateral(filename=file.name, pathfile=file_path, user=user_mid_id , status= '1')
             collateral.save()
         except Exception as e:
@@ -6440,36 +6440,223 @@ def upload_imageprofile(request):
 
 from django.http import JsonResponse
 from .models import Collateral
-
+from datetime import datetime, timedelta
 def get_collaterals(request):
-    collaterals = Collateral.objects.all().values('id', 'filename', 'image', 'pathfile','status','user')
-    return JsonResponse(list(collaterals), safe=False)
-# from django.http import JsonResponse
-# from .models import Collateral
-
-# from django.http import JsonResponse
-# from .models import Collateral
-
+    # ດຶງ current_user_id ຈາກ query parameter
+    current_user = request.GET.get('current_user_id')
+    
+    # ຖ້າບໍ່ມີ current_user_id ໃຫ້ເອົາຈາກ authentication
+    if not current_user:
+        current_user = request.user.username  # ຫຼື request.user.id
+    
+   
+    collaterals = Collateral.objects.all()
+    
+   
+    if current_user != "01":
+        collaterals = collaterals.filter(user=current_user)
+    else:
+       
+        user_id = request.GET.get('user_id')
+        if user_id:
+            collaterals = collaterals.filter(user=user_id)
+    
+    
+    year = request.GET.get('year')
+    if year:
+        collaterals = collaterals.filter(insertdate__year=year)
+    
+   
+    month = request.GET.get('month')
+    if month:
+        collaterals = collaterals.filter(insertdate__month=month)
+    
+   
+    day = request.GET.get('day')
+    if day:
+        collaterals = collaterals.filter(insertdate__day=day)
+    
+ 
+    start_date = request.GET.get('start_date') 
+    end_date = request.GET.get('end_date')      
+    
+    if start_date and end_date:
+        start_datetime = f"{start_date} 00:00:00"
+        end_datetime = f"{end_date} 23:59:59"
+        collaterals = collaterals.filter(
+            insertdate__range=[start_datetime, end_datetime]
+        )
+    elif start_date:
+        start_datetime = f"{start_date} 00:00:00"
+        collaterals = collaterals.filter(insertdate__gte=start_datetime)
+    elif end_date:
+        end_datetime = f"{end_date} 23:59:59"
+        collaterals = collaterals.filter(insertdate__lte=end_datetime)
+    
+  
+    collaterals = collaterals.order_by('-id')
+    
+ 
+    print(f"Found {collaterals.count()} collaterals")
+    
+   
+    result = collaterals.values()
+    return JsonResponse(list(result), safe=False)
 # def get_collaterals(request):
-#     collaterals = Collateral.objects.exclude(status=0).values('id', 'filename', 'image', 'pathfile', 'status')
-#     return JsonResponse(list(collaterals), safe=False)
+#     collaterals = Collateral.objects.all()
+    
+    
+#     user_id = request.GET.get('user_id')
+#     if user_id:
+#         collaterals = collaterals.filter(user=user_id)
+    
+    
+#     year = request.GET.get('year')
+#     if year:
+#         collaterals = collaterals.filter(insertdate__year=year)
+    
+  
+#     month = request.GET.get('month')
+#     if month:
+#         collaterals = collaterals.filter(insertdate__month=month)
+    
+   
+#     day = request.GET.get('day')
+#     if day:
+#         collaterals = collaterals.filter(insertdate__day=day)
+    
 
+#     start_date = request.GET.get('start_date') 
+#     end_date = request.GET.get('end_date')      
+    
+#     if start_date and end_date:
+        
+#         start_datetime = f"{start_date} 00:00:00"
+#         end_datetime = f"{end_date} 23:59:59"
+#         collaterals = collaterals.filter(
+#             insertdate__range=[start_datetime, end_datetime]
+#         )
+#     elif start_date:
+#         start_datetime = f"{start_date} 00:00:00"
+#         collaterals = collaterals.filter(insertdate__gte=start_datetime)
+#     elif end_date:
+#         end_datetime = f"{end_date} 23:59:59"
+#         collaterals = collaterals.filter(insertdate__lte=end_datetime)
+    
+    
+#     result = collaterals.values()
+#     return JsonResponse(list(result), safe=False)
 
+# from rest_framework import status
+# from rest_framework.response import Response
+# from rest_framework.decorators import api_view
+# from .models import EnterpriseInfo
+# from .serializers import EnterpriseInfoSerializer
+
+# @api_view(['POST'])
+# def create_enterprise_info(request):
+#     if request.method == 'POST':
+#         serializer = EnterpriseInfoSerializer(data=request.data)
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response(serializer.data, status=status.HTTP_201_CREATED)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
-from .models import EnterpriseInfo
+from .models import EnterpriseInfo, Collateral
 from .serializers import EnterpriseInfoSerializer
+from django.db import transaction
 
 @api_view(['POST'])
 def create_enterprise_info(request):
-    if request.method == 'POST':
-        serializer = EnterpriseInfoSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+    """
+    API endpoint ສຳລັບສ້າງຂໍ້ມູນວິສາຫະກິດ
+    ແລະ ອັບເດດ Collateral.LCIC_reques ດ້ວຍ LCIC_code
+    """
+    print("=== Received Request ===")
+    print("Request data:", request.data)
+    
+    # ດຶງ collateral_id ຈາກ request
+    collateral_id = request.data.get('collateral_id')
+    print(f"Collateral ID: {collateral_id}")
+    
+    if not collateral_id:
+        return Response({
+            'status': 'error',
+            'message': 'ຕ້ອງມີ collateral_id'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Validate ຂໍ້ມູນວິສາຫະກິດ
+    serializer = EnterpriseInfoSerializer(data=request.data)
+    
+    if serializer.is_valid():
+        try:
+            with transaction.atomic():
+                # 1. ບັນທຶກຂໍ້ມູນວິສາຫະກິດ
+                enterprise = serializer.save()
+                print(f"✅ Created Enterprise - LCICID: {enterprise.LCICID}")
+                
+                # 2. ສ້າງ LCIC_code = "LS-{LCICID}"
+                lcic_code = f"LS-{enterprise.LCICID}"
+                enterprise.LCIC_code = lcic_code
+                enterprise.save()
+                print(f"✅ Generated LCIC_code: {lcic_code}")
+                
+                # 3. ຊອກຫາ Collateral ດ້ວຍ ID
+                try:
+                    collateral = Collateral.objects.get(id=collateral_id)
+                    print(f"✅ Found Collateral ID: {collateral.id}")
+                    print(f"   Before - LCIC_reques: {collateral.LCIC_reques}")
+                    
+                    # 4. ອັບເດດ LCIC_reques ດ້ວຍ LCIC_code
+                    collateral.LCIC_reques = lcic_code
+                    collateral.save()
+                    
+                    print(f"✅ Updated Collateral - LCIC_reques: {collateral.LCIC_reques}")
+                    
+                    return Response({
+                        'status': 'success',
+                        'message': 'ສ້າງຂໍ້ມູນວິສາຫະກິດສຳເລັດແລ້ວ',
+                        'data': {
+                            'enterprise': {
+                                'LCICID': enterprise.LCICID,
+                                'LCIC_code': enterprise.LCIC_code,
+                                'EnterpriseID': enterprise.EnterpriseID,
+                                'enterpriseNameLao': enterprise.enterpriseNameLao,
+                                'eneterpriseNameEnglish': enterprise.eneterpriseNameEnglish,
+                                'investmentAmount': enterprise.investmentAmount,
+                            },
+                            'collateral': {
+                                'id': collateral.id,
+                                'filename': collateral.filename,
+                                'LCIC_reques': collateral.LCIC_reques,  # ຕອນນີ້ແມ່ນ "LS-123"
+                                'status': collateral.status,
+                            }
+                        }
+                    }, status=status.HTTP_201_CREATED)
+                    
+                except Collateral.DoesNotExist:
+                    print(f"❌ Collateral not found: {collateral_id}")
+                    # Rollback - transaction.atomic() ຈະ rollback ອັດຕະໂນມັດ
+                    raise Exception(f'ບໍ່ພົບຂໍ້ມູນ Collateral ID: {collateral_id}')
+                    
+        except Exception as e:
+            print(f"❌ Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            
+            return Response({
+                'status': 'error',
+                'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    print("❌ Validation errors:", serializer.errors)
+    return Response({
+        'status': 'error',
+        'message': 'ຂໍ້ມູນບໍ່ຖືກຕ້ອງ',
+        'errors': serializer.errors
+    }, status=status.HTTP_400_BAD_REQUEST)
 from django.http import JsonResponse
 from .models import C1
 

@@ -1591,6 +1591,8 @@ class Collateral(models.Model):
     insertdate = models.DateTimeField(auto_now_add=True)
     pathfile = models.CharField(max_length=255, blank=True, null=True)
     status = models.CharField(max_length=100)
+    LCIC_reques = models.CharField(max_length=100)
+
 
     def __str__(self):
         return self.filename
