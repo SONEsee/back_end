@@ -1451,8 +1451,12 @@ class EnterpriseInfo(models.Model):
     CancellationDate = models.DateTimeField(blank=True, null=True)
     InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
     UpdateDate = models.DateTimeField(blank=True, null=True)
-    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
-    
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True, unique=True,  db_index=True )
+    class Meta:
+        db_table = 'enterpriseinfo'  
+        indexes = [
+            models.Index(fields=['LCIC_code']), 
+        ]
 
     def __str__(self):
         return f"EnterpriseInfo {self.LCICID} - {self.enterpriseNameLao}"
@@ -1583,6 +1587,9 @@ class File(models.Model):
 from django.db import models
 
 class Collateral(models.Model):
+    # ✅ id ເປັນ AutoField (ຕົວເລກ)
+    # Django ສ້າງອັດຕະໂນມັດ, ບໍ່ຕ້ອງປະກາດ
+    
     bank_id = models.CharField(max_length=100, blank=True, null=True)
     branch_id = models.CharField(max_length=100, blank=True, null=True)
     filename = models.CharField(max_length=255)
@@ -1591,11 +1598,15 @@ class Collateral(models.Model):
     insertdate = models.DateTimeField(auto_now_add=True)
     pathfile = models.CharField(max_length=255, blank=True, null=True)
     status = models.CharField(max_length=100)
-    LCIC_reques = models.CharField(max_length=100)
+    
+    # ✅ LCIC_reques ເປັນ CharField (ເກັບ "LS-123")
+    LCIC_reques = models.CharField(max_length=100, blank=True, null=True)
 
-
+    class Meta:
+        db_table = 'collateral'  # ຖ້າມີ
+        
     def __str__(self):
-        return self.filename
+        return f"Collateral {self.id} - {self.filename}"
 
 
 

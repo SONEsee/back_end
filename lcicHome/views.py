@@ -6561,102 +6561,206 @@ def get_collaterals(request):
 #             serializer.save()
 #             return Response(serializer.data, status=status.HTTP_201_CREATED)
 #         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+# views.py
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from .models import EnterpriseInfo, Collateral
 from .serializers import EnterpriseInfoSerializer
-from django.db import transaction
+from django.db import transaction, IntegrityError
+from datetime import datetime
+import random
+import string
+import traceback
+
+
+def generate_lcic_code():
+    """ສ້າງ LCIC_code ແບບ YYYYMMDDXXXX"""
+    date_str = datetime.now().strftime('%Y%m%d')
+    characters = string.ascii_uppercase + string.digits
+    random_str = ''.join(random.choices(characters, k=4))
+    lcic_code = f"{date_str}{random_str}"
+    print(f"📝 Generated LCIC_code: {lcic_code}")
+    return lcic_code
+
+
+def generate_unique_lcic_code(max_attempts=100):
+    """ສ້າງ LCIC_code ທີ່ບໍ່ຊ້ຳກັນ"""
+    print(f"🔄 Generating unique LCIC_code...")
+    
+    for attempt in range(max_attempts):
+        lcic_code = generate_lcic_code()
+        
+        # ກວດສອບວ່າມີໃນ DB ແລ້ວບໍ່
+        exists = EnterpriseInfo.objects.filter(LCIC_code=lcic_code).exists()
+        print(f"   Attempt {attempt + 1}: {lcic_code} - Exists: {exists}")
+        
+        if not exists:
+            print(f"✅ Unique LCIC_code found: {lcic_code}")
+            return lcic_code
+        
+        print(f"⚠️  Code exists, retrying...")
+    
+    raise Exception(f"ບໍ່ສາມາດສ້າງ LCIC_code ທີ່ບໍ່ຊ້ຳກັນໄດ້ຫຼັງຈາກ {max_attempts} ຄັ້ງ")
+
 
 @api_view(['POST'])
 def create_enterprise_info(request):
-    """
-    API endpoint ສຳລັບສ້າງຂໍ້ມູນວິສາຫະກິດ
-    ແລະ ອັບເດດ Collateral.LCIC_reques ດ້ວຍ LCIC_code
-    """
-    print("=== Received Request ===")
-    print("Request data:", request.data)
+    """API endpoint ສຳລັບສ້າງຂໍ້ມູນວິສາຫະກິດ"""
     
-    # ດຶງ collateral_id ຈາກ request
+    print("\n" + "="*70)
+    print("🚀 CREATE ENTERPRISE INFO API CALLED")
+    print("="*70)
+    
+    # 1. ດຶງ collateral_id
     collateral_id = request.data.get('collateral_id')
-    print(f"Collateral ID: {collateral_id}")
+    print(f"\n[STEP 1] Collateral ID: {collateral_id}")
     
     if not collateral_id:
+        print("❌ ERROR: collateral_id is missing!")
         return Response({
             'status': 'error',
             'message': 'ຕ້ອງມີ collateral_id'
         }, status=status.HTTP_400_BAD_REQUEST)
     
-    # Validate ຂໍ້ມູນວິສາຫະກິດ
+    # ແປງເປັນ int
+    try:
+        collateral_id = int(collateral_id)
+        print(f"✅ Collateral ID validated: {collateral_id}")
+    except (ValueError, TypeError):
+        print(f"❌ ERROR: Invalid collateral_id type")
+        return Response({
+            'status': 'error',
+            'message': 'collateral_id ຕ້ອງເປັນຕົວເລກ'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # 2. Validate data
+    print(f"\n[STEP 2] Validating enterprise data...")
     serializer = EnterpriseInfoSerializer(data=request.data)
     
-    if serializer.is_valid():
-        try:
-            with transaction.atomic():
-                # 1. ບັນທຶກຂໍ້ມູນວິສາຫະກິດ
-                enterprise = serializer.save()
-                print(f"✅ Created Enterprise - LCICID: {enterprise.LCICID}")
+    if not serializer.is_valid():
+        print(f"❌ Validation failed!")
+        print(f"Errors: {serializer.errors}")
+        return Response({
+            'status': 'error',
+            'message': 'ຂໍ້ມູນບໍ່ຖືກຕ້ອງ',
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    print(f"✅ Validation passed!")
+    
+    # 3. ບັນທຶກຂໍ້ມູນ
+    try:
+        with transaction.atomic():
+            print(f"\n[STEP 3] Saving enterprise...")
+            
+            # 3.1 ບັນທຶກ Enterprise ກ່ອນ
+            enterprise = serializer.save()
+            print(f"✅ Enterprise saved!")
+            print(f"   LCICID: {enterprise.LCICID}")
+            print(f"   EnterpriseID: {enterprise.EnterpriseID}")
+            print(f"   LCIC_code (before): '{enterprise.LCIC_code}'")
+            
+            # 3.2 ສ້າງ LCIC_code
+            print(f"\n[STEP 4] Generating LCIC_code...")
+            try:
+                lcic_code = generate_unique_lcic_code(max_attempts=50)
+            except Exception as e:
+                print(f"❌ Failed to generate LCIC_code: {str(e)}")
+                raise
+            
+            # 3.3 ບັນທຶກ LCIC_code
+            print(f"\n[STEP 5] Saving LCIC_code to enterprise...")
+            enterprise.LCIC_code = lcic_code
+            enterprise.save(update_fields=['LCIC_code'])
+            print(f"✅ LCIC_code saved!")
+            
+            # 3.4 Verify
+            enterprise.refresh_from_db()
+            print(f"   LCIC_code (after): '{enterprise.LCIC_code}'")
+            
+            if enterprise.LCIC_code != lcic_code:
+                print(f"❌ ERROR: LCIC_code not saved correctly!")
+                print(f"   Expected: {lcic_code}")
+                print(f"   Got: {enterprise.LCIC_code}")
+                raise Exception("LCIC_code verification failed!")
+            
+            # 3.5 ອັບເດດ Collateral
+            print(f"\n[STEP 6] Updating Collateral...")
+            try:
+                collateral = Collateral.objects.get(id=collateral_id)
+                print(f"✅ Found Collateral:")
+                print(f"   ID: {collateral.id}")
+                print(f"   Filename: {collateral.filename}")
+                print(f"   LCIC_reques (before): '{collateral.LCIC_reques}'")
                 
-                # 2. ສ້າງ LCIC_code = "LS-{LCICID}"
-                lcic_code = f"LS-{enterprise.LCICID}"
-                enterprise.LCIC_code = lcic_code
-                enterprise.save()
-                print(f"✅ Generated LCIC_code: {lcic_code}")
+                # ບັນທຶກ LCIC_code ໃສ່ Collateral
+                collateral.LCIC_reques = lcic_code
+                collateral.save(update_fields=['LCIC_reques'])
                 
-                # 3. ຊອກຫາ Collateral ດ້ວຍ ID
-                try:
-                    collateral = Collateral.objects.get(id=collateral_id)
-                    print(f"✅ Found Collateral ID: {collateral.id}")
-                    print(f"   Before - LCIC_reques: {collateral.LCIC_reques}")
-                    
-                    # 4. ອັບເດດ LCIC_reques ດ້ວຍ LCIC_code
-                    collateral.LCIC_reques = lcic_code
-                    collateral.save()
-                    
-                    print(f"✅ Updated Collateral - LCIC_reques: {collateral.LCIC_reques}")
-                    
-                    return Response({
-                        'status': 'success',
-                        'message': 'ສ້າງຂໍ້ມູນວິສາຫະກິດສຳເລັດແລ້ວ',
-                        'data': {
-                            'enterprise': {
-                                'LCICID': enterprise.LCICID,
-                                'LCIC_code': enterprise.LCIC_code,
-                                'EnterpriseID': enterprise.EnterpriseID,
-                                'enterpriseNameLao': enterprise.enterpriseNameLao,
-                                'eneterpriseNameEnglish': enterprise.eneterpriseNameEnglish,
-                                'investmentAmount': enterprise.investmentAmount,
-                            },
-                            'collateral': {
-                                'id': collateral.id,
-                                'filename': collateral.filename,
-                                'LCIC_reques': collateral.LCIC_reques,  # ຕອນນີ້ແມ່ນ "LS-123"
-                                'status': collateral.status,
-                            }
-                        }
-                    }, status=status.HTTP_201_CREATED)
-                    
-                except Collateral.DoesNotExist:
-                    print(f"❌ Collateral not found: {collateral_id}")
-                    # Rollback - transaction.atomic() ຈະ rollback ອັດຕະໂນມັດ
-                    raise Exception(f'ບໍ່ພົບຂໍ້ມູນ Collateral ID: {collateral_id}')
-                    
-        except Exception as e:
-            print(f"❌ Error: {str(e)}")
-            import traceback
-            traceback.print_exc()
+                # Verify
+                collateral.refresh_from_db()
+                print(f"   LCIC_reques (after): '{collateral.LCIC_reques}'")
+                
+                if collateral.LCIC_reques != lcic_code:
+                    print(f"❌ ERROR: Collateral LCIC_reques not saved!")
+                    raise Exception("Collateral update failed!")
+                
+                print(f"✅ Collateral updated successfully!")
+                
+            except Collateral.DoesNotExist:
+                print(f"❌ ERROR: Collateral ID {collateral_id} not found!")
+                raise Exception(f'ບໍ່ພົບຂໍ້ມູນ Collateral ID: {collateral_id}')
+            
+            # 3.6 Return success response
+            print(f"\n[STEP 7] Preparing response...")
+            print("="*70)
+            print("✅✅✅ SUCCESS! ✅✅✅")
+            print("="*70)
+            print(f"Enterprise:")
+            print(f"  - LCICID: {enterprise.LCICID}")
+            print(f"  - LCIC_code: {enterprise.LCIC_code}")
+            print(f"  - EnterpriseID: {enterprise.EnterpriseID}")
+            print(f"\nCollateral:")
+            print(f"  - ID: {collateral.id}")
+            print(f"  - LCIC_reques: {collateral.LCIC_reques}")
+            print("="*70 + "\n")
             
             return Response({
-                'status': 'error',
-                'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    print("❌ Validation errors:", serializer.errors)
-    return Response({
-        'status': 'error',
-        'message': 'ຂໍ້ມູນບໍ່ຖືກຕ້ອງ',
-        'errors': serializer.errors
-    }, status=status.HTTP_400_BAD_REQUEST)
+                'status': 'success',
+                'message': 'ສ້າງຂໍ້ມູນວິສາຫະກິດສຳເລັດແລ້ວ',
+                'data': {
+                    'enterprise': {
+                        'LCICID': enterprise.LCICID,
+                        'LCIC_code': enterprise.LCIC_code,
+                        'EnterpriseID': enterprise.EnterpriseID,
+                        'enterpriseNameLao': enterprise.enterpriseNameLao,
+                        'eneterpriseNameEnglish': enterprise.eneterpriseNameEnglish,
+                        'investmentAmount': enterprise.investmentAmount,
+                    },
+                    'collateral': {
+                        'id': collateral.id,
+                        'filename': collateral.filename,
+                        'LCIC_reques': collateral.LCIC_reques,
+                        'status': collateral.status,
+                    }
+                }
+            }, status=status.HTTP_201_CREATED)
+            
+    except Exception as e:
+        print(f"\n{'='*70}")
+        print(f"❌❌❌ ERROR! ❌❌❌")
+        print(f"{'='*70}")
+        print(f"Error type: {type(e).__name__}")
+        print(f"Error message: {str(e)}")
+        print(f"\nFull traceback:")
+        traceback.print_exc()
+        print(f"{'='*70}\n")
+        
+        return Response({
+            'status': 'error',
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 from django.http import JsonResponse
 from .models import C1
 
@@ -6767,28 +6871,28 @@ from django.db.models import Max
 #         else:
 #             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['POST'])
-def create_enterprise_info(request):
-    if request.method == 'POST':
-        serializer = EnterpriseInfoSerializer(data=request.data)
-        if serializer.is_valid():
+# @api_view(['POST'])
+# def create_enterprise_info(request):
+#     if request.method == 'POST':
+#         serializer = EnterpriseInfoSerializer(data=request.data)
+#         if serializer.is_valid():
             
-            max_lcicid = EnterpriseInfo.objects.aggregate(max_lcicid=Max('LCICID'))['max_lcicid']
+#             max_lcicid = EnterpriseInfo.objects.aggregate(max_lcicid=Max('LCICID'))['max_lcicid']
             
-            if max_lcicid is not None:
-                new_lcicid = max_lcicid + 1
-            else:
-                new_lcicid = 1  
+#             if max_lcicid is not None:
+#                 new_lcicid = max_lcicid + 1
+#             else:
+#                 new_lcicid = 1  
 
-            serializer.validated_data['LCICID'] = new_lcicid
-            serializer.save()
+#             serializer.validated_data['LCICID'] = new_lcicid
+#             serializer.save()
 
             
-            # Collateral.objects.filter(status='1').update(status='0')
+#             # Collateral.objects.filter(status='1').update(status='0')
 
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+#             return Response(serializer.data, status=status.HTTP_201_CREATED)
+#         else:
+#             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
