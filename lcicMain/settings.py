@@ -128,6 +128,8 @@ DATABASES = {
         'PASSWORD': 'Lcic@123',
         'HOST': '192.168.45.230',
         'PORT': '5432',
+         'connect_timeout': 600,  
+            'options': '-c statement_timeout=600000'  
     },
     'utility': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -136,6 +138,7 @@ DATABASES = {
         'PASSWORD': 'Lcic@123',
         'HOST': '192.168.45.230',
         'PORT': '5432',
+       
     },
     'ned_sql': {
         'ENGINE': 'sql_server.pyodbc',
