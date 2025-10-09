@@ -389,7 +389,7 @@ urlpatterns = [
     path('edl-summary/export/', views.EDLExportSummaryAPIView.as_view(), name='edl-summary-export'),
     path('overview/', views.EDLSummaryOverviewAPIView.as_view(), name='overview'),
     
-    # Water Supoply Dat Load Tracking
+  
     path('water/', include(water_supply_patterns)),
     path('water-summary/', include(water_summary_patterns)),
     
