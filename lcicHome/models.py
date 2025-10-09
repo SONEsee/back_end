@@ -1605,7 +1605,7 @@ class Collateral(models.Model):
         super().save(*args, **kwargs)
 
     class Meta:
-        db_table = 'collateral'  # ຖ້າມີ
+        db_table = 'collateral'  
         
     def __str__(self):
         return f"Collateral {self.id} - {self.filename}"

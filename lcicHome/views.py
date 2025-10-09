@@ -5637,71 +5637,84 @@ class LoginView1(APIView):
 # class UploadFileList(generics.ListAPIView):
 #     queryset = Upload_File.objects.all()
 #     serializer_class = UploadFileSerializer
-from rest_framework import generics, serializers
+# from rest_framework import generics, serializers
+# from rest_framework.response import Response
+# from rest_framework import status
+# from django.db.models import Q
+# from datetime import datetime
+from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Q
-from datetime import datetime
+from django.db.models import Count, Q  # ✅ import ຢູ່ເທິງສຸດ
+import logging
+
+logger = logging.getLogger(__name__)
 
 class UploadFileList(generics.ListAPIView):
     serializer_class = UploadFileSerializer
+    queryset = Upload_File.objects.all()
     
     def get_queryset(self):
-        # ດຶງ parameters ຈາກ request
         user_id = self.request.query_params.get('user_id')
         period = self.request.query_params.get('period')
         request_user_id = self.request.query_params.get('request_user_id')
-        file_type = self.request.query_params.get('file_type')  # json, xml
+        file_type = self.request.query_params.get('file_type')
         status_filter = self.request.query_params.get('status')
         
-        # ເລີ່ມຕົ້ນດ້ວຍ queryset ທັງໝົດ
         queryset = Upload_File.objects.all()
         
-        # ກວດສອບສິດທິ່ຜູ້ໃຊ້
+        # Permission logic
         if request_user_id and request_user_id != "01":
-            # ຖ້າບໍ່ແມ່ນ admin (01) ເຫັນໄດ້ແຕ່ຂອງຕົວເອງ
             queryset = queryset.filter(user_id=request_user_id)
-        elif request_user_id == "01":
-            # ຖ້າເປັນ admin (01) ສາມາດເຫັນທັງໝົດ
-            # ຖ້າມີການລະບຸ user_id ໃຫ້ filter ຕາມນັ້ນ
-            if user_id:
-                queryset = queryset.filter(user_id=user_id)
+        elif request_user_id == "01" and user_id:
+            queryset = queryset.filter(user_id=user_id)
         
-        # Filter ຕາມ period ຖ້າມີ
+        # Apply filters
         if period:
             queryset = queryset.filter(period=period)
-            
-        # Filter ຕາມປະເພດໄຟລ໌
         if file_type:
             queryset = queryset.filter(FileType=file_type)
-            
-        # Filter ຕາມສະຖານະ
         if status_filter:
             queryset = queryset.filter(statussubmit=status_filter)
             
-        return queryset.order_by('-insertDate')  # ຈັດຮຽງຕາມວັນທີໃໝ່ສຸດ
+        return queryset.order_by('-insertDate')
     
     def list(self, request, *args, **kwargs):
-        """
-        Custom list method ພ້ອມການຈັດການ error ແລະ metadata
-        """
         try:
             queryset = self.get_queryset()
+        
+        # ປ່ຽນຈາກ Count('id') ເປັນ Count('file_id') ✅
+            stats = queryset.aggregate(
+                total=Count('file_id'),
+                json_count=Count('file_id', filter=Q(FileType='json')),
+                xml_count=Count('file_id', filter=Q(FileType='xml')),
+                status_0=Count('file_id', filter=Q(statussubmit='0')),
+                status_1=Count('file_id', filter=Q(statussubmit='1')),
+                status_2=Count('file_id', filter=Q(statussubmit='2')),
+                status_3=Count('file_id', filter=Q(statussubmit='3')),
+                status_4=Count('file_id', filter=Q(statussubmit='4')),
+                status_5=Count('file_id', filter=Q(statussubmit='5')),
+                status_pending=Count('file_id', filter=Q(statussubmit='Pending'))
+            )
+        
             serializer = self.get_serializer(queryset, many=True)
-            
-            # ຄິດໄລ່ສະຖິຕິເບື້ອງຕົ້ນ
-            total_files = queryset.count()
-            json_files = queryset.filter(FileType='json').count()
-            xml_files = queryset.filter(FileType='xml').count()
-            
+        
             response_data = {
-                'count': total_files,
+                'count': stats['total'],
                 'results': serializer.data,
                 'summary': {
-                    'total_files': total_files,
-                    'json_files': json_files,
-                    'xml_files': xml_files,
-                    'status_breakdown': self._get_status_breakdown(queryset)
+                    'total_files': stats['total'],
+                    'json_files': stats['json_count'],
+                    'xml_files': stats['xml_count'],
+                    'status_breakdown': {
+                        '0': stats['status_0'],
+                        '1': stats['status_1'],
+                        '2': stats['status_2'],
+                        '3': stats['status_3'],
+                        '4': stats['status_4'],
+                        '5': stats['status_5'],
+                        'Pending': stats['status_pending']
+                    }
                 },
                 'filters_applied': {
                     'user_id': request.query_params.get('user_id'),
@@ -5711,22 +5724,228 @@ class UploadFileList(generics.ListAPIView):
                     'status': request.query_params.get('status')
                 }
             }
-            
+        
             return Response(response_data, status=status.HTTP_200_OK)
-            
+        
         except Exception as e:
+            logger.error(f"Error: {str(e)}", exc_info=True)
             return Response(
-                {'error': f'ເກີດຂໍ້ຜິດພາດໃນການດຶງຂໍ້ມູນ: {str(e)}'}, 
+                {'error': str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            )  # ✅ indentation ຖືກຕ້ອງ
+            try:
+                queryset = self.get_queryset()
+            
+            # ນັບທຸກຢ່າງໃນ query ດຽວ! ⚡
+                stats = queryset.aggregate(
+                    total=Count('id'),
+                    json_count=Count('id', filter=Q(FileType='json')),
+                    xml_count=Count('id', filter=Q(FileType='xml')),
+                    status_0=Count('id', filter=Q(statussubmit='0')),
+                    status_1=Count('id', filter=Q(statussubmit='1')),
+                    status_2=Count('id', filter=Q(statussubmit='2')),
+                    status_3=Count('id', filter=Q(statussubmit='3')),
+                    status_4=Count('id', filter=Q(statussubmit='4')),
+                    status_5=Count('id', filter=Q(statussubmit='5')),
+                    status_pending=Count('id', filter=Q(statussubmit='Pending'))
+                )
+            
+                serializer = self.get_serializer(queryset, many=True)
+            
+                response_data = {
+                    'count': stats['total'],
+                    'results': serializer.data,
+                    'summary': {
+                        'total_files': stats['total'],
+                        'json_files': stats['json_count'],
+                        'xml_files': stats['xml_count'],
+                        'status_breakdown': {
+                            '0': stats['status_0'],
+                            '1': stats['status_1'],
+                            '2': stats['status_2'],
+                            '3': stats['status_3'],
+                            '4': stats['status_4'],
+                            '5': stats['status_5'],
+                            'Pending': stats['status_pending']
+                        }
+                    },
+                    'filters_applied': {
+                        'user_id': request.query_params.get('user_id'),
+                        'period': request.query_params.get('period'),
+                        'request_user_id': request.query_params.get('request_user_id'),
+                        'file_type': request.query_params.get('file_type'),
+                        'status': request.query_params.get('status')
+                    }
+                }
+            
+                return Response(response_data, status=status.HTTP_200_OK)
+            
+            except Exception as e:
+                logger.error(f"Error: {str(e)}", exc_info=True)
+                return Response(
+                    {'error': str(e)}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+
+
+# class UploadFileList(generics.ListAPIView):
+#     serializer_class = UploadFileSerializer
+#     queryset = Upload_File.objects.all()  # ເພີ່ມບັນທັດນີ້ກ່ອນ
     
-    def _get_status_breakdown(self, queryset):
-        """ຄິດໄລ່ຈຳນວນຕາມສະຖານະ"""
-        status_map = ['0', '1', '2', '3', '4', '5', 'Pending']
-        breakdown = {}
-        for status_code in status_map:
-            breakdown[status_code] = queryset.filter(statussubmit=status_code).count()
-        return breakdown
+#     def get_queryset(self):  # ກວດ indentation ໃຫ້ດີ!
+#         user_id = self.request.query_params.get('user_id')
+#         period = self.request.query_params.get('period')
+#         request_user_id = self.request.query_params.get('request_user_id')
+#         file_type = self.request.query_params.get('file_type')
+#         status_filter = self.request.query_params.get('status')
+        
+#         # ເລີ່ມຈາກ base queryset
+#         queryset = Upload_File.objects.all()
+        
+#         # Permission logic
+#         if request_user_id and request_user_id != "01":
+#             queryset = queryset.filter(user_id=request_user_id)
+#         elif request_user_id == "01" and user_id:
+#             queryset = queryset.filter(user_id=user_id)
+        
+#         # Apply filters
+#         if period:
+#             queryset = queryset.filter(period=period)
+#         if file_type:
+#             queryset = queryset.filter(FileType=file_type)
+#         if status_filter:
+#             queryset = queryset.filter(statussubmit=status_filter)
+            
+#         return queryset.order_by('-insertdate')  # ກວດ field name ດ້ວຍ
+    
+#     def list(self, request, *args, **kwargs):
+#         try:
+#             queryset = self.get_queryset()
+#             serializer = self.get_serializer(queryset, many=True)
+            
+#             total_files = queryset.count()
+#             json_files = queryset.filter(FileType='json').count()
+#             xml_files = queryset.filter(FileType='xml').count()
+            
+#             response_data = {
+#                 'count': total_files,
+#                 'results': serializer.data,
+#                 'summary': {
+#                     'total_files': total_files,
+#                     'json_files': json_files,
+#                     'xml_files': xml_files,
+#                     'status_breakdown': self._get_status_breakdown(queryset)
+#                 },
+#                 'filters_applied': {
+#                     'user_id': request.query_params.get('user_id'),
+#                     'period': request.query_params.get('period'),
+#                     'request_user_id': request.query_params.get('request_user_id'),
+#                     'file_type': request.query_params.get('file_type'),
+#                     'status': request.query_params.get('status')
+#                 }
+#             }
+            
+#             return Response(response_data, status=status.HTTP_200_OK)
+            
+#         except Exception as e:
+#             logger.error(f"Error in UploadFileList: {str(e)}", exc_info=True)
+#             return Response(
+#                 {'error': f'ເກີດຂໍ້ຜິດພາດໃນການດຶງຂໍ້ມູນ: {str(e)}'}, 
+#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+#             )
+    
+#     def _get_status_breakdown(self, queryset):
+#         """ຄິດໄລ່ຈຳນວນຕາມສະຖານະ"""
+#         status_map = ['0', '1', '2', '3', '4', '5', 'Pending']
+#         breakdown = {}
+#         for status_code in status_map:
+#             breakdown[status_code] = queryset.filter(statussubmit=status_code).count()
+#         return breakdown
+
+# class UploadFileList(generics.ListAPIView):
+#     serializer_class = UploadFileSerializer
+    
+#     def get_queryset(self):
+       
+#         user_id = self.request.query_params.get('user_id')
+#         period = self.request.query_params.get('period')
+#         request_user_id = self.request.query_params.get('request_user_id')
+#         file_type = self.request.query_params.get('file_type')  # json, xml
+#         status_filter = self.request.query_params.get('status')
+        
+       
+#         queryset = Upload_File.objects.all()
+        
+       
+#         if request_user_id and request_user_id != "01":
+            
+#             queryset = queryset.filter(user_id=request_user_id)
+#         elif request_user_id == "01":
+           
+#             if user_id:
+#                 queryset = queryset.filter(user_id=user_id)
+        
+      
+#         if period:
+#             queryset = queryset.filter(period=period)
+            
+     
+#         if file_type:
+#             queryset = queryset.filter(FileType=file_type)
+            
+       
+#         if status_filter:
+#             queryset = queryset.filter(statussubmit=status_filter)
+            
+#         return queryset.order_by('-insertDate')  
+    
+#     def list(self, request, *args, **kwargs):
+#         """
+#         Custom list method ພ້ອມການຈັດການ error ແລະ metadata
+#         """
+#         try:
+#             queryset = self.get_queryset()
+#             serializer = self.get_serializer(queryset, many=True)
+            
+        
+#             total_files = queryset.count()
+#             json_files = queryset.filter(FileType='json').count()
+#             xml_files = queryset.filter(FileType='xml').count()
+            
+#             response_data = {
+#                 'count': total_files,
+#                 'results': serializer.data,
+#                 'summary': {
+#                     'total_files': total_files,
+#                     'json_files': json_files,
+#                     'xml_files': xml_files,
+#                     'status_breakdown': self._get_status_breakdown(queryset)
+#                 },
+#                 'filters_applied': {
+#                     'user_id': request.query_params.get('user_id'),
+#                     'period': request.query_params.get('period'),
+#                     'request_user_id': request.query_params.get('request_user_id'),
+#                     'file_type': request.query_params.get('file_type'),
+#                     'status': request.query_params.get('status')
+#                 }
+#             }
+            
+#             return Response(response_data, status=status.HTTP_200_OK)
+            
+#         except Exception as e:
+#             return Response(
+#                 {'error': f'ເກີດຂໍ້ຜິດພາດໃນການດຶງຂໍ້ມູນ: {str(e)}'}, 
+#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+#             )
+    
+#     def _get_status_breakdown(self, queryset):
+#         """ຄິດໄລ່ຈຳນວນຕາມສະຖານະ"""
+#         status_map = ['0', '1', '2', '3', '4', '5', 'Pending']
+#         breakdown = {}
+#         for status_code in status_map:
+#             breakdown[status_code] = queryset.filter(statussubmit=status_code).count()
+#         return breakdown
 
 
 class UploadFileSerializer(serializers.ModelSerializer):
@@ -6441,37 +6660,38 @@ def upload_imageprofile(request):
 from django.http import JsonResponse
 from .models import Collateral
 from datetime import datetime, timedelta
+from django.http import JsonResponse
+from .models import Collateral
+from datetime import datetime, timedelta
+
 def get_collaterals(request):
-    # ດຶງ current_user_id ຈາກ query parameter
+    
     current_user = request.GET.get('current_user_id')
     
-    # ຖ້າບໍ່ມີ current_user_id ໃຫ້ເອົາຈາກ authentication
+ 
     if not current_user:
-        current_user = request.user.username  # ຫຼື request.user.id
+        current_user = request.user.username  
     
-   
     collaterals = Collateral.objects.all()
-    
-   
+ 
     if current_user != "01":
         collaterals = collaterals.filter(user=current_user)
     else:
-       
         user_id = request.GET.get('user_id')
         if user_id:
             collaterals = collaterals.filter(user=user_id)
     
-    
+   
     year = request.GET.get('year')
     if year:
         collaterals = collaterals.filter(insertdate__year=year)
     
-   
+    
     month = request.GET.get('month')
     if month:
         collaterals = collaterals.filter(insertdate__month=month)
     
-   
+    
     day = request.GET.get('day')
     if day:
         collaterals = collaterals.filter(insertdate__day=day)
@@ -6496,12 +6716,15 @@ def get_collaterals(request):
   
     collaterals = collaterals.order_by('-id')
     
- 
     print(f"Found {collaterals.count()} collaterals")
     
-   
+ 
     result = collaterals.values()
-    return JsonResponse(list(result), safe=False)
+    
+    
+    return JsonResponse([item for item in result], safe=False)
+    
+   
 # def get_collaterals(request):
 #     collaterals = Collateral.objects.all()
     
