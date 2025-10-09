@@ -350,7 +350,6 @@ urlpatterns = [
     path('province-edl/', EDLProvinceAPIView.as_view(), name='province-edl'),
     path('province-edldetail/', EDLProvinceDetailAPIView.as_view(), name='province-edldetail'),
     path('filedetail-edl/', FileElectricListAPIView.as_view(), name='filedetail-edl'),
-    # path('province-district-combined/<str:pro_id>/', ProvinceDistrictCombinedAPIView.as_view(), name='province-district-combined'),
     
     #Tracking API Edl --------------------------
     # Step 1: Load Provinces

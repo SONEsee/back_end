@@ -445,7 +445,7 @@ from .models import SidebarItem, SidebarSubItem, Role
 class RoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Role
-        fields = ['id', 'name', 'name_lao']
+        fields = ['id', 'name', 'name_lao', 'can_access_all_paths']
 
 
 # class SidebarItemSerializer(serializers.ModelSerializer):
@@ -464,20 +464,31 @@ class RoleSerializer(serializers.ModelSerializer):
 #         fields = ['id', 'name', 'url', 'parent', 'roles']
 
 
-class SidebarItemSerializer(serializers.ModelSerializer):
-    roles = serializers.PrimaryKeyRelatedField(queryset=Role.objects.all(), many=True)
-
-    class Meta:
-        model = SidebarItem
-        fields = ['id', 'name', 'url','icon', 'roles']
-
-
 class SidebarSubItemSerializer(serializers.ModelSerializer):
-    roles = serializers.PrimaryKeyRelatedField(queryset=Role.objects.all(), many=True)
-
     class Meta:
         model = SidebarSubItem
         fields = ['id', 'name', 'url', 'parent', 'roles']
+    
+    def validate(self, data):
+        # Ensure parent exists when creating sub-item
+        if 'parent' in data and not SidebarItem.objects.filter(id=data['parent'].id).exists():
+            raise serializers.ValidationError("Invalid parent item")
+        return data
+class SidebarItemSerializer(serializers.ModelSerializer):
+    sub_items = SidebarSubItemSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = SidebarItem
+        fields = ['id', 'name', 'url', 'icon', 'roles', 'sub_items']
+    
+    def to_representation(self, instance):
+        """Include sub_items in the response"""
+        representation = super().to_representation(instance)
+        representation['sub_items'] = SidebarSubItemSerializer(
+            instance.sub_items.all(), 
+            many=True
+        ).data
+        return representation
 
 from .models import Customer_Info_IND,EnterpriseInfo, InvestorInfo, bank_bnk, B1_Yearly, B1
 from django.core.validators import MinLengthValidator
