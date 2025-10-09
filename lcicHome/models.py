@@ -1587,20 +1587,22 @@ class File(models.Model):
 from django.db import models
 
 class Collateral(models.Model):
-    # ✅ id ເປັນ AutoField (ຕົວເລກ)
-    # Django ສ້າງອັດຕະໂນມັດ, ບໍ່ຕ້ອງປະກາດ
-    
+  
     bank_id = models.CharField(max_length=100, blank=True, null=True)
     branch_id = models.CharField(max_length=100, blank=True, null=True)
     filename = models.CharField(max_length=255)
     image = models.ImageField(upload_to='collateral_images/')
     user = models.CharField(max_length=100, blank=True, null=True)
     insertdate = models.DateTimeField(auto_now_add=True)
+    updatedate = models.DateTimeField(null=True, blank=True)
     pathfile = models.CharField(max_length=255, blank=True, null=True)
-    status = models.CharField(max_length=100)
-    
-    # ✅ LCIC_reques ເປັນ CharField (ເກັບ "LS-123")
+    status = models.CharField(max_length=100)   
     LCIC_reques = models.CharField(max_length=100, blank=True, null=True)
+    def save(self, *args, **kwargs):
+        
+        if self.pk:  
+            self.updatedate = timezone.now()
+        super().save(*args, **kwargs)
 
     class Meta:
         db_table = 'collateral'  # ຖ້າມີ
