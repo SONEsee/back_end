@@ -5683,7 +5683,7 @@ class UploadFileList(generics.ListAPIView):
         try:
             queryset = self.get_queryset()
         
-        # ປ່ຽນຈາກ Count('id') ເປັນ Count('file_id') ✅
+        
             stats = queryset.aggregate(
                 total=Count('file_id'),
                 json_count=Count('file_id', filter=Q(FileType='json')),
