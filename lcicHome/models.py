@@ -1451,8 +1451,12 @@ class EnterpriseInfo(models.Model):
     CancellationDate = models.DateTimeField(blank=True, null=True)
     InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
     UpdateDate = models.DateTimeField(blank=True, null=True)
-    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
-    
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True, unique=True,  db_index=True )
+    class Meta:
+        db_table = 'enterpriseinfo'  
+        indexes = [
+            models.Index(fields=['LCIC_code']), 
+        ]
 
     def __str__(self):
         return f"EnterpriseInfo {self.LCICID} - {self.enterpriseNameLao}"
@@ -1583,19 +1587,28 @@ class File(models.Model):
 from django.db import models
 
 class Collateral(models.Model):
+  
     bank_id = models.CharField(max_length=100, blank=True, null=True)
     branch_id = models.CharField(max_length=100, blank=True, null=True)
     filename = models.CharField(max_length=255)
     image = models.ImageField(upload_to='collateral_images/')
     user = models.CharField(max_length=100, blank=True, null=True)
     insertdate = models.DateTimeField(auto_now_add=True)
+    updatedate = models.DateTimeField(null=True, blank=True)
     pathfile = models.CharField(max_length=255, blank=True, null=True)
-    status = models.CharField(max_length=100)
-    LCIC_reques = models.CharField(max_length=100)
+    status = models.CharField(max_length=100)   
+    LCIC_reques = models.CharField(max_length=100, blank=True, null=True)
+    def save(self, *args, **kwargs):
+        
+        if self.pk:  
+            self.updatedate = timezone.now()
+        super().save(*args, **kwargs)
 
-
+    class Meta:
+        db_table = 'collateral'  # ຖ້າມີ
+        
     def __str__(self):
-        return self.filename
+        return f"Collateral {self.id} - {self.filename}"
 
 
 
