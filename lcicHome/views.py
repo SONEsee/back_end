@@ -8631,8 +8631,6 @@ def get_collaterals(request):
 #     return JsonResponse(list(collaterals), safe=False)
 
 
-<<<<<<< HEAD
-=======
 # from rest_framework import status
 # from rest_framework.response import Response
 # from rest_framework.decorators import api_view
@@ -8648,24 +8646,11 @@ def get_collaterals(request):
 #             return Response(serializer.data, status=status.HTTP_201_CREATED)
 #         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 # views.py
->>>>>>> 3f3aa525c05a1cae5ef85613e6d2a6220f553f1f
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from .models import EnterpriseInfo
 from .serializers import EnterpriseInfoSerializer
-<<<<<<< HEAD
-
-@api_view(['POST'])
-def create_enterprise_info(request):
-    if request.method == 'POST':
-        serializer = EnterpriseInfoSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-=======
 from django.db import transaction, IntegrityError
 from datetime import datetime
 import random
@@ -8860,7 +8845,6 @@ def create_enterprise_info(request):
             'status': 'error',
             'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
->>>>>>> 3f3aa525c05a1cae5ef85613e6d2a6220f553f1f
 from django.http import JsonResponse
 from .models import C1
 
@@ -10182,121 +10166,121 @@ class SearchlogReportDetailView(APIView):
 #             }, status=status.HTTP_400_BAD_REQUEST)
 
 
-# from .serializers import ChargeSerializer
-# from rest_framework.views import APIView
-# from rest_framework.response import Response
-# from rest_framework import status
-# from .models import request_charge  # Assuming this is your model
-# from django.db.models import Q  # To handle complex queries
+from .serializers import ChargeSerializer
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import request_charge  # Assuming this is your model
+from django.db.models import Q  # To handle complex queries
 
-# class charge_reportView(APIView):
-#     # permission_classes = [IsAuthenticated]
+class charge_reportView(APIView):
+    # permission_classes = [IsAuthenticated]
 
-#     def get(self, request, bnk_code=None):
-#         try:
-#             # Get query parameters
-#             bank = request.query_params.get('bank', bnk_code)  # Can come from URL or query param
-#             month = request.query_params.get('month')
-#             year = request.query_params.get('year')
-#             from_date = request.query_params.get('fromDate')  # New: fromDate filter
-#             to_date = request.query_params.get('toDate')      # New: toDate filter
+    def get(self, request, bnk_code=None):
+        try:
+            # Get query parameters
+            bank = request.query_params.get('bank', bnk_code)  # Can come from URL or query param
+            month = request.query_params.get('month')
+            year = request.query_params.get('year')
+            from_date = request.query_params.get('fromDate')  # New: fromDate filter
+            to_date = request.query_params.get('toDate')      # New: toDate filter
 
-#             # Start with all records or filter by bank if provided
-#             charge_report = request_charge.objects.all().order_by('-rec_charge_ID')
+            # Start with all records or filter by bank if provided
+            charge_report = request_charge.objects.all().order_by('-rec_charge_ID')
             
-#             charge_report_list = []       
-#             for charge_field in charge_report:
-#                 # print(charge_field)
+            charge_report_list = []       
+            for charge_field in charge_report:
+                # print(charge_field)
                     
-#                 enterprise_data = EnterpriseInfo.objects.filter         (LCICID=charge_field.LCIC_ID)
+                enterprise_data = EnterpriseInfo.objects.filter         (LCICID=charge_field.LCIC_ID)
 
-#                 lon_purpose_data = Main_catalog_cat.objects.filter(cat_value=charge_field.lon_purpose)
-#                 # print(lon_purpose_data)
+                lon_purpose_data = Main_catalog_cat.objects.filter(cat_value=charge_field.lon_purpose)
+                # print(lon_purpose_data)
                 
-#                 bank_info = memberInfo.objects.filter
+                bank_info = memberInfo.objects.filter
             
-#                 # for bank_data in 
+                # for bank_data in 
                 
-#                 for lon_list in lon_purpose_data:
-#                     print("Loan_purpose: ",lon_list.cat_name)
+                for lon_list in lon_purpose_data:
+                    print("Loan_purpose: ",lon_list.cat_name)
             
-#                 # print("====> Enterprise_Data LCICID : ",enterprise_data)
-#                 for enter_data in enterprise_data:
-#                     print("-=---->",enter_data.enterpriseNameLao)
+                # print("====> Enterprise_Data LCICID : ",enterprise_data)
+                for enter_data in enterprise_data:
+                    print("-=---->",enter_data.enterpriseNameLao)
             
-#             charge_data_list = {
-#                 "rec_charge_ID": charge_field.rec_charge_ID,
-#                 "bnk_code": charge_field.bnk_code,
-#                 "bnk_type": charge_field.bnk_type,
-#                 "chg_amount": charge_field.chg_amount,
-#                 "chg_code": charge_field.chg_code,
-#                 "status": charge_field.status,
-#                 "insert_date": charge_field.insert_date,
-#                 "update_date": charge_field.update_date,
-#                 "rtp_code": charge_field.rtp_code,
-#                 "lon_purpose": lon_list.cat_name,
-#                 "chg_unit": charge_field.chg_unit,
-#                 "user_sys_id": charge_field.user_sys_id,
-#                 "LCIC_ID": enter_data.enterpriseNameLao,
-#                 "cusType": charge_field.cusType,
-#                 "user_session_id": "",
-#                 "rec_reference_code": charge_field.rec_reference_code,
-#                 "rec_insert_date": charge_field.rec_insert_date,
-#                 "search_log": charge_field.search_log.search_ID
-#             }
-#             charge_report_list.append(charge_data_list)
+            charge_data_list = {
+                "rec_charge_ID": charge_field.rec_charge_ID,
+                "bnk_code": charge_field.bnk_code,
+                "bnk_type": charge_field.bnk_type,
+                "chg_amount": charge_field.chg_amount,
+                "chg_code": charge_field.chg_code,
+                "status": charge_field.status,
+                "insert_date": charge_field.insert_date,
+                "update_date": charge_field.update_date,
+                "rtp_code": charge_field.rtp_code,
+                "lon_purpose": lon_list.cat_name,
+                "chg_unit": charge_field.chg_unit,
+                "user_sys_id": charge_field.user_sys_id,
+                "LCIC_ID": enter_data.enterpriseNameLao,
+                "cusType": charge_field.cusType,
+                "user_session_id": "",
+                "rec_reference_code": charge_field.rec_reference_code,
+                "rec_insert_date": charge_field.rec_insert_date,
+                "search_log": charge_field.search_log.search_ID
+            }
+            charge_report_list.append(charge_data_list)
             
                 
                 
             
-#             # Filter by bank code if provided
-#             if bank:
-#                 charge_report = charge_report.filter(bnk_code=bank)
+            # Filter by bank code if provided
+            if bank:
+                charge_report = charge_report.filter(bnk_code=bank)
 
-#             # Filter by year and month if provided
-#             if year:
-#                 charge_report = charge_report.filter(insert_date__year=year)
+            # Filter by year and month if provided
+            if year:
+                charge_report = charge_report.filter(insert_date__year=year)
 
-#                 if month:
-#                     charge_report = charge_report.filter(insert_date__month=month)
+                if month:
+                    charge_report = charge_report.filter(insert_date__month=month)
 
-#             elif month:
-#                 # If month is provided without year, return an error
-#                 return Response({
-#                     'error': 'Year is required when filtering by month.'
-#                 }, status=status.HTTP_400_BAD_REQUEST)
+            elif month:
+                # If month is provided without year, return an error
+                return Response({
+                    'error': 'Year is required when filtering by month.'
+                }, status=status.HTTP_400_BAD_REQUEST)
 
-#             # Apply date range filter if both fromDate and toDate are provided
-#             if from_date and to_date:
-#                 charge_report = charge_report.filter(insert_date__range=[from_date, to_date])
-#             elif from_date:
-#                 charge_report = charge_report.filter(insert_date__gte=from_date)
-#             elif to_date:
-#                 charge_report = charge_report.filter(insert_date__lte=to_date)
+            # Apply date range filter if both fromDate and toDate are provided
+            if from_date and to_date:
+                charge_report = charge_report.filter(insert_date__range=[from_date, to_date])
+            elif from_date:
+                charge_report = charge_report.filter(insert_date__gte=from_date)
+            elif to_date:
+                charge_report = charge_report.filter(insert_date__lte=to_date)
 
-#             # If no records are found, return an appropriate message
-#             if not charge_report.exists():
-#                 return Response({
-#                     'detail': 'No charges found for the provided filters.'
-#                 }, status=status.HTTP_404_NOT_FOUND)
+            # If no records are found, return an appropriate message
+            if not charge_report.exists():
+                return Response({
+                    'detail': 'No charges found for the provided filters.'
+                }, status=status.HTTP_404_NOT_FOUND)
 
-#             # Serialize the data
-#             serializer = ChargeSerializer(charge_report, many=True)
+            # Serialize the data
+            serializer = ChargeSerializer(charge_report, many=True)
             
-#             # return Response({
-#             #     'charge': serializer.data
-#             # }, status=status.HTTP_200_OK)
+            # return Response({
+            #     'charge': serializer.data
+            # }, status=status.HTTP_200_OK)
             
-#             response_data = {
-#                 'charge': charge_report_list
-#             }
-#             return Response(response_data, status=status.HTTP_200_OK)
+            response_data = {
+                'charge': charge_report_list
+            }
+            return Response(response_data, status=status.HTTP_200_OK)
 
 
-#         except Exception as e:
-#             return Response({
-#                 'error': str(e)
-#             }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
