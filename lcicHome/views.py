@@ -6422,7 +6422,7 @@ def get_data3(request):
         data_edit_data = data_edit.objects.filter(id_file=fid)
         data_edit_serializer = DataEditSerializer(data_edit_data, many=True)
 
-        b1_data = B1.objects.filter(id_file=fid, status_customer=1)
+        b1_data = B1.objects.filter(id_file=fid)
         b1_serializer = B1Serializer(b1_data, many=True)
 
         disputes_data = disputes.objects.filter(id_file=fid)
