@@ -220,7 +220,7 @@ class edl_district_code(models.Model):
 
 # API Edl Tracking:
 from django.utils import timezone
-
+# pherm check update
 class UploadDataTracking(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending'),
