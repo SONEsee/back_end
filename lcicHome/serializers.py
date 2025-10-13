@@ -218,6 +218,9 @@ class B1Serializer(serializers.ModelSerializer):
 from rest_framework import serializers
 from .models import EnterpriseInfo
 
+
+
+
 # class EnterpriseInfoSerializer(serializers.ModelSerializer):
 #     class Meta:
 #         model = EnterpriseInfo
