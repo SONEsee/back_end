@@ -13796,7 +13796,7 @@ def get_data_api(request):
                 'error': 'ບໍ່ພົບຂໍ້ມູນສຳລັບ id_file ນີ້'
             }, status=404)
         
-        # Response ແບບງ່າຍໆ
+        
         response_data = {
             'id_file': id_file,
             'counts': {
