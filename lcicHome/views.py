@@ -8327,7 +8327,7 @@ def get_data3(request):
         data_edit_data = data_edit.objects.filter(id_file=fid)
         data_edit_serializer = DataEditSerializer(data_edit_data, many=True)
 
-        b1_data = B1.objects.filter(id_file=fid, status_customer=1)
+        b1_data = B1.objects.filter(id_file=fid)
         b1_serializer = B1Serializer(b1_data, many=True)
 
         disputes_data = disputes.objects.filter(id_file=fid)
@@ -15811,68 +15811,112 @@ def filter_data_by_criteria(id_file, **kwargs):
     return result
 
 
-def get_data_api(request):
-    """
-    API ສຳລັບດຶງຂໍ້ມູນ
-    URL: /api/data/?id_file=10&bnk_code=001&period=202401
-    """
-    # ດຶງ id_file
-    id_file = request.GET.get('id_file')
-    if not id_file:
-        return JsonResponse({
-            'error': 'id_file parameter is required',
-            'example': '/api/data/?id_file=10'
-        }, status=400)
+# def get_data_api(request):
+   
+#     id_file = request.GET.get('id_file')
+#     if not id_file:
+#         return JsonResponse({
+         
+#         }, status=400)
     
    
-    filter_params = {}
-    allowed_filters = ['bnk_code', 'period', 'customer_id', 'loan_id', 'branch_id', 
-                      'segmentType', 'com_enterprise_code', 'product_type', 'lcicID']
+#     filter_params = {}
+#     allowed_filters = ['bnk_code', 'period', 'customer_id', 'loan_id', 'branch_id', 
+#                       'segmentType', 'com_enterprise_code', 'product_type', 'lcicID']
     
-    for key in allowed_filters:
-        if request.GET.get(key):
-            filter_params[key] = request.GET.get(key)
+#     for key in allowed_filters:
+#         if request.GET.get(key):
+#             filter_params[key] = request.GET.get(key)
     
-    # ດຶງຂໍ້ມູນ
-    data = filter_data_by_criteria(id_file, **filter_params)
+
+#     data = filter_data_by_criteria(id_file, **filter_params)
     
-    if data is None:
+#     if data is None:
+#         return JsonResponse({
+#             'error': 'ເກີດຂໍ້ຜິດພາດໃນການດຶງຂໍ້ມູນ'
+#         }, status=500)
+    
+    
+#     response_data = {
+#         'id_file': id_file,
+#         'filters': filter_params,
+#         'counts': {
+#             'b1': data['b1_data'].count(),
+#             'data_edit': data['data_edit'].count(),
+#             'disputes': data['disputes'].count(),
+#             'b_data_damaged': data['b_data_damaged'].count(),
+#             'b1_monthly': data['b1_monthly'].count()
+#         },
+#         'total_records': (
+#             data['b1_data'].count() + 
+#             data['data_edit'].count() + 
+#             data['disputes'].count() + 
+#             data['b_data_damaged'].count() + 
+#             data['b1_monthly'].count()
+#         ),
+#         'data': {
+#             'b1': list(data['b1_data'].values()),
+#             'data_edit': list(data['data_edit'].values()),
+#             'disputes': list(data['disputes'].values()),
+#             'b_data_damaged': list(data['b_data_damaged'].values()),
+#             'b1_monthly': list(data['b1_monthly'].values())
+#         }
+#     }
+    
+#     return JsonResponse(response_data, safe=False)
+def get_data_api(request):
+    # ຮັບແຕ່ id_file ເທົ່ານັ້ນ
+    id_file = request.GET.get('id_file')
+    
+    if not id_file:
         return JsonResponse({
-            'error': 'ເກີດຂໍ້ຜິດພາດໃນການດຶງຂໍ້ມູນ'
-        }, status=500)
+            'error': 'ກະລຸນາລະບຸ id_file'
+        }, status=400)
     
-    # ສ້າງ response
-    response_data = {
-        'id_file': id_file,
-        'filters': filter_params,
-        'counts': {
-            'b1': data['b1_data'].count(),
-            'data_edit': data['data_edit'].count(),
-            'disputes': data['disputes'].count(),
-            'b_data_damaged': data['b_data_damaged'].count(),
-            'b1_monthly': data['b1_monthly'].count()
-        },
-        'total_records': (
-            data['b1_data'].count() + 
-            data['data_edit'].count() + 
-            data['disputes'].count() + 
-            data['b_data_damaged'].count() + 
-            data['b1_monthly'].count()
-        ),
-        'data': {
-            'b1': list(data['b1_data'].values()),
-            'data_edit': list(data['data_edit'].values()),
-            'disputes': list(data['disputes'].values()),
-            'b_data_damaged': list(data['b_data_damaged'].values()),
-            'b1_monthly': list(data['b1_monthly'].values())
+    try:
+        # ດຶງຂໍ້ມູນໂດຍກົງຈາກ id_file (ບໍ່ມີ filter ເພີ່ມເຕີມ)
+        data = filter_data_by_criteria(id_file)
+        
+        if data is None:
+            return JsonResponse({
+                'error': 'ບໍ່ພົບຂໍ້ມູນສຳລັບ id_file ນີ້'
+            }, status=404)
+        
+        # Response ແບບງ່າຍໆ
+        response_data = {
+            'id_file': id_file,
+            'counts': {
+                'b1': data['b1_data'].count(),
+                'data_edit': data['data_edit'].count(),
+                'disputes': data['disputes'].count(),
+                'b_data_damaged': data['b_data_damaged'].count(),
+                'b1_monthly': data['b1_monthly'].count()
+            },
+            'total_records': (
+                data['b1_data'].count() + 
+                data['data_edit'].count() + 
+                data['disputes'].count() + 
+                data['b_data_damaged'].count() + 
+                data['b1_monthly'].count()
+            ),
+            'data': {
+                'b1': list(data['b1_data'].values()),
+                'data_edit': list(data['data_edit'].values()),
+                'disputes': list(data['disputes'].values()),
+                'b_data_damaged': list(data['b_data_damaged'].values()),
+                'b1_monthly': list(data['b1_monthly'].values())
+            }
         }
-    }
-    
-    return JsonResponse(response_data, safe=False)
+        
+        return JsonResponse(response_data, safe=False)
+        
+    except Exception as e:
+        return JsonResponse({
+            'error': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=500)
 
 
 # API Tracking Edl ----------------------------------
-
 
 import requests
 import json
