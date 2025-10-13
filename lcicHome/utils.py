@@ -120,7 +120,7 @@ class ElectricBillValidator:
     @classmethod
     def clean_record(cls, record):
         """
-        Clean and normalize record data
+        Clean and normalize record da
         
         Args:
             record: Raw record dictionary
