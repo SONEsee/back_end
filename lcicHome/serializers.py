@@ -445,7 +445,8 @@ from .models import SidebarItem, SidebarSubItem, Role
 class RoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Role
-        fields = ['id', 'name','name_la', 'can_access_all_paths']
+        # fields = ['id', 'name','name_la', 'can_access_all_paths']
+        fields = '__all__'
 
 
 # class SidebarItemSerializer(serializers.ModelSerializer):
