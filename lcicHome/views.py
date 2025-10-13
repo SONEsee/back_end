@@ -10164,6 +10164,176 @@ class SearchlogReportDetailView(APIView):
 #             return Response({
 #                 'error': str(e)
 #             }, status=status.HTTP_400_BAD_REQUEST)
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from django.db.models import Sum, Count, F, Q
+from django.db.models.functions import ExtractYear, ExtractMonth
+from .models import request_charge
+
+
+class ChargeReportMainView(APIView):
+    """
+    API endpoint for aggregated charge report dashboard.
+    
+    Access Control:
+    - GID 1-5 (Admin/CoAdmin): View all banks' data
+    - GID 6-7 (Client): View only own bank's data
+    
+    Query Parameters:
+    - year: Filter by specific year
+    - month: Filter by specific month (1-12)
+    - bank: Filter by specific bank code
+    - fromDate: Start date filter (YYYY-MM-DD)
+    - toDate: End date filter (YYYY-MM-DD)
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        try:
+            user = request.user
+            
+            # Validate user attributes
+            if not hasattr(user, 'GID') or not user.GID:
+                return Response({
+                    'error': 'User role (GID) not found'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            # Extract GID integer value from User_Group object
+            user_gid = user.GID.GID if hasattr(user.GID, 'GID') else None
+            
+            # Extract bank code from MID object (using 'id' field based on your login response)
+            user_bank_code = None
+            if hasattr(user, 'MID') and user.MID:
+                user_bank_code = getattr(user.MID, 'id', None)
+            
+            if user_gid is None:
+                return Response({
+                    'error': 'User role value not configured'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            # Base queryset with proper filtering
+            queryset = request_charge.objects.filter(
+                status__isnull=False,
+                insert_date__isnull=False
+            )
+            
+            # Role-based access control
+            # Admin/CoAdmin: GID 1-5, Client: GID 6-7
+            is_admin = user_gid in [1, 2, 3, 4, 5]
+            
+            # Convert bank code to string with zero-padding for consistency
+            bank_code_str = str(user_bank_code).zfill(2) if user_bank_code else None
+            
+            if not is_admin:
+                if not bank_code_str:
+                    return Response({
+                        'error': 'Access denied: User bank code not configured'
+                    }, status=status.HTTP_403_FORBIDDEN)
+                
+                # Filter by user's bank code (format: "01", "02", etc.)
+                queryset = queryset.filter(bnk_code=bank_code_str)
+            
+            # Apply optional filters
+            queryset = self._apply_filters(request, queryset)
+            
+            # Aggregate data by bank, year, and month
+            aggregated_data = queryset.annotate(
+                year=ExtractYear('insert_date'),
+                month=ExtractMonth('insert_date')
+            ).values(
+                'bnk_code', 'year', 'month'
+            ).annotate(
+                total_charge_amount=Sum('chg_amount'),
+                transaction_count=Count('rec_charge_ID'),
+                avg_charge_amount=Avg('chg_amount')
+            ).order_by('-year', '-month', 'bnk_code')
+            
+            # Format response
+            dashboard_data = [
+                {
+                    'bank_code': item['bnk_code'],
+                    'year': item['year'],
+                    'month': item['month'],
+                    'month_name': self._get_month_name(item['month']),
+                    'total_charge_amount': round(item['total_charge_amount'] or 0, 2),
+                    'transaction_count': item['transaction_count'],
+                    'avg_charge_amount': round(item['avg_charge_amount'] or 0, 2)
+                }
+                for item in aggregated_data
+            ]
+            
+            # Summary statistics
+            total_summary = {
+                'total_transactions': sum(item['transaction_count'] for item in dashboard_data),
+                'total_amount': round(sum(item['total_charge_amount'] for item in dashboard_data), 2),
+                'unique_banks': len(set(item['bank_code'] for item in dashboard_data))
+            }
+            
+            return Response({
+                'status': 'success',
+                'user_info': {
+                    'role_id': user_gid,
+                    'is_admin': is_admin,
+                    'bank_code': 'ALL' if is_admin else bank_code_str
+                },
+                'summary': total_summary,
+                'data': dashboard_data
+            }, status=status.HTTP_200_OK)
+            
+        except AttributeError as e:
+            return Response({
+                'error': 'Authentication error',
+                'detail': str(e)
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        except Exception as e:
+            return Response({
+                'error': 'Internal server error',
+                'detail': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _apply_filters(self, request, queryset):
+        """Apply query parameter filters to queryset"""
+        year = request.query_params.get('year')
+        month = request.query_params.get('month')
+        bank = request.query_params.get('bank')
+        from_date = request.query_params.get('fromDate')
+        to_date = request.query_params.get('toDate')
+        
+        if year:
+            queryset = queryset.filter(insert_date__year=year)
+        
+        if month:
+            if not year and not (from_date or to_date):
+                # Month filter requires context
+                pass
+            else:
+                queryset = queryset.filter(insert_date__month=month)
+        
+        if bank:
+            queryset = queryset.filter(bnk_code=bank)
+        
+        # Date range filters
+        if from_date and to_date:
+            queryset = queryset.filter(insert_date__range=[from_date, to_date])
+        elif from_date:
+            queryset = queryset.filter(insert_date__gte=from_date)
+        elif to_date:
+            queryset = queryset.filter(insert_date__lte=to_date)
+        
+        return queryset
+    
+    @staticmethod
+    def _get_month_name(month_num):
+        """Convert month number to name"""
+        months = {
+            1: 'January', 2: 'February', 3: 'March', 4: 'April',
+            5: 'May', 6: 'June', 7: 'July', 8: 'August',
+            9: 'September', 10: 'October', 11: 'November', 12: 'December'
+        }
+        return months.get(month_num, 'Unknown')
+
 
 
 from .serializers import ChargeSerializer
@@ -10174,7 +10344,7 @@ from .models import request_charge  # Assuming this is your model
 from django.db.models import Q  # To handle complex queries
 
 class charge_reportView(APIView):
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, bnk_code=None):
         try:
@@ -10192,7 +10362,7 @@ class charge_reportView(APIView):
             for charge_field in charge_report:
                 # print(charge_field)
                     
-                enterprise_data = EnterpriseInfo.objects.filter         (LCICID=charge_field.LCIC_ID)
+                enterprise_data = EnterpriseInfo.objects.filter(LCICID=charge_field.LCIC_ID)
 
                 lon_purpose_data = Main_catalog_cat.objects.filter(cat_value=charge_field.lon_purpose)
                 # print(lon_purpose_data)
@@ -10281,87 +10451,7 @@ class charge_reportView(APIView):
             return Response({
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
-from django.db.models import Sum, Count
-from datetime import datetime, timedelta
-from .models import request_charge, memberInfo
-
-class ChargeReportSummary(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        try:
-            # Retrieve query parameters
-            bank = request.query_params.get('bank')
-            month = request.query_params.get('month')
-            year = request.query_params.get('year')
-            from_date = request.query_params.get('fromDate')
-            to_date = request.query_params.get('toDate')
-
-            # Start with all records
-            charge_report = request_charge.objects.all()
-
-            # Filter by bank code if provided
-            if bank:
-                charge_report = charge_report.filter(bnk_code=bank)
-
-            # Filter by year/month
-            if year:
-                charge_report = charge_report.filter(insert_date__year=year)
-                if month:
-                    charge_report = charge_report.filter(insert_date__month=month)
-            elif month:
-                return Response({
-                    'error': 'Year is required when filtering by month.'
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            # Date range filtering
-            if from_date:
-                from_date = datetime.strptime(from_date, '%Y-%m-%d')
-            if to_date:
-                to_date = datetime.strptime(to_date, '%Y-%m-%d') + timedelta(days=1) - timedelta(seconds=1)
-
-            if from_date and to_date:
-                charge_report = charge_report.filter(insert_date__range=[from_date, to_date])
-            elif from_date:
-                charge_report = charge_report.filter(insert_date__gte=from_date)
-            elif to_date:
-                charge_report = charge_report.filter(insert_date__lte=to_date)
-
-            # Group by bank code and aggregate
-            summary_data = (
-                charge_report.values('bnk_code')
-                .annotate(
-                    total_records=Count('rec_charge_ID'),
-                    total_chg_amount=Sum('chg_amount')
-                )
-                .order_by('bnk_code')
-            )
-
-            # Build response with bank names
-            response_data = []
-            for data in summary_data:
-                bank_info = memberInfo.objects.filter(bnk_code=data['bnk_code']).first()
-                # Adjust these fields based on your model
-                bank_code = bank_info.bnk_code if bank_info else 'Unknown'
-                bank_name = getattr(bank_info, 'bnk_name', 'Unknown Bank')
-                bank_nameL = getattr(bank_info, 'nameL', 'Unknown Lao Name')
-
-                response_data.append({
-                    'bnk_code': data['bnk_code'],
-                    'bank_name': f"{bank_name} - {bank_nameL}",
-                    'total_records': data['total_records'],
-                    'total_chg_amount': data['total_chg_amount'] or 0
-                })
-
-            return Response({'summary': response_data}, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
+    
             
             
 from rest_framework.views import APIView
@@ -16092,6 +16182,8 @@ class InitializeDistrictsAPIView(APIView):
                 'error': f'Initialization failed: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+from rest_framework.throttling import UserRateThrottle
+
 class UploadDataAPIView(APIView):
     """Handle individual district data upload"""
     
@@ -16359,9 +16451,15 @@ class UploadDataAPIView(APIView):
             tracking.total_records = total_records
             tracking.processed_records = total_processed
             tracking.failed_records = total_failed
+            tracking.payment_records = payment_processed  # ✅ ADD THIS LINE
+            tracking.customer_records = customer_processed  # ✅ ADD THIS LINE
             tracking.data_size_mb = round(total_size, 2)
             tracking.success_rates = (total_processed / total_records * 100) if total_records > 0 else 0
+
             tracking.save()
+            duration = None
+            if tracking.upload_started and tracking.upload_completed:
+                duration = (tracking.upload_completed - tracking.upload_started).total_seconds()
             
             # Calculate upload duration after save
             duration = None
@@ -16514,11 +16612,11 @@ class UploadDataAPIView(APIView):
             )
             raise e
 
-
     def insert_customer_info_data(self, records, tracking):
-        """Insert or update customer records in edl_customer_info table"""
+        """Insert customer records - Skip if already exists (OPTIMIZED)"""
         processed_count = 0
         failed_count = 0
+        skipped_count = 0
         
         try:
             UploadLog.objects.create(
@@ -16527,71 +16625,100 @@ class UploadDataAPIView(APIView):
                 message=f'Starting to process {len(records)} customer records'
             )
             
-            # Use batch processing for better performance
-            batch_size = 500
-            for i in range(0, len(records), batch_size):
-                batch = records[i:i + batch_size]
-                
-                for j, item in enumerate(batch):
-                    try:
-                        if not isinstance(item, dict):
-                            failed_count += 1
-                            continue
-                        
-                        def safe_get(key, default=''):
-                            value = item.get(key, default)
-                            return value if value is not None else default
-                        
-                        # Use update_or_create for upsert logic
-                        customer_id = self.truncate(safe_get('CUSTOMER_ID', ''), 100)
-                        
-                        if not customer_id:  # Skip if no customer ID
-                            failed_count += 1
-                            continue
-                        
-                        customer, created = edl_customer_info.objects.update_or_create(
-                            Customer_ID=customer_id,
-                            defaults={
-                                'No': self.truncate(safe_get('INDEX_NO', ''), 100),
-                                'Company_name': self.truncate(safe_get('COMPANY_NAME', ''), 100),
-                                'Name': self.truncate(safe_get('GIVEN_NAME', ''), 100),
-                                'Surname': self.truncate(safe_get('FAMILY_NAME', ''), 100),
-                                'National_ID': self.truncate(safe_get('ID_NO', ''), 100),
-                                'Passport': self.truncate(safe_get('PASSPORT_NO', ''), 100),
-                                'Address': self.truncate(safe_get('FORW_ADDRESS', ''), 100),
-                                'Dustrict_ID': self.truncate(safe_get('DIS_ID', ''), 100),
-                                'Province_ID': self.truncate(safe_get('PRO_ID', ''), 100),
-                                'Tel': self.truncate(safe_get('TEL_NO', ''), 100),
-                                'Email': self.truncate(safe_get('EMAIL_NO', ''), 100),
-                                'Cus_type': self.truncate(safe_get('SUPPLY_TYPE', ''), 100),
-                                'Regis_date': self.truncate(safe_get('REGIT_D', ''), 100)
-                            }
-                        )
-                        
-                        processed_count += 1
-                    
-                    except Exception as e:
-                        failed_count += 1
-                        if failed_count <= 10:  # Log only first 10 errors
-                            UploadLog.objects.create(
-                                tracking=tracking,
-                                log_level='ERROR',
-                                message=f'Failed to process customer record {i+j}: {str(e)}'
-                            )
-                        continue
-                
-                # Log progress after each batch
-                if (i + batch_size) % 1000 == 0 or (i + batch_size) >= len(records):
-                    UploadLog.objects.create(
-                        tracking=tracking,
-                        log_level='INFO',
-                        message=f'Customer records progress: {min(i + batch_size, len(records))}/{len(records)} processed'
-                    )
+            # OPTIMIZATION 1: Get all existing customer IDs in one query
+            existing_customer_ids = set(
+                edl_customer_info.objects.values_list('Customer_ID', flat=True)
+            )
             
             UploadLog.objects.create(
                 tracking=tracking,
                 log_level='INFO',
-                message=f'Customer data processing completed. Processed: {processed_count}, Failed: {failed_count}'
+                message=f'Found {len(existing_customer_ids)} existing customers in database'
+            )
+            
+            # OPTIMIZATION 2: Prepare batch insert list
+            customers_to_insert = []
+            batch_size = 500
+            
+            for i, item in enumerate(records):
+                try:
+                    if not isinstance(item, dict):
+                        failed_count += 1
+                        continue
+                    
+                    def safe_get(key, default=''):
+                        value = item.get(key, default)
+                        return value if value is not None else default
+                    
+                    customer_id = self.truncate(safe_get('CUSTOMER_ID', ''), 100)
+                    
+                    if not customer_id:  # Skip if no customer ID
+                        failed_count += 1
+                        continue
+                    
+                    # OPTIMIZATION 3: Skip if customer already exists
+                    if customer_id in existing_customer_ids:
+                        skipped_count += 1
+                        continue
+                    
+                    # OPTIMIZATION 4: Prepare object for bulk insert
+                    customer = edl_customer_info(
+                        Customer_ID=customer_id,
+                        No=self.truncate(safe_get('INDEX_NO', ''), 100),
+                        Company_name=self.truncate(safe_get('COMPANY_NAME', ''), 100),
+                        Name=self.truncate(safe_get('GIVEN_NAME', ''), 100),
+                        Surname=self.truncate(safe_get('FAMILY_NAME', ''), 100),
+                        National_ID=self.truncate(safe_get('ID_NO', ''), 100),
+                        Passport=self.truncate(safe_get('PASSPORT_NO', ''), 100),
+                        Address=self.truncate(safe_get('FORW_ADDRESS', ''), 100),
+                        Dustrict_ID=self.truncate(safe_get('DIS_ID', ''), 100),
+                        Province_ID=self.truncate(safe_get('PRO_ID', ''), 100),
+                        Tel=self.truncate(safe_get('TEL_NO', ''), 100),
+                        Email=self.truncate(safe_get('EMAIL_NO', ''), 100),
+                        Cus_type=self.truncate(safe_get('SUPPLY_TYPE', ''), 100),
+                        Regis_date=self.truncate(safe_get('REGIT_D', ''), 100)
+                    )
+                    
+                    customers_to_insert.append(customer)
+                    
+                    # OPTIMIZATION 5: Bulk insert when batch is full
+                    if len(customers_to_insert) >= batch_size:
+                        edl_customer_info.objects.bulk_create(
+                            customers_to_insert, 
+                            ignore_conflicts=True
+                        )
+                        processed_count += len(customers_to_insert)
+                        customers_to_insert = []
+                        
+                        # Log progress
+                        UploadLog.objects.create(
+                            tracking=tracking,
+                            log_level='INFO',
+                            message=f'Customer records progress: {i+1}/{len(records)} processed, {processed_count} new, {skipped_count} skipped'
+                        )
+                
+                except Exception as e:
+                    failed_count += 1
+                    if failed_count <= 10:  # Log only first 10 errors
+                        UploadLog.objects.create(
+                            tracking=tracking,
+                            log_level='ERROR',
+                            message=f'Failed to process customer record {i}: {str(e)}'
+                        )
+                    continue
+            
+            # OPTIMIZATION 6: Insert remaining customers
+            if customers_to_insert:
+                edl_customer_info.objects.bulk_create(
+                    customers_to_insert, 
+                    ignore_conflicts=True
+                )
+                processed_count += len(customers_to_insert)
+            
+            UploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Customer data processing completed. New: {processed_count}, Skipped: {skipped_count}, Failed: {failed_count}'
             )
             
             return processed_count, failed_count
@@ -16618,6 +16745,110 @@ class UploadDataAPIView(APIView):
             return float(value or 0)
         except (ValueError, TypeError):
             return 0.0
+        
+    # def insert_customer_info_data(self, records, tracking):
+    #     """Insert or update customer records in edl_customer_info table"""
+    #     processed_count = 0
+    #     failed_count = 0
+        
+    #     try:
+    #         UploadLog.objects.create(
+    #             tracking=tracking,
+    #             log_level='INFO',
+    #             message=f'Starting to process {len(records)} customer records'
+    #         )
+            
+    #         # Use batch processing for better performance
+    #         batch_size = 500
+    #         for i in range(0, len(records), batch_size):
+    #             batch = records[i:i + batch_size]
+                
+    #             for j, item in enumerate(batch):
+    #                 try:
+    #                     if not isinstance(item, dict):
+    #                         failed_count += 1
+    #                         continue
+                        
+    #                     def safe_get(key, default=''):
+    #                         value = item.get(key, default)
+    #                         return value if value is not None else default
+                        
+    #                     # Use update_or_create for upsert logic
+    #                     customer_id = self.truncate(safe_get('CUSTOMER_ID', ''), 100)
+                        
+    #                     if not customer_id:  # Skip if no customer ID
+    #                         failed_count += 1
+    #                         continue
+                        
+    #                     customer, created = edl_customer_info.objects.update_or_create(
+    #                         Customer_ID=customer_id,
+    #                         defaults={
+    #                             'No': self.truncate(safe_get('INDEX_NO', ''), 100),
+    #                             'Company_name': self.truncate(safe_get('COMPANY_NAME', ''), 100),
+    #                             'Name': self.truncate(safe_get('GIVEN_NAME', ''), 100),
+    #                             'Surname': self.truncate(safe_get('FAMILY_NAME', ''), 100),
+    #                             'National_ID': self.truncate(safe_get('ID_NO', ''), 100),
+    #                             'Passport': self.truncate(safe_get('PASSPORT_NO', ''), 100),
+    #                             'Address': self.truncate(safe_get('FORW_ADDRESS', ''), 100),
+    #                             'Dustrict_ID': self.truncate(safe_get('DIS_ID', ''), 100),
+    #                             'Province_ID': self.truncate(safe_get('PRO_ID', ''), 100),
+    #                             'Tel': self.truncate(safe_get('TEL_NO', ''), 100),
+    #                             'Email': self.truncate(safe_get('EMAIL_NO', ''), 100),
+    #                             'Cus_type': self.truncate(safe_get('SUPPLY_TYPE', ''), 100),
+    #                             'Regis_date': self.truncate(safe_get('REGIT_D', ''), 100)
+    #                         }
+    #                     )
+                        
+    #                     processed_count += 1
+                    
+    #                 except Exception as e:
+    #                     failed_count += 1
+    #                     if failed_count <= 10:  # Log only first 10 errors
+    #                         UploadLog.objects.create(
+    #                             tracking=tracking,
+    #                             log_level='ERROR',
+    #                             message=f'Failed to process customer record {i+j}: {str(e)}'
+    #                         )
+    #                     continue
+                
+    #             # Log progress after each batch
+    #             if (i + batch_size) % 1000 == 0 or (i + batch_size) >= len(records):
+    #                 UploadLog.objects.create(
+    #                     tracking=tracking,
+    #                     log_level='INFO',
+    #                     message=f'Customer records progress: {min(i + batch_size, len(records))}/{len(records)} processed'
+    #                 )
+            
+    #         UploadLog.objects.create(
+    #             tracking=tracking,
+    #             log_level='INFO',
+    #             message=f'Customer data processing completed. Processed: {processed_count}, Failed: {failed_count}'
+    #         )
+            
+    #         return processed_count, failed_count
+            
+    #     except Exception as e:
+    #         UploadLog.objects.create(
+    #             tracking=tracking,
+    #             log_level='ERROR',
+    #             message=f'Customer data insert failed: {str(e)}'
+    #         )
+    #         raise e
+
+
+    # def truncate(self, value, max_length):
+    #     """Safely truncate string to max length"""
+    #     if value is None:
+    #         return ''
+    #     return str(value)[:max_length]
+
+
+    # def safe_decimal(self, value):
+    #     """Safely convert to decimal"""
+    #     try:
+    #         return float(value or 0)
+    #     except (ValueError, TypeError):
+    #         return 0.0
 
 class UploadTrackingDetailAPIView(APIView):
     """Get detailed tracking information with logs"""
@@ -18947,3 +19178,194 @@ class WaterSummaryStatsAPIView(APIView):
         except Exception as e:
             logger.error(f"Error in water summary stats: {str(e)}")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from django.db.models import Q
+from .models import request_charge, EnterpriseInfo, Main_catalog_cat, memberInfo
+
+
+class ChargeReportDetailView(APIView):
+    """
+    API endpoint for detailed charge report transactions.
+    
+    Access Control:
+    - GID 1-5 (Admin/CoAdmin): View all banks' data
+    - GID 6-7 (Client): View only own bank's data
+    
+    Query Parameters:
+    - bank: Filter by bank code (e.g., "01", "02")
+    - year: Filter by year (e.g., 2025)
+    - month: Filter by month (1-12)
+    - fromDate: Start date (YYYY-MM-DD)
+    - toDate: End date (YYYY-MM-DD)
+    - status: Filter by status (pending, completed, etc.)
+    - limit: Number of records to return (default: 100, max: 1000)
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        try:
+            user = request.user
+            
+            # Validate user attributes
+            if not hasattr(user, 'GID') or not user.GID:
+                return Response({
+                    'error': 'User role (GID) not found'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            # Extract user info
+            user_gid = user.GID.GID if hasattr(user.GID, 'GID') else None
+            user_bank_code = None
+            if hasattr(user, 'MID') and user.MID:
+                user_bank_code = getattr(user.MID, 'id', None)
+            
+            if user_gid is None:
+                return Response({
+                    'error': 'User role value not configured'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            # Role-based access control
+            is_admin = user_gid in [1, 2, 3, 4, 5]
+            bank_code_str = str(user_bank_code).zfill(2) if user_bank_code else None
+            
+            # Base queryset
+            queryset = request_charge.objects.select_related(
+                'search_log'
+            ).filter(
+                insert_date__isnull=False
+            ).order_by('-rec_charge_ID')
+            
+            # Apply role-based filtering
+            if not is_admin:
+                if not bank_code_str:
+                    return Response({
+                        'error': 'Access denied: User bank code not configured'
+                    }, status=status.HTTP_403_FORBIDDEN)
+                queryset = queryset.filter(bnk_code=bank_code_str)
+            
+            # Apply query parameter filters
+            queryset = self._apply_filters(request, queryset)
+            
+            # Limit results
+            limit = int(request.query_params.get('limit', 100))
+            limit = min(limit, 1000)  # Max 1000 records
+            
+            queryset = queryset[:limit]
+            
+            # Build detailed response
+            charge_report_list = []
+            
+            for charge_field in queryset:
+                # Get enterprise name
+                enterprise_name = ""
+                try:
+                    enterprise = EnterpriseInfo.objects.filter(
+                        LCICID=charge_field.LCIC_ID
+                    ).first()
+                    if enterprise:
+                        enterprise_name = f"{charge_field.LCIC_ID} - {enterprise.enterpriseNameLao}"
+                    else:
+                        enterprise_name = charge_field.LCIC_ID or ""
+                except Exception:
+                    enterprise_name = charge_field.LCIC_ID or ""
+                
+                # Get loan purpose name
+                loan_purpose_name = ""
+                try:
+                    loan_purpose = Main_catalog_cat.objects.filter(
+                        cat_value=charge_field.lon_purpose
+                    ).first()
+                    if loan_purpose:
+                        loan_purpose_name = loan_purpose.cat_name
+                    else:
+                        loan_purpose_name = charge_field.lon_purpose or ""
+                except Exception:
+                    loan_purpose_name = charge_field.lon_purpose or ""
+                
+                # Get bank name
+                bank_name = ""
+                try:
+                    bank = memberInfo.objects.filter(
+                        bnk_code=charge_field.bnk_code
+                    ).first()
+                    if bank:
+                        bank_name = getattr(bank, 'bnk_name', '') or getattr(bank, 'name', '')
+                        bank_display = f"{charge_field.bnk_code}-{bank_name}"
+                    else:
+                        bank_display = charge_field.bnk_code or ""
+                except Exception:
+                    bank_display = charge_field.bnk_code or ""
+                
+                charge_data = {
+                    "rec_charge_ID": charge_field.rec_charge_ID,
+                    "bnk_code": bank_display,
+                    "bnk_type": charge_field.bnk_type or "",
+                    "chg_amount": float(charge_field.chg_amount) if charge_field.chg_amount else 0,
+                    "chg_code": charge_field.chg_code or "",
+                    "status": charge_field.status or "",
+                    "insert_date": charge_field.insert_date,
+                    "update_date": charge_field.update_date,
+                    "rtp_code": charge_field.rtp_code or "",
+                    "lon_purpose": loan_purpose_name,
+                    "chg_unit": charge_field.chg_unit or "",
+                    "user_sys_id": charge_field.user_sys_id or "",
+                    "LCIC_ID": enterprise_name,
+                    "cusType": charge_field.cusType or "",
+                    "user_session_id": charge_field.user_session_id or "",
+                    "rec_reference_code": charge_field.rec_reference_code or "",
+                    "rec_insert_date": charge_field.rec_insert_date,
+                    "search_log": charge_field.search_log.search_ID if charge_field.search_log else None
+                }
+                
+                charge_report_list.append(charge_data)
+            
+            return Response({
+                'status': 'success',
+                'user_info': {
+                    'role_id': user_gid,
+                    'is_admin': is_admin,
+                    'bank_code': 'ALL' if is_admin else bank_code_str
+                },
+                'total_records': len(charge_report_list),
+                'data': charge_report_list
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': 'Internal server error',
+                'detail': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _apply_filters(self, request, queryset):
+        """Apply query parameter filters"""
+        bank = request.query_params.get('bank')
+        year = request.query_params.get('year')
+        month = request.query_params.get('month')
+        from_date = request.query_params.get('fromDate')
+        to_date = request.query_params.get('toDate')
+        status_filter = request.query_params.get('status')
+        
+        if bank:
+            queryset = queryset.filter(bnk_code=bank)
+        
+        if year:
+            queryset = queryset.filter(insert_date__year=year)
+        
+        if month:
+            queryset = queryset.filter(insert_date__month=month)
+        
+        if from_date and to_date:
+            queryset = queryset.filter(insert_date__range=[from_date, to_date])
+        elif from_date:
+            queryset = queryset.filter(insert_date__gte=from_date)
+        elif to_date:
+            queryset = queryset.filter(insert_date__lte=to_date)
+        
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        
+        return queryset
+

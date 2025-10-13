@@ -56,7 +56,7 @@ from rest_framework_simplejwt.views import (
 from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView,ChargeMatrixViewSet, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files,BankUsersView,LoanCountByDate,CountSearchLogbyDate,CountFeebyDate
 from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView
 from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files,BankUsersView,LoanCountByDate,CountSearchLogbyDate,CountFeebyDate
-from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddLCICSystemUser, SysUserTokenRefresh,LCICSystemUserDetailView, LCICSystemUserListView, BankListCreateView,BankDetailView, EDLProvinceDetailAPIView, FileElectricListAPIView, ElectricReportAPIView, UserGroupViewSet,UploadTrackingListAPIView,UploadDataAPIView,UploadTrackingDetailAPIView,InitializeTrackingAPIView, DebugAPIView,InitializeTestDataAPIView, TestRealUploadAPIView, InitializeDistrictsAPIView
+from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddLCICSystemUser, SysUserTokenRefresh,LCICSystemUserDetailView, LCICSystemUserListView, BankListCreateView,BankDetailView, EDLProvinceDetailAPIView, FileElectricListAPIView, ElectricReportAPIView, UserGroupViewSet,UploadTrackingListAPIView,UploadDataAPIView,UploadTrackingDetailAPIView,InitializeTrackingAPIView, DebugAPIView,InitializeTestDataAPIView, TestRealUploadAPIView, InitializeDistrictsAPIView, ChargeReportMainView, ChargeReportDetailView
 
 
 from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView
@@ -193,16 +193,14 @@ urlpatterns = [
    path('charge_report/<str:bnk_code>', charge_reportView.as_view(), name='charge_searchlog'),
    path('searchlog_chart/', SearchLogChartView.as_view(), name='searchlog_chart'),
    
+   
+   
    path('searchlog_chart/month/<str:month_year>', SearchLogChart_MonthView.as_view(), name='searchlog_chartbymonth'),
    path('searchlog_chart/month/', SearchLogChart_MonthView.as_view(), name='searchlog_chart_current_month'),
    path('searchlog_chart/month/<str:month_year>/', SearchLogChart_MonthView.as_view(), name='searchlog_chart_month'),  
-   
    path('searchlog_chart/date/<str:inquiry_date>', SearchLogChartByDateView.as_view(), name='searchlog_chartbydate'),
-   
    path('searchlog_chart/perday/',SearchLogChargePerDayView.as_view(), name='searchlog_chartperday'),
-   
-    path('charge-count/', ChargeCountByHourView.as_view(), name='charge-count-by-hour'),
-   
+   path('charge-count/', ChargeCountByHourView.as_view(), name='charge-count-by-hour'),
    path('searchlog_chart/bank/<str:bnk_code>', SearchLogChartByBankCodeView.as_view(), name='searchlog_chartbybank'),
    path('charge_chart/',ChargeChartView.as_view(), name='charge_report_chart'),
    path('charge_chart/date/<str:charge_date>', ChargeChartByDateView.as_view(), name='charge-chart-by-date'),
@@ -228,17 +226,12 @@ urlpatterns = [
    path('report_catalog/<int:pk>/', ReportCatalogView.as_view(), name='report-catalog-detail'),
    path('memberinfo/', memberinfolistView.as_view(),name='memberinfo'),
    
-   
-   
    path('enterprisematch/', EnterpriseInfoMatch.as_view(), name='enterprise-info-match'),
    
    path('api/v1/enterprise-info/search/', EnterpriseInfoSearch.as_view(), name='enterprise-info-search'),
     path('api/v1/enterprise-info/by-lcic/<str:lcic_code>/', EnterpriseByLCICView.as_view(), name='enterprise_by_lcic'),
     path('api/v1/enterprise-info/by-enterprise/<str:enterprise_id>/', LCICByEnterpriseView.as_view(), name='lcic_by_enterprise'),
 
-  
-   
-   
    path('enter', include(router.urls)),
    
    path('productinfo1/', get_product_info, name='get_product_info'),
@@ -354,22 +347,16 @@ urlpatterns = [
     #Tracking API Edl --------------------------
     # Step 1: Load Provinces
     path('provinces/', views.ProvinceListAPIView.as_view(), name='province-list'),
-    
     # Step 2: Load Districts for Selected Province  
     path('districts/', views.DistrictListAPIView.as_view(), name='district-list'),
-    
     # Step 3: Initialize Districts Tracking for Province + Month
     path('initialize-districts/', views.InitializeDistrictsAPIView.as_view(), name='initialize-districts'),
-    
     # Step 4: Load Individual District Data (Upload Data → Fetches from EDL API → Inserts into Electric_Bill)
     path('upload-data/', views.UploadDataAPIView.as_view(), name='upload-data'),
-    
     # Step 5: Monitor Progress - Get Tracking Status for Province
     path('upload-tracking/', views.UploadTrackingListAPIView.as_view(), name='upload-tracking-list'),
-    
     # Step 6: Monitor Progress - Get Detailed Logs  
     path('upload-tracking/<int:tracking_id>/', views.UploadTrackingDetailAPIView.as_view(), name='upload-tracking-detail'),
-    
     path('initialize-tracking/', InitializeTrackingAPIView.as_view(), name='initialize-tracking'),
     path('debug/', DebugAPIView.as_view(), name='debug-api'),
     path('init-test-data/', InitializeTestDataAPIView.as_view(), name='init-test-data'),
@@ -388,12 +375,14 @@ urlpatterns = [
     path('edl-summary/export/', views.EDLExportSummaryAPIView.as_view(), name='edl-summary-export'),
     path('overview/', views.EDLSummaryOverviewAPIView.as_view(), name='overview'),
     
-  
     path('water/', include(water_supply_patterns)),
     path('water-summary/', include(water_summary_patterns)),
     
+    # API Mai Sumlup LCIC -----------------
+    path('charge_report_main/', ChargeReportMainView.as_view(), name='charge-report-main'),
+    path('charge_report_detail/', ChargeReportDetailView.as_view(), name='charge-report-detail'),
     
-    
+    #--------------------------------------
     path('systemlogin/', SysUserLogin.as_view(), name='sys_user_login'),
     path('sys-add-user/', AddLCICSystemUser.as_view(), name='add_system_user'),
     path('token/refresh/', SysUserTokenRefresh.as_view(), name='token_refresh'),

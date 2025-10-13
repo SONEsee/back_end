@@ -879,7 +879,8 @@ class UploadTrackingSerializer(serializers.ModelSerializer):
             'id', 'pro_id', 'pro_name', 'dis_id', 'dis_name', 
             'upload_month', 'status', 'status_color', 'total_records', 
             'processed_records', 'failed_records', 'success_rate_formatted',
-            'data_size_mb', 'formatted_size', 'upload_started', 
+            'data_size_mb', 'formatted_size', 'upload_started','payment_records',   # ✅ ADD THIS
+            'customer_records',  # ✅ ADD THIS 
             'upload_completed', 'upload_duration', 'user_upload', 
             'created_at', 'updated_at'
         ]

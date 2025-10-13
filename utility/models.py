@@ -240,6 +240,9 @@ class UploadDataTracking(models.Model):
     data_size_mb = models.FloatField(default=0.0)
     upload_started = models.DateTimeField(null=True, blank=True)
     upload_completed = models.DateTimeField(null=True, blank=True)
+    payment_records = models.IntegerField(default=0)  # ✅ ADD THIS
+    customer_records = models.IntegerField(default=0)  # ✅ ADD THIS
+    upload_duration = models.FloatField(null=True, blank=True)  # ✅ ADD THIS (optional)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     processed_records = models.IntegerField(default=0)
