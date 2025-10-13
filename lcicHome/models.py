@@ -1616,6 +1616,7 @@ class Role(models.Model):
     name = models.CharField(max_length=100)
     name_lao = models.CharField(max_length=100, blank=True, null=True)
     can_access_all_paths = models.BooleanField(default=False)
+    name_la = models.CharField(max_length=100, blank=True, null=True)
 
     def __str__(self):
         return self.name
