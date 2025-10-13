@@ -13743,7 +13743,7 @@ from django.http import StreamingHttpResponse
 import time
 import threading
 
-# backend/django_app/views.py
+
 class FileUploadView(APIView):
     def get(self, request):
         files = FileDetail.objects.all()
@@ -15882,7 +15882,7 @@ def get_data_api(request):
                 'error': 'ບໍ່ພົບຂໍ້ມູນສຳລັບ id_file ນີ້'
             }, status=404)
         
-        # Response ແບບງ່າຍໆ
+        
         response_data = {
             'id_file': id_file,
             'counts': {
