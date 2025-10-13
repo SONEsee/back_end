@@ -13743,7 +13743,7 @@ from django.http import StreamingHttpResponse
 import time
 import threading
 
-# backend/django_app/views.py
+
 class FileUploadView(APIView):
     def get(self, request):
         files = FileDetail.objects.all()
