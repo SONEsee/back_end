@@ -949,25 +949,7 @@ class B1_Yearly(models.Model):
     is_disputed = models.BigIntegerField(default=0, null=True)
     LCIC_code = models.CharField(max_length=255, blank=True, null=True)
 
-class C1 (models.Model):
-    id = models.AutoField(primary_key=True)
-    id_file = models.CharField(max_length=100)
-    bnk_code = models.CharField(max_length=30)
-    period = models.CharField(max_length=150)
-    segmentType = models.CharField(max_length=10)
-    branch_id_code = models.CharField(max_length=30)
-    bank_customer_ID = models.CharField(max_length=50)
-    loan_id = models.CharField(max_length=50)
-    col_id = models.CharField(max_length=30) 
-    col_type = models.CharField(max_length=30)
-    collateral_status = models.CharField(max_length=30)
-    insert_date = models.DateTimeField(blank=True)
-    update_date = models.DateTimeField(blank=True)
-    lcicID = models.CharField(max_length=30)
-    LCIC_code = models.CharField(max_length=255)
-    user_id = models.CharField(max_length=100)
-    com_enterprise_code = models.CharField(max_length=50)
-    data_status = models.CharField(max_length=100, blank=True, null=True)
+
 
 class CDL (models.Model):
     id = models.AutoField(primary_key=True)
@@ -1017,6 +999,26 @@ class CDL (models.Model):
     user_id = models.CharField(max_length=255)
     period = models.CharField(max_length=255)
     col_type = models.CharField(max_length=30)
+
+class C1 (models.Model):
+    id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
+    bnk_code = models.CharField(max_length=30)
+    period = models.CharField(max_length=150)
+    segmentType = models.CharField(max_length=10)
+    branch_id_code = models.CharField(max_length=30)
+    bank_customer_ID = models.CharField(max_length=50)
+    loan_id = models.CharField(max_length=50)
+    col_id = models.CharField(max_length=30) 
+    col_type = models.CharField(max_length=30)
+    collateral_status = models.CharField(max_length=30)
+    insert_date = models.DateTimeField(blank=True)
+    update_date = models.DateTimeField(blank=True)
+    lcicID = models.CharField(max_length=30)
+    LCIC_code = models.CharField(max_length=255)
+    user_id = models.CharField(max_length=100)
+    com_enterprise_code = models.CharField(max_length=50)
+    data_status = models.CharField(max_length=100, blank=True, null=True)
 class C1_disptes (models.Model):
     id = models.AutoField(primary_key=True)
     id_file = models.CharField(max_length=100)

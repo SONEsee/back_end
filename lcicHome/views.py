@@ -8358,74 +8358,193 @@ from django.http import JsonResponse
 from .models import  Upload_File_C, C1, C_error ,col_real_estates, col_money_mia, col_equipment_eqi , col_project_prj, col_vechicle_veh, col_guarantor_gua, col_goldsilver_gold,C_error
 from .serializers import UploadFilecSerializer, C1Serializer, C_errorSerializer,col_real_estatesSerializer, col_money_miaSerializer, col_equipment_eqiSerializer, col_project_prjSerializer, col_vechicle_vehSerializer, col_guarantor_guaSerializer, col_goldsilver_goldSerializer,C_errorSerializer
 
+# logger = logging.getLogger(__name__)
+
+# @api_view(['GET'])
+# def get_data4(request):
+#     try:
+#         cid = request.GET.get('CID')
+
+#         logger.debug(f"Received CID: {cid}")
+
+#         if not cid:
+#             return JsonResponse({'error': 'CID is required'}, status=400)
+
+#         c1_data = C1.objects.filter(id_file=cid)
+#         c1_serializer = C1Serializer( c1_data, many=True)
+
+#         c_error_data= C_error.objects.filter(id_file=cid)
+#         c_errorSerializer = C_errorSerializer(c_error_data, many=True)
+
+#         col_real_estates_data = col_real_estates.objects.filter(id_file=cid)
+#         col_real_estates_serializer = col_real_estatesSerializer(col_real_estates_data, many=True)
+
+#         col_money_data = col_money_mia.objects.filter(id_file=cid)
+#         col_money_serializer = col_money_miaSerializer(col_money_data, many=True)
+
+#         col_equipment_eqi_data = col_equipment_eqi.objects.filter(id_file=cid)
+#         col_equipment_eqi_serializer = col_equipment_eqiSerializer(col_equipment_eqi_data, many=True)
+
+#         col_project_prj_data = col_project_prj.objects.filter(id_file=cid)
+#         col_project_prj_serializer = col_project_prjSerializer(col_project_prj_data, many=True)
+
+#         col_vechicle_veh_data = col_vechicle_veh.objects.filter(id_file=cid)
+#         col_vechicle_veh_serializer = col_vechicle_vehSerializer(col_vechicle_veh_data, many=True)
+
+#         col_guarantor_gua_data = col_guarantor_gua.objects.filter(id_file=cid)
+#         col_guarantor_gua_serializer = col_guarantor_guaSerializer(col_guarantor_gua_data, many=True)
+
+#         col_goldsilver_gold_data = col_goldsilver_gold.objects.filter(id_file=cid)
+#         col_goldsilver_gold_serializer = col_goldsilver_goldSerializer(col_goldsilver_gold_data, many=True)
+
+#         c1_disptes = C1_disptes.objects.filter(id_file=cid)
+#         c1_disptes_serializer = C1Serializer(c1_disptes, many=True)
+
+#         uploadfilec_data = Upload_File_C.objects.filter(CID=cid)
+#         uploadfilec_serializer = UploadFilecSerializer(uploadfilec_data, many=True)
+
+
+
+
+#         data = {
+#             'C1': c1_serializer.data,
+#             'C_error': c_errorSerializer.data,
+#             'col_real_estates': col_real_estates_serializer.data,
+#             'col_money_mia': col_money_serializer.data,
+#             'col_equipment_eqi': col_equipment_eqi_serializer.data,
+#             'col_project_prj': col_project_prj_serializer.data,
+#             'col_vechicle_veh': col_vechicle_veh_serializer.data,
+#             'col_guarantor_gua': col_guarantor_gua_serializer.data,
+#             'col_goldsilver_gold': col_goldsilver_gold_serializer.data,
+#             'C1_disptes': c1_disptes_serializer.data,
+#             'uploadfile': uploadfilec_serializer.data
+           
+#         }
+
+#         return JsonResponse(data)
+#     except Exception as e:
+#         logger.error(f"Error fetching data: {str(e)}")
+#         return JsonResponse({'error': str(e)}, status=500)
+import logging
+from django.core.paginator import Paginator
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+
 logger = logging.getLogger(__name__)
 
 @api_view(['GET'])
 def get_data4(request):
     try:
+        # ✅ ຮັບ CID ເປັນ string
         cid = request.GET.get('CID')
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 20))
 
-        logger.debug(f"Received CID: {cid}")
+        logger.debug(f"Received CID: {cid}, Page: {page}, Size: {page_size}")
 
         if not cid:
-            return JsonResponse({'error': 'CID is required'}, status=400)
+            return Response(
+                {'error': 'CID is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        c1_data = C1.objects.filter(id_file=cid)
-        c1_serializer = C1Serializer( c1_data, many=True)
+        # ✅ Helper function ສຳລັບ paginate
+        def paginate_queryset(queryset, serializer_class):
+            paginator = Paginator(queryset, page_size)
+            page_obj = paginator.get_page(page)
+            
+            serializer = serializer_class(page_obj, many=True)
+            
+            return {
+                'items': serializer.data,
+                'total_items': paginator.count,
+                'total_pages': paginator.num_pages,
+                'current_page': page,
+                'page_size': page_size,
+                'has_next': page_obj.has_next(),
+                'has_previous': page_obj.has_previous(),
+            }
 
-        c_error_data= C_error.objects.filter(id_file=cid)
-        c_errorSerializer = C_errorSerializer(c_error_data, many=True)
+        # ✅ Query ດ້ວຍ id_file (string) ສຳລັບຕາຕະລາງອື່ນ
+        c1_data = C1.objects.filter(id_file=cid).order_by('-id')
+        c_error_data = C_error.objects.filter(id_file=cid).order_by('-id')
+        col_real_estates_data = col_real_estates.objects.filter(id_file=cid).order_by('-id')
+        col_money_data = col_money_mia.objects.filter(id_file=cid).order_by('-id')
+        col_equipment_data = col_equipment_eqi.objects.filter(id_file=cid).order_by('-id')
+        col_project_data = col_project_prj.objects.filter(id_file=cid).order_by('-id')
+        col_vechicle_data = col_vechicle_veh.objects.filter(id_file=cid).order_by('-id')
+        col_guarantor_data = col_guarantor_gua.objects.filter(id_file=cid).order_by('-id')
+        col_goldsilver_data = col_goldsilver_gold.objects.filter(id_file=cid).order_by('-id')
+        c1_disputes_data = C1_disptes.objects.filter(id_file=cid).order_by('-id')
+        
+        # ✅ ເພີ່ມ CDL data
+        cdl_data = CDL.objects.filter(id_file=cid).order_by('-id')
+        
+        # ✅ Query ດ້ວຍ CID (integer) ສຳລັບ Upload_File_C
+        try:
+            cid_int = int(cid)
+            uploadfile_data = Upload_File_C.objects.filter(CID=cid_int).order_by('-insertDate')
+        except ValueError:
+            uploadfile_data = Upload_File_C.objects.none()
+        except Exception:
+            uploadfile_data = Upload_File_C.objects.filter(CID=cid_int)
 
-        col_real_estates_data = col_real_estates.objects.filter(id_file=cid)
-        col_real_estates_serializer = col_real_estatesSerializer(col_real_estates_data, many=True)
-
-        col_money_data = col_money_mia.objects.filter(id_file=cid)
-        col_money_serializer = col_money_miaSerializer(col_money_data, many=True)
-
-        col_equipment_eqi_data = col_equipment_eqi.objects.filter(id_file=cid)
-        col_equipment_eqi_serializer = col_equipment_eqiSerializer(col_equipment_eqi_data, many=True)
-
-        col_project_prj_data = col_project_prj.objects.filter(id_file=cid)
-        col_project_prj_serializer = col_project_prjSerializer(col_project_prj_data, many=True)
-
-        col_vechicle_veh_data = col_vechicle_veh.objects.filter(id_file=cid)
-        col_vechicle_veh_serializer = col_vechicle_vehSerializer(col_vechicle_veh_data, many=True)
-
-        col_guarantor_gua_data = col_guarantor_gua.objects.filter(id_file=cid)
-        col_guarantor_gua_serializer = col_guarantor_guaSerializer(col_guarantor_gua_data, many=True)
-
-        col_goldsilver_gold_data = col_goldsilver_gold.objects.filter(id_file=cid)
-        col_goldsilver_gold_serializer = col_goldsilver_goldSerializer(col_goldsilver_gold_data, many=True)
-
-        c1_disptes = C1_disptes.objects.filter(id_file=cid)
-        c1_disptes_serializer = C1Serializer(c1_disptes, many=True)
-
-        uploadfilec_data = Upload_File_C.objects.filter(CID=cid)
-        uploadfilec_serializer = UploadFilecSerializer(uploadfilec_data, many=True)
-
-
-
-
+        # ✅ Paginate ທຸກຕາຕະລາງ (ເພີ່ມ CDL)
         data = {
-            'C1': c1_serializer.data,
-            'C_error': c_errorSerializer.data,
-            'col_real_estates': col_real_estates_serializer.data,
-            'col_money_mia': col_money_serializer.data,
-            'col_equipment_eqi': col_equipment_eqi_serializer.data,
-            'col_project_prj': col_project_prj_serializer.data,
-            'col_vechicle_veh': col_vechicle_veh_serializer.data,
-            'col_guarantor_gua': col_guarantor_gua_serializer.data,
-            'col_goldsilver_gold': col_goldsilver_gold_serializer.data,
-            'C1_disptes': c1_disptes_serializer.data,
-            'uploadfile': uploadfilec_serializer.data
-           
+            'C1': paginate_queryset(c1_data, C1Serializer),
+            'C_error': paginate_queryset(c_error_data, C_errorSerializer),
+            'col_real_estates': paginate_queryset(col_real_estates_data, col_real_estatesSerializer),
+            'col_money_mia': paginate_queryset(col_money_data, col_money_miaSerializer),
+            'col_equipment_eqi': paginate_queryset(col_equipment_data, col_equipment_eqiSerializer),
+            'col_project_prj': paginate_queryset(col_project_data, col_project_prjSerializer),
+            'col_vechicle_veh': paginate_queryset(col_vechicle_data, col_vechicle_vehSerializer),
+            'col_guarantor_gua': paginate_queryset(col_guarantor_data, col_guarantor_guaSerializer),
+            'col_goldsilver_gold': paginate_queryset(col_goldsilver_data, col_goldsilver_goldSerializer),
+            'C1_disptes': paginate_queryset(c1_disputes_data, C1Serializer),
+            'CDL': paginate_queryset(cdl_data, CDLSerializer),  # ✅ ເພີ່ມໃໝ່
+            'uploadfile': paginate_queryset(uploadfile_data, UploadFilecSerializer),
         }
 
-        return JsonResponse(data)
+        # ✅ ສະຫຼຸບຂໍ້ມູນທັງໝົດ (ເພີ່ມ CDL)
+        summary = {
+            'cid': cid,
+            'total_c1': c1_data.count(),
+            'total_errors': c_error_data.count(),
+            'total_real_estates': col_real_estates_data.count(),
+            'total_money': col_money_data.count(),
+            'total_equipment': col_equipment_data.count(),
+            'total_projects': col_project_data.count(),
+            'total_vehicles': col_vechicle_data.count(),
+            'total_guarantors': col_guarantor_data.count(),
+            'total_gold': col_goldsilver_data.count(),
+            'total_disputes': c1_disputes_data.count(),
+            'total_cdl': cdl_data.count(),  # ✅ ເພີ່ມໃໝ່
+            'total_files': uploadfile_data.count(),
+        }
+
+        response_data = {
+            'data': data,
+            'summary': summary,
+        }
+
+        logger.info(f"Successfully fetched data for CID: {cid}")
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    except ValueError as ve:
+        logger.error(f"Invalid parameter: {str(ve)}")
+        return Response(
+            {'error': 'Invalid page or page_size parameter'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
     except Exception as e:
         logger.error(f"Error fetching data: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
-
+        import traceback
+        traceback.print_exc()
+        return Response(
+            {'error': f'Internal server error: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 
@@ -15869,9 +15988,9 @@ from django.core.paginator import Paginator
 def get_data_api(request):
     id_file = request.GET.get('id_file')
     
-    # Pagination parameters
+    
     page = int(request.GET.get('page', 1))
-    page_size = int(request.GET.get('page_size', 20))  # default 20 items
+    page_size = int(request.GET.get('page_size', 20))  
     
     if not id_file:
         return JsonResponse({'error': 'ກະລຸນາລະບຸ id_file'}, status=400)
@@ -15879,7 +15998,7 @@ def get_data_api(request):
     try:
         data = filter_data_by_criteria(id_file)
         
-        # ນັບຈຳນວນທັງໝົດກ່ອນ (ໄວ)
+       
         counts = {
             'b1': data['b1_data'].count(),
             'data_edit': data['data_edit'].count(),
@@ -15888,7 +16007,7 @@ def get_data_api(request):
             'b1_monthly': data['b1_monthly'].count()
         }
         
-        # Paginate ແຕ່ລະ dataset
+       
         def paginate_data(queryset, page, page_size):
             paginator = Paginator(queryset, page_size)
             try:
@@ -15933,7 +16052,7 @@ def get_data_api(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-# API Tracking Edl ----------------------------------
+
 
 import requests
 import json
