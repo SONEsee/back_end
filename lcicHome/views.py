@@ -15864,57 +15864,74 @@ def filter_data_by_criteria(id_file, **kwargs):
 #     }
     
 #     return JsonResponse(response_data, safe=False)
+from django.core.paginator import Paginator
+
 def get_data_api(request):
-    # ຮັບແຕ່ id_file ເທົ່ານັ້ນ
     id_file = request.GET.get('id_file')
     
+    # Pagination parameters
+    page = int(request.GET.get('page', 1))
+    page_size = int(request.GET.get('page_size', 20))  # default 20 items
+    
     if not id_file:
-        return JsonResponse({
-            'error': 'ກະລຸນາລະບຸ id_file'
-        }, status=400)
+        return JsonResponse({'error': 'ກະລຸນາລະບຸ id_file'}, status=400)
     
     try:
-        # ດຶງຂໍ້ມູນໂດຍກົງຈາກ id_file (ບໍ່ມີ filter ເພີ່ມເຕີມ)
         data = filter_data_by_criteria(id_file)
         
-        if data is None:
-            return JsonResponse({
-                'error': 'ບໍ່ພົບຂໍ້ມູນສຳລັບ id_file ນີ້'
-            }, status=404)
+        # ນັບຈຳນວນທັງໝົດກ່ອນ (ໄວ)
+        counts = {
+            'b1': data['b1_data'].count(),
+            'data_edit': data['data_edit'].count(),
+            'disputes': data['disputes'].count(),
+            'b_data_damaged': data['b_data_damaged'].count(),
+            'b1_monthly': data['b1_monthly'].count()
+        }
         
+        # Paginate ແຕ່ລະ dataset
+        def paginate_data(queryset, page, page_size):
+            paginator = Paginator(queryset, page_size)
+            try:
+                paginated = paginator.page(page)
+                return {
+                    'items': list(paginated.object_list.values()),
+                    'total_pages': paginator.num_pages,
+                    'current_page': page,
+                    'has_next': paginated.has_next(),
+                    'has_previous': paginated.has_previous(),
+                    'total_items': paginator.count
+                }
+            except Exception:
+                return {
+                    'items': [],
+                    'total_pages': 0,
+                    'current_page': page,
+                    'has_next': False,
+                    'has_previous': False,
+                    'total_items': 0
+                }
         
         response_data = {
             'id_file': id_file,
-            'counts': {
-                'b1': data['b1_data'].count(),
-                'data_edit': data['data_edit'].count(),
-                'disputes': data['disputes'].count(),
-                'b_data_damaged': data['b_data_damaged'].count(),
-                'b1_monthly': data['b1_monthly'].count()
+            'pagination': {
+                'page': page,
+                'page_size': page_size
             },
-            'total_records': (
-                data['b1_data'].count() + 
-                data['data_edit'].count() + 
-                data['disputes'].count() + 
-                data['b_data_damaged'].count() + 
-                data['b1_monthly'].count()
-            ),
+            'counts': counts,
+            'total_records': sum(counts.values()),
             'data': {
-                'b1': list(data['b1_data'].values()),
-                'data_edit': list(data['data_edit'].values()),
-                'disputes': list(data['disputes'].values()),
-                'b_data_damaged': list(data['b_data_damaged'].values()),
-                'b1_monthly': list(data['b1_monthly'].values())
+                'b1': paginate_data(data['b1_data'], page, page_size),
+                'data_edit': paginate_data(data['data_edit'], page, page_size),
+                'disputes': paginate_data(data['disputes'], page, page_size),
+                'b_data_damaged': paginate_data(data['b_data_damaged'], page, page_size),
+                'b1_monthly': paginate_data(data['b1_monthly'], page, page_size)
             }
         }
         
         return JsonResponse(response_data, safe=False)
         
     except Exception as e:
-        return JsonResponse({
-            'error': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
-        }, status=500)
-
+        return JsonResponse({'error': str(e)}, status=500)
 
 # API Tracking Edl ----------------------------------
 
