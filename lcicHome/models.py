@@ -1,6 +1,6 @@
 # from sre_parse import Verbose
 from tabnanny import verbose
-from tkinter.tix import Tree
+
 from unittest.util import _MAX_LENGTH
 from django.db import models
 from django.utils.html import format_html

@@ -4,7 +4,6 @@ from datetime import datetime
 from multiprocessing import context
 from crispy_forms.helper import FormHelper
 from re import M
-from tkinter.messagebox import NO
 from django.http import request
 from django.shortcuts import render, redirect
 from .models import Login,Group_User, GroupSubMenu, H_imageBar,H_productInfo,H_newsInfo,H_Lang, User_Group, User_Login, Menu, SubMenu, Upload_File, CustomerWater, SegmentType, EnterpriseInfo, InvestorInfo, user_logged, searchLog, request_charge
