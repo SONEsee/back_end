@@ -540,6 +540,7 @@ class Upload_File(models.Model):
     status_upload = models.CharField(max_length=150)
     FileType = models.CharField(max_length=10)
     percentage = models.FloatField(default=0.0)
+    dispuste = models.CharField(max_length=255, null=True, blank=True)
 
     def __str__(self):
         return self.title    
@@ -916,6 +917,72 @@ class disputes(models.Model):
     user_id = models.CharField(max_length=100)
     is_disputed = models.BigIntegerField(default=0, null=True)
     LCIC_code = models.CharField(max_length=255, blank=True, null=True)
+class ConfirmDispustLoan(models.Model):
+    id_disput_loan = models.AutoField(primary_key=True)
+    bnk_code = models.CharField(max_length=100)
+    image = models.ImageField(upload_to='disput_loan_images/')
+    user_insert = models.CharField(max_length=100)
+    user_update = models.CharField(max_length=100, blank=True, null=True)
+    insertdate = models.DateTimeField(auto_now_add=True)
+    updatedate = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=100)
+    total = models.FloatField()
+    
+    class Meta:
+        db_table = 'confirm_dispust_loan'
+        
+    def __str__(self):
+        return f"Dispute Loan {self.id_disput_loan} - {self.bnk_code}"
+class disputes_noti(models.Model):
+    id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
+    lcicID = models.CharField(max_length=100)
+    period = models.CharField(max_length=100)
+    product_type = models.CharField(max_length=100)
+    com_enterprise_code = models.CharField(max_length=100)
+    segmentType = models.CharField(max_length=100)
+    bnk_code = models.CharField(max_length=100)
+    customer_id = models.CharField(max_length=100)
+    branch_id = models.CharField(max_length=100)
+    lon_sys_id = models.CharField(max_length=100)
+    loan_id = models.CharField(max_length=100)
+    lon_open_date = models.DateField(null=True)
+    lon_exp_date = models.DateField(null=True)
+    lon_ext_date = models.DateField(null=True)
+    lon_int_rate = models.FloatField(default=0)
+    lon_purpose_code = models.CharField(max_length=100)
+    lon_credit_line = models.FloatField(default=0)
+    lon_currency_code = models.CharField(max_length=100)
+    lon_outstanding_balance = models.FloatField(default=0)
+    lon_account_no = models.CharField(max_length=100)
+    lon_no_days_slow = models.IntegerField(default=0)
+    lon_class = models.CharField(max_length=100)
+    lon_type = models.CharField(max_length=100)
+    lon_term = models.CharField(max_length=100)
+    lon_status = models.CharField(max_length=100)
+    lon_insert_date = models.DateTimeField(null=True)
+    lon_update_date = models.DateTimeField(null=True)
+    lon_applied_date = models.DateTimeField(null=True)
+    user_id = models.CharField(max_length=100)
+    is_disputed = models.BigIntegerField(default=0, null=True)
+    
+   
+    confirm_dispust_id = models.ForeignKey(
+        ConfirmDispustLoan, 
+        on_delete=models.SET_NULL,  
+        null=True, 
+        blank=True,
+        related_name='disputes',  
+        db_column='confirm_dispust_id' 
+    )
+    
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
+    
+    class Meta:
+        db_table = 'disputes_noti'
+        
+    def __str__(self):
+        return f"Dispute {self.id} - {self.loan_id}"
     
 
     
@@ -1611,6 +1678,7 @@ class Collateral(models.Model):
         
     def __str__(self):
         return f"Collateral {self.id} - {self.filename}"
+
 
 
 
