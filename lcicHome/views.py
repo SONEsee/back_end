@@ -8436,11 +8436,11 @@ logger = logging.getLogger(__name__)
 @api_view(['GET'])
 def get_data4(request):
     try:
-        # ✅ ຮັບ parameters
+       
         cid = request.GET.get('CID')
         page = int(request.GET.get('page', 1))
         page_size = int(request.GET.get('page_size', 20))
-        col_type = request.GET.get('col_type')  # ✅ ເພີ່ມໃໝ່
+        col_type = request.GET.get('col_type')  
 
         logger.debug(f"Received CID: {cid}, Page: {page}, Size: {page_size}, col_type: {col_type}")
 
@@ -8450,7 +8450,7 @@ def get_data4(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # ✅ Helper function ສຳລັບ paginate
+        
         def paginate_queryset(queryset, serializer_class):
             paginator = Paginator(queryset, page_size)
             page_obj = paginator.get_page(page)
@@ -8467,14 +8467,14 @@ def get_data4(request):
                 'has_previous': page_obj.has_previous(),
             }
 
-        # ✅ Helper function ສຳລັບ filter ດ້ວຍ col_type
+        
         def filter_by_col_type(queryset):
             if col_type:
-                # ຖ້າມີ col_type ໃຫ້ filter
-                return queryset.filter(col_type__iexact=col_type)  # iexact = case-insensitive
+              
+                return queryset.filter(col_type__iexact=col_type) 
             return queryset
 
-        # ✅ Query ດ້ວຍ id_file ແລະ optional col_type
+       
         c1_data = filter_by_col_type(C1.objects.filter(id_file=cid)).order_by('-id')
         c_error_data = filter_by_col_type(C_error.objects.filter(id_file=cid)).order_by('-id')
         col_real_estates_data = filter_by_col_type(col_real_estates.objects.filter(id_file=cid)).order_by('-id')
@@ -8487,7 +8487,7 @@ def get_data4(request):
         c1_disputes_data = filter_by_col_type(C1_disptes.objects.filter(id_file=cid)).order_by('-id')
         cdl_data = filter_by_col_type(CDL.objects.filter(id_file=cid)).order_by('-id')
         
-        # ✅ Query ດ້ວຍ CID (integer) ສຳລັບ Upload_File_C
+       
         try:
             cid_int = int(cid)
             uploadfile_data = Upload_File_C.objects.filter(CID=cid_int).order_by('-insertDate')
@@ -8496,7 +8496,7 @@ def get_data4(request):
         except Exception:
             uploadfile_data = Upload_File_C.objects.filter(CID=cid_int)
 
-        # ✅ Paginate ທຸກຕາຕະລາງ
+       
         data = {
             'C1': paginate_queryset(c1_data, C1Serializer),
             'C_error': paginate_queryset(c_error_data, C_errorSerializer),
@@ -8512,10 +8512,10 @@ def get_data4(request):
             'uploadfile': paginate_queryset(uploadfile_data, UploadFilecSerializer),
         }
 
-        # ✅ ສະຫຼຸບຂໍ້ມູນທັງໝົດ
+       
         summary = {
             'cid': cid,
-            'col_type': col_type,  # ✅ ເພີ່ມໃໝ່
+            'col_type': col_type,  
             'total_c1': c1_data.count(),
             'total_errors': c_error_data.count(),
             'total_real_estates': col_real_estates_data.count(),
