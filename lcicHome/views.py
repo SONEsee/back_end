@@ -8436,12 +8436,13 @@ logger = logging.getLogger(__name__)
 @api_view(['GET'])
 def get_data4(request):
     try:
-        # ✅ ຮັບ CID ເປັນ string
+        # ✅ ຮັບ parameters
         cid = request.GET.get('CID')
         page = int(request.GET.get('page', 1))
         page_size = int(request.GET.get('page_size', 20))
+        col_type = request.GET.get('col_type')  # ✅ ເພີ່ມໃໝ່
 
-        logger.debug(f"Received CID: {cid}, Page: {page}, Size: {page_size}")
+        logger.debug(f"Received CID: {cid}, Page: {page}, Size: {page_size}, col_type: {col_type}")
 
         if not cid:
             return Response(
@@ -8466,20 +8467,25 @@ def get_data4(request):
                 'has_previous': page_obj.has_previous(),
             }
 
-        # ✅ Query ດ້ວຍ id_file (string) ສຳລັບຕາຕະລາງອື່ນ
-        c1_data = C1.objects.filter(id_file=cid).order_by('-id')
-        c_error_data = C_error.objects.filter(id_file=cid).order_by('-id')
-        col_real_estates_data = col_real_estates.objects.filter(id_file=cid).order_by('-id')
-        col_money_data = col_money_mia.objects.filter(id_file=cid).order_by('-id')
-        col_equipment_data = col_equipment_eqi.objects.filter(id_file=cid).order_by('-id')
-        col_project_data = col_project_prj.objects.filter(id_file=cid).order_by('-id')
-        col_vechicle_data = col_vechicle_veh.objects.filter(id_file=cid).order_by('-id')
-        col_guarantor_data = col_guarantor_gua.objects.filter(id_file=cid).order_by('-id')
-        col_goldsilver_data = col_goldsilver_gold.objects.filter(id_file=cid).order_by('-id')
-        c1_disputes_data = C1_disptes.objects.filter(id_file=cid).order_by('-id')
-        
-        # ✅ ເພີ່ມ CDL data
-        cdl_data = CDL.objects.filter(id_file=cid).order_by('-id')
+        # ✅ Helper function ສຳລັບ filter ດ້ວຍ col_type
+        def filter_by_col_type(queryset):
+            if col_type:
+                # ຖ້າມີ col_type ໃຫ້ filter
+                return queryset.filter(col_type__iexact=col_type)  # iexact = case-insensitive
+            return queryset
+
+        # ✅ Query ດ້ວຍ id_file ແລະ optional col_type
+        c1_data = filter_by_col_type(C1.objects.filter(id_file=cid)).order_by('-id')
+        c_error_data = filter_by_col_type(C_error.objects.filter(id_file=cid)).order_by('-id')
+        col_real_estates_data = filter_by_col_type(col_real_estates.objects.filter(id_file=cid)).order_by('-id')
+        col_money_data = filter_by_col_type(col_money_mia.objects.filter(id_file=cid)).order_by('-id')
+        col_equipment_data = filter_by_col_type(col_equipment_eqi.objects.filter(id_file=cid)).order_by('-id')
+        col_project_data = filter_by_col_type(col_project_prj.objects.filter(id_file=cid)).order_by('-id')
+        col_vechicle_data = filter_by_col_type(col_vechicle_veh.objects.filter(id_file=cid)).order_by('-id')
+        col_guarantor_data = filter_by_col_type(col_guarantor_gua.objects.filter(id_file=cid)).order_by('-id')
+        col_goldsilver_data = filter_by_col_type(col_goldsilver_gold.objects.filter(id_file=cid)).order_by('-id')
+        c1_disputes_data = filter_by_col_type(C1_disptes.objects.filter(id_file=cid)).order_by('-id')
+        cdl_data = filter_by_col_type(CDL.objects.filter(id_file=cid)).order_by('-id')
         
         # ✅ Query ດ້ວຍ CID (integer) ສຳລັບ Upload_File_C
         try:
@@ -8490,7 +8496,7 @@ def get_data4(request):
         except Exception:
             uploadfile_data = Upload_File_C.objects.filter(CID=cid_int)
 
-        # ✅ Paginate ທຸກຕາຕະລາງ (ເພີ່ມ CDL)
+        # ✅ Paginate ທຸກຕາຕະລາງ
         data = {
             'C1': paginate_queryset(c1_data, C1Serializer),
             'C_error': paginate_queryset(c_error_data, C_errorSerializer),
@@ -8502,13 +8508,14 @@ def get_data4(request):
             'col_guarantor_gua': paginate_queryset(col_guarantor_data, col_guarantor_guaSerializer),
             'col_goldsilver_gold': paginate_queryset(col_goldsilver_data, col_goldsilver_goldSerializer),
             'C1_disptes': paginate_queryset(c1_disputes_data, C1Serializer),
-            'CDL': paginate_queryset(cdl_data, CDLSerializer),  # ✅ ເພີ່ມໃໝ່
+            'CDL': paginate_queryset(cdl_data, CDLSerializer),
             'uploadfile': paginate_queryset(uploadfile_data, UploadFilecSerializer),
         }
 
-        # ✅ ສະຫຼຸບຂໍ້ມູນທັງໝົດ (ເພີ່ມ CDL)
+        # ✅ ສະຫຼຸບຂໍ້ມູນທັງໝົດ
         summary = {
             'cid': cid,
+            'col_type': col_type,  # ✅ ເພີ່ມໃໝ່
             'total_c1': c1_data.count(),
             'total_errors': c_error_data.count(),
             'total_real_estates': col_real_estates_data.count(),
@@ -8519,7 +8526,7 @@ def get_data4(request):
             'total_guarantors': col_guarantor_data.count(),
             'total_gold': col_goldsilver_data.count(),
             'total_disputes': c1_disputes_data.count(),
-            'total_cdl': cdl_data.count(),  # ✅ ເພີ່ມໃໝ່
+            'total_cdl': cdl_data.count(),
             'total_files': uploadfile_data.count(),
         }
 
@@ -8528,7 +8535,7 @@ def get_data4(request):
             'summary': summary,
         }
 
-        logger.info(f"Successfully fetched data for CID: {cid}")
+        logger.info(f"Successfully fetched data for CID: {cid}, col_type: {col_type}")
         return Response(response_data, status=status.HTTP_200_OK)
 
     except ValueError as ve:
@@ -8545,8 +8552,6 @@ def get_data4(request):
             {'error': f'Internal server error: {str(e)}'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
-
-
 
 # views.py
 from django.http import JsonResponse
