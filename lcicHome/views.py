@@ -19593,13 +19593,13 @@ def confirm_dispute_upload(request):
     try:
         import json
         
-        # ດຶງຂໍ້ມູນຈາກ request
+       
         uploaded_file = request.FILES.get('file')
         dispute_ids_raw = request.data.get('dispute_ids', [])
         id_dispust = request.data.get('id_dispust')
         user_id = request.data.get('user_id')
-        
-        # Parse dispute_ids ຈາກ string ເປັນ list
+        deception = request.data.get('deception', '')
+     
         if isinstance(dispute_ids_raw, str):
             try:
                 dispute_ids = json.loads(dispute_ids_raw)
@@ -19608,29 +19608,27 @@ def confirm_dispute_upload(request):
         else:
             dispute_ids = dispute_ids_raw
         
-        # ============================================
-        # ພາກທີ 1: ການກວດສອບຂໍ້ມູນ (Validation)
-        # ============================================
+     
         
         validation_errors = []
         
-        # ກວດສອບໄຟລ໌
+       
         if not uploaded_file:
             validation_errors.append("ກະລຸນາອັບໂຫຼດເອກະສານຢັ້ງຢືນ")
         
-        # ກວດສອບ dispute_ids
+       
         if not dispute_ids or len(dispute_ids) == 0:
             validation_errors.append("ກະລຸນາເລືອກລາຍການ Dispute ຢ່າງໜ້ອຍ 1 ລາຍການ")
         
-        # ກວດສອບ id_dispust
+      
         if not id_dispust:
             validation_errors.append("ບໍ່ພົບ ID ຂອງ Dispute File")
         
-        # ກວດສອບ user_id
+       
         if not user_id:
             validation_errors.append("ບໍ່ພົບຂໍ້ມູນຜູ້ໃຊ້")
         
-        # ຖ້າມີ error ໃນການກວດສອບ, return ທັນທີ
+       
         if validation_errors:
             return Response({
                 'success': False,
@@ -19639,23 +19637,18 @@ def confirm_dispute_upload(request):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         
-        # ============================================
-        # ພາກທີ 2: ດຶງແລະກວດສອບຂໍ້ມູນຈາກ Database
-        # ============================================
-        
-        # ດຶງຂໍ້ມູນ disputes ຕາມ IDs ທີ່ສົ່ງມາ ເກັບໄວ້ໃນໂຕແປ
+     
         dispute_records = list(
             disputes.objects.filter(id__in=dispute_ids).values()
         )
         
-        # ກວດສອບວ່າພົບຂໍ້ມູນຫຼືບໍ່
+   
         if not dispute_records:
             return Response({
                 'success': False,
                 'message': 'ບໍ່ພົບຂໍ້ມູນ Dispute ທີ່ເລືອກ'
             }, status=status.HTTP_404_NOT_FOUND)
-        
-        # ກວດສອບວ່າຈຳນວນທີ່ພົບກັບທີ່ສົ່ງມາຕົງກັນຫຼືບໍ່
+      
         if len(dispute_records) != len(dispute_ids):
             found_ids = [record['id'] for record in dispute_records]
             missing_ids = list(set(dispute_ids) - set(found_ids))
@@ -19665,7 +19658,7 @@ def confirm_dispute_upload(request):
                 'missing_ids': missing_ids
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # ກວດສອບວ່າທຸກລາຍການມີ bnk_code ດຽວກັນຫຼືບໍ່
+      
         bnk_codes = set([record['bnk_code'] for record in dispute_records])
         if len(bnk_codes) > 1:
             return Response({
@@ -19678,21 +19671,19 @@ def confirm_dispute_upload(request):
         total_records = len(dispute_records)
         
         
-        # ============================================
-        # ພາກທີ 3: ບັນທຶກຂໍ້ມູນດ້ວຍ Transaction
-        # ============================================
+     
         
         with transaction.atomic():
-            # ສ້າງ ConfirmDispustLoan record
+            
             confirm_record = ConfirmDispustLoan.objects.create(
                 bnk_code=bnk_code,
                 image=uploaded_file,
                 user_insert=user_id,
-                status='pending',  # pending, approved, rejected
+                status='1', 
                 total=total_records
             )
             
-            # ກຽມຂໍ້ມູນສຳຫຼັບ bulk create
+        
             disputes_noti_records = []
             
             for record in dispute_records:
@@ -19729,21 +19720,21 @@ def confirm_dispute_upload(request):
                         user_id=record['user_id'],
                         is_disputed=record['id'],
                         LCIC_code=record['LCIC_code'],
-                        confirm_dispust_id=confirm_record  # Link ກັບ ConfirmDispustLoan
+                        status='1',
+                        confirm_dispust_id=confirm_record  ,
+                        deception = deception
                     )
                 )
             
-            # Bulk insert ເຂົ້າ disputes_noti
+        
             disputes_noti.objects.bulk_create(disputes_noti_records)
             
-            # ອັບເດດສະຖານະໃນຕາຕະລາງ disputes (optional)
+           
             disputes.objects.filter(id__in=dispute_ids).update(
-                is_disputed=1  # ໝາຍເຖິງຢັ້ງຢືນແລ້ວ
+                is_disputed=1  
             )
         
-        # ============================================
-        # ສົ່ງຜົນລັບກັບ
-        # ============================================
+       
         
         return Response({
             'success': True,
@@ -19763,3 +19754,240 @@ def confirm_dispute_upload(request):
             'message': 'ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກຂໍ້ມູນ',
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from django.db.models import Q
+from .models import ConfirmDispustLoan
+from .serializers import ConfirmDispustLoanSerializer
+
+@api_view(['GET'])
+def get_dispute_loans(request):
+   
+    try:
+        
+        user_bnk_code = request.GET.get('bnk_code', '')
+        filter_bnk_code = request.GET.get('filter_bnk_code', '')
+        filter_status = request.GET.get('status', '')
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 10))
+        
+      
+        if not user_bnk_code:
+            return Response({
+                'status': 'error',
+                'message': 'ກະລຸນາລະບຸ bnk_code'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+       
+        queryset = ConfirmDispustLoan.objects.all()
+        
+        
+        if user_bnk_code == '01':
+           
+            if filter_bnk_code:
+               
+                queryset = queryset.filter(bnk_code=filter_bnk_code)
+        else:
+            
+            queryset = queryset.filter(bnk_code=user_bnk_code)
+        
+       
+        if filter_status:
+            queryset = queryset.filter(status=filter_status)
+        
+        
+        queryset = queryset.order_by('-id_disput_loan')
+        
+       
+        total_count = queryset.count()
+        
+       
+        start = (page - 1) * page_size
+        end = start + page_size
+        paginated_queryset = queryset[start:end]
+        
+       
+        serializer = ConfirmDispustLoanSerializer(paginated_queryset, many=True)
+        
+       
+        total_pages = (total_count + page_size - 1) // page_size
+        
+        return Response({
+            'status': 'success',
+            'data': {
+                'items': serializer.data,
+                'pagination': {
+                    'page': page,
+                    'page_size': page_size,
+                    'total_items': total_count,
+                    'total_pages': total_pages,
+                    'has_next': page < total_pages,
+                    'has_previous': page > 1
+                }
+            },
+            'filters_applied': {
+                'user_bnk_code': user_bnk_code,
+                'filter_bnk_code': filter_bnk_code if filter_bnk_code else 'ທັງໝົດ',
+                'status': filter_status if filter_status else 'ທັງໝົດ'
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except ValueError as e:
+        return Response({
+            'status': 'error',
+            'message': f'ຄ່າ parameter ບໍ່ຖືກຕ້ອງ: {str(e)}'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from django.db.models import Q, Count, Sum, Avg
+from .models import disputes_noti, ConfirmDispustLoan
+from .serializers import DisputesNotiSerializer
+from datetime import datetime
+
+@api_view(['GET'])
+def get_disputes_by_confirm_id(request):
+   
+    try:
+        
+        confirm_dispust_id = request.GET.get('confirm_dispust_id')
+        bnk_code = request.GET.get('bnk_code', '')
+        period = request.GET.get('period', '')
+        dispute_status = request.GET.get('status', '')
+        product_type = request.GET.get('product_type', '')
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 20))
+        sort_by = request.GET.get('sort_by', '-id')
+        
+        
+        if not confirm_dispust_id:
+            return Response({
+                'status': 'error',
+                'message': 'ກະລຸນາລະບຸ confirm_dispust_id'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # ກວດສອບວ່າ ConfirmDispustLoan ມີຢູ່ບໍ່
+        try:
+            confirm_loan = ConfirmDispustLoan.objects.get(id_disput_loan=confirm_dispust_id)
+        except ConfirmDispustLoan.DoesNotExist:
+            return Response({
+                'status': 'error',
+                'message': f'ບໍ່ພົບຂໍ້ມູນ ConfirmDispustLoan ID: {confirm_dispust_id}'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Query base
+        queryset = disputes_noti.objects.filter(confirm_dispust_id=confirm_dispust_id)
+        
+        # ກັ່ນຕອງເພີ່ມເຕີມ
+        if bnk_code:
+            queryset = queryset.filter(bnk_code=bnk_code)
+        
+        if period:
+            queryset = queryset.filter(period=period)
+        
+        if dispute_status:
+            queryset = queryset.filter(status=dispute_status)
+        
+        if product_type:
+            queryset = queryset.filter(product_type=product_type)
+        
+        # ລຽງລຳດັບ
+        queryset = queryset.order_by(sort_by)
+        
+        # ນັບຈຳນວນທັງໝົດ
+        total_count = queryset.count()
+        
+        # ສະຖິຕິ
+        statistics = {
+            'total_disputes': total_count,
+            'total_outstanding': float(queryset.aggregate(Sum('lon_outstanding_balance'))['lon_outstanding_balance__sum'] or 0),
+            'avg_credit_line': float(queryset.aggregate(Avg('lon_credit_line'))['lon_credit_line__avg'] or 0),
+            'by_status': {},
+            'by_bank': {},
+            'by_product_type': {},
+            'by_period': {}
+        }
+        
+        # ນັບຕາມສະຖານະ
+        status_counts = queryset.values('status').annotate(count=Count('id'))
+        for item in status_counts:
+            statistics['by_status'][item['status'] or 'unknown'] = item['count']
+        
+        # ນັບຕາມທະນາຄານ
+        bank_counts = queryset.values('bnk_code').annotate(count=Count('id'))
+        for item in bank_counts:
+            statistics['by_bank'][item['bnk_code']] = item['count']
+        
+        # ນັບຕາມປະເພດຜະລິດຕະພັນ
+        product_counts = queryset.values('product_type').annotate(count=Count('id'))
+        for item in product_counts:
+            statistics['by_product_type'][item['product_type']] = item['count']
+        
+        # ນັບຕາມໄລຍະເວລາ
+        period_counts = queryset.values('period').annotate(count=Count('id'))
+        for item in period_counts:
+            statistics['by_period'][item['period']] = item['count']
+        
+        # Pagination
+        start = (page - 1) * page_size
+        end = start + page_size
+        paginated_queryset = queryset[start:end]
+        
+        # Serialize
+        serializer = DisputesNotiSerializer(paginated_queryset, many=True)
+        
+        # ຄຳນວນຈຳນວນໜ້າທັງໝົດ
+        total_pages = (total_count + page_size - 1) // page_size
+        
+        return Response({
+            'status': 'success',
+            'data': {
+                'confirm_loan_info': {
+                    'id_disput_loan': confirm_loan.id_disput_loan,
+                    'bnk_code': confirm_loan.bnk_code,
+                    'status': confirm_loan.status,
+                    'total': float(confirm_loan.total),
+                    'insertdate': confirm_loan.insertdate.isoformat() if confirm_loan.insertdate else None
+                },
+                'disputes': serializer.data,
+                'pagination': {
+                    'page': page,
+                    'page_size': page_size,
+                    'total_items': total_count,
+                    'total_pages': total_pages,
+                    'has_next': page < total_pages,
+                    'has_previous': page > 1
+                },
+                'statistics': statistics
+            },
+            'filters_applied': {
+                'confirm_dispust_id': confirm_dispust_id,
+                'bnk_code': bnk_code if bnk_code else 'ທັງໝົດ',
+                'period': period if period else 'ທັງໝົດ',
+                'status': dispute_status if dispute_status else 'ທັງໝົດ',
+                'product_type': product_type if product_type else 'ທັງໝົດ'
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except ValueError as e:
+        return Response({
+            'status': 'error',
+            'message': f'ຄ່າ parameter ບໍ່ຖືກຕ້ອງ: {str(e)}'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+
