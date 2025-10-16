@@ -1,6 +1,6 @@
 # from sre_parse import Verbose
 from tabnanny import verbose
-from tkinter.tix import Tree
+
 from unittest.util import _MAX_LENGTH
 from django.db import models
 from django.utils.html import format_html
@@ -917,6 +917,8 @@ class disputes(models.Model):
     user_id = models.CharField(max_length=100)
     is_disputed = models.BigIntegerField(default=0, null=True)
     LCIC_code = models.CharField(max_length=255, blank=True, null=True)
+
+    
 class ConfirmDispustLoan(models.Model):
     id_disput_loan = models.AutoField(primary_key=True)
     bnk_code = models.CharField(max_length=100)
