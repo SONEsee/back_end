@@ -1,7 +1,7 @@
 from cProfile import label
 from email import message
 #from socket import fromshare
-from tkinter import Widget
+# from tkinter import Widget
 from xml.dom import ValidationErr
 from django import forms 
 from .models import Login, User_Group, Upload_File, Customer_Info_IND ,SegmentType, SType,Upload_Type, EnterpriseInfo

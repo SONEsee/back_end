@@ -150,7 +150,7 @@ DATABASES = {
         'HOST': '192.168.45.245\EXPRESS',
         'PORT': '57004',
         'OPTIONS': {
-            'driver': 'ODBC Driver 17 for SQL Server',
+            'driver': 'ODBC Driver 18 for SQL Server',
         },
     },
 }

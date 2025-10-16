@@ -4,7 +4,6 @@ from datetime import datetime
 from multiprocessing import context
 from crispy_forms.helper import FormHelper
 from re import M
-from tkinter.messagebox import NO
 from django.http import request
 from django.shortcuts import render, redirect
 from .models import Login,Group_User, GroupSubMenu, H_imageBar,H_productInfo,H_newsInfo,H_Lang, User_Group, User_Login, Menu, SubMenu, Upload_File, CustomerWater, SegmentType, EnterpriseInfo, InvestorInfo, user_logged, searchLog, request_charge
@@ -8358,76 +8357,200 @@ from django.http import JsonResponse
 from .models import  Upload_File_C, C1, C_error ,col_real_estates, col_money_mia, col_equipment_eqi , col_project_prj, col_vechicle_veh, col_guarantor_gua, col_goldsilver_gold,C_error
 from .serializers import UploadFilecSerializer, C1Serializer, C_errorSerializer,col_real_estatesSerializer, col_money_miaSerializer, col_equipment_eqiSerializer, col_project_prjSerializer, col_vechicle_vehSerializer, col_guarantor_guaSerializer, col_goldsilver_goldSerializer,C_errorSerializer
 
+# logger = logging.getLogger(__name__)
+
+# @api_view(['GET'])
+# def get_data4(request):
+#     try:
+#         cid = request.GET.get('CID')
+
+#         logger.debug(f"Received CID: {cid}")
+
+#         if not cid:
+#             return JsonResponse({'error': 'CID is required'}, status=400)
+
+#         c1_data = C1.objects.filter(id_file=cid)
+#         c1_serializer = C1Serializer( c1_data, many=True)
+
+#         c_error_data= C_error.objects.filter(id_file=cid)
+#         c_errorSerializer = C_errorSerializer(c_error_data, many=True)
+
+#         col_real_estates_data = col_real_estates.objects.filter(id_file=cid)
+#         col_real_estates_serializer = col_real_estatesSerializer(col_real_estates_data, many=True)
+
+#         col_money_data = col_money_mia.objects.filter(id_file=cid)
+#         col_money_serializer = col_money_miaSerializer(col_money_data, many=True)
+
+#         col_equipment_eqi_data = col_equipment_eqi.objects.filter(id_file=cid)
+#         col_equipment_eqi_serializer = col_equipment_eqiSerializer(col_equipment_eqi_data, many=True)
+
+#         col_project_prj_data = col_project_prj.objects.filter(id_file=cid)
+#         col_project_prj_serializer = col_project_prjSerializer(col_project_prj_data, many=True)
+
+#         col_vechicle_veh_data = col_vechicle_veh.objects.filter(id_file=cid)
+#         col_vechicle_veh_serializer = col_vechicle_vehSerializer(col_vechicle_veh_data, many=True)
+
+#         col_guarantor_gua_data = col_guarantor_gua.objects.filter(id_file=cid)
+#         col_guarantor_gua_serializer = col_guarantor_guaSerializer(col_guarantor_gua_data, many=True)
+
+#         col_goldsilver_gold_data = col_goldsilver_gold.objects.filter(id_file=cid)
+#         col_goldsilver_gold_serializer = col_goldsilver_goldSerializer(col_goldsilver_gold_data, many=True)
+
+#         c1_disptes = C1_disptes.objects.filter(id_file=cid)
+#         c1_disptes_serializer = C1Serializer(c1_disptes, many=True)
+
+#         uploadfilec_data = Upload_File_C.objects.filter(CID=cid)
+#         uploadfilec_serializer = UploadFilecSerializer(uploadfilec_data, many=True)
+
+
+
+
+#         data = {
+#             'C1': c1_serializer.data,
+#             'C_error': c_errorSerializer.data,
+#             'col_real_estates': col_real_estates_serializer.data,
+#             'col_money_mia': col_money_serializer.data,
+#             'col_equipment_eqi': col_equipment_eqi_serializer.data,
+#             'col_project_prj': col_project_prj_serializer.data,
+#             'col_vechicle_veh': col_vechicle_veh_serializer.data,
+#             'col_guarantor_gua': col_guarantor_gua_serializer.data,
+#             'col_goldsilver_gold': col_goldsilver_gold_serializer.data,
+#             'C1_disptes': c1_disptes_serializer.data,
+#             'uploadfile': uploadfilec_serializer.data
+           
+#         }
+
+#         return JsonResponse(data)
+#     except Exception as e:
+#         logger.error(f"Error fetching data: {str(e)}")
+#         return JsonResponse({'error': str(e)}, status=500)
+import logging
+from django.core.paginator import Paginator
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+
 logger = logging.getLogger(__name__)
 
 @api_view(['GET'])
 def get_data4(request):
     try:
+       
         cid = request.GET.get('CID')
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 20))
+        col_type = request.GET.get('col_type')  
 
-        logger.debug(f"Received CID: {cid}")
+        logger.debug(f"Received CID: {cid}, Page: {page}, Size: {page_size}, col_type: {col_type}")
 
         if not cid:
-            return JsonResponse({'error': 'CID is required'}, status=400)
+            return Response(
+                {'error': 'CID is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        c1_data = C1.objects.filter(id_file=cid)
-        c1_serializer = C1Serializer( c1_data, many=True)
+        
+        def paginate_queryset(queryset, serializer_class):
+            paginator = Paginator(queryset, page_size)
+            page_obj = paginator.get_page(page)
+            
+            serializer = serializer_class(page_obj, many=True)
+            
+            return {
+                'items': serializer.data,
+                'total_items': paginator.count,
+                'total_pages': paginator.num_pages,
+                'current_page': page,
+                'page_size': page_size,
+                'has_next': page_obj.has_next(),
+                'has_previous': page_obj.has_previous(),
+            }
 
-        c_error_data= C_error.objects.filter(id_file=cid)
-        c_errorSerializer = C_errorSerializer(c_error_data, many=True)
+        
+        def filter_by_col_type(queryset):
+            if col_type:
+              
+                return queryset.filter(col_type__iexact=col_type) 
+            return queryset
 
-        col_real_estates_data = col_real_estates.objects.filter(id_file=cid)
-        col_real_estates_serializer = col_real_estatesSerializer(col_real_estates_data, many=True)
+       
+        c1_data = filter_by_col_type(C1.objects.filter(id_file=cid)).order_by('-id')
+        c_error_data = filter_by_col_type(C_error.objects.filter(id_file=cid)).order_by('-id')
+        col_real_estates_data = filter_by_col_type(col_real_estates.objects.filter(id_file=cid)).order_by('-id')
+        col_money_data = filter_by_col_type(col_money_mia.objects.filter(id_file=cid)).order_by('-id')
+        col_equipment_data = filter_by_col_type(col_equipment_eqi.objects.filter(id_file=cid)).order_by('-id')
+        col_project_data = filter_by_col_type(col_project_prj.objects.filter(id_file=cid)).order_by('-id')
+        col_vechicle_data = filter_by_col_type(col_vechicle_veh.objects.filter(id_file=cid)).order_by('-id')
+        col_guarantor_data = filter_by_col_type(col_guarantor_gua.objects.filter(id_file=cid)).order_by('-id')
+        col_goldsilver_data = filter_by_col_type(col_goldsilver_gold.objects.filter(id_file=cid)).order_by('-id')
+        c1_disputes_data = filter_by_col_type(C1_disptes.objects.filter(id_file=cid)).order_by('-id')
+        cdl_data = filter_by_col_type(CDL.objects.filter(id_file=cid)).order_by('-id')
+        
+       
+        try:
+            cid_int = int(cid)
+            uploadfile_data = Upload_File_C.objects.filter(CID=cid_int).order_by('-insertDate')
+        except ValueError:
+            uploadfile_data = Upload_File_C.objects.none()
+        except Exception:
+            uploadfile_data = Upload_File_C.objects.filter(CID=cid_int)
 
-        col_money_data = col_money_mia.objects.filter(id_file=cid)
-        col_money_serializer = col_money_miaSerializer(col_money_data, many=True)
-
-        col_equipment_eqi_data = col_equipment_eqi.objects.filter(id_file=cid)
-        col_equipment_eqi_serializer = col_equipment_eqiSerializer(col_equipment_eqi_data, many=True)
-
-        col_project_prj_data = col_project_prj.objects.filter(id_file=cid)
-        col_project_prj_serializer = col_project_prjSerializer(col_project_prj_data, many=True)
-
-        col_vechicle_veh_data = col_vechicle_veh.objects.filter(id_file=cid)
-        col_vechicle_veh_serializer = col_vechicle_vehSerializer(col_vechicle_veh_data, many=True)
-
-        col_guarantor_gua_data = col_guarantor_gua.objects.filter(id_file=cid)
-        col_guarantor_gua_serializer = col_guarantor_guaSerializer(col_guarantor_gua_data, many=True)
-
-        col_goldsilver_gold_data = col_goldsilver_gold.objects.filter(id_file=cid)
-        col_goldsilver_gold_serializer = col_goldsilver_goldSerializer(col_goldsilver_gold_data, many=True)
-
-        c1_disptes = C1_disptes.objects.filter(id_file=cid)
-        c1_disptes_serializer = C1Serializer(c1_disptes, many=True)
-
-        uploadfilec_data = Upload_File_C.objects.filter(CID=cid)
-        uploadfilec_serializer = UploadFilecSerializer(uploadfilec_data, many=True)
-
-
-
-
+       
         data = {
-            'C1': c1_serializer.data,
-            'C_error': c_errorSerializer.data,
-            'col_real_estates': col_real_estates_serializer.data,
-            'col_money_mia': col_money_serializer.data,
-            'col_equipment_eqi': col_equipment_eqi_serializer.data,
-            'col_project_prj': col_project_prj_serializer.data,
-            'col_vechicle_veh': col_vechicle_veh_serializer.data,
-            'col_guarantor_gua': col_guarantor_gua_serializer.data,
-            'col_goldsilver_gold': col_goldsilver_gold_serializer.data,
-            'C1_disptes': c1_disptes_serializer.data,
-            'uploadfile': uploadfilec_serializer.data
-           
+            'C1': paginate_queryset(c1_data, C1Serializer),
+            'C_error': paginate_queryset(c_error_data, C_errorSerializer),
+            'col_real_estates': paginate_queryset(col_real_estates_data, col_real_estatesSerializer),
+            'col_money_mia': paginate_queryset(col_money_data, col_money_miaSerializer),
+            'col_equipment_eqi': paginate_queryset(col_equipment_data, col_equipment_eqiSerializer),
+            'col_project_prj': paginate_queryset(col_project_data, col_project_prjSerializer),
+            'col_vechicle_veh': paginate_queryset(col_vechicle_data, col_vechicle_vehSerializer),
+            'col_guarantor_gua': paginate_queryset(col_guarantor_data, col_guarantor_guaSerializer),
+            'col_goldsilver_gold': paginate_queryset(col_goldsilver_data, col_goldsilver_goldSerializer),
+            'C1_disptes': paginate_queryset(c1_disputes_data, C1Serializer),
+            'CDL': paginate_queryset(cdl_data, CDLSerializer),
+            'uploadfile': paginate_queryset(uploadfile_data, UploadFilecSerializer),
         }
 
-        return JsonResponse(data)
+       
+        summary = {
+            'cid': cid,
+            'col_type': col_type,  
+            'total_c1': c1_data.count(),
+            'total_errors': c_error_data.count(),
+            'total_real_estates': col_real_estates_data.count(),
+            'total_money': col_money_data.count(),
+            'total_equipment': col_equipment_data.count(),
+            'total_projects': col_project_data.count(),
+            'total_vehicles': col_vechicle_data.count(),
+            'total_guarantors': col_guarantor_data.count(),
+            'total_gold': col_goldsilver_data.count(),
+            'total_disputes': c1_disputes_data.count(),
+            'total_cdl': cdl_data.count(),
+            'total_files': uploadfile_data.count(),
+        }
+
+        response_data = {
+            'data': data,
+            'summary': summary,
+        }
+
+        logger.info(f"Successfully fetched data for CID: {cid}, col_type: {col_type}")
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    except ValueError as ve:
+        logger.error(f"Invalid parameter: {str(ve)}")
+        return Response(
+            {'error': 'Invalid page or page_size parameter'}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
     except Exception as e:
         logger.error(f"Error fetching data: {str(e)}")
-        return JsonResponse({'error': str(e)}, status=500)
-
-
-
+        import traceback
+        traceback.print_exc()
+        return Response(
+            {'error': f'Internal server error: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 # views.py
 from django.http import JsonResponse
@@ -15864,59 +15987,76 @@ def filter_data_by_criteria(id_file, **kwargs):
 #     }
     
 #     return JsonResponse(response_data, safe=False)
+from django.core.paginator import Paginator
+
 def get_data_api(request):
-    # ຮັບແຕ່ id_file ເທົ່ານັ້ນ
     id_file = request.GET.get('id_file')
     
+    
+    page = int(request.GET.get('page', 1))
+    page_size = int(request.GET.get('page_size', 20))  
+    
     if not id_file:
-        return JsonResponse({
-            'error': 'ກະລຸນາລະບຸ id_file'
-        }, status=400)
+        return JsonResponse({'error': 'ກະລຸນາລະບຸ id_file'}, status=400)
     
     try:
-        # ດຶງຂໍ້ມູນໂດຍກົງຈາກ id_file (ບໍ່ມີ filter ເພີ່ມເຕີມ)
         data = filter_data_by_criteria(id_file)
         
-        if data is None:
-            return JsonResponse({
-                'error': 'ບໍ່ພົບຂໍ້ມູນສຳລັບ id_file ນີ້'
-            }, status=404)
+       
+        counts = {
+            'b1': data['b1_data'].count(),
+            'data_edit': data['data_edit'].count(),
+            'disputes': data['disputes'].count(),
+            'b_data_damaged': data['b_data_damaged'].count(),
+            'b1_monthly': data['b1_monthly'].count()
+        }
         
+       
+        def paginate_data(queryset, page, page_size):
+            paginator = Paginator(queryset, page_size)
+            try:
+                paginated = paginator.page(page)
+                return {
+                    'items': list(paginated.object_list.values()),
+                    'total_pages': paginator.num_pages,
+                    'current_page': page,
+                    'has_next': paginated.has_next(),
+                    'has_previous': paginated.has_previous(),
+                    'total_items': paginator.count
+                }
+            except Exception:
+                return {
+                    'items': [],
+                    'total_pages': 0,
+                    'current_page': page,
+                    'has_next': False,
+                    'has_previous': False,
+                    'total_items': 0
+                }
         
         response_data = {
             'id_file': id_file,
-            'counts': {
-                'b1': data['b1_data'].count(),
-                'data_edit': data['data_edit'].count(),
-                'disputes': data['disputes'].count(),
-                'b_data_damaged': data['b_data_damaged'].count(),
-                'b1_monthly': data['b1_monthly'].count()
+            'pagination': {
+                'page': page,
+                'page_size': page_size
             },
-            'total_records': (
-                data['b1_data'].count() + 
-                data['data_edit'].count() + 
-                data['disputes'].count() + 
-                data['b_data_damaged'].count() + 
-                data['b1_monthly'].count()
-            ),
+            'counts': counts,
+            'total_records': sum(counts.values()),
             'data': {
-                'b1': list(data['b1_data'].values()),
-                'data_edit': list(data['data_edit'].values()),
-                'disputes': list(data['disputes'].values()),
-                'b_data_damaged': list(data['b_data_damaged'].values()),
-                'b1_monthly': list(data['b1_monthly'].values())
+                'b1': paginate_data(data['b1_data'], page, page_size),
+                'data_edit': paginate_data(data['data_edit'], page, page_size),
+                'disputes': paginate_data(data['disputes'], page, page_size),
+                'b_data_damaged': paginate_data(data['b_data_damaged'], page, page_size),
+                'b1_monthly': paginate_data(data['b1_monthly'], page, page_size)
             }
         }
         
         return JsonResponse(response_data, safe=False)
         
     except Exception as e:
-        return JsonResponse({
-            'error': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
-        }, status=500)
+        return JsonResponse({'error': str(e)}, status=500)
 
 
-# API Tracking Edl ----------------------------------
 
 import requests
 import json
@@ -19725,3 +19865,213 @@ class ChargeReportDetailView(APIView):
         
         return queryset
 
+# ============================================
+# urls.py
+# ============================================
+"""
+from django.urls import path
+from .views import confirm_dispute_upload
+
+urlpatterns = [
+    path('api/disputes/confirm/', confirm_dispute_upload, name='confirm_dispute'),
+]
+"""
+
+# ============================================
+# views.py
+# ============================================
+
+from django.db import transaction
+from django.core.exceptions import ValidationError
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from .models import disputes, ConfirmDispustLoan, disputes_noti
+from datetime import datetime
+
+
+@api_view(['POST'])
+def confirm_dispute_upload(request):
+    """
+    API ສຳຫຼັບຢັ້ງຢືນການແກ້ໄຂ Dispute
+    
+    Request Body:
+    - file: ເອກະສານຢັ້ງຢືນ (image/pdf)
+    - dispute_ids: list ຂອງ ID ທີ່ເລືອກ [1, 2, 3]
+    - id_dispust: ID ຂອງ file dispute
+    - user_id: User ທີ່ດຳເນີນການ
+    """
+    
+    try:
+        import json
+        
+        # ດຶງຂໍ້ມູນຈາກ request
+        uploaded_file = request.FILES.get('file')
+        dispute_ids_raw = request.data.get('dispute_ids', [])
+        id_dispust = request.data.get('id_dispust')
+        user_id = request.data.get('user_id')
+        
+        # Parse dispute_ids ຈາກ string ເປັນ list
+        if isinstance(dispute_ids_raw, str):
+            try:
+                dispute_ids = json.loads(dispute_ids_raw)
+            except json.JSONDecodeError:
+                dispute_ids = []
+        else:
+            dispute_ids = dispute_ids_raw
+        
+        # ============================================
+        # ພາກທີ 1: ການກວດສອບຂໍ້ມູນ (Validation)
+        # ============================================
+        
+        validation_errors = []
+        
+        # ກວດສອບໄຟລ໌
+        if not uploaded_file:
+            validation_errors.append("ກະລຸນາອັບໂຫຼດເອກະສານຢັ້ງຢືນ")
+        
+        # ກວດສອບ dispute_ids
+        if not dispute_ids or len(dispute_ids) == 0:
+            validation_errors.append("ກະລຸນາເລືອກລາຍການ Dispute ຢ່າງໜ້ອຍ 1 ລາຍການ")
+        
+        # ກວດສອບ id_dispust
+        if not id_dispust:
+            validation_errors.append("ບໍ່ພົບ ID ຂອງ Dispute File")
+        
+        # ກວດສອບ user_id
+        if not user_id:
+            validation_errors.append("ບໍ່ພົບຂໍ້ມູນຜູ້ໃຊ້")
+        
+        # ຖ້າມີ error ໃນການກວດສອບ, return ທັນທີ
+        if validation_errors:
+            return Response({
+                'success': False,
+                'message': 'ການກວດສອບຂໍ້ມູນບໍ່ຜ່ານ',
+                'errors': validation_errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        
+        # ============================================
+        # ພາກທີ 2: ດຶງແລະກວດສອບຂໍ້ມູນຈາກ Database
+        # ============================================
+        
+        # ດຶງຂໍ້ມູນ disputes ຕາມ IDs ທີ່ສົ່ງມາ ເກັບໄວ້ໃນໂຕແປ
+        dispute_records = list(
+            disputes.objects.filter(id__in=dispute_ids).values()
+        )
+        
+        # ກວດສອບວ່າພົບຂໍ້ມູນຫຼືບໍ່
+        if not dispute_records:
+            return Response({
+                'success': False,
+                'message': 'ບໍ່ພົບຂໍ້ມູນ Dispute ທີ່ເລືອກ'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # ກວດສອບວ່າຈຳນວນທີ່ພົບກັບທີ່ສົ່ງມາຕົງກັນຫຼືບໍ່
+        if len(dispute_records) != len(dispute_ids):
+            found_ids = [record['id'] for record in dispute_records]
+            missing_ids = list(set(dispute_ids) - set(found_ids))
+            return Response({
+                'success': False,
+                'message': f'ບໍ່ພົບຂໍ້ມູນບາງລາຍການ',
+                'missing_ids': missing_ids
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # ກວດສອບວ່າທຸກລາຍການມີ bnk_code ດຽວກັນຫຼືບໍ່
+        bnk_codes = set([record['bnk_code'] for record in dispute_records])
+        if len(bnk_codes) > 1:
+            return Response({
+                'success': False,
+                'message': 'ລາຍການທີ່ເລືອກຕ້ອງມາຈາກສະມາຊິກດຽວກັນເທົ່ານັ້ນ',
+                'bank_codes': list(bnk_codes)
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        bnk_code = list(bnk_codes)[0]
+        total_records = len(dispute_records)
+        
+        
+        # ============================================
+        # ພາກທີ 3: ບັນທຶກຂໍ້ມູນດ້ວຍ Transaction
+        # ============================================
+        
+        with transaction.atomic():
+            # ສ້າງ ConfirmDispustLoan record
+            confirm_record = ConfirmDispustLoan.objects.create(
+                bnk_code=bnk_code,
+                image=uploaded_file,
+                user_insert=user_id,
+                status='pending',  # pending, approved, rejected
+                total=total_records
+            )
+            
+            # ກຽມຂໍ້ມູນສຳຫຼັບ bulk create
+            disputes_noti_records = []
+            
+            for record in dispute_records:
+                disputes_noti_records.append(
+                    disputes_noti(
+                        id_file=record['id_file'],
+                        lcicID=record['lcicID'],
+                        period=record['period'],
+                        product_type=record['product_type'],
+                        com_enterprise_code=record['com_enterprise_code'],
+                        segmentType=record['segmentType'],
+                        bnk_code=record['bnk_code'],
+                        customer_id=record['customer_id'],
+                        branch_id=record['branch_id'],
+                        lon_sys_id=record['lon_sys_id'],
+                        loan_id=record['loan_id'],
+                        lon_open_date=record['lon_open_date'],
+                        lon_exp_date=record['lon_exp_date'],
+                        lon_ext_date=record['lon_ext_date'],
+                        lon_int_rate=record['lon_int_rate'],
+                        lon_purpose_code=record['lon_purpose_code'],
+                        lon_credit_line=record['lon_credit_line'],
+                        lon_currency_code=record['lon_currency_code'],
+                        lon_outstanding_balance=record['lon_outstanding_balance'],
+                        lon_account_no=record['lon_account_no'],
+                        lon_no_days_slow=record['lon_no_days_slow'],
+                        lon_class=record['lon_class'],
+                        lon_type=record['lon_type'],
+                        lon_term=record['lon_term'],
+                        lon_status=record['lon_status'],
+                        lon_insert_date=record['lon_insert_date'],
+                        lon_update_date=record['lon_update_date'],
+                        lon_applied_date=record['lon_applied_date'],
+                        user_id=record['user_id'],
+                        is_disputed=record['id'],
+                        LCIC_code=record['LCIC_code'],
+                        confirm_dispust_id=confirm_record  # Link ກັບ ConfirmDispustLoan
+                    )
+                )
+            
+            # Bulk insert ເຂົ້າ disputes_noti
+            disputes_noti.objects.bulk_create(disputes_noti_records)
+            
+            # ອັບເດດສະຖານະໃນຕາຕະລາງ disputes (optional)
+            disputes.objects.filter(id__in=dispute_ids).update(
+                is_disputed=1  # ໝາຍເຖິງຢັ້ງຢືນແລ້ວ
+            )
+        
+        # ============================================
+        # ສົ່ງຜົນລັບກັບ
+        # ============================================
+        
+        return Response({
+            'success': True,
+            'message': 'ບັນທຶກຂໍ້ມູນສຳເລັດ',
+            'data': {
+                'confirm_id': confirm_record.id_disput_loan,
+                'bnk_code': bnk_code,
+                'total_records': total_records,
+                'status': confirm_record.status,
+                'inserted_at': confirm_record.insertdate
+            }
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': 'ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກຂໍ້ມູນ',
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
