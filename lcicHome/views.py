@@ -16594,7 +16594,7 @@ class UploadDataAPIView(APIView):
                         
                         # Create Electric_Bill object according to your mapping
                         bill = Electric_Bill(
-                            Customer_ID=self.truncate(safe_get('MASTER_BILL_ID', ''), 255),
+                            Customer_ID=self.truncate(safe_get('ACCOUNT_NO', ''), 255),
                             InvoiceNo=self.truncate(safe_get('INDEX_NO', ''), 255),
                             TypeOfPro=self.truncate(safe_get('SUPPLY_TYPE', ''), 100),
                             Outstanding=self.safe_decimal(safe_get('OUTSTANDING', 0)),
@@ -16969,7 +16969,319 @@ class InitializeTrackingAPIView(APIView):
                 'error': f'Initialization failed: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
-# End API Tracking Edl ----------------------------------           
+# End API Tracking Edl ----------------------------------
+# API Tracking EDL Bulk Upload --------------------------
+# class BulkUploadAllProvincesAPIView(APIView):
+#     """
+#     Trigger bulk upload for ALL provinces and districts in a specific month
+#     """
+    
+#     def post(self, request):
+#         try:
+#             upload_month = request.data.get('month')
+#             username = request.data.get('username', 'system')
+            
+#             if not upload_month:
+#                 return Response({
+#                     'error': 'month parameter is required'
+#                 }, status=status.HTTP_400_BAD_REQUEST)
+            
+#             # Validate month format
+#             try:
+#                 datetime.strptime(upload_month, '%Y%m')
+#             except ValueError:
+#                 return Response({
+#                     'error': 'Invalid month format. Use YYYYMM (e.g., 202509)'
+#                 }, status=status.HTTP_400_BAD_REQUEST)
+            
+#             if not username:
+#                 return Response({
+#                     'error': 'username is required'
+#                 }, status=status.HTTP_400_BAD_REQUEST)
+            
+#             # Trigger the bulk upload task
+#             from utility.tasks import upload_all_provinces_districts
+            
+#             task = upload_all_provinces_districts.delay(upload_month, username)
+            
+#             logger.info(f"Bulk upload task started: {task.id}")
+            
+#             return Response({
+#                 'message': f'Bulk upload started for month {upload_month}',
+#                 'task_id': task.id,
+#                 'status': 'processing',
+#                 'upload_month': upload_month
+#             }, status=status.HTTP_202_ACCEPTED)
+            
+#         except Exception as e:
+#             logger.error(f"Bulk upload trigger failed: {str(e)}")
+#             return Response({
+#                 'error': f'Failed to start bulk upload: {str(e)}'
+#             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# class BulkUploadStatusAPIView(APIView):
+#     """
+#     Check the status of a bulk upload task
+#     """
+    
+#     def get(self, request):
+#         upload_month = request.GET.get('month')
+        
+#         if not upload_month:
+#             return Response({
+#                 'error': 'month parameter is required'
+#             }, status=status.HTTP_400_BAD_REQUEST)
+        
+#         try:
+#             # Get statistics for the month
+#             total = UploadDataTracking.objects.filter(
+#                 upload_month=upload_month
+#             ).count()
+            
+#             completed = UploadDataTracking.objects.filter(
+#                 upload_month=upload_month,
+#                 status='completed'
+#             ).count()
+            
+#             in_progress = UploadDataTracking.objects.filter(
+#                 upload_month=upload_month,
+#                 status='in_progress'
+#             ).count()
+            
+#             failed = UploadDataTracking.objects.filter(
+#                 upload_month=upload_month,
+#                 status='failed'
+#             ).count()
+            
+#             pending = UploadDataTracking.objects.filter(
+#                 upload_month=upload_month,
+#                 status='pending'
+#             ).count()
+            
+#             percentage = (completed / total * 100) if total > 0 else 0
+            
+#             return Response({
+#                 'upload_month': upload_month,
+#                 'total': total,
+#                 'completed': completed,
+#                 'in_progress': in_progress,
+#                 'failed': failed,
+#                 'pending': pending,
+#                 'percentage': round(percentage, 1),
+#                 'status': 'completed' if completed == total else 'in_progress'
+#             }, status=status.HTTP_200_OK)
+            
+#         except Exception as e:
+#             logger.error(f"Status check failed: {str(e)}")
+#             return Response({
+#                 'error': str(e)
+#             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+import threading
+from django.utils import timezone
+from django.db import transaction
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from utility.models import UploadDataTracking, edl_province_code, edl_district_code
+from lcicHome.views import UploadDataAPIView
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class BulkUploadAllProvincesAPIView(APIView):
+    """
+    Bulk upload all provinces and districts WITHOUT Celery
+    Uses threading to prevent timeout
+    """
+    
+    def post(self, request):
+        upload_month = request.data.get('month')
+        username = request.data.get('username', 'system')
+        
+        if not upload_month:
+            return Response({
+                'error': 'Month parameter is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Initialize all districts first (synchronously)
+            self._initialize_all_districts(upload_month, username)
+            
+            # Start background thread for uploading
+            thread = threading.Thread(
+                target=self._process_all_uploads,
+                args=(upload_month, username),
+                daemon=True
+            )
+            thread.start()
+            
+            # Get initial count
+            total_districts = UploadDataTracking.objects.filter(
+                upload_month=upload_month
+            ).count()
+            
+            return Response({
+                'status': 'success',
+                'message': f'Bulk upload started for {total_districts} districts',
+                'total': total_districts,
+                'month': upload_month
+            })
+            
+        except Exception as e:
+            logger.error(f"Bulk upload initiation failed: {str(e)}")
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    
+    def _initialize_all_districts(self, upload_month, username):
+        """
+        Initialize tracking records for all districts
+        This runs synchronously to ensure records exist before processing
+        """
+        logger.info(f"🚀 Initializing districts for month: {upload_month}")
+        
+        provinces = edl_province_code.objects.all()
+        total_initialized = 0
+        
+        for province in provinces:
+            try:
+                districts = edl_district_code.objects.filter(pro_id=province.pro_id)
+                
+                for district in districts:
+                    # Create or update tracking record
+                    tracking, created = UploadDataTracking.objects.get_or_create(
+                        pro_id=district.pro_id,
+                        dis_id=district.dis_id,
+                        upload_month=upload_month,
+                        defaults={
+                            'pro_name': province.pro_name,
+                            'dis_name': district.dis_name,
+                            'status': 'pending',
+                            'user_upload': username
+                        }
+                    )
+                    
+                    # Reset status if already exists but not completed
+                    if not created and tracking.status != 'completed':
+                        tracking.status = 'pending'
+                        tracking.error_message = None
+                        tracking.save()
+                    
+                    total_initialized += 1
+                
+                logger.info(f"✓ Initialized {province.pro_name}: {districts.count()} districts")
+                
+            except Exception as e:
+                logger.error(f"✗ Failed to initialize {province.pro_name}: {str(e)}")
+        
+        logger.info(f"✅ Total initialized: {total_initialized} districts")
+        return total_initialized
+    
+    
+    def _process_all_uploads(self, upload_month, username):
+        """
+        Process all district uploads in background thread
+        This runs asynchronously to avoid request timeout
+        """
+        logger.info(f"📤 Starting background upload process for {upload_month}")
+        
+        # Get all pending/failed districts
+        pending_districts = UploadDataTracking.objects.filter(
+            upload_month=upload_month,
+            status__in=['pending', 'failed']
+        ).order_by('pro_id', 'dis_id')
+        
+        total = pending_districts.count()
+        processed = 0
+        
+        logger.info(f"Found {total} districts to upload")
+        
+        for tracking in pending_districts:
+            try:
+                processed += 1
+                logger.info(f"[{processed}/{total}] Uploading {tracking.dis_name} ({tracking.dis_id})")
+                
+                # Update status to in_progress
+                tracking.status = 'in_progress'
+                tracking.upload_started = timezone.now()
+                tracking.user_upload = username
+                tracking.save()
+                
+                # Perform actual upload using existing logic
+                upload_view = UploadDataAPIView()
+                result = upload_view.fetch_and_process_data(tracking)
+                
+                logger.info(f"✅ [{processed}/{total}] Completed {tracking.dis_name}")
+                
+            except Exception as e:
+                logger.error(f"❌ [{processed}/{total}] Failed {tracking.dis_name}: {str(e)}")
+                
+                # Update tracking to failed
+                tracking.status = 'failed'
+                tracking.error_message = str(e)[:500]  # Limit error message length
+                tracking.save()
+        
+        logger.info(f"🎉 Bulk upload completed! Processed {processed}/{total} districts")
+
+
+class BulkUploadStatusAPIView(APIView):
+    """
+    Get real-time status of bulk upload
+    """
+    
+    def get(self, request):
+        upload_month = request.query_params.get('month')
+        
+        if not upload_month:
+            return Response({
+                'error': 'Month parameter is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Query all tracking records for this month
+            records = UploadDataTracking.objects.filter(upload_month=upload_month)
+            
+            total = records.count()
+            completed = records.filter(status='completed').count()
+            in_progress = records.filter(status='in_progress').count()
+            pending = records.filter(status='pending').count()
+            failed = records.filter(status='failed').count()
+            
+            # Calculate percentage
+            percentage = int((completed / total * 100)) if total > 0 else 0
+            
+            # Determine overall status
+            if completed == total:
+                overall_status = 'completed'
+            elif in_progress > 0 or pending > 0:
+                overall_status = 'in_progress'
+            else:
+                overall_status = 'pending'
+            
+            return Response({
+                'status': overall_status,
+                'total': total,
+                'completed': completed,
+                'in_progress': in_progress,
+                'pending': pending,
+                'failed': failed,
+                'percentage': percentage,
+                'month': upload_month
+            })
+            
+        except Exception as e:
+            logger.error(f"Status check failed: {str(e)}")
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+# End API Tracking EDL Bulk Upload ----------------------
+
+           
 import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt

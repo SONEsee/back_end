@@ -367,6 +367,9 @@ urlpatterns = [
     path('initialize-districts-func/', views.initialize_districts_function, name='initialize-districts-func'),
     path('debug-edl/', views.debug_edl_api, name='debug-edl'),
     
+    path('bulk-upload-all/', views.BulkUploadAllProvincesAPIView.as_view(), name='bulk-upload-all'),
+    path('bulk-upload-status/', views.BulkUploadStatusAPIView.as_view(), name='bulk-upload-status'),
+    
     # Summarize EDL Data Loaded
     # EDL Summary APIs
     path('edl-summary/overview/', views.EDLSummaryOverviewAPIView.as_view(), name='edl-summary-overview'),
