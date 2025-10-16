@@ -234,7 +234,89 @@ class CDLSerializer(serializers.ModelSerializer):
             'c41', 'c42'
         ]
 
+# serializers.py
+from rest_framework import serializers
+from .models import ConfirmDispustLoan
 
+class ConfirmDispustLoanSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+    insertdate_formatted = serializers.SerializerMethodField()
+    updatedate_formatted = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ConfirmDispustLoan
+        fields = [
+            'id_disput_loan',
+            'bnk_code',
+            'image',
+            'image_url',
+            'user_insert',
+            'user_update',
+            'insertdate',
+            'insertdate_formatted',
+            'updatedate',
+            'updatedate_formatted',
+            'status',
+            'total'
+        ]
+    
+    def get_image_url(self, obj):
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
+    
+    def get_insertdate_formatted(self, obj):
+        if obj.insertdate:
+            return obj.insertdate.strftime('%d/%m/%Y %H:%M')
+        return None
+    
+    def get_updatedate_formatted(self, obj):
+        if obj.updatedate:
+            return obj.updatedate.strftime('%d/%m/%Y %H:%M')
+        return None
+
+from rest_framework import serializers
+from .models import disputes_noti
+
+class DisputesNotiSerializer(serializers.ModelSerializer):
+   
+    lon_open_date_formatted = serializers.SerializerMethodField()
+    lon_exp_date_formatted = serializers.SerializerMethodField()
+    lon_ext_date_formatted = serializers.SerializerMethodField()
+    lon_insert_date_formatted = serializers.SerializerMethodField()
+    lon_update_date_formatted = serializers.SerializerMethodField()
+    lon_applied_date_formatted = serializers.SerializerMethodField()
+    
+   
+    confirm_loan_status = serializers.CharField(
+        source='confirm_dispust_id.status', 
+        read_only=True
+    )
+    
+    class Meta:
+        model = disputes_noti
+        fields = '__all__'
+    
+    def get_lon_open_date_formatted(self, obj):
+        return obj.lon_open_date.strftime('%d/%m/%Y') if obj.lon_open_date else None
+    
+    def get_lon_exp_date_formatted(self, obj):
+        return obj.lon_exp_date.strftime('%d/%m/%Y') if obj.lon_exp_date else None
+    
+    def get_lon_ext_date_formatted(self, obj):
+        return obj.lon_ext_date.strftime('%d/%m/%Y') if obj.lon_ext_date else None
+    
+    def get_lon_insert_date_formatted(self, obj):
+        return obj.lon_insert_date.strftime('%d/%m/%Y %H:%M') if obj.lon_insert_date else None
+    
+    def get_lon_update_date_formatted(self, obj):
+        return obj.lon_update_date.strftime('%d/%m/%Y %H:%M') if obj.lon_update_date else None
+    
+    def get_lon_applied_date_formatted(self, obj):
+        return obj.lon_applied_date.strftime('%d/%m/%Y %H:%M') if obj.lon_applied_date else None
 # class EnterpriseInfoSerializer(serializers.ModelSerializer):
 #     class Meta:
 #         model = EnterpriseInfo

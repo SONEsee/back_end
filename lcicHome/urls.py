@@ -255,6 +255,8 @@ urlpatterns = [
     path('upload-files2/', UploadFileList.as_view(), name='upload-file-list'),
     path('api/upload-filesc2/', UploadFilecList.as_view(), name='upload-file-list'),
     path('api/data/', views.get_data_api, name='get_data_api'),
+    path('api/dispute-loans/', views.get_dispute_loans, name='get_dispute_loans'),
+    
 
     path('api/productinfo3/', get_data3, name='get_data_by_id_file_and_period'),
     path('api/productinfoc3/', get_data4, name='get_data_by_id_file_and_period'),
@@ -268,9 +270,7 @@ urlpatterns = [
     path('upload-files/', FileUploadView3.as_view(), name='upload_files_view'),
     path('process-files/', upload_files, name='upload_files'),
     path('unload-upload/', views.unload_upload, name='unload_upload'),
-
-
-
+    path('api/disputes-by-confirm/', views.get_disputes_by_confirm_id, name='disputes_by_confirm'),
     path('upload-filesC/', FileUploadViewC.as_view(), name='upload_files_view'),
     path('process-filesC/', process_uploaded_file, name='process_uploaded_file'),
 

@@ -966,7 +966,9 @@ class disputes_noti(models.Model):
     lon_update_date = models.DateTimeField(null=True)
     lon_applied_date = models.DateTimeField(null=True)
     user_id = models.CharField(max_length=100)
+    status = models.CharField(max_length=100 , null=True)
     is_disputed = models.BigIntegerField(default=0, null=True)
+    deception = models.TextField(blank=True, null=True)
     
    
     confirm_dispust_id = models.ForeignKey(
