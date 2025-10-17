@@ -20083,6 +20083,7 @@ def get_dispute_loans(request):
         filter_bnk_code = request.GET.get('filter_bnk_code', '')
         filter_status = request.GET.get('status', '')
         page = int(request.GET.get('page', 1))
+        id_disput_loan = request.GET.get('id_disput_loan', '')
         page_size = int(request.GET.get('page_size', 10))
         
       
@@ -20108,6 +20109,10 @@ def get_dispute_loans(request):
        
         if filter_status:
             queryset = queryset.filter(status=filter_status)
+        
+       
+        if id_disput_loan:
+            queryset = queryset.filter(id_disput_loan=id_disput_loan)
         
         
         queryset = queryset.order_by('-id_disput_loan')
