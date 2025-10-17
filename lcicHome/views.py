@@ -20066,6 +20066,7 @@ def confirm_dispute_upload(request):
             'message': 'ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກຂໍ້ມູນ',
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+<<<<<<< HEAD
     
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -20308,3 +20309,204 @@ def get_disputes_by_confirm_id(request):
 
 
 
+=======
+        
+       
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from django.db.models import Q, Value, CharField
+from django.db.models.functions import Concat
+from django.core.cache import cache
+from django.conf import settings
+import hashlib
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Province mapping
+PROVINCE_MAP = {
+    '1': 'ນະຄອນຫຼວງວຽງຈັນ',
+    '2': 'ຜົ້ງສາລີ',
+    '3': 'ຫຼວງນໍ້າທາ',
+    '4': 'ອຸດົມໄຊ',
+    '5': 'ບໍ່ແກ້ວ',
+    '6': 'ຫຼວງພະບາງ',
+    '7': 'ຫົວພັນ',
+    '8': 'ໄຊຍະບູລີ',
+    '9': 'ຊຽງຂວາງ',
+    '10': 'ວຽງຈັນ',
+    '11': 'ບໍລິຄໍາໄຊ',
+    '12': 'ຄໍາມ່ວນ',
+    '13': 'ສະຫວັນນະເຂດ',
+    '14': 'ສາລະວັນ',
+    '15': 'ເຊກອງ',
+    '16': 'ຈໍາປາສັກ',
+    '17': 'ອັດຕະປື',
+    '18': 'ໄຊສົມບູນ'
+}
+
+def get_from_cache(key):
+    """Safely get from cache with error handling"""
+    try:
+        return cache.get(key)
+    except Exception as e:
+        logger.warning(f"Cache get error: {str(e)}")
+        return None
+
+def set_to_cache(key, value, timeout=300):
+    """Safely set to cache with error handling"""
+    try:
+        cache.set(key, value, timeout)
+    except Exception as e:
+        logger.warning(f"Cache set error: {str(e)}")
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def edl_customer_search(request):
+    """
+    Fast customer search for EDL (Electric) customers
+    Uses 'utility' database via database router
+    
+    Query params:
+    - query: search term (required, min 2 chars)
+    - province_id: filter by province (optional)
+    - limit: max results (default: 15, max: 50)
+    """
+    
+    query = request.GET.get('query', '').strip()
+    province_id = request.GET.get('province_id', '').strip()
+    limit = min(int(request.GET.get('limit', 100)), 50)
+    
+    # Validate query
+    if not query or len(query) < 2:
+        return Response({
+            'error': 'Query must be at least 2 characters',
+            'results': []
+        }, status=400)
+    
+    # Create cache key
+    cache_key = f"edl_search_{hashlib.md5(f'{query}_{province_id}_{limit}'.encode()).hexdigest()}"
+    
+    # Try to get from cache
+    cached_result = get_from_cache(cache_key)
+    if cached_result:
+        return Response(cached_result)
+    
+    try:
+        # Import model
+        from utility.models import edl_customer_info
+        
+        # Build search query
+        search_query = Q(Customer_ID__icontains=query) | \
+                       Q(Name__icontains=query) | \
+                       Q(Surname__icontains=query) | \
+                       Q(Company_name__icontains=query)
+        
+        # Add province filter
+        if province_id:
+            search_query &= Q(Province_ID=province_id)
+        
+        # Execute query - Database router will automatically use 'utility' database
+        customers = edl_customer_info.objects.using('utility').filter(search_query).only(
+            'Customer_ID', 'Name', 'Surname', 'Company_name', 'Province_ID', 'Address'
+        ).order_by('Name')[:limit]
+        
+        # Format results
+        results = []
+        for customer in customers:
+            full_name = f"{customer.Name or ''} {customer.Surname or ''}".strip()
+            company_part = f" ({customer.Company_name})" if customer.Company_name else ""
+            
+            results.append({
+                'Customer_ID': customer.Customer_ID,
+                'Name': customer.Name or '',
+                'Surname': customer.Surname or '',
+                'Company_name': customer.Company_name or '',
+                'Province_ID': customer.Province_ID,
+                'province_name': PROVINCE_MAP.get(customer.Province_ID, 'ບໍ່ລະບຸ'),
+                'Address': customer.Address or '',
+                'display': f"{full_name}{company_part}"
+            })
+        
+        # Cache results
+        set_to_cache(cache_key, results, 300)
+        
+        return Response(results)
+        
+    except Exception as e:
+        logger.error(f"EDL customer search error: {str(e)}")
+        return Response({
+            'error': 'An error occurred during search',
+            'results': []
+        }, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def water_customer_search(request):
+    """
+    Fast customer search for Water customers
+    Uses 'utility' database via database router
+    """
+    
+    query = request.GET.get('query', '').strip()
+    province_id = request.GET.get('province_id', '').strip()
+    limit = min(int(request.GET.get('limit', 15)), 50)
+    
+    if not query or len(query) < 2:
+        return Response({
+            'error': 'Query must be at least 2 characters',
+            'results': []
+        }, status=400)
+    
+    cache_key = f"water_search_{hashlib.md5(f'{query}_{province_id}_{limit}'.encode()).hexdigest()}"
+    cached_result = get_from_cache(cache_key)
+    
+    if cached_result:
+        return Response(cached_result)
+    
+    try:
+        # Import your water customer model
+        from utility.models import w_customer_info
+        
+        search_query = Q(Customer_ID__icontains=query) | \
+                       Q(Name__icontains=query) | \
+                       Q(Surname__icontains=query) | \
+                       Q(Company_name__icontains=query)
+        
+        if province_id:
+            search_query &= Q(Province_ID=province_id)
+        
+        # Use 'utility' database
+        customers = w_customer_info.objects.using('utility').filter(search_query).only(
+            'Customer_ID', 'Name', 'Surname', 'Company_name', 'Province_ID', 'Address'
+        ).order_by('Name')[:limit]
+        
+        results = []
+        for customer in customers:
+            full_name = f"{customer.Name or ''} {customer.Surname or ''}".strip()
+            company_part = f" ({customer.Company_name})" if customer.Company_name else ""
+            
+            results.append({
+                'Customer_ID': customer.Customer_ID,
+                'Name': customer.Name or '',
+                'Surname': customer.Surname or '',
+                'Company_name': customer.Company_name or '',
+                'Province_ID': customer.Province_ID,
+                'province_name': PROVINCE_MAP.get(customer.Province_ID, 'ບໍ່ລະບຸ'),
+                'Address': customer.Address or '',
+                'display': f"{full_name}{company_part}"
+            })
+        
+        set_to_cache(cache_key, results, 300)
+        
+        return Response(results)
+        
+    except Exception as e:
+        logger.error(f"Water customer search error: {str(e)}")
+        return Response({
+            'error': 'An error occurred during search',
+            'results': []
+        }, status=500)
+>>>>>>> d69d39c01a15f6671ff7347f3b921ce43d49d93c
