@@ -38,6 +38,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'rest_framework',
     'rest_framework.authtoken',
+    'django_celery_beat',      # ✅ ADD
+    'django_celery_results',   # ✅ ADD (optional, for task history)
     
 ]
 
@@ -236,10 +238,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
     "http://192.168.45.54:3000",
     "http://192.168.45.54:3000",
+    "http://localhost:3001",
 ]
 
 CORS_ALLOW_HEADERS = list(default_headers) + [
     'X-User-Roles',
+    'cache-control',
+    'pragma',
 ]
 
 AUTH_USER_MODEL = 'lcicHome.Login'
@@ -248,6 +253,7 @@ CSRF_TRUSTED_ORIGINS = ['http://localhost:3000','http://192.168.45.54:3000']
 
 CORS_ALLOWED_ORIGINS = [
     "http://192.168.45.54:35729",
+    "http://localhost:3001",
     # origins ອື່ນໆທີ່ມີຢູ່ແລ້ວ...
 ]
 CSRF_COOKIE_HTTPONLY = False
@@ -256,8 +262,9 @@ CSRF_COOKIE_SECURE = False
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
 LOGIN_URL = '/accounts/login/'
-CELERY_BROKER_URL = 'redis://localhost:3000/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:35725/0'
+# ✅ CORRECT - Standard Redis port
+CELERY_BROKER_URL = 'redis://localhost:6379/0' 
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 
 # Celery settings
 # CELERY_BROKER_URL = 'redis://localhost:8000/0'
@@ -267,7 +274,13 @@ CELERY_RESULT_BACKEND = 'redis://localhost:35725/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = 'UTC'
+CELERY_TIMEZONE = 'Asia/Vientiane'  
+
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes max
+
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
 CORS_ALLOW_CREDENTIALS = True
 DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880
 FILE_UPLOAD_HANDLERS = [
