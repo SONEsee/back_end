@@ -149,23 +149,58 @@ class w_customer_info(models.Model):
     Email = models.CharField(max_length=100)
     Cus_type = models.CharField(max_length=100)
     Regis_date = models.CharField(max_length=100)
-   
+    class Meta:
+        managed = False
+        indexes = [
+            models.Index(fields=['Name', 'Province_ID'], name='water_name_prov_idx'),
+            models.Index(fields=['Surname', 'Province_ID'], name='water_surname_prov_idx'),
+        ]
+    
+    def __str__(self):
+        return f"{self.Customer_ID} - {self.Name} {self.Surname or ''}"
+    
      
+# class edl_customer_info(models.Model):
+#     No =  models.CharField(max_length=100)
+#     Customer_ID = models.CharField(max_length=100)
+#     Company_name = models.CharField(max_length=100)
+#     Name = models.CharField(max_length=100)
+#     Surname = models.CharField(max_length=100)
+#     National_ID = models.CharField(max_length=100)
+#     Passport = models.CharField(max_length=100)
+#     Address = models.CharField(max_length=100)
+#     Dustrict_ID = models.CharField(max_length=100)
+#     Province_ID = models.CharField(max_length=100)
+#     Tel = models.CharField(max_length=100)
+#     Email = models.CharField(max_length=100)
+#     Cus_type = models.CharField(max_length=100)
+#     Regis_date = models.CharField(max_length=100)
 class edl_customer_info(models.Model):
-    No =  models.CharField(max_length=100)
-    Customer_ID = models.CharField(max_length=100)
-    Company_name = models.CharField(max_length=100)
-    Name = models.CharField(max_length=100)
-    Surname = models.CharField(max_length=100)
+    No = models.CharField(max_length=100)
+    Customer_ID = models.CharField(max_length=100, db_index=True)  # Add index
+    Company_name = models.CharField(max_length=100, db_index=True)  # Add index
+    Name = models.CharField(max_length=100, db_index=True)  # Add index
+    Surname = models.CharField(max_length=100, db_index=True)  # Add index
     National_ID = models.CharField(max_length=100)
     Passport = models.CharField(max_length=100)
     Address = models.CharField(max_length=100)
-    Dustrict_ID = models.CharField(max_length=100)
-    Province_ID = models.CharField(max_length=100)
+    Dustrict_ID = models.CharField(max_length=100, db_index=True)  # Add index
+    Province_ID = models.CharField(max_length=100, db_index=True)  # Add index
     Tel = models.CharField(max_length=100)
     Email = models.CharField(max_length=100)
     Cus_type = models.CharField(max_length=100)
     Regis_date = models.CharField(max_length=100)
+    
+    class Meta:
+        # Composite indexes for faster searches
+        indexes = [
+            models.Index(fields=['Name', 'Province_ID'], name='name_province_idx'),
+            models.Index(fields=['Surname', 'Province_ID'], name='surname_province_idx'),
+            models.Index(fields=['Company_name', 'Province_ID'], name='company_province_idx'),
+        ]
+    
+    def __str__(self):
+        return f"{self.Customer_ID} - {self.Name} {self.Surname}"
    
    
 class searchlog_utility(models.Model):

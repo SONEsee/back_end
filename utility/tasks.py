@@ -59,7 +59,7 @@ def auto_upload_all_provinces(self):
         logger.error(f"Auto-upload failed: {str(exc)}")
         raise self.retry(exc=exc)
     
-    
+#utility/tasks.py    
 from celery import shared_task, group
 from celery.utils.log import get_task_logger
 from django.utils import timezone
