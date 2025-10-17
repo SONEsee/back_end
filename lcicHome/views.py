@@ -19892,24 +19892,21 @@ from datetime import datetime
 
 @api_view(['POST'])
 def confirm_dispute_upload(request):
-    """
-    API ສຳຫຼັບຢັ້ງຢືນການແກ້ໄຂ Dispute
-    
-    Request Body:
-    - file: ເອກະສານຢັ້ງຢືນ (image/pdf)
-    - dispute_ids: list ຂອງ ID ທີ່ເລືອກ [1, 2, 3]
-    - id_dispust: ID ຂອງ file dispute
-    - user_id: User ທີ່ດຳເນີນການ
-    """
+   
     
     try:
         import json
-        
+        print("=== BACKEND DEBUG ===")
+        print("request.data:", dict(request.data))
+        print("request.FILES:", dict(request.FILES))
+
        
         uploaded_file = request.FILES.get('file')
         dispute_ids_raw = request.data.get('dispute_ids', [])
         id_dispust = request.data.get('id_dispust')
         user_id = request.data.get('user_id')
+        user_insert = request.data.get('user_insert')
+
         deception = request.data.get('deception', '')
      
         if isinstance(dispute_ids_raw, str):
@@ -19990,9 +19987,10 @@ def confirm_dispute_upload(request):
             confirm_record = ConfirmDispustLoan.objects.create(
                 bnk_code=bnk_code,
                 image=uploaded_file,
-                user_insert=user_id,
+                # user_insert=user_id,
                 status='1', 
-                total=total_records
+                total=total_records,
+                user_insert = user_insert
             )
             
         
@@ -20066,7 +20064,6 @@ def confirm_dispute_upload(request):
             'message': 'ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກຂໍ້ມູນ',
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-<<<<<<< HEAD
     
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -20309,7 +20306,6 @@ def get_disputes_by_confirm_id(request):
 
 
 
-=======
         
        
 from rest_framework.decorators import api_view, permission_classes
@@ -20509,4 +20505,3 @@ def water_customer_search(request):
             'error': 'An error occurred during search',
             'results': []
         }, status=500)
->>>>>>> d69d39c01a15f6671ff7347f3b921ce43d49d93c
