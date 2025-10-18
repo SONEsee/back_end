@@ -19896,9 +19896,7 @@ def confirm_dispute_upload(request):
     
     try:
         import json
-        print("=== BACKEND DEBUG ===")
-        print("request.data:", dict(request.data))
-        print("request.FILES:", dict(request.FILES))
+       
 
        
         uploaded_file = request.FILES.get('file')
@@ -19987,7 +19985,7 @@ def confirm_dispute_upload(request):
             confirm_record = ConfirmDispustLoan.objects.create(
                 bnk_code=bnk_code,
                 image=uploaded_file,
-                # user_insert=user_id,
+               
                 status='1', 
                 total=total_records,
                 user_insert = user_insert
