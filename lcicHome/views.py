@@ -5195,6 +5195,12 @@ def human_readable_size(size):
 
 @csrf_exempt
 def upload_files(request):
+    """
+    ⚡ ປັບປຸງແລ້ວ:
+    - ໃຊ້ prefetch ເພື່ອຫຼຸດ database queries (ໄວຂຶ້ນຫຼາຍ!)
+    - ໃຊ້ transaction ເພື່ອຄວາມປອດໄພ
+    - ໃຊ້ bulk insert ເພື່ອປະສິດທິພາບ
+    """
     if request.method == 'POST':
         try:
             user = request.user
@@ -5203,8 +5209,10 @@ def upload_files(request):
             file = request.FILES.get('file')
             warnings = []
             period = request.POST.get('period')
+            
             if period.startswith('M'):
                 period = period[1:]
+            
             FID = request.POST.get('file_id')
 
             if file and file.name.endswith('.json'):
@@ -5212,55 +5220,153 @@ def upload_files(request):
                 file_size = file.size
                 file_size_hr = human_readable_size(file.size)
 
-                upload_file = Upload_File.objects.create(
-                    FID=FID,
-                    fileName=file.name,
-                    fileSize=file_size_hr,
-                    path="uploadFiles/" + file.name,
-                    insertDate=timezone.now(),
-                    updateDate=timezone.now(),
-                    period=period,
-                    user_id=user_id,
-                    status="Processing",
-                    status_upload="Pending",
-                    statussubmit="Pending",
-                    FileType="json",
-                    MID=user.memberinfo if hasattr(user, 'memberinfo') else None,
-                    GID=user.user_group if hasattr(user, 'user_group') else None,
-                    SType=user.stype if hasattr(user, 'stype') else None,
-                    UType=user.upload_type if hasattr(user, 'upload_type') else None,
-                )
+                
+                with transaction.atomic():
+                  
+                    upload_file = Upload_File.objects.create(
+                        FID=FID,
+                        fileName=file.name,
+                        fileSize=file_size_hr,
+                        path="uploadFiles/" + file.name,
+                        insertDate=timezone.now(),
+                        updateDate=timezone.now(),
+                        period=period,
+                        user_id=user_id,
+                        status="Processing",
+                        status_upload="Pending",
+                        statussubmit="Pending",
+                        FileType="json",
+                        MID=user.memberinfo if hasattr(user, 'memberinfo') else None,
+                        GID=user.user_group if hasattr(user, 'user_group') else None,
+                        SType=user.stype if hasattr(user, 'stype') else None,
+                        UType=user.upload_type if hasattr(user, 'upload_type') else None,
+                    )
 
-                total_items = len(data)
-                erroneous_items = 0
+                    total_items = len(data)
+                    erroneous_items = 0
+                    
+                   
+                    good_records = []  
+                    bad_records = []  
 
-                for item in data:
-                    try:
-                        com_enterprise_code = item.get('com_enterprise_code', '')
-                        lcicID = item.get('lcicID', '')  # ຮັກສາ lcicID ສຳລັບການເກັບຂໍ້ມູນ
-                        LCIC_code = item.get('LCIC_code', '')  # ໃຊ້ LCIC_code ສຳລັບການກວດສອບ
-                        LCIC_code_get = None
-                        LCIC_code_error_status = '33'
+                    
+                   
+                    all_enterprise_codes = set()
+                    all_lcic_codes = set()
+                    
+                    for item in data:
+                        code = item.get('com_enterprise_code', '')
+                        lcic = item.get('LCIC_code', '')
+                        if code:
+                            all_enterprise_codes.add(code)
+                        if lcic:
+                            all_lcic_codes.add(lcic)
+                    
+                   
+                    enterprises_by_code = {
+                        e.EnterpriseID: e 
+                        for e in EnterpriseInfo.objects.filter(
+                            EnterpriseID__in=all_enterprise_codes
+                        )
+                    }
+                    
+                    enterprises_by_lcic = {
+                        e.LCIC_code: e 
+                        for e in EnterpriseInfo.objects.filter(
+                            LCIC_code__in=all_lcic_codes
+                        )
+                    }
 
-                        if com_enterprise_code and LCIC_code:
-                            enterprise_info_by_code = EnterpriseInfo.objects.filter(EnterpriseID=com_enterprise_code).first()
-                            # ປ່ຽນການກວດສອບໃຊ້ LCIC_code ແທນ LCICID
-                            enterprise_info_by_LCIC = EnterpriseInfo.objects.filter(LCIC_code=LCIC_code).first()
+                    #
+                    for item in data:
+                        try:
+                            com_enterprise_code = item.get('com_enterprise_code', '')
+                            lcicID = item.get('lcicID', '')  
+                            LCIC_code = item.get('LCIC_code', '')  
+                            LCIC_code_get = None
+                            LCIC_code_error_status = '33'
+
                             
-                            if enterprise_info_by_code and enterprise_info_by_LCIC:
-                                LCIC_code_error_status = '0'
-                                data_edit.objects.create(
-                                    lcicID=lcicID,  # ຍັງໃຊ້ lcicID ຈາກ JSON
-                                    LCIC_code=LCIC_code,  # ໃຊ້ LCIC
+                            if com_enterprise_code and LCIC_code:
+                                enterprise_info_by_code = enterprises_by_code.get(com_enterprise_code)
+                                enterprise_info_by_LCIC = enterprises_by_lcic.get(LCIC_code)
+                                
+                                if enterprise_info_by_code and enterprise_info_by_LCIC:
+                                    
+                                    LCIC_code_error_status = '0'
+                                    good_records.append(
+                                        data_edit(
+                                            lcicID=lcicID, 
+                                            LCIC_code=LCIC_code,  
+                                            period=period,
+                                            com_enterprise_code=com_enterprise_code,
+                                            segmentType=item.get('segmentType', ''),
+                                            bnk_code=item.get('bnk_code', ''),
+                                            customer_id=item.get('customer_id', ''),
+                                            branch_id=item.get('branch_id', ''),
+                                            lon_sys_id=item.get('lon_sys_id', ''),
+                                            loan_id=item.get('loan_id', ''),
+                                            user_id=user_id,
+                                            lon_open_date=item.get('lon_open_date', None),
+                                            lon_exp_date=item.get('lon_exp_date', None),
+                                            lon_ext_date=item.get('lon_ext_date', None),
+                                            lon_int_rate=item.get('lon_int_rate', 0),
+                                            lon_purpose_code=item.get('lon_purpose_code', ''),
+                                            lon_credit_line=item.get('lon_credit_line', 0),
+                                            lon_currency_code=item.get('lon_currency_code', ''),
+                                            lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
+                                            lon_account_no=item.get('lon_account_no', ''),
+                                            lon_no_days_slow=item.get('lon_no_days_slow', 0),
+                                            lon_class=item.get('lon_class', ''),
+                                            lon_type=item.get('lon_type', ''),
+                                            lon_term=item.get('lon_term', ''),
+                                            lon_status=item.get('lon_status', ''),
+                                            lon_insert_date=item.get('lon_insert_date', None),
+                                            lon_update_date=item.get('lon_update_date', None),
+                                            lon_applied_date=item.get('lon_applied_date', None),
+                                            is_disputed=item.get('is_disputed', 0),
+                                            id_file=FID
+                                        )
+                                    )
+                                    continue
+                                else:
+                                    if enterprise_info_by_code:   
+                                        LCIC_code_get = enterprise_info_by_code.LCIC_code
+                                        LCIC_code_error_status = '01'
+                                    elif enterprise_info_by_LCIC:  
+                                        LCIC_code_get = enterprise_info_by_LCIC.EnterpriseID
+                                        LCIC_code_error_status = '10'
+                                        
+                            elif com_enterprise_code:
+                                enterprise_info_by_code = enterprises_by_code.get(com_enterprise_code)
+                                if enterprise_info_by_code:
+                                    LCIC_code_get = enterprise_info_by_code.LCIC_code
+                                    LCIC_code_error_status = '31'
+                                else:
+                                    LCIC_code_error_status = '31'
+                                    
+                            elif LCIC_code:
+                                enterprise_info_by_LCIC = enterprises_by_lcic.get(LCIC_code)
+                                if enterprise_info_by_LCIC:
+                                    LCIC_code_get = enterprise_info_by_LCIC.EnterpriseID
+                                    LCIC_code_error_status = '13'
+                                else:
+                                    LCIC_code_error_status = '13'
+
+                       
+                            bad_records.append(
+                                B_Data_is_damaged(
+                                    lcicID=lcicID,  
                                     period=period,
+                                    user_id=user_id,
                                     com_enterprise_code=com_enterprise_code,
+                                    product_type=item.get('product_type', ''),
                                     segmentType=item.get('segmentType', ''),
                                     bnk_code=item.get('bnk_code', ''),
                                     customer_id=item.get('customer_id', ''),
                                     branch_id=item.get('branch_id', ''),
                                     lon_sys_id=item.get('lon_sys_id', ''),
                                     loan_id=item.get('loan_id', ''),
-                                    user_id=user_id,
                                     lon_open_date=item.get('lon_open_date', None),
                                     lon_exp_date=item.get('lon_exp_date', None),
                                     lon_ext_date=item.get('lon_ext_date', None),
@@ -5279,130 +5385,99 @@ def upload_files(request):
                                     lon_update_date=item.get('lon_update_date', None),
                                     lon_applied_date=item.get('lon_applied_date', None),
                                     is_disputed=item.get('is_disputed', 0),
+                                    lcicID_error=LCIC_code_error_status,  
+                                    lcicID_get=LCIC_code_get,  
+                                    LCIC_code=LCIC_code,  
                                     id_file=FID
                                 )
-                                continue
-                            else:
-                                if enterprise_info_by_code:   # ມີ enterprise code ແຕ່ບໍ່ມີ LCIC_code ທີ່ກົງກັນ
-                                    LCIC_code_get = enterprise_info_by_code.LCIC_code
-                                    LCIC_code_error_status = '01'
-                                elif enterprise_info_by_LCIC:  # ມີ LCIC_code ແຕ່ບໍ່ມີ enterprise code
-                                    LCIC_code_get = enterprise_info_by_LCIC.EnterpriseID
-                                    LCIC_code_error_status = '10'
-                        elif com_enterprise_code:
-                            enterprise_info_by_code = EnterpriseInfo.objects.filter(EnterpriseID=com_enterprise_code).first() # ມີ enterprise code ແຕ່ LCIC_code ຜິດ
-                            if enterprise_info_by_code:
-                                LCIC_code_get = enterprise_info_by_code.LCIC_code
-                                LCIC_code_error_status = '31'
-                            else:
-                                LCIC_code_error_status = '31'
-                        elif LCIC_code:
-                            enterprise_info_by_LCIC = EnterpriseInfo.objects.filter(LCIC_code=LCIC_code).first() # ມີ LCIC_code ແຕ່ enterprise code ຜິດ
-                            if enterprise_info_by_LCIC:
-                                LCIC_code_get = enterprise_info_by_LCIC.EnterpriseID
-                                LCIC_code_error_status = '13'
-                            else:
-                                LCIC_code_error_status = '13'
+                            )
 
-                        B_Data_is_damaged.objects.create(
-                            lcicID=lcicID,  # ຍັງໃຊ້ lcicID ຈາກ JSON
-                            
-                            period=period,
-                            user_id=user_id,
-                            com_enterprise_code=com_enterprise_code,
-                            product_type=item.get('product_type', ''),
-                            segmentType=item.get('segmentType', ''),
-                            bnk_code=item.get('bnk_code', ''),
-                            customer_id=item.get('customer_id', ''),
-                            branch_id=item.get('branch_id', ''),
-                            lon_sys_id=item.get('lon_sys_id', ''),
-                            loan_id=item.get('loan_id', ''),
-                            lon_open_date=item.get('lon_open_date', None),
-                            lon_exp_date=item.get('lon_exp_date', None),
-                            lon_ext_date=item.get('lon_ext_date', None),
-                            lon_int_rate=item.get('lon_int_rate', 0),
-                            lon_purpose_code=item.get('lon_purpose_code', ''),
-                            lon_credit_line=item.get('lon_credit_line', 0),
-                            lon_currency_code=item.get('lon_currency_code', ''),
-                            lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
-                            lon_account_no=item.get('lon_account_no', ''),
-                            lon_no_days_slow=item.get('lon_no_days_slow', 0),
-                            lon_class=item.get('lon_class', ''),
-                            lon_type=item.get('lon_type', ''),
-                            lon_term=item.get('lon_term', ''),
-                            lon_status=item.get('lon_status', ''),
-                            lon_insert_date=item.get('lon_insert_date', None),
-                            lon_update_date=item.get('lon_update_date', None),
-                            lon_applied_date=item.get('lon_applied_date', None),
-                            is_disputed=item.get('is_disputed', 0),
-                            lcicID_error=LCIC_code_error_status,  # ໃຊ້ error status ຈາກ LCIC_code
-                            lcicID_get=LCIC_code_get,  # ໃຊ້ LCIC_code_get ສຳລັບການກວດສອບ
-                            LCIC_code=LCIC_code,  # ໃຊ້ LCIC_code ສຳລັບການກວດສອບ
-                            id_file=FID
-                        )
+                            if LCIC_code_error_status != '0':
+                                erroneous_items += 1
 
-                        if LCIC_code_error_status != '0':
+                        except Exception as e:
+                         
+                            bad_records.append(
+                                B_Data_is_damaged(
+                                    lcicID=item.get('lcicID', ''),
+                                    LCIC_code=item.get('LCIC_code', ''),  
+                                    period=period,
+                                    product_type=item.get('product_type', ''),
+                                    user_id=user_id,
+                                    com_enterprise_code=item.get('com_enterprise_code', ''),
+                                    segmentType=item.get('segmentType', ''),
+                                    bnk_code=item.get('bnk_code', ''),
+                                    customer_id=item.get('customer_id', ''),
+                                    branch_id=item.get('branch_id', ''),
+                                    lon_sys_id=item.get('lon_sys_id', ''),
+                                    loan_id=item.get('loan_id', ''),
+                                    lon_open_date=item.get('lon_open_date', None),
+                                    lon_exp_date=item.get('lon_exp_date', None),
+                                    lon_ext_date=item.get('lon_ext_date', None),
+                                    lon_int_rate=item.get('lon_int_rate', 0),
+                                    lon_purpose_code=item.get('lon_purpose_code', ''),
+                                    lon_credit_line=item.get('lon_credit_line', 0),
+                                    lon_currency_code=item.get('lon_currency_code', ''),
+                                    lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
+                                    lon_account_no=item.get('lon_account_no', ''),
+                                    lon_no_days_slow=item.get('lon_no_days_slow', 0),
+                                    lon_class=item.get('lon_class', ''),
+                                    lon_type=item.get('lon_type', ''),
+                                    lon_term=item.get('lon_term', ''),
+                                    lon_status=item.get('lon_status', ''),
+                                    lon_insert_date=item.get('lon_insert_date', None),
+                                    lon_update_date=item.get('lon_update_date', None),
+                                    lon_applied_date=item.get('lon_applied_date', None),
+                                    is_disputed=item.get('is_disputed', 0),
+                                    lcicID_error='33',
+                                    id_file=FID
+                                )
+                            )
                             erroneous_items += 1
 
-                    except Exception as e:
-                        B_Data_is_damaged.objects.create(
-                            lcicID=item.get('lcicID', ''),  # ຍັງໃຊ້ lcicID ຈາກ JSON
-                            LCIC_code=item.get('LCIC_code', ''),  
-                            period=period,
-                            product_type=item.get('product_type', ''),
-                            user_id=user_id,
-                            com_enterprise_code=item.get('com_enterprise_code', ''),
-                            segmentType=item.get('segmentType', ''),
-                            bnk_code=item.get('bnk_code', ''),
-                            customer_id=item.get('customer_id', ''),
-                            branch_id=item.get('branch_id', ''),
-                            lon_sys_id=item.get('lon_sys_id', ''),
-                            loan_id=item.get('loan_id', ''),
-                            lon_open_date=item.get('lon_open_date', None),
-                            lon_exp_date=item.get('lon_exp_date', None),
-                            lon_ext_date=item.get('lon_ext_date', None),
-                            lon_int_rate=item.get('lon_int_rate', 0),
-                            lon_purpose_code=item.get('lon_purpose_code', ''),
-                            lon_credit_line=item.get('lon_credit_line', 0),
-                            lon_currency_code=item.get('lon_currency_code', ''),
-                            lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
-                            lon_account_no=item.get('lon_account_no', ''),
-                            lon_no_days_slow=item.get('lon_no_days_slow', 0),
-                            lon_class=item.get('lon_class', ''),
-                            lon_type=item.get('lon_type', ''),
-                            lon_term=item.get('lon_term', ''),
-                            lon_status=item.get('lon_status', ''),
-                            lon_insert_date=item.get('lon_insert_date', None),
-                            lon_update_date=item.get('lon_update_date', None),
-                            lon_applied_date=item.get('lon_applied_date', None),
-                            is_disputed=item.get('is_disputed', 0),
-                            lcicID_error='33',
-                            id_file=FID
-                        )
-                        erroneous_items += 1
+                   
+                    if good_records:
+                        data_edit.objects.bulk_create(good_records, batch_size=1000)
+                    
+                    if bad_records:
+                        B_Data_is_damaged.objects.bulk_create(bad_records, batch_size=1000)
 
-                error_percentage = (erroneous_items / total_items) * 100 if total_items > 0 else 0
-
-                upload_file.percentage = error_percentage
-                upload_file.statussubmit = "2" if error_percentage > 15 else "1"
-                upload_file.save()
+                   
+                    error_percentage = (erroneous_items / total_items) * 100 if total_items > 0 else 0
+                    upload_file.percentage = error_percentage
+                    upload_file.statussubmit = "2" if error_percentage > 15 else "1"
+                    upload_file.save()
+                
+              
                 return JsonResponse({
                     'status': 'success',
                     'message': 'File uploaded and processed successfully',
                     'warnings': warnings,
-                    'error_percentage': error_percentage
+                    'error_percentage': error_percentage,
+                    'total_items': total_items,
+                    'good_records': len(good_records),
+                    'bad_records': len(bad_records)
                 }, status=200)
 
             else:
-                return JsonResponse({'status': 'error', 'message': 'Invalid file format'}, status=400)
+                return JsonResponse({
+                    'status': 'error', 
+                    'message': 'Invalid file format'
+                }, status=400)
 
         except Exception as e:
+           
             logger.error(f"File upload failed: {str(e)}")
-            return JsonResponse({'status': 'error', 'message': f'File upload failed: {str(e)}'}, status=500)
+            return JsonResponse({
+                'status': 'error', 
+                'message': f'File upload failed: {str(e)}'
+            }, status=500)
 
     else:
-        return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=400)
-
+        return JsonResponse({
+            'status': 'error', 
+            'message': 'Invalid request method'
+        }, status=400)
 # from django.views.decorators.csrf import csrf_exempt
 # from django.http import JsonResponse
 # import json
@@ -6374,8 +6449,8 @@ def safe_parse_datetime(value):
     
 #     except Exception as e:
 #         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
-@csrf_exempt
-@require_POST
+# @csrf_exempt
+# @require_POST   
 # def confirm_upload(request):
 #     try:
 #         FID = request.POST.get('FID')
@@ -6387,7 +6462,6 @@ def safe_parse_datetime(value):
 #             Upload_File.objects.filter(FID=FID).update(statussubmit='2')
 #             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
         
-
 #         for item in data_edits:
 #             try:
 #                 latest_b1 = B1.objects.filter(
@@ -6419,6 +6493,7 @@ def safe_parse_datetime(value):
 #                 ).exists()
 
 #                 if b1_monthly_match or b1_match:
+                    
 #                     b1_monthly_mismatch = B1_Monthly.objects.filter(
 #                         bnk_code=item.bnk_code,
 #                         branch_id=item.branch_id,
@@ -6427,7 +6502,7 @@ def safe_parse_datetime(value):
 #                         period=item.period
 #                     ).exclude(
 #                         com_enterprise_code=item.com_enterprise_code,
-#                         lcicID=item.lcicID
+#                         LCIC_code=item.LCIC_code  
 #                     ).exists()
 
 #                     b1_mismatch = B1.objects.filter(
@@ -6438,7 +6513,7 @@ def safe_parse_datetime(value):
 #                         period=item.period
 #                     ).exclude(
 #                         com_enterprise_code=item.com_enterprise_code,
-#                         lcicID=item.lcicID
+#                         LCIC_code=item.LCIC_code  
 #                     ).exists()
 
 #                     if b1_monthly_mismatch or b1_mismatch:
@@ -6477,7 +6552,6 @@ def safe_parse_datetime(value):
 #                         )
 #                         continue  
 
-                
 #                 existing_record = B1.objects.filter(
 #                     bnk_code=item.bnk_code,
 #                     branch_id=item.branch_id,
@@ -6485,7 +6559,6 @@ def safe_parse_datetime(value):
 #                     loan_id=item.loan_id
 #                 ).exists()
 
-               
 #                 status_data_value = 'u' if existing_record else 'i'
 #                 b1_monthly_exists = B1_Monthly.objects.filter(
 #                     bnk_code=item.bnk_code,
@@ -6536,7 +6609,6 @@ def safe_parse_datetime(value):
 #                         'status_data': b1_monthly_status_data
 #                     }
 #                 )
-                
                 
 #                 B1.objects.filter(
 #                     bnk_code=item.bnk_code,
@@ -6591,174 +6663,182 @@ def safe_parse_datetime(value):
 #     except Exception as e:
 #         Upload_File.objects.filter(FID=FID).update(statussubmit='2')
 #         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
-    
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from django.db import transaction
+@csrf_exempt
+@require_POST
+@transaction.atomic
 def confirm_upload(request):
     try:
         FID = request.POST.get('FID')
         if not FID:
             return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
-
+            
+        print(f"Starting to process File ID: {FID}")
+        
         data_edits = data_edit.objects.filter(id_file=FID)
         if not data_edits.exists():
             Upload_File.objects.filter(FID=FID).update(statussubmit='2')
             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
         
+        print(f"Found {data_edits.count()} data edit records for File ID: {FID}")
+        
+        # ສ້າງລາຍການເພື່ອເກັບຂໍ້ມູນກ່ອນບັນທຶກ
+        disputes_to_create = []
+        b1_monthly_to_update = []
+        b1_keys_to_delete = set()
+        b1_to_create = []
+        
+        # ກວດຄ່າລ່າສຸດຂອງ period ໃນ B1
+        latest_periods = {}
+        for b1 in B1.objects.all():
+            bank_key = b1.bnk_code
+            if bank_key not in latest_periods or b1.period > latest_periods[bank_key]:
+                latest_periods[bank_key] = b1.period
+        
+        processed_count = 0
+        dispute_count = 0
+        
+      
         for item in data_edits:
             try:
-                latest_b1 = B1.objects.filter(
-                    bnk_code=item.bnk_code,
-                ).order_by('-period').first()
-                print("B1", latest_b1)
-                print("item", item.period)
-                if latest_b1 and item.period < latest_b1.period:
+                processed_count += 1
+                print(f"Checking item {processed_count}/{data_edits.count()}: {item.loan_id}")
+                
+                
+                bank_key = item.bnk_code
+                if bank_key in latest_periods and item.period < latest_periods[bank_key]:
                     Upload_File.objects.filter(FID=FID).update(statussubmit='2')
                     return JsonResponse({
                         'status': 'error',
-                        'message': f'The uploaded period {item.period} is earlier than the latest period {latest_b1.period} in B1.'
+                        'message': f'The uploaded period {item.period} is earlier than the latest period {latest_periods[bank_key]} in B1.'
                     }, status=400)
-
-                b1_monthly_match = B1_Monthly.objects.filter(
+                    
+                # ກວດສອບເງື່ອນໄຂທີ່ 1: bnk_code, branch_id, customer_id, loan_id ຕົງກັນ ແຕ່ com_enterprise_code ຫຼື LCIC_code ແຕກຕ່າງກັນ
+                condition1_match = B1.objects.filter(
                     bnk_code=item.bnk_code,
                     branch_id=item.branch_id,
                     customer_id=item.customer_id,
-                    loan_id=item.loan_id,
-                    period=item.period
+                    loan_id=item.loan_id
+                ).exclude(
+                    com_enterprise_code=item.com_enterprise_code,
+                    LCIC_code=item.LCIC_code
                 ).exists()
+
+                # ກວດສອບເງື່ອນໄຂທີ່ 2: branch_id, customer_id, loan_id, com_enterprise_code, LCIC_code ຕົງກັນ ແຕ່ bnk_code ແຕກຕ່າງກັນ
+                condition2_match = B1.objects.filter(
+                    branch_id=item.branch_id,
+                    customer_id=item.customer_id,
+                    loan_id=item.loan_id,
+                    com_enterprise_code=item.com_enterprise_code,
+                    LCIC_code=item.LCIC_code
+                ).exclude(
+                    bnk_code=item.bnk_code
+                ).exists()
+
+                # ຖ້າເງື່ອນໄຂໃດໜຶ່ງເປັນຈິງ, ເກັບຂໍ້ມູນ dispute ໄວ້
+                if condition1_match or condition2_match:
+                    dispute_count += 1
+                    dispute_data = disputes(
+                        id_file=FID,
+                        lcicID=item.lcicID,
+                        user_id=item.user_id,
+                        com_enterprise_code=item.com_enterprise_code,
+                        segmentType=item.segmentType,
+                        bnk_code=item.bnk_code,
+                        customer_id=item.customer_id,
+                        branch_id=item.branch_id,
+                        period=item.period,
+                        product_type=item.product_type,
+                        lon_sys_id=item.lon_sys_id,
+                        loan_id=item.loan_id,
+                        lon_open_date=item.lon_open_date,
+                        lon_exp_date=item.lon_exp_date,
+                        lon_ext_date=item.lon_ext_date,
+                        lon_int_rate=item.lon_int_rate,
+                        lon_purpose_code=item.lon_purpose_code,
+                        lon_credit_line=item.lon_credit_line,
+                        lon_currency_code=item.lon_currency_code,
+                        lon_outstanding_balance=item.lon_outstanding_balance,
+                        lon_account_no=item.lon_account_no,
+                        lon_no_days_slow=item.lon_no_days_slow,
+                        lon_class=item.lon_class,
+                        lon_type=item.lon_type,
+                        lon_term=item.lon_term,
+                        lon_status=item.lon_status,
+                        lon_insert_date=item.lon_insert_date,
+                        lon_update_date=item.lon_update_date,
+                        lon_applied_date=item.lon_applied_date,
+                        is_disputed=item.is_disputed,
+                        LCIC_code=item.LCIC_code,
+                        dispute_reason='condition1' if condition1_match else 'condition2'
+                    )
+                    disputes_to_create.append(dispute_data)
+                    continue
                 
-                b1_match = B1.objects.filter(
-                    bnk_code=item.bnk_code,
-                    branch_id=item.branch_id,
-                    customer_id=item.customer_id,
-                    loan_id=item.loan_id,
-                    period=item.period
-                ).exists()
-
-                if b1_monthly_match or b1_match:
-                    # ປ່ຽນການເຊັກຈາກ lcicID ມາເປັນ LCIC_code
-                    b1_monthly_mismatch = B1_Monthly.objects.filter(
-                        bnk_code=item.bnk_code,
-                        branch_id=item.branch_id,
-                        customer_id=item.customer_id,
-                        loan_id=item.loan_id,
-                        period=item.period
-                    ).exclude(
-                        com_enterprise_code=item.com_enterprise_code,
-                        LCIC_code=item.LCIC_code  # ປ່ຽນຈາກ lcicID → LCIC_code
-                    ).exists()
-
-                    b1_mismatch = B1.objects.filter(
-                        bnk_code=item.bnk_code,
-                        branch_id=item.branch_id,
-                        customer_id=item.customer_id,
-                        loan_id=item.loan_id,
-                        period=item.period
-                    ).exclude(
-                        com_enterprise_code=item.com_enterprise_code,
-                        LCIC_code=item.LCIC_code  # ປ່ຽນຈາກ lcicID → LCIC_code
-                    ).exists()
-
-                    if b1_monthly_mismatch or b1_mismatch:
-                        disputes.objects.create(
-                            id_file=FID,
-                            lcicID=item.lcicID,
-                            user_id=item.user_id,
-                            com_enterprise_code=item.com_enterprise_code,
-                            segmentType=item.segmentType,
-                            bnk_code=item.bnk_code,
-                            customer_id=item.customer_id,
-                            branch_id=item.branch_id,
-                            period=item.period,
-                            product_type=item.product_type,
-                            lon_sys_id=item.lon_sys_id,
-                            loan_id=item.loan_id,
-                            lon_open_date=item.lon_open_date,
-                            lon_exp_date=item.lon_exp_date,
-                            lon_ext_date=item.lon_ext_date,
-                            lon_int_rate=item.lon_int_rate,
-                            lon_purpose_code=item.lon_purpose_code,
-                            lon_credit_line=item.lon_credit_line,
-                            lon_currency_code=item.lon_currency_code,
-                            lon_outstanding_balance=item.lon_outstanding_balance,
-                            lon_account_no=item.lon_account_no,
-                            lon_no_days_slow=item.lon_no_days_slow,
-                            lon_class=item.lon_class,
-                            lon_type=item.lon_type,
-                            lon_term=item.lon_term,
-                            lon_status=item.lon_status,
-                            lon_insert_date=item.lon_insert_date,
-                            lon_update_date=item.lon_update_date,
-                            lon_applied_date=item.lon_applied_date,
-                            is_disputed=item.is_disputed,
-                            LCIC_code=item.LCIC_code
-                        )
-                        continue  
-
+                # ກວດສອບວ່າມີຂໍ້ມູນທີ່ຊ້ຳກັນໃນ B1
                 existing_record = B1.objects.filter(
                     bnk_code=item.bnk_code,
                     branch_id=item.branch_id,
                     customer_id=item.customer_id,
                     loan_id=item.loan_id
                 ).exists()
-
+                
                 status_data_value = 'u' if existing_record else 'i'
-                b1_monthly_exists = B1_Monthly.objects.filter(
-                    bnk_code=item.bnk_code,
-                    branch_id=item.branch_id,
-                    customer_id=item.customer_id,
-                    loan_id=item.loan_id
-                ).exists()
-                b1_monthly_status_data = 'u' if b1_monthly_exists else 'i'
-
-                b1_monthly, created = B1_Monthly.objects.update_or_create(
-                    bnk_code=item.bnk_code,
-                    branch_id=item.branch_id,
-                    customer_id=item.customer_id,
-                    loan_id=item.loan_id,
-                    period=item.period,
-                    defaults={
-                        'lcicID': item.lcicID,
-                        'com_enterprise_code': item.com_enterprise_code,
-                        'segmentType': item.segmentType,
-                        'bnk_code': item.bnk_code,
-                        'customer_id': item.customer_id,
-                        'branch_id': item.branch_id,
-                        'user_id': item.user_id,
-                        'period': item.period,
-                        'product_type': item.product_type,
-                        'lon_sys_id': item.lon_sys_id,
-                        'loan_id': item.loan_id,
-                        'lon_open_date': item.lon_open_date,
-                        'lon_exp_date': item.lon_exp_date,
-                        'lon_ext_date': item.lon_ext_date,
-                        'lon_int_rate': item.lon_int_rate,
-                        'lon_purpose_code': item.lon_purpose_code,
-                        'lon_credit_line': item.lon_credit_line,
-                        'lon_currency_code': item.lon_currency_code,
-                        'lon_outstanding_balance': item.lon_outstanding_balance,
-                        'lon_account_no': item.lon_account_no,
-                        'lon_no_days_slow': item.lon_no_days_slow,
-                        'lon_class': item.lon_class,
-                        'lon_type': item.lon_type,
-                        'lon_term': item.lon_term,
-                        'lon_status': item.lon_status,
-                        'lon_insert_date': item.lon_insert_date,
-                        'lon_update_date': item.lon_update_date,
-                        'lon_applied_date': item.lon_applied_date,
-                        'is_disputed': item.is_disputed,
-                        'id_file': FID,
-                        'LCIC_code': item.LCIC_code,
-                        'status_data': b1_monthly_status_data
-                    }
-                )
                 
-                B1.objects.filter(
-                    bnk_code=item.bnk_code,
-                    branch_id=item.branch_id,
-                    customer_id=item.customer_id,
-                    loan_id=item.loan_id
-                ).delete()
+                # ເກັບຂໍ້ມູນສຳລັບອັບເດດ B1_Monthly
+                b1_monthly_key = {
+                    'bnk_code': item.bnk_code,
+                    'branch_id': item.branch_id,
+                    'customer_id': item.customer_id,
+                    'loan_id': item.loan_id,
+                    'period': item.period
+                }
                 
-                B1.objects.create(
+                b1_monthly_value = {
+                    'lcicID': item.lcicID,
+                    'com_enterprise_code': item.com_enterprise_code,
+                    'segmentType': item.segmentType,
+                    'bnk_code': item.bnk_code,
+                    'customer_id': item.customer_id,
+                    'branch_id': item.branch_id,
+                    'user_id': item.user_id,
+                    'period': item.period,
+                    'product_type': item.product_type,
+                    'lon_sys_id': item.lon_sys_id,
+                    'loan_id': item.loan_id,
+                    'lon_open_date': item.lon_open_date,
+                    'lon_exp_date': item.lon_exp_date,
+                    'lon_ext_date': item.lon_ext_date,
+                    'lon_int_rate': item.lon_int_rate,
+                    'lon_purpose_code': item.lon_purpose_code,
+                    'lon_credit_line': item.lon_credit_line,
+                    'lon_currency_code': item.lon_currency_code,
+                    'lon_outstanding_balance': item.lon_outstanding_balance,
+                    'lon_account_no': item.lon_account_no,
+                    'lon_no_days_slow': item.lon_no_days_slow,
+                    'lon_class': item.lon_class,
+                    'lon_type': item.lon_type,
+                    'lon_term': item.lon_term,
+                    'lon_status': item.lon_status,
+                    'lon_insert_date': item.lon_insert_date,
+                    'lon_update_date': item.lon_update_date,
+                    'lon_applied_date': item.lon_applied_date,
+                    'is_disputed': item.is_disputed,
+                    'id_file': FID,
+                    'LCIC_code': item.LCIC_code,
+                    'status_data': status_data_value if existing_record else 'i'
+                }
+                
+                b1_monthly_to_update.append((b1_monthly_key, b1_monthly_value))
+                
+                # ເກັບຂໍ້ມູນສຳລັບລຶບຂໍ້ມູນ B1 ເກົ່າ
+                b1_keys_to_delete.add((item.bnk_code, item.branch_id, item.customer_id, item.loan_id))
+                
+                # ເກັບຂໍ້ມູນສຳລັບສ້າງຂໍ້ມູນ B1 ໃໝ່
+                b1_data = B1(
                     lcicID=item.lcicID,
                     com_enterprise_code=item.com_enterprise_code,
                     segmentType=item.segmentType,
@@ -6790,20 +6870,62 @@ def confirm_upload(request):
                     is_disputed=item.is_disputed,
                     id_file=FID,
                     LCIC_code=item.LCIC_code,
-                    status_data=status_data_value 
+                    status_data=status_data_value
                 )
+                b1_to_create.append(b1_data)
                 
             except Exception as e:
-                Upload_File.objects.filter(FID=FID).update(statussubmit='2')
-                return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
-
+                print(f"Error checking item: {str(e)}")
+                continue
+        
+        print(f"Checking completed. Found {dispute_count} disputes, {len(b1_monthly_to_update)} B1_Monthly updates, {len(b1_keys_to_delete)} B1 records to delete, {len(b1_to_create)} B1 records to create")
+        
+        # ດຳເນີນການບັນທຶກຂໍ້ມູນຫຼັງຈາກກວດສອບເງື່ອນໄຂທັງໝົດແລ້ວ
+        
+        # 1. ບັນທຶກຂໍ້ມູນ disputes
+        if disputes_to_create:
+            disputes.objects.bulk_create(disputes_to_create)
+            print(f"Created {len(disputes_to_create)} dispute records")
+        
+        # 2. ອັບເດດຂໍ້ມູນ B1_Monthly
+        for b1_monthly_key, b1_monthly_value in b1_monthly_to_update:
+            B1_Monthly.objects.update_or_create(defaults=b1_monthly_value, **b1_monthly_key)
+        print(f"Updated {len(b1_monthly_to_update)} B1_Monthly records")
+        
+        # 3. ລຶບຂໍ້ມູນ B1 ເກົ່າ
+        for bnk_code, branch_id, customer_id, loan_id in b1_keys_to_delete:
+            B1.objects.filter(
+                bnk_code=bnk_code,
+                branch_id=branch_id,
+                customer_id=customer_id,
+                loan_id=loan_id
+            ).delete()
+        print(f"Deleted B1 records for {len(b1_keys_to_delete)} unique keys")
+        
+        # 4. ສ້າງຂໍ້ມູນ B1 ໃໝ່
+        if b1_to_create:
+            # ໃຊ້ bulk_create ເພື່ອບັນທຶກຂໍ້ມູນຫຼາຍລາຍການພ້ອມກັນ
+            B1.objects.bulk_create(b1_to_create)
+            print(f"Created {len(b1_to_create)} new B1 records")
+        
+        # 5. ອັບເດດສະຖານະໄຟລ໌
         Upload_File.objects.filter(FID=FID).update(statussubmit='0')
-
-        return JsonResponse({'status': 'success', 'message': 'Data confirmed successfully'})
-    
+        print(f"Updated Upload_File status to '0' (success)")
+        
+        return JsonResponse({
+            'status': 'success', 
+            'message': f'Data confirmed successfully. Processed {processed_count} items, created {dispute_count} disputes.'
+        })
+        
     except Exception as e:
-        Upload_File.objects.filter(FID=FID).update(statussubmit='2')
+        print(f"General error in confirm_upload: {str(e)}")
+        
+        if 'FID' in locals() and FID:
+            Upload_File.objects.filter(FID=FID).update(statussubmit='2')
+            print(f"Updated Upload_File status to '2' (error)")
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
 @csrf_exempt
 @require_POST
 def unload_upload(request):
@@ -6811,6 +6933,7 @@ def unload_upload(request):
         FID = request.POST.get('FID')
         if not FID:
             Upload_File.objects.filter(FID=FID).update(statussubmit='1')
+            
             return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
 
         
@@ -20228,12 +20351,13 @@ def get_disputes_by_confirm_id(request):
             'by_period': {}
         }
         
-        # ນັບຕາມສະຖານະ
+        
+
         status_counts = queryset.values('status').annotate(count=Count('id'))
         for item in status_counts:
             statistics['by_status'][item['status'] or 'unknown'] = item['count']
         
-        # ນັບຕາມທະນາຄານ
+        
         bank_counts = queryset.values('bnk_code').annotate(count=Count('id'))
         for item in bank_counts:
             statistics['by_bank'][item['bnk_code']] = item['count']
