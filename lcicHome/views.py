@@ -5195,12 +5195,7 @@ def human_readable_size(size):
 
 @csrf_exempt
 def upload_files(request):
-    """
-    ⚡ ປັບປຸງແລ້ວ:
-    - ໃຊ້ prefetch ເພື່ອຫຼຸດ database queries (ໄວຂຶ້ນຫຼາຍ!)
-    - ໃຊ້ transaction ເພື່ອຄວາມປອດໄພ
-    - ໃຊ້ bulk insert ເພື່ອປະສິດທິພາບ
-    """
+  
     if request.method == 'POST':
         try:
             user = request.user
