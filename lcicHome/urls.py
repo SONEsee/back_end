@@ -59,7 +59,7 @@ from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, Upda
 from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddLCICSystemUser, SysUserTokenRefresh,LCICSystemUserDetailView, LCICSystemUserListView, BankListCreateView,BankDetailView, EDLProvinceDetailAPIView, FileElectricListAPIView, ElectricReportAPIView, UserGroupViewSet,UploadTrackingListAPIView,UploadDataAPIView,UploadTrackingDetailAPIView,InitializeTrackingAPIView, DebugAPIView,InitializeTestDataAPIView, TestRealUploadAPIView, InitializeDistrictsAPIView, ChargeReportMainView, ChargeReportDetailView,confirm_dispute_upload,edl_customer_search,water_customer_search
 
 
-from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView
+from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView,process_dispute_notification, process_multiple_disputes
 from .views import upload_json,MemberInfoViewSet
 from .views import SearchBatfileAPIView
 # from .views import FileUploadView, FileDeleteView
@@ -287,6 +287,9 @@ urlpatterns = [
     path('api/get_collaterals/', get_collaterals, name='get_collaterals'),
     path('api/get_login3/', get_login3, name='get_login3'),
     path('api/disputes/confirm/', confirm_dispute_upload, name='confirm_dispute'),
+    path('process-dispute/', views.process_dispute_notification, name='process_dispute_notification'),
+    path('process-multiple-disputes/', process_multiple_disputes, name='process_multiple_disputes'),
+
   
     path('api/enterprise-info/', views.create_enterprise_info, name='create_enterprise_info'),
     path('api/last-lcicid/', get_last_lcicid, name='get_last_lcicid'),

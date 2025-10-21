@@ -937,6 +937,7 @@ class disputes(models.Model):
     user_id = models.CharField(max_length=100)
     is_disputed = models.BigIntegerField(default=0, null=True)
     LCIC_code = models.CharField(max_length=255, blank=True, null=True)
+    status = models.CharField(max_length=100)
     action_dispust = models.CharField(max_length=100)
 
     
@@ -989,7 +990,9 @@ class disputes_noti(models.Model):
     user_id = models.CharField(max_length=100)
     status = models.CharField(max_length=100 , null=True)
     is_disputed = models.BigIntegerField(default=0, null=True)
+    id_dispust = models.BigIntegerField(null=True)
     deception = models.TextField(blank=True, null=True)
+    action_dispust = models.CharField(max_length=100)
 
     
    
