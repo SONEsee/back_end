@@ -5195,6 +5195,7 @@ def human_readable_size(size):
 
 @csrf_exempt
 def upload_files(request):
+  
     if request.method == 'POST':
         try:
             user = request.user
@@ -5203,8 +5204,10 @@ def upload_files(request):
             file = request.FILES.get('file')
             warnings = []
             period = request.POST.get('period')
+            
             if period.startswith('M'):
                 period = period[1:]
+            
             FID = request.POST.get('file_id')
 
             if file and file.name.endswith('.json'):
@@ -5212,55 +5215,153 @@ def upload_files(request):
                 file_size = file.size
                 file_size_hr = human_readable_size(file.size)
 
-                upload_file = Upload_File.objects.create(
-                    FID=FID,
-                    fileName=file.name,
-                    fileSize=file_size_hr,
-                    path="uploadFiles/" + file.name,
-                    insertDate=timezone.now(),
-                    updateDate=timezone.now(),
-                    period=period,
-                    user_id=user_id,
-                    status="Processing",
-                    status_upload="Pending",
-                    statussubmit="Pending",
-                    FileType="json",
-                    MID=user.memberinfo if hasattr(user, 'memberinfo') else None,
-                    GID=user.user_group if hasattr(user, 'user_group') else None,
-                    SType=user.stype if hasattr(user, 'stype') else None,
-                    UType=user.upload_type if hasattr(user, 'upload_type') else None,
-                )
+                
+                with transaction.atomic():
+                  
+                    upload_file = Upload_File.objects.create(
+                        FID=FID,
+                        fileName=file.name,
+                        fileSize=file_size_hr,
+                        path="uploadFiles/" + file.name,
+                        insertDate=timezone.now(),
+                        updateDate=timezone.now(),
+                        period=period,
+                        user_id=user_id,
+                        status="Processing",
+                        status_upload="Pending",
+                        statussubmit="Pending",
+                        FileType="json",
+                        MID=user.memberinfo if hasattr(user, 'memberinfo') else None,
+                        GID=user.user_group if hasattr(user, 'user_group') else None,
+                        SType=user.stype if hasattr(user, 'stype') else None,
+                        UType=user.upload_type if hasattr(user, 'upload_type') else None,
+                    )
 
-                total_items = len(data)
-                erroneous_items = 0
+                    total_items = len(data)
+                    erroneous_items = 0
+                    
+                   
+                    good_records = []  
+                    bad_records = []  
 
-                for item in data:
-                    try:
-                        com_enterprise_code = item.get('com_enterprise_code', '')
-                        lcicID = item.get('lcicID', '')  # ຮັກສາ lcicID ສຳລັບການເກັບຂໍ້ມູນ
-                        LCIC_code = item.get('LCIC_code', '')  # ໃຊ້ LCIC_code ສຳລັບການກວດສອບ
-                        LCIC_code_get = None
-                        LCIC_code_error_status = '33'
+                    
+                   
+                    all_enterprise_codes = set()
+                    all_lcic_codes = set()
+                    
+                    for item in data:
+                        code = item.get('com_enterprise_code', '')
+                        lcic = item.get('LCIC_code', '')
+                        if code:
+                            all_enterprise_codes.add(code)
+                        if lcic:
+                            all_lcic_codes.add(lcic)
+                    
+                   
+                    enterprises_by_code = {
+                        e.EnterpriseID: e 
+                        for e in EnterpriseInfo.objects.filter(
+                            EnterpriseID__in=all_enterprise_codes
+                        )
+                    }
+                    
+                    enterprises_by_lcic = {
+                        e.LCIC_code: e 
+                        for e in EnterpriseInfo.objects.filter(
+                            LCIC_code__in=all_lcic_codes
+                        )
+                    }
 
-                        if com_enterprise_code and LCIC_code:
-                            enterprise_info_by_code = EnterpriseInfo.objects.filter(EnterpriseID=com_enterprise_code).first()
-                            # ປ່ຽນການກວດສອບໃຊ້ LCIC_code ແທນ LCICID
-                            enterprise_info_by_LCIC = EnterpriseInfo.objects.filter(LCIC_code=LCIC_code).first()
+                    #
+                    for item in data:
+                        try:
+                            com_enterprise_code = item.get('com_enterprise_code', '')
+                            lcicID = item.get('lcicID', '')  
+                            LCIC_code = item.get('LCIC_code', '')  
+                            LCIC_code_get = None
+                            LCIC_code_error_status = '33'
+
                             
-                            if enterprise_info_by_code and enterprise_info_by_LCIC:
-                                LCIC_code_error_status = '0'
-                                data_edit.objects.create(
-                                    lcicID=lcicID,  # ຍັງໃຊ້ lcicID ຈາກ JSON
-                                    LCIC_code=LCIC_code,  # ໃຊ້ LCIC
+                            if com_enterprise_code and LCIC_code:
+                                enterprise_info_by_code = enterprises_by_code.get(com_enterprise_code)
+                                enterprise_info_by_LCIC = enterprises_by_lcic.get(LCIC_code)
+                                
+                                if enterprise_info_by_code and enterprise_info_by_LCIC:
+                                    
+                                    LCIC_code_error_status = '0'
+                                    good_records.append(
+                                        data_edit(
+                                            lcicID=lcicID, 
+                                            LCIC_code=LCIC_code,  
+                                            period=period,
+                                            com_enterprise_code=com_enterprise_code,
+                                            segmentType=item.get('segmentType', ''),
+                                            bnk_code=item.get('bnk_code', ''),
+                                            customer_id=item.get('customer_id', ''),
+                                            branch_id=item.get('branch_id', ''),
+                                            lon_sys_id=item.get('lon_sys_id', ''),
+                                            loan_id=item.get('loan_id', ''),
+                                            user_id=user_id,
+                                            lon_open_date=item.get('lon_open_date', None),
+                                            lon_exp_date=item.get('lon_exp_date', None),
+                                            lon_ext_date=item.get('lon_ext_date', None),
+                                            lon_int_rate=item.get('lon_int_rate', 0),
+                                            lon_purpose_code=item.get('lon_purpose_code', ''),
+                                            lon_credit_line=item.get('lon_credit_line', 0),
+                                            lon_currency_code=item.get('lon_currency_code', ''),
+                                            lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
+                                            lon_account_no=item.get('lon_account_no', ''),
+                                            lon_no_days_slow=item.get('lon_no_days_slow', 0),
+                                            lon_class=item.get('lon_class', ''),
+                                            lon_type=item.get('lon_type', ''),
+                                            lon_term=item.get('lon_term', ''),
+                                            lon_status=item.get('lon_status', ''),
+                                            lon_insert_date=item.get('lon_insert_date', None),
+                                            lon_update_date=item.get('lon_update_date', None),
+                                            lon_applied_date=item.get('lon_applied_date', None),
+                                            is_disputed=item.get('is_disputed', 0),
+                                            id_file=FID
+                                        )
+                                    )
+                                    continue
+                                else:
+                                    if enterprise_info_by_code:   
+                                        LCIC_code_get = enterprise_info_by_code.LCIC_code
+                                        LCIC_code_error_status = '01'
+                                    elif enterprise_info_by_LCIC:  
+                                        LCIC_code_get = enterprise_info_by_LCIC.EnterpriseID
+                                        LCIC_code_error_status = '10'
+                                        
+                            elif com_enterprise_code:
+                                enterprise_info_by_code = enterprises_by_code.get(com_enterprise_code)
+                                if enterprise_info_by_code:
+                                    LCIC_code_get = enterprise_info_by_code.LCIC_code
+                                    LCIC_code_error_status = '31'
+                                else:
+                                    LCIC_code_error_status = '31'
+                                    
+                            elif LCIC_code:
+                                enterprise_info_by_LCIC = enterprises_by_lcic.get(LCIC_code)
+                                if enterprise_info_by_LCIC:
+                                    LCIC_code_get = enterprise_info_by_LCIC.EnterpriseID
+                                    LCIC_code_error_status = '13'
+                                else:
+                                    LCIC_code_error_status = '13'
+
+                       
+                            bad_records.append(
+                                B_Data_is_damaged(
+                                    lcicID=lcicID,  
                                     period=period,
+                                    user_id=user_id,
                                     com_enterprise_code=com_enterprise_code,
+                                    product_type=item.get('product_type', ''),
                                     segmentType=item.get('segmentType', ''),
                                     bnk_code=item.get('bnk_code', ''),
                                     customer_id=item.get('customer_id', ''),
                                     branch_id=item.get('branch_id', ''),
                                     lon_sys_id=item.get('lon_sys_id', ''),
                                     loan_id=item.get('loan_id', ''),
-                                    user_id=user_id,
                                     lon_open_date=item.get('lon_open_date', None),
                                     lon_exp_date=item.get('lon_exp_date', None),
                                     lon_ext_date=item.get('lon_ext_date', None),
@@ -5279,129 +5380,102 @@ def upload_files(request):
                                     lon_update_date=item.get('lon_update_date', None),
                                     lon_applied_date=item.get('lon_applied_date', None),
                                     is_disputed=item.get('is_disputed', 0),
+                                    lcicID_error=LCIC_code_error_status,  
+                                    lcicID_get=LCIC_code_get,  
+                                    LCIC_code=LCIC_code,  
                                     id_file=FID
                                 )
-                                continue
-                            else:
-                                if enterprise_info_by_code:   # ມີ enterprise code ແຕ່ບໍ່ມີ LCIC_code ທີ່ກົງກັນ
-                                    LCIC_code_get = enterprise_info_by_code.LCIC_code
-                                    LCIC_code_error_status = '01'
-                                elif enterprise_info_by_LCIC:  # ມີ LCIC_code ແຕ່ບໍ່ມີ enterprise code
-                                    LCIC_code_get = enterprise_info_by_LCIC.EnterpriseID
-                                    LCIC_code_error_status = '10'
-                        elif com_enterprise_code:
-                            enterprise_info_by_code = EnterpriseInfo.objects.filter(EnterpriseID=com_enterprise_code).first() # ມີ enterprise code ແຕ່ LCIC_code ຜິດ
-                            if enterprise_info_by_code:
-                                LCIC_code_get = enterprise_info_by_code.LCIC_code
-                                LCIC_code_error_status = '31'
-                            else:
-                                LCIC_code_error_status = '31'
-                        elif LCIC_code:
-                            enterprise_info_by_LCIC = EnterpriseInfo.objects.filter(LCIC_code=LCIC_code).first() # ມີ LCIC_code ແຕ່ enterprise code ຜິດ
-                            if enterprise_info_by_LCIC:
-                                LCIC_code_get = enterprise_info_by_LCIC.EnterpriseID
-                                LCIC_code_error_status = '13'
-                            else:
-                                LCIC_code_error_status = '13'
+                            )
 
-                        B_Data_is_damaged.objects.create(
-                            lcicID=lcicID,  # ຍັງໃຊ້ lcicID ຈາກ JSON
-                            
-                            period=period,
-                            user_id=user_id,
-                            com_enterprise_code=com_enterprise_code,
-                            product_type=item.get('product_type', ''),
-                            segmentType=item.get('segmentType', ''),
-                            bnk_code=item.get('bnk_code', ''),
-                            customer_id=item.get('customer_id', ''),
-                            branch_id=item.get('branch_id', ''),
-                            lon_sys_id=item.get('lon_sys_id', ''),
-                            loan_id=item.get('loan_id', ''),
-                            lon_open_date=item.get('lon_open_date', None),
-                            lon_exp_date=item.get('lon_exp_date', None),
-                            lon_ext_date=item.get('lon_ext_date', None),
-                            lon_int_rate=item.get('lon_int_rate', 0),
-                            lon_purpose_code=item.get('lon_purpose_code', ''),
-                            lon_credit_line=item.get('lon_credit_line', 0),
-                            lon_currency_code=item.get('lon_currency_code', ''),
-                            lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
-                            lon_account_no=item.get('lon_account_no', ''),
-                            lon_no_days_slow=item.get('lon_no_days_slow', 0),
-                            lon_class=item.get('lon_class', ''),
-                            lon_type=item.get('lon_type', ''),
-                            lon_term=item.get('lon_term', ''),
-                            lon_status=item.get('lon_status', ''),
-                            lon_insert_date=item.get('lon_insert_date', None),
-                            lon_update_date=item.get('lon_update_date', None),
-                            lon_applied_date=item.get('lon_applied_date', None),
-                            is_disputed=item.get('is_disputed', 0),
-                            lcicID_error=LCIC_code_error_status,  # ໃຊ້ error status ຈາກ LCIC_code
-                            lcicID_get=LCIC_code_get,  # ໃຊ້ LCIC_code_get ສຳລັບການກວດສອບ
-                            LCIC_code=LCIC_code,  # ໃຊ້ LCIC_code ສຳລັບການກວດສອບ
-                            id_file=FID
-                        )
+                            if LCIC_code_error_status != '0':
+                                erroneous_items += 1
 
-                        if LCIC_code_error_status != '0':
+                        except Exception as e:
+                         
+                            bad_records.append(
+                                B_Data_is_damaged(
+                                    lcicID=item.get('lcicID', ''),
+                                    LCIC_code=item.get('LCIC_code', ''),  
+                                    period=period,
+                                    product_type=item.get('product_type', ''),
+                                    user_id=user_id,
+                                    com_enterprise_code=item.get('com_enterprise_code', ''),
+                                    segmentType=item.get('segmentType', ''),
+                                    bnk_code=item.get('bnk_code', ''),
+                                    customer_id=item.get('customer_id', ''),
+                                    branch_id=item.get('branch_id', ''),
+                                    lon_sys_id=item.get('lon_sys_id', ''),
+                                    loan_id=item.get('loan_id', ''),
+                                    lon_open_date=item.get('lon_open_date', None),
+                                    lon_exp_date=item.get('lon_exp_date', None),
+                                    lon_ext_date=item.get('lon_ext_date', None),
+                                    lon_int_rate=item.get('lon_int_rate', 0),
+                                    lon_purpose_code=item.get('lon_purpose_code', ''),
+                                    lon_credit_line=item.get('lon_credit_line', 0),
+                                    lon_currency_code=item.get('lon_currency_code', ''),
+                                    lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
+                                    lon_account_no=item.get('lon_account_no', ''),
+                                    lon_no_days_slow=item.get('lon_no_days_slow', 0),
+                                    lon_class=item.get('lon_class', ''),
+                                    lon_type=item.get('lon_type', ''),
+                                    lon_term=item.get('lon_term', ''),
+                                    lon_status=item.get('lon_status', ''),
+                                    lon_insert_date=item.get('lon_insert_date', None),
+                                    lon_update_date=item.get('lon_update_date', None),
+                                    lon_applied_date=item.get('lon_applied_date', None),
+                                    is_disputed=item.get('is_disputed', 0),
+                                    lcicID_error='33',
+                                    id_file=FID
+                                )
+                            )
                             erroneous_items += 1
 
-                    except Exception as e:
-                        B_Data_is_damaged.objects.create(
-                            lcicID=item.get('lcicID', ''),  # ຍັງໃຊ້ lcicID ຈາກ JSON
-                            LCIC_code=item.get('LCIC_code', ''),  
-                            period=period,
-                            product_type=item.get('product_type', ''),
-                            user_id=user_id,
-                            com_enterprise_code=item.get('com_enterprise_code', ''),
-                            segmentType=item.get('segmentType', ''),
-                            bnk_code=item.get('bnk_code', ''),
-                            customer_id=item.get('customer_id', ''),
-                            branch_id=item.get('branch_id', ''),
-                            lon_sys_id=item.get('lon_sys_id', ''),
-                            loan_id=item.get('loan_id', ''),
-                            lon_open_date=item.get('lon_open_date', None),
-                            lon_exp_date=item.get('lon_exp_date', None),
-                            lon_ext_date=item.get('lon_ext_date', None),
-                            lon_int_rate=item.get('lon_int_rate', 0),
-                            lon_purpose_code=item.get('lon_purpose_code', ''),
-                            lon_credit_line=item.get('lon_credit_line', 0),
-                            lon_currency_code=item.get('lon_currency_code', ''),
-                            lon_outstanding_balance=item.get('lon_outstanding_balance', 0),
-                            lon_account_no=item.get('lon_account_no', ''),
-                            lon_no_days_slow=item.get('lon_no_days_slow', 0),
-                            lon_class=item.get('lon_class', ''),
-                            lon_type=item.get('lon_type', ''),
-                            lon_term=item.get('lon_term', ''),
-                            lon_status=item.get('lon_status', ''),
-                            lon_insert_date=item.get('lon_insert_date', None),
-                            lon_update_date=item.get('lon_update_date', None),
-                            lon_applied_date=item.get('lon_applied_date', None),
-                            is_disputed=item.get('is_disputed', 0),
-                            lcicID_error='33',
-                            id_file=FID
-                        )
-                        erroneous_items += 1
+                   
+                    if good_records:
+                        data_edit.objects.bulk_create(good_records, batch_size=1000)
+                    
+                    if bad_records:
+                        B_Data_is_damaged.objects.bulk_create(bad_records, batch_size=1000)
 
-                error_percentage = (erroneous_items / total_items) * 100 if total_items > 0 else 0
-
-                upload_file.percentage = error_percentage
-                upload_file.statussubmit = "2" if error_percentage > 15 else "1"
-                upload_file.save()
+                   
+                    error_percentage = (erroneous_items / total_items) * 100 if total_items > 0 else 0
+                    upload_file.percentage = error_percentage
+                    upload_file.statussubmit = "2" if error_percentage > 15 else "1"
+                    upload_file.save()
+                
+              
                 return JsonResponse({
                     'status': 'success',
                     'message': 'File uploaded and processed successfully',
                     'warnings': warnings,
-                    'error_percentage': error_percentage
+                    'error_percentage': error_percentage,
+                    'total_items': total_items,
+                    'good_records': len(good_records),
+                    'bad_records': len(bad_records)
                 }, status=200)
 
             else:
-                return JsonResponse({'status': 'error', 'message': 'Invalid file format'}, status=400)
+                return JsonResponse({
+                    'status': 'error', 
+                    'message': 'Invalid file format'
+                }, status=400)
 
         except Exception as e:
+           
             logger.error(f"File upload failed: {str(e)}")
-            return JsonResponse({'status': 'error', 'message': f'File upload failed: {str(e)}'}, status=500)
+            return JsonResponse({
+                'status': 'error', 
+                'message': f'File upload failed: {str(e)}'
+            }, status=500)
 
     else:
-        return JsonResponse({'status': 'error', 'message': 'Invalid request method'}, status=400)
+        return JsonResponse({
+            'status': 'error', 
+            'message': 'Invalid request method'
+        }, status=400)
+
+
+
 
 # from django.views.decorators.csrf import csrf_exempt
 # from django.http import JsonResponse
@@ -5769,613 +5843,38 @@ def unload_statussubmitc(request):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
-# from django.http import JsonResponse
-# from django.views.decorators.http import require_POST   
-# from django.views.decorators.csrf import csrf_exempt
-# from .models import Upload_File, data_edit, B1, B1_Monthly
-
-# @csrf_exempt
-# @require_POST
-# def confirm_upload(request):
-#     try:
-#         FID = request.POST.get('FID')
-#         if not FID:
-#             return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
-
-#         data_edits = data_edit.objects.filter(id_file=FID)
-#         if not data_edits.exists():
-#             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
-
-#         for item in data_edits:
-#             try:
-               
-#                 B1_Monthly.objects.update_or_create(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id,
-#                     defaults={
-#                         'lcicID': item.lcicID,
-#                         'com_enterprise_code': item.com_enterprise_code,
-#                         'segmentType': item.segmentType,
-#                         'bnk_code': item.bnk_code,
-#                         'customer_id': item.customer_id,
-#                         'branch_id': item.branch_id,
-#                         'lon_sys_id': item.lon_sys_id,
-#                         'loan_id': item.loan_id,
-#                         'lon_open_date': item.lon_open_date,
-#                         'lon_exp_date': item.lon_exp_date,
-#                         'lon_ext_date': item.lon_ext_date,
-#                         'lon_int_rate': item.lon_int_rate,
-#                         'lon_purpose_code': item.lon_purpose_code,
-#                         'lon_credit_line': item.lon_credit_line,
-#                         'lon_currency_code': item.lon_currency_code,
-#                         'lon_outstanding_balance': item.lon_outstanding_balance,
-#                         'lon_account_no': item.lon_account_no,
-#                         'lon_no_days_slow': item.lon_no_days_slow,
-#                         'lon_class': item.lon_class,
-#                         'lon_type': item.lon_type,
-#                         'lon_term': item.lon_term,
-#                         'lon_status': item.lon_status,
-#                         'lon_insert_date': item.lon_insert_date,
-#                         'lon_update_date': item.lon_update_date,
-#                         'lon_applied_date': item.lon_applied_date,
-#                         'is_disputed': item.is_disputed,
-#                         'id_file': FID
-#                     }
-#                 )
-
-               
-#                 B1.objects.update_or_create(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id,
-#                     defaults={
-#                         'lcicID': item.lcicID,
-#                         'com_enterprise_code': item.com_enterprise_code,
-#                         'segmentType': item.segmentType,
-#                         'bnk_code': item.bnk_code,
-#                         'customer_id': item.customer_id,
-#                         'branch_id': item.branch_id,
-#                         'lon_sys_id': item.lon_sys_id,
-#                         'loan_id': item.loan_id,
-#                         'lon_open_date': item.lon_open_date,
-#                         'lon_exp_date': item.lon_exp_date,
-#                         'lon_ext_date': item.lon_ext_date,
-#                         'lon_int_rate': item.lon_int_rate,
-#                         'lon_purpose_code': item.lon_purpose_code,
-#                         'lon_credit_line': item.lon_credit_line,
-#                         'lon_currency_code': item.lon_currency_code,
-#                         'lon_outstanding_balance': item.lon_outstanding_balance,
-#                         'lon_account_no': item.lon_account_no,
-#                         'lon_no_days_slow': item.lon_no_days_slow,
-#                         'lon_class': item.lon_class,
-#                         'lon_type': item.lon_type,
-#                         'lon_term': item.lon_term,
-#                         'lon_status': item.lon_status,
-#                         'lon_insert_date': item.lon_insert_date,
-#                         'lon_update_date': item.lon_update_date,
-#                         'lon_applied_date': item.lon_applied_date,
-#                         'is_disputed': item.is_disputed,
-#                         'id_file': FID
-#                     }
-#                 )
-#             except Exception as e:
-#                 return JsonResponse({'status': 'error', 'message': f'Error while processing item with id {item.id}: {str(e)}'}, status=500)
-
-#         return JsonResponse({'status': 'success', 'message': 'Data successfully confirmed and updated'})
-#     except Exception as e:
-#         return JsonResponse({'status': 'error', 'message': f'Error in confirm_upload: {str(e)}'}, status=500)
 
 
-from django.utils.dateparse import parse_datetime
-from django.utils.timezone import make_aware
-from datetime import datetime
-from django.http import JsonResponse
-from django.views.decorators.http import require_POST
+
+#ຂອ້ຍຕອ້ງການແບບເກົ່າທຸກຢາວງແຕ່ຢາກ ເພີ່ມເຕີມຄື ການ ໃຊ້ databases transection ແລະ ການປຽນມາເປັນການກວດສອບເງືອນໄຂແລະເກັບໃນໂຕແປກອ່ນ ຈົນກວດສຳເລັດທັງໝົດແລ້ວຈື່ງ ບັນທືກລົງຖານ
+
+
+
+
+from django.db import connection, transaction
 from django.views.decorators.csrf import csrf_exempt
-from .models import Upload_File, data_edit, B1, B1_Monthly, disputes
+from django.views.decorators.http import require_POST
+from django.http import JsonResponse
+import logging
+from datetime import datetime
 
-def safe_parse_datetime(value):
-    if isinstance(value, str):
-        parsed_date = parse_datetime(value)
-        return make_aware(parsed_date) if parsed_date else None
-    elif isinstance(value, datetime):
-        return make_aware(value) if value.tzinfo is None else value
-    else:
-        return None
+logger = logging.getLogger(__name__)
 
-# @csrf_exempt
+
+
+
+from django.db import connection, transaction
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from django.http import JsonResponse
+import logging
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+# good code
+
 # @require_POST
-# def confirm_upload(request):
-#     try:
-#         FID = request.POST.get('FID')
-#         if not FID:
-#             return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
-
-#         data_edits = data_edit.objects.filter(id_file=FID)
-#         if not data_edits.exists():
-#             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
-
-#         for item in data_edits:
-#             try:
-#                 # Parsing dates safely
-#                 item.lon_open_date = safe_parse_datetime(item.lon_open_date)
-#                 item.lon_exp_date = safe_parse_datetime(item.lon_exp_date)
-                
-#                 # Check for existing records
-#                 b1_monthly_record = B1_Monthly.objects.filter(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id
-#                 ).first()
-
-#                 b1_record = B1.objects.filter(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id
-#                 ).first()
-
-#                 # Check for mismatches and log disputes if needed
-#                 if b1_monthly_record or b1_record:
-#                     b1_monthly_mismatch = B1_Monthly.objects.filter(
-#                         bnk_code=item.bnk_code,
-#                         branch_id=item.branch_id,
-#                         customer_id=item.customer_id,
-#                         loan_id=item.loan_id
-#                     ).exclude(
-#                         com_enterprise_code=item.com_enterprise_code,
-#                         lcicID=item.lcicID
-#                     ).exists()
-
-#                     b1_mismatch = B1.objects.filter(
-#                         bnk_code=item.bnk_code,
-#                         branch_id=item.branch_id,
-#                         customer_id=item.customer_id,
-#                         loan_id=item.loan_id
-#                     ).exclude(
-#                         com_enterprise_code=item.com_enterprise_code,
-#                         lcicID=item.lcicID
-#                     ).exists()
-
-#                     if b1_monthly_mismatch or b1_mismatch:
-#                         disputes.objects.create(
-#                             id_file=FID,
-#                             lcicID=item.lcicID,
-#                             period=item.period,
-#                             com_enterprise_code=item.com_enterprise_code,
-#                             segmentType=item.segmentType,
-#                             bnk_code=item.bnk_code,
-#                             customer_id=item.customer_id,
-#                             branch_id=item.branch_id,
-#                             lon_sys_id=item.lon_sys_id,
-#                             loan_id=item.loan_id,
-#                             lon_open_date=item.lon_open_date,
-#                             lon_exp_date=item.lon_exp_date,
-#                             lon_ext_date=item.lon_ext_date,
-#                             lon_int_rate=item.lon_int_rate,
-#                             lon_purpose_code=item.lon_purpose_code,
-#                             lon_credit_line=item.lon_credit_line,
-#                             lon_currency_code=item.lon_currency_code,
-#                             lon_outstanding_balance=item.lon_outstanding_balance,
-#                             lon_account_no=item.lon_account_no,
-#                             lon_no_days_slow=item.lon_no_days_slow,
-#                             lon_class=item.lon_class,
-#                             lon_type=item.lon_type,
-#                             lon_term=item.lon_term,
-#                             lon_status=item.lon_status,
-#                             lon_insert_date=item.lon_insert_date,
-#                             lon_update_date=item.lon_update_date,
-#                             lon_applied_date=item.lon_applied_date,
-#                             is_disputed=item.is_disputed
-#                         )
-#                         continue
-
-#                 # Update or create records in B1_Monthly and B1
-#                 B1_Monthly.objects.update_or_create(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id,
-#                     defaults={
-#                         'lcicID': item.lcicID,
-#                         'com_enterprise_code': item.com_enterprise_code,
-#                         'segmentType': item.segmentType,
-#                         'bnk_code': item.bnk_code,
-#                         'customer_id': item.customer_id,
-#                         'branch_id': item.branch_id,
-#                         'lon_sys_id': item.lon_sys_id,
-#                         'loan_id': item.loan_id,
-#                         'lon_open_date': item.lon_open_date,
-#                         'lon_exp_date': item.lon_exp_date,
-#                         'lon_ext_date': item.lon_ext_date,
-#                         'lon_int_rate': item.lon_int_rate,
-#                         'lon_purpose_code': item.lon_purpose_code,
-#                         'lon_credit_line': item.lon_credit_line,
-#                         'lon_currency_code': item.lon_currency_code,
-#                         'lon_outstanding_balance': item.lon_outstanding_balance,
-#                         'lon_account_no': item.lon_account_no,
-#                         'lon_no_days_slow': item.lon_no_days_slow,
-#                         'lon_class': item.lon_class,
-#                         'lon_type': item.lon_type,
-#                         'lon_term': item.lon_term,
-#                         'lon_status': item.lon_status,
-#                         'lon_insert_date': item.lon_insert_date,
-#                         'lon_update_date': item.lon_update_date,
-#                         'lon_applied_date': item.lon_applied_date,
-#                         'is_disputed': item.is_disputed,
-#                         'id_file': FID,
-#                     }
-#                 )
-
-#                 B1.objects.update_or_create(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id,
-#                     defaults={
-#                         'lcicID': item.lcicID,
-#                         'com_enterprise_code': item.com_enterprise_code,
-#                         'segmentType': item.segmentType,
-#                         'bnk_code': item.bnk_code,
-#                         'customer_id': item.customer_id,
-#                         'branch_id': item.branch_id,
-#                         'lon_sys_id': item.lon_sys_id,
-#                         'loan_id': item.loan_id,
-#                         'lon_open_date': item.lon_open_date,
-#                         'lon_exp_date': item.lon_exp_date,
-#                         'lon_ext_date': item.lon_ext_date,
-#                         'lon_int_rate': item.lon_int_rate,
-#                         'lon_purpose_code': item.lon_purpose_code,
-#                         'lon_credit_line': item.lon_credit_line,
-#                         'lon_currency_code': item.lon_currency_code,
-#                         'lon_outstanding_balance': item.lon_outstanding_balance,
-#                         'lon_account_no': item.lon_account_no,
-#                         'lon_no_days_slow': item.lon_no_days_slow,
-#                         'lon_class': item.lon_class,
-#                         'lon_type': item.lon_type,
-#                         'lon_term': item.lon_term,
-#                         'lon_status': item.lon_status,
-#                         'lon_insert_date': item.lon_insert_date,
-#                         'lon_update_date': item.lon_update_date,
-#                         'lon_applied_date': item.lon_applied_date,
-#                         'is_disputed': item.is_disputed,
-#                         'id_file': FID,
-#                     }
-#                 )
-#             except Exception as e:
-#                 print(f"Error processing item with id {item.id}: {str(e)}")
-#                 return JsonResponse({'status': 'error', 'message': f'Error while processing item with id {item.id}: {str(e)}'}, status=500)
-
-#         return JsonResponse({'status': 'success', 'message': 'Data successfully confirmed and updated'})
-#     except Exception as e:
-#         return JsonResponse({'status': 'error', 'message': f'Error in confirm_upload: {str(e)}'}, status=500)
-
-# from django.http import JsonResponse
-# from django.views.decorators.http import require_POST
-# from django.views.decorators.csrf import csrf_exempt
-# from .models import Upload_File, data_edit, B1, B1_Monthly, disputes
-
 # @csrf_exempt
-# @require_POST
-# def confirm_upload(request):
-#     try:
-#         FID = request.POST.get('FID')
-#         if not FID:
-#             return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
-
-#         data_edits = data_edit.objects.filter(id_file=FID)
-#         if not data_edits.exists():
-#             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
-
-#         for item in data_edits:
-#             try:
-                  
-#                 item_period_formatted = int(str(item.period)[:2] + str(item.period)[2:])
-#                 print("file", item_period_formatted)
-
-               
-#                 last_record = B1.objects.filter(bnk_code=item.bnk_code).order_by('-period').first()
-#                 if last_record:
-#                     last_period_formatted = int(str(last_record.period)[:2] + str(last_record.period)[2:]) 
-#                     print("B1",last_period_formatted)
-#                 else:
-#                     last_period_formatted = None
-
-               
-#                 if last_period_formatted is not None and item_period_formatted < last_period_formatted:
-#                     continue
-
-             
-#                 b1_monthly, created = B1_Monthly.objects.update_or_create(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id,
-#                     period=item.period,
-#                     defaults={
-#                         'lcicID': item.lcicID,
-#                         'com_enterprise_code': item.com_enterprise_code,
-#                         'segmentType': item.segmentType,
-#                         'bnk_code': item.bnk_code,
-#                         'customer_id': item.customer_id,
-#                         'branch_id': item.branch_id,
-#                         'user_id': item.user_id,
-#                         'period': item.period,
-#                         'product_type': item.product_type,
-#                         'lon_sys_id': item.lon_sys_id,
-#                         'loan_id': item.loan_id,
-#                         'lon_open_date': item.lon_open_date,
-#                         'lon_exp_date': item.lon_exp_date,
-#                         'lon_ext_date': item.lon_ext_date,
-#                         'lon_int_rate': item.lon_int_rate,
-#                         'lon_purpose_code': item.lon_purpose_code,
-#                         'lon_credit_line': item.lon_credit_line,
-#                         'lon_currency_code': item.lon_currency_code,
-#                         'lon_outstanding_balance': item.lon_outstanding_balance,
-#                         'lon_account_no': item.lon_account_no,
-#                         'lon_no_days_slow': item.lon_no_days_slow,
-#                         'lon_class': item.lon_class,
-#                         'lon_type': item.lon_type,
-#                         'lon_term': item.lon_term,
-#                         'lon_status': item.lon_status,
-#                         'lon_insert_date': item.lon_insert_date,
-#                         'lon_update_date': item.lon_update_date,
-#                         'lon_applied_date': item.lon_applied_date,
-#                         'is_disputed': item.is_disputed,
-#                         'id_file': FID,
-#                     }
-#                 )
-                
-#                 b1, created = B1.objects.update_or_create(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id,
-#                     defaults={
-#                         'lcicID': item.lcicID,
-#                         'com_enterprise_code': item.com_enterprise_code,
-#                         'segmentType': item.segmentType,
-#                         'bnk_code': item.bnk_code,
-#                         'user_id': item.user_id,
-#                         'customer_id': item.customer_id,
-#                         'branch_id': item.branch_id,
-#                         'lon_sys_id': item.lon_sys_id,
-#                         'loan_id': item.loan_id,
-#                         'period': item.period,
-#                         'product_type': item.product_type,    
-#                         'lon_open_date': item.lon_open_date,
-#                         'lon_exp_date': item.lon_exp_date,
-#                         'lon_ext_date': item.lon_ext_date,
-#                         'lon_int_rate': item.lon_int_rate,
-#                         'lon_purpose_code': item.lon_purpose_code,
-#                         'lon_credit_line': item.lon_credit_line,
-#                         'lon_currency_code': item.lon_currency_code,
-#                         'lon_outstanding_balance': item.lon_outstanding_balance,
-#                         'lon_account_no': item.lon_account_no,
-#                         'lon_no_days_slow': item.lon_no_days_slow,
-#                         'lon_class': item.lon_class,
-#                         'lon_type': item.lon_type,
-#                         'lon_term': item.lon_term,
-#                         'lon_status': item.lon_status,
-#                         'lon_insert_date': item.lon_insert_date,
-#                         'lon_update_date': item.lon_update_date,
-#                         'lon_applied_date': item.lon_applied_date,
-#                         'is_disputed': item.is_disputed,
-#                         'id_file': FID,
-#                         'status_customer': '1' if created else '0'
-#                     }
-#                 )
-#             except Exception as e:
-#                 return JsonResponse({'status': 'error', 'message': f'Error while processing item with id {item.id}: {str(e)}'}, status=500)
-
-#         return JsonResponse({'status': 'success', 'message': 'Data successfully confirmed and updated'})
-#     except Exception as e:
-#         return JsonResponse({'status': 'error', 'message': f'Error in confirm_upload: {str(e)}'}, status=500)
-
-# @csrf_exempt
-# @require_POST
-# def confirm_upload(request):
-#     try:
-#         FID = request.POST.get('FID')
-#         if not FID:
-#             return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
-
-#         data_edits = data_edit.objects.filter(id_file=FID)
-#         if not data_edits.exists():
-#             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
-
-#         for item in data_edits:
-#             try:
-               
-#                 latest_b1 = B1.objects.filter(
-#                     bnk_code=item.bnk_code,
-                   
-                    
-                   
-#                 ).order_by('-period').first()
-#                 print("B1", latest_b1)
-#                 print("item", item.period)
-
-#                 if latest_b1 and item.period < latest_b1.period:
-#                     Upload_File.objects.filter(FID=FID).update(statussubmit='2')
-                   
-#                     return JsonResponse({
-#                         'status': 'error',
-#                         'message': f'The uploaded period {item.period} is earlier than the latest period {latest_b1.period} in B1.'
-#                     }, status=400)
-
-                
-#                 b1_monthly_match = B1_Monthly.objects.filter(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id,
-#                     period=item.period
-#                 ).exists()
-                
-#                 b1_match = B1.objects.filter(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id,
-#                     period=item.period
-#                 ).exists()
-
-#                 if b1_monthly_match or b1_match:
-#                     b1_monthly_mismatch = B1_Monthly.objects.filter(
-#                         bnk_code=item.bnk_code,
-#                         branch_id=item.branch_id,
-#                         customer_id=item.customer_id,
-#                         loan_id=item.loan_id,
-#                         period=item.period
-#                     ).exclude(
-#                         com_enterprise_code=item.com_enterprise_code,
-#                         lcicID=item.lcicID
-#                     ).exists()
-
-#                     b1_mismatch = B1.objects.filter(
-#                         bnk_code=item.bnk_code,
-#                         branch_id=item.branch_id,
-#                         customer_id=item.customer_id,
-#                         loan_id=item.loan_id,
-#                         period=item.period
-#                     ).exclude(
-#                         com_enterprise_code=item.com_enterprise_code,
-#                         lcicID=item.lcicID
-#                     ).exists()
-
-#                     if b1_monthly_mismatch or b1_mismatch:
-#                         disputes.objects.create(
-#                             id_file=FID,
-#                             lcicID=item.lcicID,
-#                             user_id=item.user_id,
-#                             com_enterprise_code=item.com_enterprise_code,
-#                             segmentType=item.segmentType,
-#                             bnk_code=item.bnk_code,
-#                             customer_id=item.customer_id,
-#                             branch_id=item.branch_id,
-#                             period=item.period,
-#                             product_type=item.product_type,
-#                             lon_sys_id=item.lon_sys_id,
-#                             loan_id=item.loan_id,
-#                             lon_open_date=item.lon_open_date,
-#                             lon_exp_date=item.lon_exp_date,
-#                             lon_ext_date=item.lon_ext_date,
-#                             lon_int_rate=item.lon_int_rate,
-#                             lon_purpose_code=item.lon_purpose_code,
-#                             lon_credit_line=item.lon_credit_line,
-#                             lon_currency_code=item.lon_currency_code,
-#                             lon_outstanding_balance=item.lon_outstanding_balance,
-#                             lon_account_no=item.lon_account_no,
-#                             lon_no_days_slow=item.lon_no_days_slow,
-#                             lon_class=item.lon_class,
-#                             lon_type=item.lon_type,
-#                             lon_term=item.lon_term,
-#                             lon_status=item.lon_status,
-#                             lon_insert_date=item.lon_insert_date,
-#                             lon_update_date=item.lon_update_date,
-#                             lon_applied_date=item.lon_applied_date,
-#                             is_disputed=item.is_disputed,
-#                             LCIC_code=item.LCIC_code
-                            
-#                         )
-#                         continue  
-
-#                 # ອັບເດດຕາຕະລາງ B1_Monthly ແລະ B1
-#                 b1_monthly, created = B1_Monthly.objects.update_or_create(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id,
-#                     period=item.period,
-#                     defaults={
-#                         'lcicID': item.lcicID,
-#                         'com_enterprise_code': item.com_enterprise_code,
-#                         'segmentType': item.segmentType,
-#                         'bnk_code': item.bnk_code,
-#                         'customer_id': item.customer_id,
-#                         'branch_id': item.branch_id,
-#                         'user_id': item.user_id,
-#                         'period': item.period,
-#                         'product_type': item.product_type,
-#                         'lon_sys_id': item.lon_sys_id,
-#                         'loan_id': item.loan_id,
-#                         'lon_open_date': item.lon_open_date,
-#                         'lon_exp_date': item.lon_exp_date,
-#                         'lon_ext_date': item.lon_ext_date,
-#                         'lon_int_rate': item.lon_int_rate,
-#                         'lon_purpose_code': item.lon_purpose_code,
-#                         'lon_credit_line': item.lon_credit_line,
-#                         'lon_currency_code': item.lon_currency_code,
-#                         'lon_outstanding_balance': item.lon_outstanding_balance,
-#                         'lon_account_no': item.lon_account_no,
-#                         'lon_no_days_slow': item.lon_no_days_slow,
-#                         'lon_class': item.lon_class,
-#                         'lon_type': item.lon_type,
-#                         'lon_term': item.lon_term,
-#                         'lon_status': item.lon_status,
-#                         'lon_insert_date': item.lon_insert_date,
-#                         'lon_update_date': item.lon_update_date,
-#                         'lon_applied_date': item.lon_applied_date,
-#                         'is_disputed': item.is_disputed,
-#                         'id_file': FID,
-#                         'LCIC_code': item.LCIC_code
-#                     }
-#                 )
-                
-#                 b1, created = B1.objects.update_or_create(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id,
-#                     defaults={
-#                         'lcicID': item.lcicID,
-#                         'com_enterprise_code': item.com_enterprise_code,
-#                         'segmentType': item.segmentType,
-#                         'bnk_code': item.bnk_code,
-#                         'user_id': item.user_id,
-#                         'customer_id': item.customer_id,
-#                         'branch_id': item.branch_id,
-#                         'lon_sys_id': item.lon_sys_id,
-#                         'loan_id': item.loan_id,
-#                         'period': item.period,
-#                         'product_type': item.product_type,    
-#                         'lon_open_date': item.lon_open_date,
-#                         'lon_exp_date': item.lon_exp_date,
-#                         'lon_ext_date': item.lon_ext_date,
-#                         'lon_int_rate': item.lon_int_rate,
-#                         'lon_purpose_code': item.lon_purpose_code,
-#                         'lon_credit_line': item.lon_credit_line,
-#                         'lon_currency_code': item.lon_currency_code,
-#                         'lon_outstanding_balance': item.lon_outstanding_balance,
-#                         'lon_account_no': item.lon_account_no,
-#                         'lon_no_days_slow': item.lon_no_days_slow,
-#                         'lon_class': item.lon_class,
-#                         'lon_type': item.lon_type,
-#                         'lon_term': item.lon_term,
-#                         'lon_status': item.lon_status,
-#                         'lon_insert_date': item.lon_insert_date,
-#                         'lon_update_date': item.lon_update_date,
-#                         'lon_applied_date': item.lon_applied_date,
-#                         'is_disputed': item.is_disputed,
-#                         'id_file': FID,
-#                         'LCIC_code': item.LCIC_code
-#                     }
-#                 )
-                
-#             except Exception as e:
-#                 return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
-
-#         return JsonResponse({'status': 'success', 'message': 'Data confirmed successfully'})
-    
-#     except Exception as e:
-#         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
-@csrf_exempt
-@require_POST
 # def confirm_upload(request):
 #     try:
 #         FID = request.POST.get('FID')
@@ -6387,62 +5886,159 @@ def safe_parse_datetime(value):
 #             Upload_File.objects.filter(FID=FID).update(statussubmit='2')
 #             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
         
-
+       
+#         first_item = data_edits.first()
+#         latest_b1 = B1.objects.filter(
+#             bnk_code=first_item.bnk_code,
+#         ).order_by('-period').first()
+        
+#         print("B1", latest_b1)
+#         print("first_item period", first_item.period)
+        
+#         if latest_b1 and first_item.period < latest_b1.period:
+#             Upload_File.objects.filter(FID=FID).update(statussubmit='2')
+#             return JsonResponse({
+#                 'status': 'error',
+#                 'message': f'The uploaded period {first_item.period} is earlier than the latest period {latest_b1.period} in B1.'
+#             }, status=400)
+        
+       
+#         print(f"Loading existing data for {data_edits.count()} records...")
+        
+      
+#         bnk_codes = list(set(item.bnk_code for item in data_edits))
+#         print(f"Processing {len(bnk_codes)} unique bank codes...")
+        
+       
+#         existing_b1_monthly_dict = {}
+#         print("Loading B1_Monthly records...")
+#         b1_monthly_records = B1_Monthly.objects.filter(
+#             bnk_code__in=bnk_codes
+#         ).only(
+#             'bnk_code', 'branch_id', 'customer_id', 'loan_id', 'period',
+#             'com_enterprise_code', 'LCIC_code'
+#         ).values(
+#             'bnk_code', 'branch_id', 'customer_id', 'loan_id', 'period',
+#             'com_enterprise_code', 'LCIC_code'
+#         ).iterator(chunk_size=5000)  
+        
+#         for record in b1_monthly_records:
+#             key = (
+#                 record['bnk_code'], 
+#                 record['branch_id'], 
+#                 record['customer_id'], 
+#                 record['loan_id'], 
+#                 record['period']
+#             )
+#             existing_b1_monthly_dict[key] = {
+#                 'com_enterprise_code': record['com_enterprise_code'],
+#                 'LCIC_code': record['LCIC_code']
+#             }
+        
+       
+#         existing_b1_dict = {}
+#         print("Loading B1 records...")
+#         b1_records = B1.objects.filter(
+#             bnk_code__in=bnk_codes
+#         ).only(
+#             'bnk_code', 'branch_id', 'customer_id', 'loan_id', 'period',
+#             'com_enterprise_code', 'LCIC_code'
+#         ).values(
+#             'bnk_code', 'branch_id', 'customer_id', 'loan_id', 'period',
+#             'com_enterprise_code', 'LCIC_code'
+#         ).iterator(chunk_size=5000)  
+        
+#         for record in b1_records:
+#             key = (
+#                 record['bnk_code'], 
+#                 record['branch_id'], 
+#                 record['customer_id'], 
+#                 record['loan_id'], 
+#                 record['period']
+#             )
+#             existing_b1_dict[key] = {
+#                 'com_enterprise_code': record['com_enterprise_code'],
+#                 'LCIC_code': record['LCIC_code'],
+#                 'bnk_code': record['bnk_code']
+#             }
+        
+       
+#         print("Loading B1_Monthly keys...")
+#         existing_b1_monthly_keys = set(
+#             B1_Monthly.objects.filter(
+#                 bnk_code__in=bnk_codes
+#             ).values_list('bnk_code', 'branch_id', 'customer_id', 'loan_id', 'period').iterator(chunk_size=5000)
+#         )
+        
+       
+#         print("Loading B1 keys...")
+#         existing_b1_keys = set(
+#             B1.objects.filter(
+#                 bnk_code__in=bnk_codes
+#             ).values_list('bnk_code', 'branch_id', 'customer_id', 'loan_id').iterator(chunk_size=5000)
+#         )
+        
+#         print(f"Loaded {len(existing_b1_monthly_dict)} B1_Monthly records and {len(existing_b1_dict)} B1 records")
+        
+       
+#         disputed_data = []
+#         non_disputed_data = []
+        
+        
+#         print("Analyzing data...")
 #         for item in data_edits:
 #             try:
-#                 latest_b1 = B1.objects.filter(
-#                     bnk_code=item.bnk_code,
-#                 ).order_by('-period').first()
-#                 print("B1", latest_b1)
-#                 print("item", item.period)
-#                 if latest_b1 and item.period < latest_b1.period:
-#                     Upload_File.objects.filter(FID=FID).update(statussubmit='2')
-#                     return JsonResponse({
-#                         'status': 'error',
-#                         'message': f'The uploaded period {item.period} is earlier than the latest period {latest_b1.period} in B1.'
-#                     }, status=400)
-
-#                 b1_monthly_match = B1_Monthly.objects.filter(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id,
-#                     period=item.period
-#                 ).exists()
+#                 is_dispute = False
+#                 action_dispust = None
                 
-#                 b1_match = B1.objects.filter(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id,
-#                     period=item.period
-#                 ).exists()
+#                 # ເງື່ອນໄຂທີ່ 1: ທຽບກັບ B1 - bnk_code, branch_id, customer_id, loan_id ຄືກັນ ແຕ່ com_enterprise_code ຫຼື LCIC_code ຕ່າງ
+#                 key_for_condition1 = (item.bnk_code, item.branch_id, item.customer_id, item.loan_id, item.period)
+#                 if key_for_condition1 in existing_b1_dict:
+#                     existing_data = existing_b1_dict[key_for_condition1]
+#                     if (existing_data['com_enterprise_code'] != item.com_enterprise_code or 
+#                         existing_data['LCIC_code'] != item.LCIC_code):
+#                         is_dispute = True
+#                         action_dispust = '01'
+                
+#                 # ເງື່ອນໄຂທີ່ 2: ທຽບກັບ B1 - branch_id, customer_id, loan_id, com_enterprise_code, LCIC_code ຄືກັນ ແຕ່ bnk_code ຕ່າງ
+#                 if not is_dispute:  # ເຊັກເງື່ອນໄຂທີ່ 2 ຖ້າຍັງບໍ່ເປັນ dispute
+#                     for existing_key, existing_data in existing_b1_dict.items():
+#                         existing_bnk_code, existing_branch_id, existing_customer_id, existing_loan_id, existing_period = existing_key
+                        
+#                         # ເຊັກວ່າ branch_id, customer_id, loan_id, com_enterprise_code, LCIC_code ຄືກັນ ແຕ່ bnk_code ຕ່າງ
+#                         if (existing_branch_id == item.branch_id and
+#                             existing_customer_id == item.customer_id and
+#                             existing_loan_id == item.loan_id and
+#                             existing_data['com_enterprise_code'] == item.com_enterprise_code and
+#                             existing_data['LCIC_code'] == item.LCIC_code and
+#                             existing_bnk_code != item.bnk_code):
+#                             is_dispute = True
+#                             action_dispust = '02'
+#                             break
+                
+#                 # ແຍກຂໍ້ມູນ disputed ແລະ non-disputed
+#                 if is_dispute:
+#                     # ເພີ່ມ action_dispust ໃສ່ item
+#                     item.action_dispust = action_dispust
+#                     disputed_data.append(item)
+#                 else:
+#                     non_disputed_data.append(item)
+                    
+#             except Exception as e:
+#                 Upload_File.objects.filter(FID=FID).update(statussubmit='2')
+#                 return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
-#                 if b1_monthly_match or b1_match:
-#                     b1_monthly_mismatch = B1_Monthly.objects.filter(
-#                         bnk_code=item.bnk_code,
-#                         branch_id=item.branch_id,
-#                         customer_id=item.customer_id,
-#                         loan_id=item.loan_id,
-#                         period=item.period
-#                     ).exclude(
-#                         com_enterprise_code=item.com_enterprise_code,
-#                         lcicID=item.lcicID
-#                     ).exists()
+#         print(f"Found {len(disputed_data)} disputes and {len(non_disputed_data)} non-disputed records")
 
-#                     b1_mismatch = B1.objects.filter(
-#                         bnk_code=item.bnk_code,
-#                         branch_id=item.branch_id,
-#                         customer_id=item.customer_id,
-#                         loan_id=item.loan_id,
-#                         period=item.period
-#                     ).exclude(
-#                         com_enterprise_code=item.com_enterprise_code,
-#                         lcicID=item.lcicID
-#                     ).exists()
-
-#                     if b1_monthly_mismatch or b1_mismatch:
-#                         disputes.objects.create(
+       
+#         try:
+#             with transaction.atomic():
+                
+#                 if len(disputed_data) > 0:
+#                     print(f"Creating {len(disputed_data)} dispute records...")
+#                     disputes_to_create = []
+#                     for item in disputed_data:
+#                         disputes_to_create.append(disputes(
 #                             id_file=FID,
 #                             lcicID=item.lcicID,
 #                             user_id=item.user_id,
@@ -6473,125 +6069,264 @@ def safe_parse_datetime(value):
 #                             lon_update_date=item.lon_update_date,
 #                             lon_applied_date=item.lon_applied_date,
 #                             is_disputed=item.is_disputed,
-#                             LCIC_code=item.LCIC_code
-#                         )
-#                         continue  
-
+#                             LCIC_code=item.LCIC_code,
+#                             action_dispust=item.action_dispust  # ເພີ່ມ action_dispust ຕາມເງື່ອນໄຂ
+#                         ))
+                    
+#                     disputes.objects.bulk_create(disputes_to_create, batch_size=1000)
+#                     print(f"  Created all dispute records successfully")
                 
-#                 existing_record = B1.objects.filter(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id
-#                 ).exists()
-
+#                 # ປະມວນຜົນທັງໝົດຂໍ້ມູນ (ທັງ disputed ແລະ non-disputed) ສຳລັບ B1 ແລະ B1_Monthly ແບບເກົ່າ
+#                 all_data = disputed_data + non_disputed_data
+                
+#                 b1_monthly_to_update = []
+#                 b1_monthly_to_create = []
+#                 b1_to_update = []
+#                 b1_to_create = []
+                
+#                 for item in all_data:
+#                     key = (item.bnk_code, item.branch_id, item.customer_id, item.loan_id, item.period)
+                    
+#                     if key in existing_b1_monthly_keys:
+#                         b1_monthly_to_update.append(item)
+#                     else:
+#                         b1_monthly_to_create.append(item)
+                    
+#                     key_without_period = (item.bnk_code, item.branch_id, item.customer_id, item.loan_id)
+#                     if key_without_period in existing_b1_keys:
+#                         b1_to_update.append(item)
+#                     else:
+#                         b1_to_create.append(item)
+                
+#                 print(f"B1_Monthly: {len(b1_monthly_to_update)} to update, {len(b1_monthly_to_create)} to create")
+#                 print(f"B1: {len(b1_to_update)} to update, {len(b1_to_create)} to create")
+                
+#                 # Update B1_Monthly records
+#                 if len(b1_monthly_to_update) > 0:
+#                     print(f"Updating {len(b1_monthly_to_update)} B1_Monthly records in batches...")
+                    
+#                     batch_size = 1000
+#                     for i in range(0, len(b1_monthly_to_update), batch_size):
+#                         batch = b1_monthly_to_update[i:i + batch_size]
+                        
+#                         delete_query = Q()
+#                         for item in batch:
+#                             delete_query |= Q(
+#                                 bnk_code=item.bnk_code,
+#                                 branch_id=item.branch_id,
+#                                 customer_id=item.customer_id,
+#                                 loan_id=item.loan_id,
+#                                 period=item.period
+#                             )
+                        
+#                         B1_Monthly.objects.filter(delete_query).delete()
+#                         print(f"  Deleted B1_Monthly batch {i//batch_size + 1}/{(len(b1_monthly_to_update)-1)//batch_size + 1}")
+                    
+#                     print(f"Creating {len(b1_monthly_to_update)} new B1_Monthly records...")
+#                     b1_monthly_update_list = []
+#                     for item in b1_monthly_to_update:
+#                         b1_monthly_update_list.append(B1_Monthly(
+#                             lcicID=item.lcicID,
+#                             com_enterprise_code=item.com_enterprise_code,
+#                             segmentType=item.segmentType,
+#                             bnk_code=item.bnk_code,
+#                             customer_id=item.customer_id,
+#                             branch_id=item.branch_id,
+#                             user_id=item.user_id,
+#                             period=item.period,
+#                             product_type=item.product_type,
+#                             lon_sys_id=item.lon_sys_id,
+#                             loan_id=item.loan_id,
+#                             lon_open_date=item.lon_open_date,
+#                             lon_exp_date=item.lon_exp_date,
+#                             lon_ext_date=item.lon_ext_date,
+#                             lon_int_rate=item.lon_int_rate,
+#                             lon_purpose_code=item.lon_purpose_code,
+#                             lon_credit_line=item.lon_credit_line,
+#                             lon_currency_code=item.lon_currency_code,
+#                             lon_outstanding_balance=item.lon_outstanding_balance,
+#                             lon_account_no=item.lon_account_no,
+#                             lon_no_days_slow=item.lon_no_days_slow,
+#                             lon_class=item.lon_class,
+#                             lon_type=item.lon_type,
+#                             lon_term=item.lon_term,
+#                             lon_status=item.lon_status,
+#                             lon_insert_date=item.lon_insert_date,
+#                             lon_update_date=item.lon_update_date,
+#                             lon_applied_date=item.lon_applied_date,
+#                             is_disputed=item.is_disputed,
+#                             id_file=FID,
+#                             LCIC_code=item.LCIC_code,
+#                             status_data='u'
+#                         ))
+                    
+#                     B1_Monthly.objects.bulk_create(b1_monthly_update_list, batch_size=1000)
+#                     print(f"  Created all B1_Monthly records successfully")
+                
                
-#                 status_data_value = 'u' if existing_record else 'i'
-#                 b1_monthly_exists = B1_Monthly.objects.filter(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id
-#                 ).exists()
-#                 b1_monthly_status_data = 'u' if b1_monthly_exists else 'i'
+#                 if len(b1_monthly_to_create) > 0:
+#                     b1_monthly_create_list = []
+#                     for item in b1_monthly_to_create:
+#                         b1_monthly_create_list.append(B1_Monthly(
+#                             lcicID=item.lcicID,
+#                             com_enterprise_code=item.com_enterprise_code,
+#                             segmentType=item.segmentType,
+#                             bnk_code=item.bnk_code,
+#                             customer_id=item.customer_id,
+#                             branch_id=item.branch_id,
+#                             user_id=item.user_id,
+#                             period=item.period,
+#                             product_type=item.product_type,
+#                             lon_sys_id=item.lon_sys_id,
+#                             loan_id=item.loan_id,
+#                             lon_open_date=item.lon_open_date,
+#                             lon_exp_date=item.lon_exp_date,
+#                             lon_ext_date=item.lon_ext_date,
+#                             lon_int_rate=item.lon_int_rate,
+#                             lon_purpose_code=item.lon_purpose_code,
+#                             lon_credit_line=item.lon_credit_line,
+#                             lon_currency_code=item.lon_currency_code,
+#                             lon_outstanding_balance=item.lon_outstanding_balance,
+#                             lon_account_no=item.lon_account_no,
+#                             lon_no_days_slow=item.lon_no_days_slow,
+#                             lon_class=item.lon_class,
+#                             lon_type=item.lon_type,
+#                             lon_term=item.lon_term,
+#                             lon_status=item.lon_status,
+#                             lon_insert_date=item.lon_insert_date,
+#                             lon_update_date=item.lon_update_date,
+#                             lon_applied_date=item.lon_applied_date,
+#                             is_disputed=item.is_disputed,
+#                             id_file=FID,
+#                             LCIC_code=item.LCIC_code,
+#                             status_data='i'
+#                         ))
+                    
+#                     B1_Monthly.objects.bulk_create(b1_monthly_create_list, batch_size=1000)
+                
+                
+#                 if len(b1_to_update) > 0:
+                   
+#                     print(f"Updating {len(b1_to_update)} B1 records in batches...")
+                    
+#                     batch_size = 1000
+#                     for i in range(0, len(b1_to_update), batch_size):
+#                         batch = b1_to_update[i:i + batch_size]
+                        
+                       
+#                         delete_query = Q()
+#                         for item in batch:
+#                             delete_query |= Q(
+#                                 bnk_code=item.bnk_code,
+#                                 branch_id=item.branch_id,
+#                                 customer_id=item.customer_id,
+#                                 loan_id=item.loan_id
+#                             )
+                        
+#                         B1.objects.filter(delete_query).delete()
+#                         print(f"  Deleted B1 batch {i//batch_size + 1}/{(len(b1_to_update)-1)//batch_size + 1}")
+                    
+                   
+#                     print(f"Creating {len(b1_to_update)} new B1 records...")
+#                     b1_update_list = []
+#                     for item in b1_to_update:
+#                         b1_update_list.append(B1(
+#                             lcicID=item.lcicID,
+#                             com_enterprise_code=item.com_enterprise_code,
+#                             segmentType=item.segmentType,
+#                             bnk_code=item.bnk_code,
+#                             user_id=item.user_id,
+#                             customer_id=item.customer_id,
+#                             branch_id=item.branch_id,
+#                             lon_sys_id=item.lon_sys_id,
+#                             loan_id=item.loan_id,
+#                             period=item.period,
+#                             product_type=item.product_type,    
+#                             lon_open_date=item.lon_open_date,
+#                             lon_exp_date=item.lon_exp_date,
+#                             lon_ext_date=item.lon_ext_date,
+#                             lon_int_rate=item.lon_int_rate,
+#                             lon_purpose_code=item.lon_purpose_code,
+#                             lon_credit_line=item.lon_credit_line,
+#                             lon_currency_code=item.lon_currency_code,
+#                             lon_outstanding_balance=item.lon_outstanding_balance,
+#                             lon_account_no=item.lon_account_no,
+#                             lon_no_days_slow=item.lon_no_days_slow,
+#                             lon_class=item.lon_class,
+#                             lon_type=item.lon_type,
+#                             lon_term=item.lon_term,
+#                             lon_status=item.lon_status,
+#                             lon_insert_date=item.lon_insert_date,
+#                             lon_update_date=item.lon_update_date,
+#                             lon_applied_date=item.lon_applied_date,
+#                             is_disputed=item.is_disputed,
+#                             id_file=FID,
+#                             LCIC_code=item.LCIC_code,
+#                             status_data='u'
+#                         ))
+                    
+#                     B1.objects.bulk_create(b1_update_list, batch_size=1000)
+#                     print(f"  Created all B1 records successfully")
+                
+                
+#                 if len(b1_to_create) > 0:
+#                     b1_create_list = []
+#                     for item in b1_to_create:
+#                         b1_create_list.append(B1(
+#                             lcicID=item.lcicID,
+#                             com_enterprise_code=item.com_enterprise_code,
+#                             segmentType=item.segmentType,
+#                             bnk_code=item.bnk_code,
+#                             user_id=item.user_id,
+#                             customer_id=item.customer_id,
+#                             branch_id=item.branch_id,
+#                             lon_sys_id=item.lon_sys_id,
+#                             loan_id=item.loan_id,
+#                             period=item.period,
+#                             product_type=item.product_type,    
+#                             lon_open_date=item.lon_open_date,
+#                             lon_exp_date=item.lon_exp_date,
+#                             lon_ext_date=item.lon_ext_date,
+#                             lon_int_rate=item.lon_int_rate,
+#                             lon_purpose_code=item.lon_purpose_code,
+#                             lon_credit_line=item.lon_credit_line,
+#                             lon_currency_code=item.lon_currency_code,
+#                             lon_outstanding_balance=item.lon_outstanding_balance,
+#                             lon_account_no=item.lon_account_no,
+#                             lon_no_days_slow=item.lon_no_days_slow,
+#                             lon_class=item.lon_class,
+#                             lon_type=item.lon_type,
+#                             lon_term=item.lon_term,
+#                             lon_status=item.lon_status,
+#                             lon_insert_date=item.lon_insert_date,
+#                             lon_update_date=item.lon_update_date,
+#                             lon_applied_date=item.lon_applied_date,
+#                             is_disputed=item.is_disputed,
+#                             id_file=FID,
+#                             LCIC_code=item.LCIC_code,
+#                             status_data='i'
+#                         ))
+                    
+#                     B1.objects.bulk_create(b1_create_list, batch_size=1000)
 
-#                 b1_monthly, created = B1_Monthly.objects.update_or_create(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id,
-#                     period=item.period,
-#                     defaults={
-#                         'lcicID': item.lcicID,
-#                         'com_enterprise_code': item.com_enterprise_code,
-#                         'segmentType': item.segmentType,
-#                         'bnk_code': item.bnk_code,
-#                         'customer_id': item.customer_id,
-#                         'branch_id': item.branch_id,
-#                         'user_id': item.user_id,
-#                         'period': item.period,
-#                         'product_type': item.product_type,
-#                         'lon_sys_id': item.lon_sys_id,
-#                         'loan_id': item.loan_id,
-#                         'lon_open_date': item.lon_open_date,
-#                         'lon_exp_date': item.lon_exp_date,
-#                         'lon_ext_date': item.lon_ext_date,
-#                         'lon_int_rate': item.lon_int_rate,
-#                         'lon_purpose_code': item.lon_purpose_code,
-#                         'lon_credit_line': item.lon_credit_line,
-#                         'lon_currency_code': item.lon_currency_code,
-#                         'lon_outstanding_balance': item.lon_outstanding_balance,
-#                         'lon_account_no': item.lon_account_no,
-#                         'lon_no_days_slow': item.lon_no_days_slow,
-#                         'lon_class': item.lon_class,
-#                         'lon_type': item.lon_type,
-#                         'lon_term': item.lon_term,
-#                         'lon_status': item.lon_status,
-#                         'lon_insert_date': item.lon_insert_date,
-#                         'lon_update_date': item.lon_update_date,
-#                         'lon_applied_date': item.lon_applied_date,
-#                         'is_disputed': item.is_disputed,
-#                         'id_file': FID,
-#                         'LCIC_code': item.LCIC_code,
-#                         'status_data': b1_monthly_status_data
-#                     }
-#                 )
+          
+#                 Upload_File.objects.filter(FID=FID).update(statussubmit='0')
+#                 print("✅ Transaction completed successfully!")
                 
-                
-#                 B1.objects.filter(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id
-#                 ).delete()
-                
-#                 B1.objects.create(
-#                     lcicID=item.lcicID,
-#                     com_enterprise_code=item.com_enterprise_code,
-#                     segmentType=item.segmentType,
-#                     bnk_code=item.bnk_code,
-#                     user_id=item.user_id,
-#                     customer_id=item.customer_id,
-#                     branch_id=item.branch_id,
-#                     lon_sys_id=item.lon_sys_id,
-#                     loan_id=item.loan_id,
-#                     period=item.period,
-#                     product_type=item.product_type,    
-#                     lon_open_date=item.lon_open_date,
-#                     lon_exp_date=item.lon_exp_date,
-#                     lon_ext_date=item.lon_ext_date,
-#                     lon_int_rate=item.lon_int_rate,
-#                     lon_purpose_code=item.lon_purpose_code,
-#                     lon_credit_line=item.lon_credit_line,
-#                     lon_currency_code=item.lon_currency_code,
-#                     lon_outstanding_balance=item.lon_outstanding_balance,
-#                     lon_account_no=item.lon_account_no,
-#                     lon_no_days_slow=item.lon_no_days_slow,
-#                     lon_class=item.lon_class,
-#                     lon_type=item.lon_type,
-#                     lon_term=item.lon_term,
-#                     lon_status=item.lon_status,
-#                     lon_insert_date=item.lon_insert_date,
-#                     lon_update_date=item.lon_update_date,
-#                     lon_applied_date=item.lon_applied_date,
-#                     is_disputed=item.is_disputed,
-#                     id_file=FID,
-#                     LCIC_code=item.LCIC_code,
-#                     status_data=status_data_value 
-#                 )
-                
-#             except Exception as e:
-#                 Upload_File.objects.filter(FID=FID).update(statussubmit='2')
-#                 return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
-
-#         Upload_File.objects.filter(FID=FID).update(statussubmit='0')
+#         except Exception as e:
+            
+#             Upload_File.objects.filter(FID=FID).update(statussubmit='2')
+#             return JsonResponse({'status': 'error', 'message': f'Transaction failed: {str(e)}'}, status=500)
 
 #         return JsonResponse({'status': 'success', 'message': 'Data confirmed successfully'})
     
 #     except Exception as e:
 #         Upload_File.objects.filter(FID=FID).update(statussubmit='2')
 #         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
-    
+
+
+@require_POST
+@csrf_exempt
 def confirm_upload(request):
     try:
         FID = request.POST.get('FID')
@@ -6603,70 +6338,170 @@ def confirm_upload(request):
             Upload_File.objects.filter(FID=FID).update(statussubmit='2')
             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
         
+       
+        first_item = data_edits.first()
+        latest_b1 = B1.objects.filter(
+            bnk_code=first_item.bnk_code,
+        ).order_by('-period').first()
+        
+        print("B1", latest_b1)
+        print("first_item period", first_item.period)
+        
+        if latest_b1 and first_item.period < latest_b1.period:
+            Upload_File.objects.filter(FID=FID).update(statussubmit='2')
+            return JsonResponse({
+                'status': 'error',
+                'message': f'The uploaded period {first_item.period} is earlier than the latest period {latest_b1.period} in B1.'
+            }, status=400)
+        
+       
+        print(f"Loading existing data for {data_edits.count()} records...")
+        
+      
+        bnk_codes = list(set(item.bnk_code for item in data_edits))
+        print(f"Processing {len(bnk_codes)} unique bank codes...")
+        
+       
+        existing_b1_monthly_dict = {}
+        print("Loading B1_Monthly records...")
+        b1_monthly_records = B1_Monthly.objects.filter(
+            bnk_code__in=bnk_codes
+        ).only(
+            'bnk_code', 'branch_id', 'customer_id', 'loan_id', 'period',
+            'com_enterprise_code', 'LCIC_code'
+        ).values(
+            'bnk_code', 'branch_id', 'customer_id', 'loan_id', 'period',
+            'com_enterprise_code', 'LCIC_code'
+        ).iterator(chunk_size=5000)  
+        
+        for record in b1_monthly_records:
+            key = (
+                record['bnk_code'], 
+                record['branch_id'], 
+                record['customer_id'], 
+                record['loan_id'], 
+                record['period']
+            )
+            existing_b1_monthly_dict[key] = {
+                'com_enterprise_code': record['com_enterprise_code'],
+                'LCIC_code': record['LCIC_code']
+            }
+        
+       
+        existing_b1_dict = {}
+        print("Loading B1 records...")
+        b1_records = B1.objects.filter(
+            bnk_code__in=bnk_codes
+        ).only(
+            'bnk_code', 'branch_id', 'customer_id', 'loan_id', 'period',
+            'com_enterprise_code', 'LCIC_code'
+        ).values(
+            'bnk_code', 'branch_id', 'customer_id', 'loan_id', 'period',
+            'com_enterprise_code', 'LCIC_code'
+        ).iterator(chunk_size=5000)  
+        
+        for record in b1_records:
+            key = (
+                record['bnk_code'], 
+                record['branch_id'], 
+                record['customer_id'], 
+                record['loan_id'], 
+                record['period']
+            )
+            existing_b1_dict[key] = {
+                'com_enterprise_code': record['com_enterprise_code'],
+                'LCIC_code': record['LCIC_code'],
+                'bnk_code': record['bnk_code']
+            }
+        
+       
+        print("Loading B1_Monthly keys...")
+        existing_b1_monthly_keys = set(
+            B1_Monthly.objects.filter(
+                bnk_code__in=bnk_codes
+            ).values_list('bnk_code', 'branch_id', 'customer_id', 'loan_id', 'period').iterator(chunk_size=5000)
+        )
+        
+       
+        print("Loading B1 keys...")
+        existing_b1_keys = set(
+            B1.objects.filter(
+                bnk_code__in=bnk_codes
+            ).values_list('bnk_code', 'branch_id', 'customer_id', 'loan_id').iterator(chunk_size=5000)
+        )
+        
+        print(f"Loaded {len(existing_b1_monthly_dict)} B1_Monthly records and {len(existing_b1_dict)} B1 records")
+        
+       
+        disputed_data = []
+        non_disputed_data = []
+        
+        
+        print("Analyzing data...")
         for item in data_edits:
             try:
-                latest_b1 = B1.objects.filter(
-                    bnk_code=item.bnk_code,
-                ).order_by('-period').first()
-                print("B1", latest_b1)
-                print("item", item.period)
-                if latest_b1 and item.period < latest_b1.period:
-                    Upload_File.objects.filter(FID=FID).update(statussubmit='2')
-                    return JsonResponse({
-                        'status': 'error',
-                        'message': f'The uploaded period {item.period} is earlier than the latest period {latest_b1.period} in B1.'
-                    }, status=400)
-
-                b1_monthly_match = B1_Monthly.objects.filter(
-                    bnk_code=item.bnk_code,
-                    branch_id=item.branch_id,
-                    customer_id=item.customer_id,
-                    loan_id=item.loan_id,
-                    period=item.period
-                ).exists()
+                is_dispute = False
+                action_dispust = None
                 
-                b1_match = B1.objects.filter(
-                    bnk_code=item.bnk_code,
-                    branch_id=item.branch_id,
-                    customer_id=item.customer_id,
-                    loan_id=item.loan_id,
-                    period=item.period
-                ).exists()
+                # ເງື່ອນໄຂທີ່ 1: ທຽບກັບ B1 - bnk_code, branch_id, customer_id, loan_id ຄືກັນ ແຕ່ com_enterprise_code ຫຼື LCIC_code ຕ່າງ
+                key_for_condition1 = (item.bnk_code, item.branch_id, item.customer_id, item.loan_id, item.period)
+                if key_for_condition1 in existing_b1_dict:
+                    existing_data = existing_b1_dict[key_for_condition1]
+                    if (existing_data['com_enterprise_code'] != item.com_enterprise_code or 
+                        existing_data['LCIC_code'] != item.LCIC_code):
+                        is_dispute = True
+                        action_dispust = '01'
+                
+                # ເງື່ອນໄຂທີ່ 2: ທຽບກັບ B1 - branch_id, customer_id, loan_id, com_enterprise_code, LCIC_code ຄືກັນ ແຕ່ bnk_code ຕ່າງ
+                if not is_dispute:  # ເຊັກເງື່ອນໄຂທີ່ 2 ຖ້າຍັງບໍ່ເປັນ dispute
+                    for existing_key, existing_data in existing_b1_dict.items():
+                        existing_bnk_code, existing_branch_id, existing_customer_id, existing_loan_id, existing_period = existing_key
+                        
+                        # ເຊັກວ່າ branch_id, customer_id, loan_id, com_enterprise_code, LCIC_code ຄືກັນ ແຕ່ bnk_code ຕ່າງ
+                        if (existing_branch_id == item.branch_id and
+                            existing_customer_id == item.customer_id and
+                            existing_loan_id == item.loan_id and
+                            existing_data['com_enterprise_code'] == item.com_enterprise_code and
+                            existing_data['LCIC_code'] == item.LCIC_code and
+                            existing_bnk_code != item.bnk_code):
+                            is_dispute = True
+                            action_dispust = '02'
+                            break
+                
+                # ແຍກຂໍ້ມູນ disputed ແລະ non-disputed
+                if is_dispute:
+                    # ເພີ່ມ action_dispust ໃສ່ item
+                    item.action_dispust = action_dispust
+                    disputed_data.append(item)
+                else:
+                    non_disputed_data.append(item)
+                    
+            except Exception as e:
+                Upload_File.objects.filter(FID=FID).update(statussubmit='2')
+                return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
-                if b1_monthly_match or b1_match:
-                    # ປ່ຽນການເຊັກຈາກ lcicID ມາເປັນ LCIC_code
-                    b1_monthly_mismatch = B1_Monthly.objects.filter(
-                        bnk_code=item.bnk_code,
-                        branch_id=item.branch_id,
-                        customer_id=item.customer_id,
-                        loan_id=item.loan_id,
-                        period=item.period
-                    ).exclude(
-                        com_enterprise_code=item.com_enterprise_code,
-                        LCIC_code=item.LCIC_code  # ປ່ຽນຈາກ lcicID → LCIC_code
-                    ).exists()
+        print(f"Found {len(disputed_data)} disputes and {len(non_disputed_data)} non-disputed records")
 
-                    b1_mismatch = B1.objects.filter(
-                        bnk_code=item.bnk_code,
-                        branch_id=item.branch_id,
-                        customer_id=item.customer_id,
-                        loan_id=item.loan_id,
-                        period=item.period
-                    ).exclude(
-                        com_enterprise_code=item.com_enterprise_code,
-                        LCIC_code=item.LCIC_code  # ປ່ຽນຈາກ lcicID → LCIC_code
-                    ).exists()
+        # ບັນທຶກຈຳນວນ dispute ໄປໃສ່ Upload_File
+        Upload_File.objects.filter(FID=FID).update(dispuste=str(len(disputed_data)))
 
-                    if b1_monthly_mismatch or b1_mismatch:
-                        disputes.objects.create(
+       
+        try:
+            with transaction.atomic():
+                
+                if len(disputed_data) > 0:
+                    print(f"Creating {len(disputed_data)} dispute records...")
+                    disputes_to_create = []
+                    for item in disputed_data:
+                        disputes_to_create.append(disputes(
                             id_file=FID,
                             lcicID=item.lcicID,
-                            user_id=item.user_id,
                             com_enterprise_code=item.com_enterprise_code,
                             segmentType=item.segmentType,
                             bnk_code=item.bnk_code,
                             customer_id=item.customer_id,
                             branch_id=item.branch_id,
+                            user_id=item.user_id,
                             period=item.period,
                             product_type=item.product_type,
                             lon_sys_id=item.lon_sys_id,
@@ -6689,121 +6524,1107 @@ def confirm_upload(request):
                             lon_update_date=item.lon_update_date,
                             lon_applied_date=item.lon_applied_date,
                             is_disputed=item.is_disputed,
-                            LCIC_code=item.LCIC_code
-                        )
-                        continue  
-
-                existing_record = B1.objects.filter(
-                    bnk_code=item.bnk_code,
-                    branch_id=item.branch_id,
-                    customer_id=item.customer_id,
-                    loan_id=item.loan_id
-                ).exists()
-
-                status_data_value = 'u' if existing_record else 'i'
-                b1_monthly_exists = B1_Monthly.objects.filter(
-                    bnk_code=item.bnk_code,
-                    branch_id=item.branch_id,
-                    customer_id=item.customer_id,
-                    loan_id=item.loan_id
-                ).exists()
-                b1_monthly_status_data = 'u' if b1_monthly_exists else 'i'
-
-                b1_monthly, created = B1_Monthly.objects.update_or_create(
-                    bnk_code=item.bnk_code,
-                    branch_id=item.branch_id,
-                    customer_id=item.customer_id,
-                    loan_id=item.loan_id,
-                    period=item.period,
-                    defaults={
-                        'lcicID': item.lcicID,
-                        'com_enterprise_code': item.com_enterprise_code,
-                        'segmentType': item.segmentType,
-                        'bnk_code': item.bnk_code,
-                        'customer_id': item.customer_id,
-                        'branch_id': item.branch_id,
-                        'user_id': item.user_id,
-                        'period': item.period,
-                        'product_type': item.product_type,
-                        'lon_sys_id': item.lon_sys_id,
-                        'loan_id': item.loan_id,
-                        'lon_open_date': item.lon_open_date,
-                        'lon_exp_date': item.lon_exp_date,
-                        'lon_ext_date': item.lon_ext_date,
-                        'lon_int_rate': item.lon_int_rate,
-                        'lon_purpose_code': item.lon_purpose_code,
-                        'lon_credit_line': item.lon_credit_line,
-                        'lon_currency_code': item.lon_currency_code,
-                        'lon_outstanding_balance': item.lon_outstanding_balance,
-                        'lon_account_no': item.lon_account_no,
-                        'lon_no_days_slow': item.lon_no_days_slow,
-                        'lon_class': item.lon_class,
-                        'lon_type': item.lon_type,
-                        'lon_term': item.lon_term,
-                        'lon_status': item.lon_status,
-                        'lon_insert_date': item.lon_insert_date,
-                        'lon_update_date': item.lon_update_date,
-                        'lon_applied_date': item.lon_applied_date,
-                        'is_disputed': item.is_disputed,
-                        'id_file': FID,
-                        'LCIC_code': item.LCIC_code,
-                        'status_data': b1_monthly_status_data
-                    }
-                )
+                            LCIC_code=item.LCIC_code,
+                            action_dispust=item.action_dispust
+                        ))
+                    
+                    disputes.objects.bulk_create(disputes_to_create, batch_size=1000)
+                    print(f"  Created all dispute records successfully")
                 
-                B1.objects.filter(
-                    bnk_code=item.bnk_code,
-                    branch_id=item.branch_id,
-                    customer_id=item.customer_id,
-                    loan_id=item.loan_id
-                ).delete()
+                # ສ່ວນທີ່ເຫຼືອຂອງໂຄດເກົ່າຍັງຄົງຮັກສາໄວ້ເໝືອນເກົ່າ...
+                # (ໂຄດທີ່ເຫຼືອຂ້າງລຸ່ມນີ້ບໍ່ມີການປ່ຽນແປງ)
                 
-                B1.objects.create(
-                    lcicID=item.lcicID,
-                    com_enterprise_code=item.com_enterprise_code,
-                    segmentType=item.segmentType,
-                    bnk_code=item.bnk_code,
-                    user_id=item.user_id,
-                    customer_id=item.customer_id,
-                    branch_id=item.branch_id,
-                    lon_sys_id=item.lon_sys_id,
-                    loan_id=item.loan_id,
-                    period=item.period,
-                    product_type=item.product_type,    
-                    lon_open_date=item.lon_open_date,
-                    lon_exp_date=item.lon_exp_date,
-                    lon_ext_date=item.lon_ext_date,
-                    lon_int_rate=item.lon_int_rate,
-                    lon_purpose_code=item.lon_purpose_code,
-                    lon_credit_line=item.lon_credit_line,
-                    lon_currency_code=item.lon_currency_code,
-                    lon_outstanding_balance=item.lon_outstanding_balance,
-                    lon_account_no=item.lon_account_no,
-                    lon_no_days_slow=item.lon_no_days_slow,
-                    lon_class=item.lon_class,
-                    lon_type=item.lon_type,
-                    lon_term=item.lon_term,
-                    lon_status=item.lon_status,
-                    lon_insert_date=item.lon_insert_date,
-                    lon_update_date=item.lon_update_date,
-                    lon_applied_date=item.lon_applied_date,
-                    is_disputed=item.is_disputed,
-                    id_file=FID,
-                    LCIC_code=item.LCIC_code,
-                    status_data=status_data_value 
-                )
+                b1_monthly_to_update = [item for item in non_disputed_data if (item.bnk_code, item.branch_id, item.customer_id, item.loan_id, item.period) in existing_b1_monthly_keys]
+                b1_monthly_to_create = [item for item in non_disputed_data if (item.bnk_code, item.branch_id, item.customer_id, item.loan_id, item.period) not in existing_b1_monthly_keys]
                 
-            except Exception as e:
-                Upload_File.objects.filter(FID=FID).update(statussubmit='2')
-                return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+                b1_to_update = [item for item in non_disputed_data if (item.bnk_code, item.branch_id, item.customer_id, item.loan_id) in existing_b1_keys]
+                b1_to_create = [item for item in non_disputed_data if (item.bnk_code, item.branch_id, item.customer_id, item.loan_id) not in existing_b1_keys]
+                
+                if len(b1_monthly_to_update) > 0:
+                    print(f"Updating {len(b1_monthly_to_update)} B1_Monthly records in batches...")
+                    
+                    batch_size = 1000
+                    for i in range(0, len(b1_monthly_to_update), batch_size):
+                        batch = b1_monthly_to_update[i:i + batch_size]
+                        
+                        delete_query = Q()
+                        for item in batch:
+                            delete_query |= Q(
+                                bnk_code=item.bnk_code,
+                                branch_id=item.branch_id,
+                                customer_id=item.customer_id,
+                                loan_id=item.loan_id,
+                                period=item.period
+                            )
+                        
+                        B1_Monthly.objects.filter(delete_query).delete()
+                        print(f"  Deleted B1_Monthly batch {i//batch_size + 1}/{(len(b1_monthly_to_update)-1)//batch_size + 1}")
+                    
+                    print(f"Creating {len(b1_monthly_to_update)} new B1_Monthly records...")
+                    b1_monthly_update_list = []
+                    for item in b1_monthly_to_update:
+                        b1_monthly_update_list.append(B1_Monthly(
+                            lcicID=item.lcicID,
+                            com_enterprise_code=item.com_enterprise_code,
+                            segmentType=item.segmentType,
+                            bnk_code=item.bnk_code,
+                            customer_id=item.customer_id,
+                            branch_id=item.branch_id,
+                            user_id=item.user_id,
+                            period=item.period,
+                            product_type=item.product_type,
+                            lon_sys_id=item.lon_sys_id,
+                            loan_id=item.loan_id,
+                            lon_open_date=item.lon_open_date,
+                            lon_exp_date=item.lon_exp_date,
+                            lon_ext_date=item.lon_ext_date,
+                            lon_int_rate=item.lon_int_rate,
+                            lon_purpose_code=item.lon_purpose_code,
+                            lon_credit_line=item.lon_credit_line,
+                            lon_currency_code=item.lon_currency_code,
+                            lon_outstanding_balance=item.lon_outstanding_balance,
+                            lon_account_no=item.lon_account_no,
+                            lon_no_days_slow=item.lon_no_days_slow,
+                            lon_class=item.lon_class,
+                            lon_type=item.lon_type,
+                            lon_term=item.lon_term,
+                            lon_status=item.lon_status,
+                            lon_insert_date=item.lon_insert_date,
+                            lon_update_date=item.lon_update_date,
+                            lon_applied_date=item.lon_applied_date,
+                            is_disputed=item.is_disputed,
+                            id_file=FID,
+                            LCIC_code=item.LCIC_code,
+                            status_data='u'
+                        ))
+                    
+                    B1_Monthly.objects.bulk_create(b1_monthly_update_list, batch_size=1000)
+                    print(f"  Created all B1_Monthly records successfully")
+                
+               
+                if len(b1_monthly_to_create) > 0:
+                    b1_monthly_create_list = []
+                    for item in b1_monthly_to_create:
+                        b1_monthly_create_list.append(B1_Monthly(
+                            lcicID=item.lcicID,
+                            com_enterprise_code=item.com_enterprise_code,
+                            segmentType=item.segmentType,
+                            bnk_code=item.bnk_code,
+                            customer_id=item.customer_id,
+                            branch_id=item.branch_id,
+                            user_id=item.user_id,
+                            period=item.period,
+                            product_type=item.product_type,
+                            lon_sys_id=item.lon_sys_id,
+                            loan_id=item.loan_id,
+                            lon_open_date=item.lon_open_date,
+                            lon_exp_date=item.lon_exp_date,
+                            lon_ext_date=item.lon_ext_date,
+                            lon_int_rate=item.lon_int_rate,
+                            lon_purpose_code=item.lon_purpose_code,
+                            lon_credit_line=item.lon_credit_line,
+                            lon_currency_code=item.lon_currency_code,
+                            lon_outstanding_balance=item.lon_outstanding_balance,
+                            lon_account_no=item.lon_account_no,
+                            lon_no_days_slow=item.lon_no_days_slow,
+                            lon_class=item.lon_class,
+                            lon_type=item.lon_type,
+                            lon_term=item.lon_term,
+                            lon_status=item.lon_status,
+                            lon_insert_date=item.lon_insert_date,
+                            lon_update_date=item.lon_update_date,
+                            lon_applied_date=item.lon_applied_date,
+                            is_disputed=item.is_disputed,
+                            id_file=FID,
+                            LCIC_code=item.LCIC_code,
+                            status_data='i'
+                        ))
+                    
+                    B1_Monthly.objects.bulk_create(b1_monthly_create_list, batch_size=1000)
+                
+                
+                if len(b1_to_update) > 0:
+                   
+                    print(f"Updating {len(b1_to_update)} B1 records in batches...")
+                    
+                    batch_size = 1000
+                    for i in range(0, len(b1_to_update), batch_size):
+                        batch = b1_to_update[i:i + batch_size]
+                        
+                       
+                        delete_query = Q()
+                        for item in batch:
+                            delete_query |= Q(
+                                bnk_code=item.bnk_code,
+                                branch_id=item.branch_id,
+                                customer_id=item.customer_id,
+                                loan_id=item.loan_id
+                            )
+                        
+                        B1.objects.filter(delete_query).delete()
+                        print(f"  Deleted B1 batch {i//batch_size + 1}/{(len(b1_to_update)-1)//batch_size + 1}")
+                    
+                   
+                    print(f"Creating {len(b1_to_update)} new B1 records...")
+                    b1_update_list = []
+                    for item in b1_to_update:
+                        b1_update_list.append(B1(
+                            lcicID=item.lcicID,
+                            com_enterprise_code=item.com_enterprise_code,
+                            segmentType=item.segmentType,
+                            bnk_code=item.bnk_code,
+                            user_id=item.user_id,
+                            customer_id=item.customer_id,
+                            branch_id=item.branch_id,
+                            lon_sys_id=item.lon_sys_id,
+                            loan_id=item.loan_id,
+                            period=item.period,
+                            product_type=item.product_type,    
+                            lon_open_date=item.lon_open_date,
+                            lon_exp_date=item.lon_exp_date,
+                            lon_ext_date=item.lon_ext_date,
+                            lon_int_rate=item.lon_int_rate,
+                            lon_purpose_code=item.lon_purpose_code,
+                            lon_credit_line=item.lon_credit_line,
+                            lon_currency_code=item.lon_currency_code,
+                            lon_outstanding_balance=item.lon_outstanding_balance,
+                            lon_account_no=item.lon_account_no,
+                            lon_no_days_slow=item.lon_no_days_slow,
+                            lon_class=item.lon_class,
+                            lon_type=item.lon_type,
+                            lon_term=item.lon_term,
+                            lon_status=item.lon_status,
+                            lon_insert_date=item.lon_insert_date,
+                            lon_update_date=item.lon_update_date,
+                            lon_applied_date=item.lon_applied_date,
+                            is_disputed=item.is_disputed,
+                            id_file=FID,
+                            LCIC_code=item.LCIC_code,
+                            status_data='u'
+                        ))
+                    
+                    B1.objects.bulk_create(b1_update_list, batch_size=1000)
+                    print(f"  Created all B1 records successfully")
+                
+                
+                if len(b1_to_create) > 0:
+                    b1_create_list = []
+                    for item in b1_to_create:
+                        b1_create_list.append(B1(
+                            lcicID=item.lcicID,
+                            com_enterprise_code=item.com_enterprise_code,
+                            segmentType=item.segmentType,
+                            bnk_code=item.bnk_code,
+                            user_id=item.user_id,
+                            customer_id=item.customer_id,
+                            branch_id=item.branch_id,
+                            lon_sys_id=item.lon_sys_id,
+                            loan_id=item.loan_id,
+                            period=item.period,
+                            product_type=item.product_type,    
+                            lon_open_date=item.lon_open_date,
+                            lon_exp_date=item.lon_exp_date,
+                            lon_ext_date=item.lon_ext_date,
+                            lon_int_rate=item.lon_int_rate,
+                            lon_purpose_code=item.lon_purpose_code,
+                            lon_credit_line=item.lon_credit_line,
+                            lon_currency_code=item.lon_currency_code,
+                            lon_outstanding_balance=item.lon_outstanding_balance,
+                            lon_account_no=item.lon_account_no,
+                            lon_no_days_slow=item.lon_no_days_slow,
+                            lon_class=item.lon_class,
+                            lon_type=item.lon_type,
+                            lon_term=item.lon_term,
+                            lon_status=item.lon_status,
+                            lon_insert_date=item.lon_insert_date,
+                            lon_update_date=item.lon_update_date,
+                            lon_applied_date=item.lon_applied_date,
+                            is_disputed=item.is_disputed,
+                            id_file=FID,
+                            LCIC_code=item.LCIC_code,
+                            status_data='i'
+                        ))
+                    
+                    B1.objects.bulk_create(b1_create_list, batch_size=1000)
 
-        Upload_File.objects.filter(FID=FID).update(statussubmit='0')
+          
+                Upload_File.objects.filter(FID=FID).update(statussubmit='0')
+                print("✅ Transaction completed successfully!")
+                
+        except Exception as e:
+            
+            Upload_File.objects.filter(FID=FID).update(statussubmit='2')
+            return JsonResponse({'status': 'error', 'message': f'Transaction failed: {str(e)}'}, status=500)
 
         return JsonResponse({'status': 'success', 'message': 'Data confirmed successfully'})
     
     except Exception as e:
         Upload_File.objects.filter(FID=FID).update(statussubmit='2')
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+# good code
+from django.db import transaction
+from django.core.exceptions import ValidationError
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from .models import disputes_noti, B1, B1_Monthly, ConfirmDispustLoan
+from django.db.models import Q
+
+
+@api_view(['POST'])
+def process_dispute_notification(request):
+    """
+    ຟັງຊັນສຳລັບດຶງຂໍ້ມູນຈາກ disputes_noti ແລະອັບເດດໄປຍັງ B1 ແລະ B1_Monthly
+    """
+    try:
+        id_dispust = request.data.get('id_dispust')
+        
+        if not id_dispust:
+            return Response({
+                'success': False,
+                'message': 'ກະລຸນາລະບຸ ID Dispute'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        print(f"\n{'='*60}")
+        print(f"ເລີ່ມຕົ້ນການປະມວນຜົນ Dispute ID: {id_dispust}")
+        print(f"{'='*60}")
+        
+        # ດຶງຂໍ້ມູນໂດຍກົງຈາກ disputes_noti ໂດຍໃຊ້ id_dispust
+        dispute_notifications = disputes_noti.objects.filter(
+            id_dispust=id_dispust
+        )
+        
+        if not dispute_notifications.exists():
+            # ລອງວິທີອື່ນ
+            print("⚠️  ບໍ່ພົບດ້ວຍ id_dispust, ລອງວິທີອື່ນ...")
+            
+            # ລອງດ້ວຍ id_file
+            dispute_notifications = disputes_noti.objects.filter(
+                id_file=str(id_dispust)
+            )
+            
+            if not dispute_notifications.exists():
+                # ລອງດ້ວຍ confirm_dispust_id
+                dispute_notifications = disputes_noti.objects.filter(
+                    confirm_dispust_id__id_disput_loan=id_dispust
+                )
+        
+        if not dispute_notifications.exists():
+            # Debug: ສະແດງຂໍ້ມູນທີ່ມີ
+            total_disputes = disputes_noti.objects.count()
+            sample_disputes = disputes_noti.objects.all()[:5]
+            
+            debug_info = {
+                'total_disputes_noti': total_disputes,
+                'sample_records': []
+            }
+            
+            for d in sample_disputes:
+                debug_info['sample_records'].append({
+                    'id': d.id,
+                    'id_dispust': d.id_dispust,
+                    'id_file': d.id_file,
+                    'confirm_dispust_id': d.confirm_dispust_id.id_disput_loan if d.confirm_dispust_id else None,
+                    'action_dispust': d.action_dispust,
+                    'loan_id': d.loan_id
+                })
+            
+            return Response({
+                'success': False,
+                'message': f'ບໍ່ພົບຂໍ້ມູນ Dispute Notification ສຳລັບ ID: {id_dispust}',
+                'debug': debug_info,
+                'suggestion': 'ກະລຸນາກວດເບິ່ງວ່າ ID ທີ່ສົ່ງມາຖືກຕ້ອງ ແລະມີຢູ່ໃນຕາຕະລາງ disputes_noti'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        total_records = dispute_notifications.count()
+        print(f"\n✓ ພົບທັງໝົດ {total_records} ລາຍການທີ່ຕ້ອງດຳເນີນການ")
+        
+        # ຂັ້ນຕອນທີ 1: ແຍກຂໍ້ມູນຕາມ action_dispust
+        action_01_records = []
+        action_02_records = []
+        
+        print(f"\n{'='*60}")
+        print("ຂັ້ນຕອນທີ 1: ແຍກຂໍ້ມູນຕາມ action_dispust")
+        print(f"{'='*60}")
+        
+        for record in dispute_notifications:
+            if record.action_dispust == '01':
+                action_01_records.append(record)
+            elif record.action_dispust == '02':
+                action_02_records.append(record)
+            else:
+                print(f"⚠️  ພົບ action_dispust ທີ່ບໍ່ຮູ້ຈັກ: {record.action_dispust} (ID: {record.id})")
+        
+        print(f"✓ Action 01: {len(action_01_records)} ລາຍການ")
+        print(f"✓ Action 02: {len(action_02_records)} ລາຍການ")
+        
+        # ຂັ້ນຕອນທີ 2: ຊອກຫາແລະເກັບຂໍ້ມູນທີ່ຈະອັບເດດໃນ B1_Monthly ແລະ B1
+        b1_monthly_to_update = []
+        b1_to_update = []
+        
+        print(f"\n{'='*60}")
+        print("ຂັ້ນຕອນທີ 2: ຊອກຫາຂໍ້ມູນທີ່ຈະອັບເດດ")
+        print(f"{'='*60}")
+        
+        # ປະມວນຜົນ Action 01
+        print(f"\n--- ກຳລັງປະມວນຜົນ Action 01 ({len(action_01_records)} ລາຍການ) ---")
+        for idx, record in enumerate(action_01_records, 1):
+            print(f"\n  [{idx}/{len(action_01_records)}] ກຳລັງຊອກຫາຂໍ້ມູນທີ່ກົງກັບ:")
+            print(f"      bnk_code={record.bnk_code}, branch_id={record.branch_id}")
+            print(f"      customer_id={record.customer_id}, loan_id={record.loan_id}")
+            
+            # ຊອກຫາ B1_Monthly ທີ່ກົງກັນ
+            b1_monthly_matches = B1_Monthly.objects.filter(
+                bnk_code=record.bnk_code,
+                branch_id=record.branch_id,
+                customer_id=record.customer_id,
+                loan_id=record.loan_id,
+                period=record.period
+            )
+            
+            for match in b1_monthly_matches:
+                b1_monthly_to_update.append({
+                    'original': match,
+                    'new_data': record,
+                    'action': '01'
+                })
+            
+            if b1_monthly_matches.count() > 0:
+                print(f"      ✓ ພົບ {b1_monthly_matches.count()} ລາຍການໃນ B1_Monthly")
+            else:
+                print(f"      ⚠️  ບໍ່ພົບຂໍ້ມູນໃນ B1_Monthly")
+            
+            # ຊອກຫາ B1 ທີ່ກົງກັນ
+            b1_matches = B1.objects.filter(
+                bnk_code=record.bnk_code,
+                branch_id=record.branch_id,
+                customer_id=record.customer_id,
+                loan_id=record.loan_id
+            )
+            
+            for match in b1_matches:
+                b1_to_update.append({
+                    'original': match,
+                    'new_data': record,
+                    'action': '01'
+                })
+            
+            if b1_matches.count() > 0:
+                print(f"      ✓ ພົບ {b1_matches.count()} ລາຍການໃນ B1")
+            else:
+                print(f"      ⚠️  ບໍ່ພົບຂໍ້ມູນໃນ B1")
+        
+        # ປະມວນຜົນ Action 02
+        print(f"\n--- ກຳລັງປະມວນຜົນ Action 02 ({len(action_02_records)} ລາຍການ) ---")
+        for idx, record in enumerate(action_02_records, 1):
+            print(f"\n  [{idx}/{len(action_02_records)}] ກຳລັງຊອກຫາຂໍ້ມູນທີ່ກົງກັບ:")
+            print(f"      branch_id={record.branch_id}, customer_id={record.customer_id}")
+            print(f"      loan_id={record.loan_id}, com_enterprise_code={record.com_enterprise_code}")
+            print(f"      LCIC_code={record.LCIC_code}")
+            
+            # ຊອກຫາ B1_Monthly ທີ່ກົງກັນ
+            b1_monthly_matches = B1_Monthly.objects.filter(
+                branch_id=record.branch_id,
+                customer_id=record.customer_id,
+                loan_id=record.loan_id,
+                com_enterprise_code=record.com_enterprise_code,
+                LCIC_code=record.LCIC_code,
+                period=record.period
+            )
+            
+            for match in b1_monthly_matches:
+                b1_monthly_to_update.append({
+                    'original': match,
+                    'new_data': record,
+                    'action': '02'
+                })
+            
+            if b1_monthly_matches.count() > 0:
+                print(f"      ✓ ພົບ {b1_monthly_matches.count()} ລາຍການໃນ B1_Monthly")
+            else:
+                print(f"      ⚠️  ບໍ່ພົບຂໍ້ມູນໃນ B1_Monthly")
+            
+            # ຊອກຫາ B1 ທີ່ກົງກັນ
+            b1_matches = B1.objects.filter(
+                branch_id=record.branch_id,
+                customer_id=record.customer_id,
+                loan_id=record.loan_id,
+                com_enterprise_code=record.com_enterprise_code,
+                LCIC_code=record.LCIC_code
+            )
+            
+            for match in b1_matches:
+                b1_to_update.append({
+                    'original': match,
+                    'new_data': record,
+                    'action': '02'
+                })
+            
+            if b1_matches.count() > 0:
+                print(f"      ✓ ພົບ {b1_matches.count()} ລາຍການໃນ B1")
+            else:
+                print(f"      ⚠️  ບໍ່ພົບຂໍ້ມູນໃນ B1")
+        
+        print(f"\n{'='*60}")
+        print("ສະຫຼຸບຜົນການຊອກຫາ:")
+        print(f"{'='*60}")
+        print(f"✓ B1_Monthly ທີ່ຈະອັບເດດ: {len(b1_monthly_to_update)} ລາຍການ")
+        print(f"✓ B1 ທີ່ຈະອັບເດດ: {len(b1_to_update)} ລາຍການ")
+        
+        # ກຳນົດ fields ທີ່ຈະອັບເດດ
+        update_fields = [
+            'lcicID', 'com_enterprise_code', 'segmentType', 'bnk_code',
+            'customer_id', 'branch_id', 'user_id', 'period', 'product_type',
+            'lon_sys_id', 'loan_id', 'lon_open_date', 'lon_exp_date',
+            'lon_ext_date', 'lon_int_rate', 'lon_purpose_code', 'lon_credit_line',
+            'lon_currency_code', 'lon_outstanding_balance', 'lon_account_no',
+            'lon_no_days_slow', 'lon_class', 'lon_type', 'lon_term',
+            'lon_status', 'lon_insert_date', 'lon_update_date', 'lon_applied_date',
+            'is_disputed', 'LCIC_code'
+        ]
+        
+        # ຂັ້ນຕອນທີ 3: ດຳເນີນການອັບເດດພາຍໃນ Transaction
+        print(f"\n{'='*60}")
+        print("ຂັ້ນຕອນທີ 3: ດຳເນີນການອັບເດດຂໍ້ມູນ")
+        print(f"{'='*60}")
+        
+        try:
+            with transaction.atomic():
+                updated_b1_monthly_count = 0
+                updated_b1_count = 0
+                
+                # ອັບເດດ B1_Monthly
+                if len(b1_monthly_to_update) > 0:
+                    print(f"\n--- ກຳລັງອັບເດດ B1_Monthly ({len(b1_monthly_to_update)} ລາຍການ) ---")
+                    
+                    for idx, item in enumerate(b1_monthly_to_update, 1):
+                        original = item['original']
+                        new_data = item['new_data']
+                        action = item['action']
+                        
+                        print(f"  [{idx}/{len(b1_monthly_to_update)}] ອັບເດດ loan_id={original.loan_id}, period={original.period} (Action {action})")
+                        
+                        # ອັບເດດແຕ່ລະ field
+                        for field in update_fields:
+                            if hasattr(new_data, field) and hasattr(original, field):
+                                new_value = getattr(new_data, field)
+                                setattr(original, field, new_value)
+                        
+                        original.status_data = 'u'  # u = update
+                        original.save()
+                        updated_b1_monthly_count += 1
+                    
+                    print(f"\n  ✅ ອັບເດດ B1_Monthly ສຳເລັດ {updated_b1_monthly_count} ລາຍການ")
+                
+                # ອັບເດດ B1
+                if len(b1_to_update) > 0:
+                    print(f"\n--- ກຳລັງອັບເດດ B1 ({len(b1_to_update)} ລາຍການ) ---")
+                    
+                    for idx, item in enumerate(b1_to_update, 1):
+                        original = item['original']
+                        new_data = item['new_data']
+                        action = item['action']
+                        
+                        print(f"  [{idx}/{len(b1_to_update)}] ອັບເດດ loan_id={original.loan_id} (Action {action})")
+                        
+                        # ອັບເດດແຕ່ລະ field (ຍົກເວັ້ນ period ສຳລັບ B1)
+                        for field in update_fields:
+                            if field != 'period' and hasattr(new_data, field) and hasattr(original, field):
+                                new_value = getattr(new_data, field)
+                                setattr(original, field, new_value)
+                        
+                        original.status_data = 'u'  # u = update
+                        original.save()
+                        updated_b1_count += 1
+                    
+                    print(f"\n  ✅ ອັບເດດ B1 ສຳເລັດ {updated_b1_count} ລາຍການ")
+                
+                # ອັບເດດສະຖານະໃນ disputes_noti ເປັນ '2' (ດຳເນີນການສຳເລັດ)
+                print(f"\n--- ກຳລັງອັບເດດສະຖານະ disputes_noti ---")
+                updated_noti_count = disputes_noti.objects.filter(
+                    id_dispust=id_dispust
+                ).update(status='2')
+                print(f"  ✓ ອັບເດດສະຖານະ {updated_noti_count} ລາຍການໃນ disputes_noti")
+                
+                # ອັບເດດສະຖານະໃນ ConfirmDispustLoan ເປັນ '2' (ສຳເລັດ) ຖ້າມີ
+                try:
+                    confirm_record = ConfirmDispustLoan.objects.get(id_disput_loan=id_dispust)
+                    confirm_record.status = '2'
+                    confirm_record.save()
+                    print(f"  ✓ ອັບເດດສະຖານະ ConfirmDispustLoan")
+                except ConfirmDispustLoan.DoesNotExist:
+                    print(f"  ⚠️  ບໍ່ພົບ ConfirmDispustLoan ເພື່ອອັບເດດສະຖານະ")
+                
+                print(f"\n{'='*60}")
+                print("✅ ດຳເນີນການສຳເລັດທັງໝົດພາຍໃນ Transaction!")
+                print(f"{'='*60}")
+                
+        except Exception as e:
+            print(f"\n{'='*60}")
+            print(f"❌ ເກີດຂໍ້ຜິດພາດໃນການອັບເດດ")
+            print(f"{'='*60}")
+            print(f"ຂໍ້ຜິດພາດ: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            
+            return Response({
+                'success': False,
+                'message': f'ເກີດຂໍ້ຜິດພາດໃນການອັບເດດຂໍ້ມູນ: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # ສົ່ງຜົນລັບ
+        return Response({
+            'success': True,
+            'message': 'ດຳເນີນການອັບເດດຂໍ້ມູນສຳເລັດ',
+            'data': {
+                'id_dispust': id_dispust,
+                'summary': {
+                    'total_notifications': total_records,
+                    'action_01_records': len(action_01_records),
+                    'action_02_records': len(action_02_records),
+                    'updated_b1_monthly': updated_b1_monthly_count,
+                    'updated_b1': updated_b1_count,
+                    'updated_notifications': updated_noti_count
+                }
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        print(f"\n{'='*60}")
+        print(f"❌ ເກີດຂໍ້ຜິດພາດທີ່ບໍ່ຄາດຄິດ")
+        print(f"{'='*60}")
+        print(f"ຂໍ້ຜິດພາດ: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return Response({
+            'success': False,
+            'message': 'ເກີດຂໍ້ຜິດພາດໃນການປະມວນຜົນ',
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+# @api_view(['POST'])
+# def process_multiple_disputes(request):
+   
+#     try:
+#         id_dispust_list = request.data.get('id_dispust_list', [])
+        
+       
+#         if not id_dispust_list or not isinstance(id_dispust_list, list):
+#             return Response({
+#                 'success': False,
+#                 'message': 'ກະລຸນາລະບຸ id_dispust_list ເປັນ array'
+#             }, status=status.HTTP_400_BAD_REQUEST)
+        
+#         if len(id_dispust_list) == 0:
+#             return Response({
+#                 'success': False,
+#                 'message': 'id_dispust_list ບໍ່ສາມາດເປັນ array ວ່າງໄດ້'
+#             }, status=status.HTTP_400_BAD_REQUEST)
+        
+#         print(f"\n{'='*60}")
+#         print(f"ເລີ່ມຕົ້ນການປະມວນຜົນຫຼາຍ Dispute: {len(id_dispust_list)} ລາຍການ")
+#         print(f"IDs: {id_dispust_list}")
+#         print(f"{'='*60}")
+        
+#         results = []
+#         total_success = 0
+#         total_failed = 0
+        
+#         # ປະມວນຜົນແຕ່ລະ ID
+#         for idx, id_dispust in enumerate(id_dispust_list, 1):
+#             print(f"\n{'#'*60}")
+#             print(f"[{idx}/{len(id_dispust_list)}] ກຳລັງປະມວນຜົນ ID: {id_dispust}")
+#             print(f"{'#'*60}")
+            
+#             try:
+#                 # ດຶງຂໍ້ມູນຈາກ disputes_noti
+#                 dispute_notifications = disputes_noti.objects.filter(
+#                     id_dispust=id_dispust
+#                 )
+                
+#                 if not dispute_notifications.exists():
+#                     print(f"  ⚠️  ບໍ່ພົບຂໍ້ມູນສຳລັບ ID: {id_dispust}")
+#                     results.append({
+#                         'id_dispust': id_dispust,
+#                         'success': False,
+#                         'message': 'ບໍ່ພົບຂໍ້ມູນ'
+#                     })
+#                     total_failed += 1
+#                     continue
+                
+#                 total_records = dispute_notifications.count()
+#                 print(f"  ✓ ພົບ {total_records} ລາຍການ")
+                
+#                 # ແຍກຂໍ້ມູນຕາມ action_dispust
+#                 action_01_records = []
+#                 action_02_records = []
+                
+#                 for record in dispute_notifications:
+#                     if record.action_dispust == '01':
+#                         action_01_records.append(record)
+#                     elif record.action_dispust == '02':
+#                         action_02_records.append(record)
+                
+#                 print(f"  ✓ Action 01: {len(action_01_records)} ລາຍການ")
+#                 print(f"  ✓ Action 02: {len(action_02_records)} ລາຍການ")
+                
+#                 # ຊອກຫາຂໍ້ມູນທີ່ຈະອັບເດດ
+#                 b1_monthly_to_update = []
+#                 b1_to_update = []
+                
+#                 # ປະມວນຜົນ Action 01
+#                 for record in action_01_records:
+#                     # B1_Monthly
+#                     b1_monthly_matches = B1_Monthly.objects.filter(
+#                         bnk_code=record.bnk_code,
+#                         branch_id=record.branch_id,
+#                         customer_id=record.customer_id,
+#                         loan_id=record.loan_id,
+#                         period=record.period
+#                     )
+#                     for match in b1_monthly_matches:
+#                         b1_monthly_to_update.append({
+#                             'original': match,
+#                             'new_data': record,
+#                             'action': '01'
+#                         })
+                    
+#                     # B1
+#                     b1_matches = B1.objects.filter(
+#                         bnk_code=record.bnk_code,
+#                         branch_id=record.branch_id,
+#                         customer_id=record.customer_id,
+#                         loan_id=record.loan_id
+#                     )
+#                     for match in b1_matches:
+#                         b1_to_update.append({
+#                             'original': match,
+#                             'new_data': record,
+#                             'action': '01'
+#                         })
+                
+#                 # ປະມວນຜົນ Action 02
+#                 for record in action_02_records:
+#                     # B1_Monthly
+#                     b1_monthly_matches = B1_Monthly.objects.filter(
+#                         branch_id=record.branch_id,
+#                         customer_id=record.customer_id,
+#                         loan_id=record.loan_id,
+#                         com_enterprise_code=record.com_enterprise_code,
+#                         LCIC_code=record.LCIC_code,
+#                         period=record.period
+#                     )
+#                     for match in b1_monthly_matches:
+#                         b1_monthly_to_update.append({
+#                             'original': match,
+#                             'new_data': record,
+#                             'action': '02'
+#                         })
+                    
+#                     # B1
+#                     b1_matches = B1.objects.filter(
+#                         branch_id=record.branch_id,
+#                         customer_id=record.customer_id,
+#                         loan_id=record.loan_id,
+#                         com_enterprise_code=record.com_enterprise_code,
+#                         LCIC_code=record.LCIC_code
+#                     )
+#                     for match in b1_matches:
+#                         b1_to_update.append({
+#                             'original': match,
+#                             'new_data': record,
+#                             'action': '02'
+#                         })
+                
+#                 print(f"  ✓ ຈະອັບເດດ B1_Monthly: {len(b1_monthly_to_update)} ລາຍການ")
+#                 print(f"  ✓ ຈະອັບເດດ B1: {len(b1_to_update)} ລາຍການ")
+                
+#                 # ກຳນົດ fields ທີ່ຈະອັບເດດ
+#                 update_fields = [
+#                     'lcicID', 'com_enterprise_code', 'segmentType', 'bnk_code',
+#                     'customer_id', 'branch_id', 'user_id', 'period', 'product_type',
+#                     'lon_sys_id', 'loan_id', 'lon_open_date', 'lon_exp_date',
+#                     'lon_ext_date', 'lon_int_rate', 'lon_purpose_code', 'lon_credit_line',
+#                     'lon_currency_code', 'lon_outstanding_balance', 'lon_account_no',
+#                     'lon_no_days_slow', 'lon_class', 'lon_type', 'lon_term',
+#                     'lon_status', 'lon_insert_date', 'lon_update_date', 'lon_applied_date',
+#                     'is_disputed', 'LCIC_code'
+#                 ]
+                
+#                 # ດຳເນີນການອັບເດດໃນ Transaction
+#                 with transaction.atomic():
+#                     updated_b1_monthly_count = 0
+#                     updated_b1_count = 0
+                    
+#                     # ອັບເດດ B1_Monthly
+#                     for item in b1_monthly_to_update:
+#                         original = item['original']
+#                         new_data = item['new_data']
+                        
+#                         for field in update_fields:
+#                             if hasattr(new_data, field) and hasattr(original, field):
+#                                 new_value = getattr(new_data, field)
+#                                 setattr(original, field, new_value)
+                        
+#                         original.status_data = 'u'
+#                         original.save()
+#                         updated_b1_monthly_count += 1
+                    
+#                     # ອັບເດດ B1
+#                     for item in b1_to_update:
+#                         original = item['original']
+#                         new_data = item['new_data']
+                        
+#                         for field in update_fields:
+#                             if field != 'period' and hasattr(new_data, field) and hasattr(original, field):
+#                                 new_value = getattr(new_data, field)
+#                                 setattr(original, field, new_value)
+                        
+#                         original.status_data = 'u'
+#                         original.save()
+#                         updated_b1_count += 1
+                    
+#                     # ອັບເດດສະຖານະ disputes_noti
+#                     updated_noti_count = disputes_noti.objects.filter(
+#                         id_dispust=id_dispust
+#                     ).update(status='2')
+                    
+#                     # ອັບເດດ ConfirmDispustLoan ຖ້າມີ
+#                     try:
+#                         confirm_record = ConfirmDispustLoan.objects.get(id_disput_loan=id_dispust)
+#                         confirm_record.status = '2'
+#                         confirm_record.save()
+#                     except ConfirmDispustLoan.DoesNotExist:
+#                         pass
+                
+#                 print(f"  ✅ ອັບເດດສຳເລັດ ID: {id_dispust}")
+                
+#                 results.append({
+#                     'id_dispust': id_dispust,
+#                     'success': True,
+#                     'summary': {
+#                         'total_notifications': total_records,
+#                         'action_01_records': len(action_01_records),
+#                         'action_02_records': len(action_02_records),
+#                         'updated_b1_monthly': updated_b1_monthly_count,
+#                         'updated_b1': updated_b1_count,
+#                         'updated_notifications': updated_noti_count
+#                     }
+#                 })
+#                 total_success += 1
+                
+#             except Exception as e:
+#                 print(f"  ❌ ຜິດພາດກັບ ID {id_dispust}: {str(e)}")
+#                 results.append({
+#                     'id_dispust': id_dispust,
+#                     'success': False,
+#                     'message': str(e)
+#                 })
+#                 total_failed += 1
+        
+#         print(f"\n{'='*60}")
+#         print(f"ສຳເລັດການປະມວນຜົນທັງໝົດ")
+#         print(f"✅ ສຳເລັດ: {total_success}/{len(id_dispust_list)}")
+#         print(f"❌ ຜິດພາດ: {total_failed}/{len(id_dispust_list)}")
+#         print(f"{'='*60}")
+        
+#         return Response({
+#             'success': True,
+#             'message': f'ປະມວນຜົນສຳເລັດ {total_success}/{len(id_dispust_list)} ລາຍການ',
+#             'summary': {
+#                 'total': len(id_dispust_list),
+#                 'success': total_success,
+#                 'failed': total_failed
+#             },
+#             'results': results
+#         }, status=status.HTTP_200_OK)
+        
+#     except Exception as e:
+#         print(f"\n❌ ເກີດຂໍ້ຜິດພາດທີ່ບໍ່ຄາດຄິດ: {str(e)}")
+#         import traceback
+#         traceback.print_exc()
+        
+#         return Response({
+#             'success': False,
+#             'message': 'ເກີດຂໍ້ຜິດພາດໃນການປະມວນຜົນ',
+#             'error': str(e)
+#         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+@api_view(['POST'])
+def process_multiple_disputes(request):
+    """
+    ຟັງຊັນສຳລັບປະມວນຜົນຫຼາຍ Dispute ພ້ອມກັນ
+    ຮັບ: {"id_dispust_list": [43238, 43239, 43240]}
+    """
+    try:
+        id_dispust_list = request.data.get('id_dispust_list', [])
+        
+        # ກວດສອບວ່າມີ list ຫຼືບໍ່
+        if not id_dispust_list or not isinstance(id_dispust_list, list):
+            return Response({
+                'success': False,
+                'message': 'ກະລຸນາລະບຸ id_dispust_list ເປັນ array'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if len(id_dispust_list) == 0:
+            return Response({
+                'success': False,
+                'message': 'id_dispust_list ບໍ່ສາມາດເປັນ array ວ່າງໄດ້'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        print(f"\n{'='*60}")
+        print(f"ເລີ່ມຕົ້ນການປະມວນຜົນຫຼາຍ Dispute: {len(id_dispust_list)} ລາຍການ")
+        print(f"IDs: {id_dispust_list}")
+        print(f"{'='*60}")
+        
+        results = []
+        total_success = 0
+        total_failed = 0
+        
+        # ປະມວນຜົນແຕ່ລະ ID
+        for idx, id_dispust in enumerate(id_dispust_list, 1):
+            print(f"\n{'#'*60}")
+            print(f"[{idx}/{len(id_dispust_list)}] ກຳລັງປະມວນຜົນ ID: {id_dispust}")
+            print(f"{'#'*60}")
+            
+            try:
+                # ດຶງຂໍ້ມູນຈາກ disputes_noti
+                dispute_notifications = disputes_noti.objects.filter(
+                    id_dispust=id_dispust
+                )
+                
+                if not dispute_notifications.exists():
+                    print(f"  ⚠️  ບໍ່ພົບຂໍ້ມູນສຳລັບ ID: {id_dispust}")
+                    results.append({
+                        'id_dispust': id_dispust,
+                        'success': False,
+                        'message': 'ບໍ່ພົບຂໍ້ມູນ'
+                    })
+                    total_failed += 1
+                    continue
+                
+                total_records = dispute_notifications.count()
+                print(f"  ✓ ພົບ {total_records} ລາຍການ")
+                
+                # ເກັບ disputes IDs ສຳລັບອັບເດດຕາຕະລາງ disputes
+                disputes_ids_to_update = []
+                for noti in dispute_notifications:
+                    if noti.is_disputed:
+                        disputes_ids_to_update.append(noti.is_disputed)
+                
+                print(f"  ✓ ພົບ {len(disputes_ids_to_update)} disputes IDs ທີ່ຕ້ອງອັບເດດ")
+                
+                # ແຍກຂໍ້ມູນຕາມ action_dispust
+                action_01_records = []
+                action_02_records = []
+                
+                for record in dispute_notifications:
+                    if record.action_dispust == '01':
+                        action_01_records.append(record)
+                    elif record.action_dispust == '02':
+                        action_02_records.append(record)
+                
+                print(f"  ✓ Action 01: {len(action_01_records)} ລາຍການ")
+                print(f"  ✓ Action 02: {len(action_02_records)} ລາຍການ")
+                
+                # ຊອກຫາຂໍ້ມູນທີ່ຈະອັບເດດ
+                b1_monthly_to_update = []
+                b1_to_update = []
+                
+                # ປະມວນຜົນ Action 01
+                for record in action_01_records:
+                    # B1_Monthly
+                    b1_monthly_matches = B1_Monthly.objects.filter(
+                        bnk_code=record.bnk_code,
+                        branch_id=record.branch_id,
+                        customer_id=record.customer_id,
+                        loan_id=record.loan_id,
+                        period=record.period
+                    )
+                    for match in b1_monthly_matches:
+                        b1_monthly_to_update.append({
+                            'original': match,
+                            'new_data': record,
+                            'action': '01'
+                        })
+                    
+                    # B1
+                    b1_matches = B1.objects.filter(
+                        bnk_code=record.bnk_code,
+                        branch_id=record.branch_id,
+                        customer_id=record.customer_id,
+                        loan_id=record.loan_id
+                    )
+                    for match in b1_matches:
+                        b1_to_update.append({
+                            'original': match,
+                            'new_data': record,
+                            'action': '01'
+                        })
+                
+                # ປະມວນຜົນ Action 02
+                for record in action_02_records:
+                    # B1_Monthly
+                    b1_monthly_matches = B1_Monthly.objects.filter(
+                        branch_id=record.branch_id,
+                        customer_id=record.customer_id,
+                        loan_id=record.loan_id,
+                        com_enterprise_code=record.com_enterprise_code,
+                        LCIC_code=record.LCIC_code,
+                        period=record.period
+                    )
+                    for match in b1_monthly_matches:
+                        b1_monthly_to_update.append({
+                            'original': match,
+                            'new_data': record,
+                            'action': '02'
+                        })
+                    
+                    # B1
+                    b1_matches = B1.objects.filter(
+                        branch_id=record.branch_id,
+                        customer_id=record.customer_id,
+                        loan_id=record.loan_id,
+                        com_enterprise_code=record.com_enterprise_code,
+                        LCIC_code=record.LCIC_code
+                    )
+                    for match in b1_matches:
+                        b1_to_update.append({
+                            'original': match,
+                            'new_data': record,
+                            'action': '02'
+                        })
+                
+                print(f"  ✓ ຈະອັບເດດ B1_Monthly: {len(b1_monthly_to_update)} ລາຍການ")
+                print(f"  ✓ ຈະອັບເດດ B1: {len(b1_to_update)} ລາຍການ")
+                
+                # ກຳນົດ fields ທີ່ຈະອັບເດດ
+                update_fields = [
+                    'lcicID', 'com_enterprise_code', 'segmentType', 'bnk_code',
+                    'customer_id', 'branch_id', 'user_id', 'period', 'product_type',
+                    'lon_sys_id', 'loan_id', 'lon_open_date', 'lon_exp_date',
+                    'lon_ext_date', 'lon_int_rate', 'lon_purpose_code', 'lon_credit_line',
+                    'lon_currency_code', 'lon_outstanding_balance', 'lon_account_no',
+                    'lon_no_days_slow', 'lon_class', 'lon_type', 'lon_term',
+                    'lon_status', 'lon_insert_date', 'lon_update_date', 'lon_applied_date',
+                    'is_disputed', 'LCIC_code'
+                ]
+                
+                # ດຳເນີນການອັບເດດໃນ Transaction
+                with transaction.atomic():
+                    updated_b1_monthly_count = 0
+                    updated_b1_count = 0
+                    
+                    # ອັບເດດ B1_Monthly
+                    for item in b1_monthly_to_update:
+                        original = item['original']
+                        new_data = item['new_data']
+                        
+                        for field in update_fields:
+                            if hasattr(new_data, field) and hasattr(original, field):
+                                new_value = getattr(new_data, field)
+                                setattr(original, field, new_value)
+                        
+                        original.status_data = 'u'
+                        original.save()
+                        updated_b1_monthly_count += 1
+                    
+                    # ອັບເດດ B1
+                    for item in b1_to_update:
+                        original = item['original']
+                        new_data = item['new_data']
+                        
+                        for field in update_fields:
+                            if field != 'period' and hasattr(new_data, field) and hasattr(original, field):
+                                new_value = getattr(new_data, field)
+                                setattr(original, field, new_value)
+                        
+                        original.status_data = 'u'
+                        original.save()
+                        updated_b1_count += 1
+                    
+                    # ອັບເດດສະຖານະ disputes_noti
+                    updated_noti_count = disputes_noti.objects.filter(
+                        id_dispust=id_dispust
+                    ).update(status='2')
+                    print(f"  ✓ ອັບເດດສະຖານະ {updated_noti_count} ລາຍການໃນ disputes_noti")
+                    
+                    # ອັບເດດສະຖານະ disputes
+                    updated_disputes_count = 0
+                    if len(disputes_ids_to_update) > 0:
+                        updated_disputes_count = disputes.objects.filter(
+                            id__in=disputes_ids_to_update
+                        ).update(status='2')
+                        print(f"  ✓ ອັບເດດສະຖານະ {updated_disputes_count} ລາຍການໃນ disputes")
+                    else:
+                        print(f"  ⚠️  ບໍ່ມີ disputes IDs ທີ່ຕ້ອງອັບເດດ")
+                    
+                    # ອັບເດດ ConfirmDispustLoan ຖ້າມີ
+                    try:
+                        confirm_record = ConfirmDispustLoan.objects.get(id_disput_loan=id_dispust)
+                        confirm_record.status = '2'
+                        confirm_record.save()
+                        print(f"  ✓ ອັບເດດສະຖານະ ConfirmDispustLoan")
+                    except ConfirmDispustLoan.DoesNotExist:
+                        print(f"  ⚠️  ບໍ່ພົບ ConfirmDispustLoan")
+                
+                print(f"  ✅ ອັບເດດສຳເລັດ ID: {id_dispust}")
+                
+                results.append({
+                    'id_dispust': id_dispust,
+                    'success': True,
+                    'summary': {
+                        'total_notifications': total_records,
+                        'action_01_records': len(action_01_records),
+                        'action_02_records': len(action_02_records),
+                        'updated_b1_monthly': updated_b1_monthly_count,
+                        'updated_b1': updated_b1_count,
+                        'updated_notifications': updated_noti_count,
+                        'updated_disputes': updated_disputes_count
+                    }
+                })
+                total_success += 1
+                
+            except Exception as e:
+                print(f"  ❌ ຜິດພາດກັບ ID {id_dispust}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                results.append({
+                    'id_dispust': id_dispust,
+                    'success': False,
+                    'message': str(e)
+                })
+                total_failed += 1
+        
+
+        
+        print(f"\n{'='*60}")
+        print(f"ສຳເລັດການປະມວນຜົນທັງໝົດ")
+        print(f"✅ ສຳເລັດ: {total_success}/{len(id_dispust_list)}")
+        print(f"❌ ຜິດພາດ: {total_failed}/{len(id_dispust_list)}")
+        print(f"{'='*60}")
+        
+        return Response({
+            'success': True,
+            'message': f'ປະມວນຜົນສຳເລັດ {total_success}/{len(id_dispust_list)} ລາຍການ',
+            'summary': {
+                'total': len(id_dispust_list),
+                'success': total_success,
+                'failed': total_failed
+            },
+            'results': results
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        print(f"\n❌ ເກີດຂໍ້ຜິດພາດທີ່ບໍ່ຄາດຄິດ: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return Response({
+            'success': False,
+            'message': 'ເກີດຂໍ້ຜິດພາດໃນການປະມວນຜົນ',
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 @csrf_exempt
 @require_POST
 def unload_upload(request):
@@ -6811,6 +7632,7 @@ def unload_upload(request):
         FID = request.POST.get('FID')
         if not FID:
             Upload_File.objects.filter(FID=FID).update(statussubmit='1')
+            
             return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
 
         
@@ -20011,28 +20833,32 @@ from .models import disputes, ConfirmDispustLoan, disputes_noti
 from datetime import datetime
 
 
+from django.db import transaction
+from django.core.exceptions import ValidationError
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from .models import disputes, ConfirmDispustLoan, disputes_noti
+from datetime import datetime
+
+
 @api_view(['POST'])
 def confirm_dispute_upload(request):
-    """
-    API ສຳຫຼັບຢັ້ງຢືນການແກ້ໄຂ Dispute
-    
-    Request Body:
-    - file: ເອກະສານຢັ້ງຢືນ (image/pdf)
-    - dispute_ids: list ຂອງ ID ທີ່ເລືອກ [1, 2, 3]
-    - id_dispust: ID ຂອງ file dispute
-    - user_id: User ທີ່ດຳເນີນການ
-    """
+   
     
     try:
         import json
-        
-        # ດຶງຂໍ້ມູນຈາກ request
+       
+
+       
         uploaded_file = request.FILES.get('file')
         dispute_ids_raw = request.data.get('dispute_ids', [])
         id_dispust = request.data.get('id_dispust')
         user_id = request.data.get('user_id')
-        
-        # Parse dispute_ids ຈາກ string ເປັນ list
+        user_insert = request.data.get('user_insert')
+
+        deception = request.data.get('deception', '')
+     
         if isinstance(dispute_ids_raw, str):
             try:
                 dispute_ids = json.loads(dispute_ids_raw)
@@ -20041,29 +20867,29 @@ def confirm_dispute_upload(request):
         else:
             dispute_ids = dispute_ids_raw
         
-        # ============================================
-        # ພາກທີ 1: ການກວດສອບຂໍ້ມູນ (Validation)
-        # ============================================
+        # ແປງ dispute_ids ເປັນ integer ເພື່ອຮັບປະກັນວ່າເຮັດວຽກຖືກຕ້ອງ
+        dispute_ids = [int(id) for id in dispute_ids]
+     
         
         validation_errors = []
         
-        # ກວດສອບໄຟລ໌
+       
         if not uploaded_file:
             validation_errors.append("ກະລຸນາອັບໂຫຼດເອກະສານຢັ້ງຢືນ")
         
-        # ກວດສອບ dispute_ids
+       
         if not dispute_ids or len(dispute_ids) == 0:
             validation_errors.append("ກະລຸນາເລືອກລາຍການ Dispute ຢ່າງໜ້ອຍ 1 ລາຍການ")
         
-        # ກວດສອບ id_dispust
+      
         if not id_dispust:
             validation_errors.append("ບໍ່ພົບ ID ຂອງ Dispute File")
         
-        # ກວດສອບ user_id
+       
         if not user_id:
             validation_errors.append("ບໍ່ພົບຂໍ້ມູນຜູ້ໃຊ້")
         
-        # ຖ້າມີ error ໃນການກວດສອບ, return ທັນທີ
+       
         if validation_errors:
             return Response({
                 'success': False,
@@ -20072,23 +20898,18 @@ def confirm_dispute_upload(request):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         
-        # ============================================
-        # ພາກທີ 2: ດຶງແລະກວດສອບຂໍ້ມູນຈາກ Database
-        # ============================================
-        
-        # ດຶງຂໍ້ມູນ disputes ຕາມ IDs ທີ່ສົ່ງມາ ເກັບໄວ້ໃນໂຕແປ
+     
         dispute_records = list(
             disputes.objects.filter(id__in=dispute_ids).values()
         )
         
-        # ກວດສອບວ່າພົບຂໍ້ມູນຫຼືບໍ່
+   
         if not dispute_records:
             return Response({
                 'success': False,
                 'message': 'ບໍ່ພົບຂໍ້ມູນ Dispute ທີ່ເລືອກ'
             }, status=status.HTTP_404_NOT_FOUND)
-        
-        # ກວດສອບວ່າຈຳນວນທີ່ພົບກັບທີ່ສົ່ງມາຕົງກັນຫຼືບໍ່
+      
         if len(dispute_records) != len(dispute_ids):
             found_ids = [record['id'] for record in dispute_records]
             missing_ids = list(set(dispute_ids) - set(found_ids))
@@ -20098,7 +20919,7 @@ def confirm_dispute_upload(request):
                 'missing_ids': missing_ids
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # ກວດສອບວ່າທຸກລາຍການມີ bnk_code ດຽວກັນຫຼືບໍ່
+      
         bnk_codes = set([record['bnk_code'] for record in dispute_records])
         if len(bnk_codes) > 1:
             return Response({
@@ -20111,26 +20932,26 @@ def confirm_dispute_upload(request):
         total_records = len(dispute_records)
         
         
-        # ============================================
-        # ພາກທີ 3: ບັນທຶກຂໍ້ມູນດ້ວຍ Transaction
-        # ============================================
+     
         
         with transaction.atomic():
-            # ສ້າງ ConfirmDispustLoan record
+            
             confirm_record = ConfirmDispustLoan.objects.create(
                 bnk_code=bnk_code,
                 image=uploaded_file,
-                user_insert=user_id,
-                status='pending',  # pending, approved, rejected
-                total=total_records
+               
+                status='1', 
+                total=total_records,
+                user_insert = user_insert
             )
             
-            # ກຽມຂໍ້ມູນສຳຫຼັບ bulk create
+        
             disputes_noti_records = []
             
             for record in dispute_records:
                 disputes_noti_records.append(
                     disputes_noti(
+                        id_dispust=record['id'],
                         id_file=record['id_file'],
                         lcicID=record['lcicID'],
                         period=record['period'],
@@ -20162,21 +20983,25 @@ def confirm_dispute_upload(request):
                         user_id=record['user_id'],
                         is_disputed=record['id'],
                         LCIC_code=record['LCIC_code'],
-                        confirm_dispust_id=confirm_record  # Link ກັບ ConfirmDispustLoan
+                        status='1',
+                        action_dispust=record['action_dispust'],
+                        confirm_dispust_id=confirm_record,
+                        deception = deception
                     )
                 )
             
-            # Bulk insert ເຂົ້າ disputes_noti
+        
             disputes_noti.objects.bulk_create(disputes_noti_records)
             
-            # ອັບເດດສະຖານະໃນຕາຕະລາງ disputes (optional)
-            disputes.objects.filter(id__in=dispute_ids).update(
-                is_disputed=1  # ໝາຍເຖິງຢັ້ງຢືນແລ້ວ
+            
+            updated_count = disputes.objects.filter(id__in=dispute_ids).update(
+                is_disputed=1,
+                status='0'
             )
+            
+            print(f"Updated {updated_count} dispute records with status='0'")
         
-        # ============================================
-        # ສົ່ງຜົນລັບກັບ
-        # ============================================
+       
         
         return Response({
             'success': True,
@@ -20185,17 +21010,261 @@ def confirm_dispute_upload(request):
                 'confirm_id': confirm_record.id_disput_loan,
                 'bnk_code': bnk_code,
                 'total_records': total_records,
+                'updated_disputes': updated_count,
                 'status': confirm_record.status,
                 'inserted_at': confirm_record.insertdate
             }
         }, status=status.HTTP_201_CREATED)
         
     except Exception as e:
+        print(f"Error: {str(e)}")
         return Response({
             'success': False,
             'message': 'ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກຂໍ້ມູນ',
             'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)   
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from django.db.models import Q
+from .models import ConfirmDispustLoan
+from .serializers import ConfirmDispustLoanSerializer
+
+@api_view(['GET'])
+def get_dispute_loans(request):
+   
+    try:
+        
+        user_bnk_code = request.GET.get('bnk_code', '')
+        filter_bnk_code = request.GET.get('filter_bnk_code', '')
+        filter_status = request.GET.get('status', '')
+        page = int(request.GET.get('page', 1))
+        id_disput_loan = request.GET.get('id_disput_loan', '')
+        page_size = int(request.GET.get('page_size', 10))
+        
+      
+        if not user_bnk_code:
+            return Response({
+                'status': 'error',
+                'message': 'ກະລຸນາລະບຸ bnk_code'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+       
+        queryset = ConfirmDispustLoan.objects.all()
+        
+        
+        if user_bnk_code == '01':
+           
+            if filter_bnk_code:
+               
+                queryset = queryset.filter(bnk_code=filter_bnk_code)
+        else:
+            
+            queryset = queryset.filter(bnk_code=user_bnk_code)
+        
+       
+        if filter_status:
+            queryset = queryset.filter(status=filter_status)
+        
+       
+        if id_disput_loan:
+            queryset = queryset.filter(id_disput_loan=id_disput_loan)
+        
+        
+        queryset = queryset.order_by('-id_disput_loan')
+        
+       
+        total_count = queryset.count()
+        
+       
+        start = (page - 1) * page_size
+        end = start + page_size
+        paginated_queryset = queryset[start:end]
+        
+       
+        serializer = ConfirmDispustLoanSerializer(paginated_queryset, many=True)
+        
+       
+        total_pages = (total_count + page_size - 1) // page_size
+        
+        return Response({
+            'status': 'success',
+            'data': {
+                'items': serializer.data,
+                'pagination': {
+                    'page': page,
+                    'page_size': page_size,
+                    'total_items': total_count,
+                    'total_pages': total_pages,
+                    'has_next': page < total_pages,
+                    'has_previous': page > 1
+                }
+            },
+            'filters_applied': {
+                'user_bnk_code': user_bnk_code,
+                'filter_bnk_code': filter_bnk_code if filter_bnk_code else 'ທັງໝົດ',
+                'status': filter_status if filter_status else 'ທັງໝົດ'
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except ValueError as e:
+        return Response({
+            'status': 'error',
+            'message': f'ຄ່າ parameter ບໍ່ຖືກຕ້ອງ: {str(e)}'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from django.db.models import Q, Count, Sum, Avg
+from .models import disputes_noti, ConfirmDispustLoan
+from .serializers import DisputesNotiSerializer
+from datetime import datetime
+
+@api_view(['GET'])
+def get_disputes_by_confirm_id(request):
+   
+    try:
+        
+        confirm_dispust_id = request.GET.get('confirm_dispust_id')
+        bnk_code = request.GET.get('bnk_code', '')
+        period = request.GET.get('period', '')
+        dispute_status = request.GET.get('status', '')
+        product_type = request.GET.get('product_type', '')
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 20))
+        sort_by = request.GET.get('sort_by', '-id')
+        
+        
+        if not confirm_dispust_id:
+            return Response({
+                'status': 'error',
+                'message': 'ກະລຸນາລະບຸ confirm_dispust_id'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # ກວດສອບວ່າ ConfirmDispustLoan ມີຢູ່ບໍ່
+        try:
+            confirm_loan = ConfirmDispustLoan.objects.get(id_disput_loan=confirm_dispust_id)
+        except ConfirmDispustLoan.DoesNotExist:
+            return Response({
+                'status': 'error',
+                'message': f'ບໍ່ພົບຂໍ້ມູນ ConfirmDispustLoan ID: {confirm_dispust_id}'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Query base
+        queryset = disputes_noti.objects.filter(confirm_dispust_id=confirm_dispust_id)
+        
+        # ກັ່ນຕອງເພີ່ມເຕີມ
+        if bnk_code:
+            queryset = queryset.filter(bnk_code=bnk_code)
+        
+        if period:
+            queryset = queryset.filter(period=period)
+        
+        if dispute_status:
+            queryset = queryset.filter(status=dispute_status)
+        
+        if product_type:
+            queryset = queryset.filter(product_type=product_type)
+        
+        # ລຽງລຳດັບ
+        queryset = queryset.order_by(sort_by)
+        
+        # ນັບຈຳນວນທັງໝົດ
+        total_count = queryset.count()
+        
+        # ສະຖິຕິ
+        statistics = {
+            'total_disputes': total_count,
+            'total_outstanding': float(queryset.aggregate(Sum('lon_outstanding_balance'))['lon_outstanding_balance__sum'] or 0),
+            'avg_credit_line': float(queryset.aggregate(Avg('lon_credit_line'))['lon_credit_line__avg'] or 0),
+            'by_status': {},
+            'by_bank': {},
+            'by_product_type': {},
+            'by_period': {}
+        }
+        
+        
+
+        status_counts = queryset.values('status').annotate(count=Count('id'))
+        for item in status_counts:
+            statistics['by_status'][item['status'] or 'unknown'] = item['count']
+        
+        
+        bank_counts = queryset.values('bnk_code').annotate(count=Count('id'))
+        for item in bank_counts:
+            statistics['by_bank'][item['bnk_code']] = item['count']
+        
+        # ນັບຕາມປະເພດຜະລິດຕະພັນ
+        product_counts = queryset.values('product_type').annotate(count=Count('id'))
+        for item in product_counts:
+            statistics['by_product_type'][item['product_type']] = item['count']
+        
+        # ນັບຕາມໄລຍະເວລາ
+        period_counts = queryset.values('period').annotate(count=Count('id'))
+        for item in period_counts:
+            statistics['by_period'][item['period']] = item['count']
+        
+        # Pagination
+        start = (page - 1) * page_size
+        end = start + page_size
+        paginated_queryset = queryset[start:end]
+        
+        # Serialize
+        serializer = DisputesNotiSerializer(paginated_queryset, many=True)
+        
+        # ຄຳນວນຈຳນວນໜ້າທັງໝົດ
+        total_pages = (total_count + page_size - 1) // page_size
+        
+        return Response({
+            'status': 'success',
+            'data': {
+                'confirm_loan_info': {
+                    'id_disput_loan': confirm_loan.id_disput_loan,
+                    'bnk_code': confirm_loan.bnk_code,
+                    'status': confirm_loan.status,
+                    'total': float(confirm_loan.total),
+                    'insertdate': confirm_loan.insertdate.isoformat() if confirm_loan.insertdate else None
+                },
+                'disputes': serializer.data,
+                'pagination': {
+                    'page': page,
+                    'page_size': page_size,
+                    'total_items': total_count,
+                    'total_pages': total_pages,
+                    'has_next': page < total_pages,
+                    'has_previous': page > 1
+                },
+                'statistics': statistics
+            },
+            'filters_applied': {
+                'confirm_dispust_id': confirm_dispust_id,
+                'bnk_code': bnk_code if bnk_code else 'ທັງໝົດ',
+                'period': period if period else 'ທັງໝົດ',
+                'status': dispute_status if dispute_status else 'ທັງໝົດ',
+                'product_type': product_type if product_type else 'ທັງໝົດ'
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except ValueError as e:
+        return Response({
+            'status': 'error',
+            'message': f'ຄ່າ parameter ບໍ່ຖືກຕ້ອງ: {str(e)}'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+
+
         
        
 from rest_framework.decorators import api_view, permission_classes

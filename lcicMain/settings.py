@@ -125,13 +125,15 @@ import pyodbc
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'lcicwebsitedb',
-        'USER': 'postgres', 
-        'PASSWORD': 'Lcic@123',
-        'HOST': '192.168.45.230',
-        'PORT': '5432',
-         'connect_timeout': 600,  
-            'options': '-c statement_timeout=600000'  
+    'NAME': 'lcicwebsitedb',
+    'USER': 'postgres', 
+    'PASSWORD': 'Lcic@123',
+    'HOST': '192.168.45.230',
+    'PORT': '5432',
+    'OPTIONS': {  # ✅ ໃສ່ໃນ OPTIONS
+        'connect_timeout': 30,  # ✅ ລຸດເວລາລົງ
+        'options': '-c statement_timeout=300000'  # ✅ ຢູ່ໃນ OPTIONS
+    },  
     },
     'utility': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -150,7 +152,7 @@ DATABASES = {
         'HOST': '192.168.45.245\EXPRESS',
         'PORT': '57004',
         'OPTIONS': {
-            'driver': 'ODBC Driver 18 for SQL Server',
+            'driver': 'ODBC Driver 17 for SQL Server',
         },
     },
 }
@@ -249,10 +251,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
     "http://192.168.45.54:3000",
     "http://192.168.45.54:3000",
+    "http://localhost:3001",
 ]
 
 CORS_ALLOW_HEADERS = list(default_headers) + [
     'X-User-Roles',
+    'cache-control',
+    'pragma',
 ]
 
 AUTH_USER_MODEL = 'lcicHome.Login'
@@ -261,6 +266,7 @@ CSRF_TRUSTED_ORIGINS = ['http://localhost:3000','http://192.168.45.54:3000']
 
 CORS_ALLOWED_ORIGINS = [
     "http://192.168.45.54:35729",
+    "http://localhost:3001",
     # origins ອື່ນໆທີ່ມີຢູ່ແລ້ວ...
 ]
 CSRF_COOKIE_HTTPONLY = False

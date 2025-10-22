@@ -707,6 +707,18 @@ class B1_Monthly(models.Model):
             raise ValidationError("is_disputed must be an integer")
             
         super().save(*args, **kwargs)
+        class Meta:
+         indexes = [
+            models.Index(fields=['bnk_code', 'branch_id', 'customer_id', 'loan_id', 'period']),
+            models.Index(fields=['bnk_code']),
+            models.Index(fields=['period']),
+            models.Index(fields=['id_file']),
+            models.Index(fields=['com_enterprise_code']),
+            models.Index(fields=['LCIC_code']),
+        ]
+from django.db import migrations, models
+
+
 
 class B_Data_is_damaged(models.Model):
     id = models.AutoField(primary_key=True)
@@ -853,6 +865,14 @@ class B1(models.Model):
 
     class Meta:
         unique_together = ('bnk_code', 'branch_id', 'customer_id', 'loan_id')
+        indexes = [
+            models.Index(fields=['bnk_code', 'period']),
+            models.Index(fields=['period']),
+            models.Index(fields=['id_file']),
+            models.Index(fields=['com_enterprise_code']),
+            models.Index(fields=['LCIC_code']),
+            models.Index(fields=['status_data']),
+        ]
 class B1_Daily(models.Model):
     lcicID = models.CharField(max_length=25,null=True)
     daily = models.DateField(blank=True)
@@ -917,6 +937,8 @@ class disputes(models.Model):
     user_id = models.CharField(max_length=100)
     is_disputed = models.BigIntegerField(default=0, null=True)
     LCIC_code = models.CharField(max_length=255, blank=True, null=True)
+    status = models.CharField(max_length=100)
+    action_dispust = models.CharField(max_length=100)
 
     
 class ConfirmDispustLoan(models.Model):
@@ -966,7 +988,12 @@ class disputes_noti(models.Model):
     lon_update_date = models.DateTimeField(null=True)
     lon_applied_date = models.DateTimeField(null=True)
     user_id = models.CharField(max_length=100)
+    status = models.CharField(max_length=100 , null=True)
     is_disputed = models.BigIntegerField(default=0, null=True)
+    id_dispust = models.BigIntegerField(null=True)
+    deception = models.TextField(blank=True, null=True)
+    action_dispust = models.CharField(max_length=100)
+
     
    
     confirm_dispust_id = models.ForeignKey(
