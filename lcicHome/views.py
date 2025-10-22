@@ -6836,6 +6836,871 @@ def confirm_upload(request):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 # good code
+<<<<<<< HEAD
+=======
+from django.db import transaction
+from django.core.exceptions import ValidationError
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from .models import disputes_noti, B1, B1_Monthly, ConfirmDispustLoan
+from django.db.models import Q
+
+
+@api_view(['POST'])
+def process_dispute_notification(request):
+    """
+    ຟັງຊັນສຳລັບດຶງຂໍ້ມູນຈາກ disputes_noti ແລະອັບເດດໄປຍັງ B1 ແລະ B1_Monthly
+    """
+    try:
+        id_dispust = request.data.get('id_dispust')
+        
+        if not id_dispust:
+            return Response({
+                'success': False,
+                'message': 'ກະລຸນາລະບຸ ID Dispute'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        print(f"\n{'='*60}")
+        print(f"ເລີ່ມຕົ້ນການປະມວນຜົນ Dispute ID: {id_dispust}")
+        print(f"{'='*60}")
+        
+        # ດຶງຂໍ້ມູນໂດຍກົງຈາກ disputes_noti ໂດຍໃຊ້ id_dispust
+        dispute_notifications = disputes_noti.objects.filter(
+            id_dispust=id_dispust
+        )
+        
+        if not dispute_notifications.exists():
+            # ລອງວິທີອື່ນ
+            print("⚠️  ບໍ່ພົບດ້ວຍ id_dispust, ລອງວິທີອື່ນ...")
+            
+            # ລອງດ້ວຍ id_file
+            dispute_notifications = disputes_noti.objects.filter(
+                id_file=str(id_dispust)
+            )
+            
+            if not dispute_notifications.exists():
+                # ລອງດ້ວຍ confirm_dispust_id
+                dispute_notifications = disputes_noti.objects.filter(
+                    confirm_dispust_id__id_disput_loan=id_dispust
+                )
+        
+        if not dispute_notifications.exists():
+            # Debug: ສະແດງຂໍ້ມູນທີ່ມີ
+            total_disputes = disputes_noti.objects.count()
+            sample_disputes = disputes_noti.objects.all()[:5]
+            
+            debug_info = {
+                'total_disputes_noti': total_disputes,
+                'sample_records': []
+            }
+            
+            for d in sample_disputes:
+                debug_info['sample_records'].append({
+                    'id': d.id,
+                    'id_dispust': d.id_dispust,
+                    'id_file': d.id_file,
+                    'confirm_dispust_id': d.confirm_dispust_id.id_disput_loan if d.confirm_dispust_id else None,
+                    'action_dispust': d.action_dispust,
+                    'loan_id': d.loan_id
+                })
+            
+            return Response({
+                'success': False,
+                'message': f'ບໍ່ພົບຂໍ້ມູນ Dispute Notification ສຳລັບ ID: {id_dispust}',
+                'debug': debug_info,
+                'suggestion': 'ກະລຸນາກວດເບິ່ງວ່າ ID ທີ່ສົ່ງມາຖືກຕ້ອງ ແລະມີຢູ່ໃນຕາຕະລາງ disputes_noti'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        total_records = dispute_notifications.count()
+        print(f"\n✓ ພົບທັງໝົດ {total_records} ລາຍການທີ່ຕ້ອງດຳເນີນການ")
+        
+        # ຂັ້ນຕອນທີ 1: ແຍກຂໍ້ມູນຕາມ action_dispust
+        action_01_records = []
+        action_02_records = []
+        
+        print(f"\n{'='*60}")
+        print("ຂັ້ນຕອນທີ 1: ແຍກຂໍ້ມູນຕາມ action_dispust")
+        print(f"{'='*60}")
+        
+        for record in dispute_notifications:
+            if record.action_dispust == '01':
+                action_01_records.append(record)
+            elif record.action_dispust == '02':
+                action_02_records.append(record)
+            else:
+                print(f"⚠️  ພົບ action_dispust ທີ່ບໍ່ຮູ້ຈັກ: {record.action_dispust} (ID: {record.id})")
+        
+        print(f"✓ Action 01: {len(action_01_records)} ລາຍການ")
+        print(f"✓ Action 02: {len(action_02_records)} ລາຍການ")
+        
+        # ຂັ້ນຕອນທີ 2: ຊອກຫາແລະເກັບຂໍ້ມູນທີ່ຈະອັບເດດໃນ B1_Monthly ແລະ B1
+        b1_monthly_to_update = []
+        b1_to_update = []
+        
+        print(f"\n{'='*60}")
+        print("ຂັ້ນຕອນທີ 2: ຊອກຫາຂໍ້ມູນທີ່ຈະອັບເດດ")
+        print(f"{'='*60}")
+        
+        # ປະມວນຜົນ Action 01
+        print(f"\n--- ກຳລັງປະມວນຜົນ Action 01 ({len(action_01_records)} ລາຍການ) ---")
+        for idx, record in enumerate(action_01_records, 1):
+            print(f"\n  [{idx}/{len(action_01_records)}] ກຳລັງຊອກຫາຂໍ້ມູນທີ່ກົງກັບ:")
+            print(f"      bnk_code={record.bnk_code}, branch_id={record.branch_id}")
+            print(f"      customer_id={record.customer_id}, loan_id={record.loan_id}")
+            
+            # ຊອກຫາ B1_Monthly ທີ່ກົງກັນ
+            b1_monthly_matches = B1_Monthly.objects.filter(
+                bnk_code=record.bnk_code,
+                branch_id=record.branch_id,
+                customer_id=record.customer_id,
+                loan_id=record.loan_id,
+                period=record.period
+            )
+            
+            for match in b1_monthly_matches:
+                b1_monthly_to_update.append({
+                    'original': match,
+                    'new_data': record,
+                    'action': '01'
+                })
+            
+            if b1_monthly_matches.count() > 0:
+                print(f"      ✓ ພົບ {b1_monthly_matches.count()} ລາຍການໃນ B1_Monthly")
+            else:
+                print(f"      ⚠️  ບໍ່ພົບຂໍ້ມູນໃນ B1_Monthly")
+            
+            # ຊອກຫາ B1 ທີ່ກົງກັນ
+            b1_matches = B1.objects.filter(
+                bnk_code=record.bnk_code,
+                branch_id=record.branch_id,
+                customer_id=record.customer_id,
+                loan_id=record.loan_id
+            )
+            
+            for match in b1_matches:
+                b1_to_update.append({
+                    'original': match,
+                    'new_data': record,
+                    'action': '01'
+                })
+            
+            if b1_matches.count() > 0:
+                print(f"      ✓ ພົບ {b1_matches.count()} ລາຍການໃນ B1")
+            else:
+                print(f"      ⚠️  ບໍ່ພົບຂໍ້ມູນໃນ B1")
+        
+        # ປະມວນຜົນ Action 02
+        print(f"\n--- ກຳລັງປະມວນຜົນ Action 02 ({len(action_02_records)} ລາຍການ) ---")
+        for idx, record in enumerate(action_02_records, 1):
+            print(f"\n  [{idx}/{len(action_02_records)}] ກຳລັງຊອກຫາຂໍ້ມູນທີ່ກົງກັບ:")
+            print(f"      branch_id={record.branch_id}, customer_id={record.customer_id}")
+            print(f"      loan_id={record.loan_id}, com_enterprise_code={record.com_enterprise_code}")
+            print(f"      LCIC_code={record.LCIC_code}")
+            
+            # ຊອກຫາ B1_Monthly ທີ່ກົງກັນ
+            b1_monthly_matches = B1_Monthly.objects.filter(
+                branch_id=record.branch_id,
+                customer_id=record.customer_id,
+                loan_id=record.loan_id,
+                com_enterprise_code=record.com_enterprise_code,
+                LCIC_code=record.LCIC_code,
+                period=record.period
+            )
+            
+            for match in b1_monthly_matches:
+                b1_monthly_to_update.append({
+                    'original': match,
+                    'new_data': record,
+                    'action': '02'
+                })
+            
+            if b1_monthly_matches.count() > 0:
+                print(f"      ✓ ພົບ {b1_monthly_matches.count()} ລາຍການໃນ B1_Monthly")
+            else:
+                print(f"      ⚠️  ບໍ່ພົບຂໍ້ມູນໃນ B1_Monthly")
+            
+            # ຊອກຫາ B1 ທີ່ກົງກັນ
+            b1_matches = B1.objects.filter(
+                branch_id=record.branch_id,
+                customer_id=record.customer_id,
+                loan_id=record.loan_id,
+                com_enterprise_code=record.com_enterprise_code,
+                LCIC_code=record.LCIC_code
+            )
+            
+            for match in b1_matches:
+                b1_to_update.append({
+                    'original': match,
+                    'new_data': record,
+                    'action': '02'
+                })
+            
+            if b1_matches.count() > 0:
+                print(f"      ✓ ພົບ {b1_matches.count()} ລາຍການໃນ B1")
+            else:
+                print(f"      ⚠️  ບໍ່ພົບຂໍ້ມູນໃນ B1")
+        
+        print(f"\n{'='*60}")
+        print("ສະຫຼຸບຜົນການຊອກຫາ:")
+        print(f"{'='*60}")
+        print(f"✓ B1_Monthly ທີ່ຈະອັບເດດ: {len(b1_monthly_to_update)} ລາຍການ")
+        print(f"✓ B1 ທີ່ຈະອັບເດດ: {len(b1_to_update)} ລາຍການ")
+        
+        # ກຳນົດ fields ທີ່ຈະອັບເດດ
+        update_fields = [
+            'lcicID', 'com_enterprise_code', 'segmentType', 'bnk_code',
+            'customer_id', 'branch_id', 'user_id', 'period', 'product_type',
+            'lon_sys_id', 'loan_id', 'lon_open_date', 'lon_exp_date',
+            'lon_ext_date', 'lon_int_rate', 'lon_purpose_code', 'lon_credit_line',
+            'lon_currency_code', 'lon_outstanding_balance', 'lon_account_no',
+            'lon_no_days_slow', 'lon_class', 'lon_type', 'lon_term',
+            'lon_status', 'lon_insert_date', 'lon_update_date', 'lon_applied_date',
+            'is_disputed', 'LCIC_code'
+        ]
+        
+        # ຂັ້ນຕອນທີ 3: ດຳເນີນການອັບເດດພາຍໃນ Transaction
+        print(f"\n{'='*60}")
+        print("ຂັ້ນຕອນທີ 3: ດຳເນີນການອັບເດດຂໍ້ມູນ")
+        print(f"{'='*60}")
+        
+        try:
+            with transaction.atomic():
+                updated_b1_monthly_count = 0
+                updated_b1_count = 0
+                
+                # ອັບເດດ B1_Monthly
+                if len(b1_monthly_to_update) > 0:
+                    print(f"\n--- ກຳລັງອັບເດດ B1_Monthly ({len(b1_monthly_to_update)} ລາຍການ) ---")
+                    
+                    for idx, item in enumerate(b1_monthly_to_update, 1):
+                        original = item['original']
+                        new_data = item['new_data']
+                        action = item['action']
+                        
+                        print(f"  [{idx}/{len(b1_monthly_to_update)}] ອັບເດດ loan_id={original.loan_id}, period={original.period} (Action {action})")
+                        
+                        # ອັບເດດແຕ່ລະ field
+                        for field in update_fields:
+                            if hasattr(new_data, field) and hasattr(original, field):
+                                new_value = getattr(new_data, field)
+                                setattr(original, field, new_value)
+                        
+                        original.status_data = 'u'  # u = update
+                        original.save()
+                        updated_b1_monthly_count += 1
+                    
+                    print(f"\n  ✅ ອັບເດດ B1_Monthly ສຳເລັດ {updated_b1_monthly_count} ລາຍການ")
+                
+                # ອັບເດດ B1
+                if len(b1_to_update) > 0:
+                    print(f"\n--- ກຳລັງອັບເດດ B1 ({len(b1_to_update)} ລາຍການ) ---")
+                    
+                    for idx, item in enumerate(b1_to_update, 1):
+                        original = item['original']
+                        new_data = item['new_data']
+                        action = item['action']
+                        
+                        print(f"  [{idx}/{len(b1_to_update)}] ອັບເດດ loan_id={original.loan_id} (Action {action})")
+                        
+                        # ອັບເດດແຕ່ລະ field (ຍົກເວັ້ນ period ສຳລັບ B1)
+                        for field in update_fields:
+                            if field != 'period' and hasattr(new_data, field) and hasattr(original, field):
+                                new_value = getattr(new_data, field)
+                                setattr(original, field, new_value)
+                        
+                        original.status_data = 'u'  # u = update
+                        original.save()
+                        updated_b1_count += 1
+                    
+                    print(f"\n  ✅ ອັບເດດ B1 ສຳເລັດ {updated_b1_count} ລາຍການ")
+                
+                # ອັບເດດສະຖານະໃນ disputes_noti ເປັນ '2' (ດຳເນີນການສຳເລັດ)
+                print(f"\n--- ກຳລັງອັບເດດສະຖານະ disputes_noti ---")
+                updated_noti_count = disputes_noti.objects.filter(
+                    id_dispust=id_dispust
+                ).update(status='2')
+                print(f"  ✓ ອັບເດດສະຖານະ {updated_noti_count} ລາຍການໃນ disputes_noti")
+                
+                # ອັບເດດສະຖານະໃນ ConfirmDispustLoan ເປັນ '2' (ສຳເລັດ) ຖ້າມີ
+                try:
+                    confirm_record = ConfirmDispustLoan.objects.get(id_disput_loan=id_dispust)
+                    confirm_record.status = '2'
+                    confirm_record.save()
+                    print(f"  ✓ ອັບເດດສະຖານະ ConfirmDispustLoan")
+                except ConfirmDispustLoan.DoesNotExist:
+                    print(f"  ⚠️  ບໍ່ພົບ ConfirmDispustLoan ເພື່ອອັບເດດສະຖານະ")
+                
+                print(f"\n{'='*60}")
+                print("✅ ດຳເນີນການສຳເລັດທັງໝົດພາຍໃນ Transaction!")
+                print(f"{'='*60}")
+                
+        except Exception as e:
+            print(f"\n{'='*60}")
+            print(f"❌ ເກີດຂໍ້ຜິດພາດໃນການອັບເດດ")
+            print(f"{'='*60}")
+            print(f"ຂໍ້ຜິດພາດ: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            
+            return Response({
+                'success': False,
+                'message': f'ເກີດຂໍ້ຜິດພາດໃນການອັບເດດຂໍ້ມູນ: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # ສົ່ງຜົນລັບ
+        return Response({
+            'success': True,
+            'message': 'ດຳເນີນການອັບເດດຂໍ້ມູນສຳເລັດ',
+            'data': {
+                'id_dispust': id_dispust,
+                'summary': {
+                    'total_notifications': total_records,
+                    'action_01_records': len(action_01_records),
+                    'action_02_records': len(action_02_records),
+                    'updated_b1_monthly': updated_b1_monthly_count,
+                    'updated_b1': updated_b1_count,
+                    'updated_notifications': updated_noti_count
+                }
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        print(f"\n{'='*60}")
+        print(f"❌ ເກີດຂໍ້ຜິດພາດທີ່ບໍ່ຄາດຄິດ")
+        print(f"{'='*60}")
+        print(f"ຂໍ້ຜິດພາດ: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return Response({
+            'success': False,
+            'message': 'ເກີດຂໍ້ຜິດພາດໃນການປະມວນຜົນ',
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+# @api_view(['POST'])
+# def process_multiple_disputes(request):
+   
+#     try:
+#         id_dispust_list = request.data.get('id_dispust_list', [])
+        
+       
+#         if not id_dispust_list or not isinstance(id_dispust_list, list):
+#             return Response({
+#                 'success': False,
+#                 'message': 'ກະລຸນາລະບຸ id_dispust_list ເປັນ array'
+#             }, status=status.HTTP_400_BAD_REQUEST)
+        
+#         if len(id_dispust_list) == 0:
+#             return Response({
+#                 'success': False,
+#                 'message': 'id_dispust_list ບໍ່ສາມາດເປັນ array ວ່າງໄດ້'
+#             }, status=status.HTTP_400_BAD_REQUEST)
+        
+#         print(f"\n{'='*60}")
+#         print(f"ເລີ່ມຕົ້ນການປະມວນຜົນຫຼາຍ Dispute: {len(id_dispust_list)} ລາຍການ")
+#         print(f"IDs: {id_dispust_list}")
+#         print(f"{'='*60}")
+        
+#         results = []
+#         total_success = 0
+#         total_failed = 0
+        
+#         # ປະມວນຜົນແຕ່ລະ ID
+#         for idx, id_dispust in enumerate(id_dispust_list, 1):
+#             print(f"\n{'#'*60}")
+#             print(f"[{idx}/{len(id_dispust_list)}] ກຳລັງປະມວນຜົນ ID: {id_dispust}")
+#             print(f"{'#'*60}")
+            
+#             try:
+#                 # ດຶງຂໍ້ມູນຈາກ disputes_noti
+#                 dispute_notifications = disputes_noti.objects.filter(
+#                     id_dispust=id_dispust
+#                 )
+                
+#                 if not dispute_notifications.exists():
+#                     print(f"  ⚠️  ບໍ່ພົບຂໍ້ມູນສຳລັບ ID: {id_dispust}")
+#                     results.append({
+#                         'id_dispust': id_dispust,
+#                         'success': False,
+#                         'message': 'ບໍ່ພົບຂໍ້ມູນ'
+#                     })
+#                     total_failed += 1
+#                     continue
+                
+#                 total_records = dispute_notifications.count()
+#                 print(f"  ✓ ພົບ {total_records} ລາຍການ")
+                
+#                 # ແຍກຂໍ້ມູນຕາມ action_dispust
+#                 action_01_records = []
+#                 action_02_records = []
+                
+#                 for record in dispute_notifications:
+#                     if record.action_dispust == '01':
+#                         action_01_records.append(record)
+#                     elif record.action_dispust == '02':
+#                         action_02_records.append(record)
+                
+#                 print(f"  ✓ Action 01: {len(action_01_records)} ລາຍການ")
+#                 print(f"  ✓ Action 02: {len(action_02_records)} ລາຍການ")
+                
+#                 # ຊອກຫາຂໍ້ມູນທີ່ຈະອັບເດດ
+#                 b1_monthly_to_update = []
+#                 b1_to_update = []
+                
+#                 # ປະມວນຜົນ Action 01
+#                 for record in action_01_records:
+#                     # B1_Monthly
+#                     b1_monthly_matches = B1_Monthly.objects.filter(
+#                         bnk_code=record.bnk_code,
+#                         branch_id=record.branch_id,
+#                         customer_id=record.customer_id,
+#                         loan_id=record.loan_id,
+#                         period=record.period
+#                     )
+#                     for match in b1_monthly_matches:
+#                         b1_monthly_to_update.append({
+#                             'original': match,
+#                             'new_data': record,
+#                             'action': '01'
+#                         })
+                    
+#                     # B1
+#                     b1_matches = B1.objects.filter(
+#                         bnk_code=record.bnk_code,
+#                         branch_id=record.branch_id,
+#                         customer_id=record.customer_id,
+#                         loan_id=record.loan_id
+#                     )
+#                     for match in b1_matches:
+#                         b1_to_update.append({
+#                             'original': match,
+#                             'new_data': record,
+#                             'action': '01'
+#                         })
+                
+#                 # ປະມວນຜົນ Action 02
+#                 for record in action_02_records:
+#                     # B1_Monthly
+#                     b1_monthly_matches = B1_Monthly.objects.filter(
+#                         branch_id=record.branch_id,
+#                         customer_id=record.customer_id,
+#                         loan_id=record.loan_id,
+#                         com_enterprise_code=record.com_enterprise_code,
+#                         LCIC_code=record.LCIC_code,
+#                         period=record.period
+#                     )
+#                     for match in b1_monthly_matches:
+#                         b1_monthly_to_update.append({
+#                             'original': match,
+#                             'new_data': record,
+#                             'action': '02'
+#                         })
+                    
+#                     # B1
+#                     b1_matches = B1.objects.filter(
+#                         branch_id=record.branch_id,
+#                         customer_id=record.customer_id,
+#                         loan_id=record.loan_id,
+#                         com_enterprise_code=record.com_enterprise_code,
+#                         LCIC_code=record.LCIC_code
+#                     )
+#                     for match in b1_matches:
+#                         b1_to_update.append({
+#                             'original': match,
+#                             'new_data': record,
+#                             'action': '02'
+#                         })
+                
+#                 print(f"  ✓ ຈະອັບເດດ B1_Monthly: {len(b1_monthly_to_update)} ລາຍການ")
+#                 print(f"  ✓ ຈະອັບເດດ B1: {len(b1_to_update)} ລາຍການ")
+                
+#                 # ກຳນົດ fields ທີ່ຈະອັບເດດ
+#                 update_fields = [
+#                     'lcicID', 'com_enterprise_code', 'segmentType', 'bnk_code',
+#                     'customer_id', 'branch_id', 'user_id', 'period', 'product_type',
+#                     'lon_sys_id', 'loan_id', 'lon_open_date', 'lon_exp_date',
+#                     'lon_ext_date', 'lon_int_rate', 'lon_purpose_code', 'lon_credit_line',
+#                     'lon_currency_code', 'lon_outstanding_balance', 'lon_account_no',
+#                     'lon_no_days_slow', 'lon_class', 'lon_type', 'lon_term',
+#                     'lon_status', 'lon_insert_date', 'lon_update_date', 'lon_applied_date',
+#                     'is_disputed', 'LCIC_code'
+#                 ]
+                
+#                 # ດຳເນີນການອັບເດດໃນ Transaction
+#                 with transaction.atomic():
+#                     updated_b1_monthly_count = 0
+#                     updated_b1_count = 0
+                    
+#                     # ອັບເດດ B1_Monthly
+#                     for item in b1_monthly_to_update:
+#                         original = item['original']
+#                         new_data = item['new_data']
+                        
+#                         for field in update_fields:
+#                             if hasattr(new_data, field) and hasattr(original, field):
+#                                 new_value = getattr(new_data, field)
+#                                 setattr(original, field, new_value)
+                        
+#                         original.status_data = 'u'
+#                         original.save()
+#                         updated_b1_monthly_count += 1
+                    
+#                     # ອັບເດດ B1
+#                     for item in b1_to_update:
+#                         original = item['original']
+#                         new_data = item['new_data']
+                        
+#                         for field in update_fields:
+#                             if field != 'period' and hasattr(new_data, field) and hasattr(original, field):
+#                                 new_value = getattr(new_data, field)
+#                                 setattr(original, field, new_value)
+                        
+#                         original.status_data = 'u'
+#                         original.save()
+#                         updated_b1_count += 1
+                    
+#                     # ອັບເດດສະຖານະ disputes_noti
+#                     updated_noti_count = disputes_noti.objects.filter(
+#                         id_dispust=id_dispust
+#                     ).update(status='2')
+                    
+#                     # ອັບເດດ ConfirmDispustLoan ຖ້າມີ
+#                     try:
+#                         confirm_record = ConfirmDispustLoan.objects.get(id_disput_loan=id_dispust)
+#                         confirm_record.status = '2'
+#                         confirm_record.save()
+#                     except ConfirmDispustLoan.DoesNotExist:
+#                         pass
+                
+#                 print(f"  ✅ ອັບເດດສຳເລັດ ID: {id_dispust}")
+                
+#                 results.append({
+#                     'id_dispust': id_dispust,
+#                     'success': True,
+#                     'summary': {
+#                         'total_notifications': total_records,
+#                         'action_01_records': len(action_01_records),
+#                         'action_02_records': len(action_02_records),
+#                         'updated_b1_monthly': updated_b1_monthly_count,
+#                         'updated_b1': updated_b1_count,
+#                         'updated_notifications': updated_noti_count
+#                     }
+#                 })
+#                 total_success += 1
+                
+#             except Exception as e:
+#                 print(f"  ❌ ຜິດພາດກັບ ID {id_dispust}: {str(e)}")
+#                 results.append({
+#                     'id_dispust': id_dispust,
+#                     'success': False,
+#                     'message': str(e)
+#                 })
+#                 total_failed += 1
+        
+#         print(f"\n{'='*60}")
+#         print(f"ສຳເລັດການປະມວນຜົນທັງໝົດ")
+#         print(f"✅ ສຳເລັດ: {total_success}/{len(id_dispust_list)}")
+#         print(f"❌ ຜິດພາດ: {total_failed}/{len(id_dispust_list)}")
+#         print(f"{'='*60}")
+        
+#         return Response({
+#             'success': True,
+#             'message': f'ປະມວນຜົນສຳເລັດ {total_success}/{len(id_dispust_list)} ລາຍການ',
+#             'summary': {
+#                 'total': len(id_dispust_list),
+#                 'success': total_success,
+#                 'failed': total_failed
+#             },
+#             'results': results
+#         }, status=status.HTTP_200_OK)
+        
+#     except Exception as e:
+#         print(f"\n❌ ເກີດຂໍ້ຜິດພາດທີ່ບໍ່ຄາດຄິດ: {str(e)}")
+#         import traceback
+#         traceback.print_exc()
+        
+#         return Response({
+#             'success': False,
+#             'message': 'ເກີດຂໍ້ຜິດພາດໃນການປະມວນຜົນ',
+#             'error': str(e)
+#         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+@api_view(['POST'])
+def process_multiple_disputes(request):
+    """
+    ຟັງຊັນສຳລັບປະມວນຜົນຫຼາຍ Dispute ພ້ອມກັນ
+    ຮັບ: {"id_dispust_list": [43238, 43239, 43240]}
+    """
+    try:
+        id_dispust_list = request.data.get('id_dispust_list', [])
+        
+        # ກວດສອບວ່າມີ list ຫຼືບໍ່
+        if not id_dispust_list or not isinstance(id_dispust_list, list):
+            return Response({
+                'success': False,
+                'message': 'ກະລຸນາລະບຸ id_dispust_list ເປັນ array'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if len(id_dispust_list) == 0:
+            return Response({
+                'success': False,
+                'message': 'id_dispust_list ບໍ່ສາມາດເປັນ array ວ່າງໄດ້'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        print(f"\n{'='*60}")
+        print(f"ເລີ່ມຕົ້ນການປະມວນຜົນຫຼາຍ Dispute: {len(id_dispust_list)} ລາຍການ")
+        print(f"IDs: {id_dispust_list}")
+        print(f"{'='*60}")
+        
+        results = []
+        total_success = 0
+        total_failed = 0
+        
+        # ປະມວນຜົນແຕ່ລະ ID
+        for idx, id_dispust in enumerate(id_dispust_list, 1):
+            print(f"\n{'#'*60}")
+            print(f"[{idx}/{len(id_dispust_list)}] ກຳລັງປະມວນຜົນ ID: {id_dispust}")
+            print(f"{'#'*60}")
+            
+            try:
+                # ດຶງຂໍ້ມູນຈາກ disputes_noti
+                dispute_notifications = disputes_noti.objects.filter(
+                    id_dispust=id_dispust
+                )
+                
+                if not dispute_notifications.exists():
+                    print(f"  ⚠️  ບໍ່ພົບຂໍ້ມູນສຳລັບ ID: {id_dispust}")
+                    results.append({
+                        'id_dispust': id_dispust,
+                        'success': False,
+                        'message': 'ບໍ່ພົບຂໍ້ມູນ'
+                    })
+                    total_failed += 1
+                    continue
+                
+                total_records = dispute_notifications.count()
+                print(f"  ✓ ພົບ {total_records} ລາຍການ")
+                
+                # ເກັບ disputes IDs ສຳລັບອັບເດດຕາຕະລາງ disputes
+                disputes_ids_to_update = []
+                for noti in dispute_notifications:
+                    if noti.is_disputed:
+                        disputes_ids_to_update.append(noti.is_disputed)
+                
+                print(f"  ✓ ພົບ {len(disputes_ids_to_update)} disputes IDs ທີ່ຕ້ອງອັບເດດ")
+                
+                # ແຍກຂໍ້ມູນຕາມ action_dispust
+                action_01_records = []
+                action_02_records = []
+                
+                for record in dispute_notifications:
+                    if record.action_dispust == '01':
+                        action_01_records.append(record)
+                    elif record.action_dispust == '02':
+                        action_02_records.append(record)
+                
+                print(f"  ✓ Action 01: {len(action_01_records)} ລາຍການ")
+                print(f"  ✓ Action 02: {len(action_02_records)} ລາຍການ")
+                
+                # ຊອກຫາຂໍ້ມູນທີ່ຈະອັບເດດ
+                b1_monthly_to_update = []
+                b1_to_update = []
+                
+                # ປະມວນຜົນ Action 01
+                for record in action_01_records:
+                    # B1_Monthly
+                    b1_monthly_matches = B1_Monthly.objects.filter(
+                        bnk_code=record.bnk_code,
+                        branch_id=record.branch_id,
+                        customer_id=record.customer_id,
+                        loan_id=record.loan_id,
+                        period=record.period
+                    )
+                    for match in b1_monthly_matches:
+                        b1_monthly_to_update.append({
+                            'original': match,
+                            'new_data': record,
+                            'action': '01'
+                        })
+                    
+                    # B1
+                    b1_matches = B1.objects.filter(
+                        bnk_code=record.bnk_code,
+                        branch_id=record.branch_id,
+                        customer_id=record.customer_id,
+                        loan_id=record.loan_id
+                    )
+                    for match in b1_matches:
+                        b1_to_update.append({
+                            'original': match,
+                            'new_data': record,
+                            'action': '01'
+                        })
+                
+                # ປະມວນຜົນ Action 02
+                for record in action_02_records:
+                    # B1_Monthly
+                    b1_monthly_matches = B1_Monthly.objects.filter(
+                        branch_id=record.branch_id,
+                        customer_id=record.customer_id,
+                        loan_id=record.loan_id,
+                        com_enterprise_code=record.com_enterprise_code,
+                        LCIC_code=record.LCIC_code,
+                        period=record.period
+                    )
+                    for match in b1_monthly_matches:
+                        b1_monthly_to_update.append({
+                            'original': match,
+                            'new_data': record,
+                            'action': '02'
+                        })
+                    
+                    # B1
+                    b1_matches = B1.objects.filter(
+                        branch_id=record.branch_id,
+                        customer_id=record.customer_id,
+                        loan_id=record.loan_id,
+                        com_enterprise_code=record.com_enterprise_code,
+                        LCIC_code=record.LCIC_code
+                    )
+                    for match in b1_matches:
+                        b1_to_update.append({
+                            'original': match,
+                            'new_data': record,
+                            'action': '02'
+                        })
+                
+                print(f"  ✓ ຈະອັບເດດ B1_Monthly: {len(b1_monthly_to_update)} ລາຍການ")
+                print(f"  ✓ ຈະອັບເດດ B1: {len(b1_to_update)} ລາຍການ")
+                
+                # ກຳນົດ fields ທີ່ຈະອັບເດດ
+                update_fields = [
+                    'lcicID', 'com_enterprise_code', 'segmentType', 'bnk_code',
+                    'customer_id', 'branch_id', 'user_id', 'period', 'product_type',
+                    'lon_sys_id', 'loan_id', 'lon_open_date', 'lon_exp_date',
+                    'lon_ext_date', 'lon_int_rate', 'lon_purpose_code', 'lon_credit_line',
+                    'lon_currency_code', 'lon_outstanding_balance', 'lon_account_no',
+                    'lon_no_days_slow', 'lon_class', 'lon_type', 'lon_term',
+                    'lon_status', 'lon_insert_date', 'lon_update_date', 'lon_applied_date',
+                    'is_disputed', 'LCIC_code'
+                ]
+                
+                # ດຳເນີນການອັບເດດໃນ Transaction
+                with transaction.atomic():
+                    updated_b1_monthly_count = 0
+                    updated_b1_count = 0
+                    
+                    # ອັບເດດ B1_Monthly
+                    for item in b1_monthly_to_update:
+                        original = item['original']
+                        new_data = item['new_data']
+                        
+                        for field in update_fields:
+                            if hasattr(new_data, field) and hasattr(original, field):
+                                new_value = getattr(new_data, field)
+                                setattr(original, field, new_value)
+                        
+                        original.status_data = 'u'
+                        original.save()
+                        updated_b1_monthly_count += 1
+                    
+                    # ອັບເດດ B1
+                    for item in b1_to_update:
+                        original = item['original']
+                        new_data = item['new_data']
+                        
+                        for field in update_fields:
+                            if field != 'period' and hasattr(new_data, field) and hasattr(original, field):
+                                new_value = getattr(new_data, field)
+                                setattr(original, field, new_value)
+                        
+                        original.status_data = 'u'
+                        original.save()
+                        updated_b1_count += 1
+                    
+                    # ອັບເດດສະຖານະ disputes_noti
+                    updated_noti_count = disputes_noti.objects.filter(
+                        id_dispust=id_dispust
+                    ).update(status='2')
+                    print(f"  ✓ ອັບເດດສະຖານະ {updated_noti_count} ລາຍການໃນ disputes_noti")
+                    
+                    # ອັບເດດສະຖານະ disputes
+                    updated_disputes_count = 0
+                    if len(disputes_ids_to_update) > 0:
+                        updated_disputes_count = disputes.objects.filter(
+                            id__in=disputes_ids_to_update
+                        ).update(status='2')
+                        print(f"  ✓ ອັບເດດສະຖານະ {updated_disputes_count} ລາຍການໃນ disputes")
+                    else:
+                        print(f"  ⚠️  ບໍ່ມີ disputes IDs ທີ່ຕ້ອງອັບເດດ")
+                    
+                    # ອັບເດດ ConfirmDispustLoan ຖ້າມີ
+                    try:
+                        confirm_record = ConfirmDispustLoan.objects.get(id_disput_loan=id_dispust)
+                        confirm_record.status = '2'
+                        confirm_record.save()
+                        print(f"  ✓ ອັບເດດສະຖານະ ConfirmDispustLoan")
+                    except ConfirmDispustLoan.DoesNotExist:
+                        print(f"  ⚠️  ບໍ່ພົບ ConfirmDispustLoan")
+                
+                print(f"  ✅ ອັບເດດສຳເລັດ ID: {id_dispust}")
+                
+                results.append({
+                    'id_dispust': id_dispust,
+                    'success': True,
+                    'summary': {
+                        'total_notifications': total_records,
+                        'action_01_records': len(action_01_records),
+                        'action_02_records': len(action_02_records),
+                        'updated_b1_monthly': updated_b1_monthly_count,
+                        'updated_b1': updated_b1_count,
+                        'updated_notifications': updated_noti_count,
+                        'updated_disputes': updated_disputes_count
+                    }
+                })
+                total_success += 1
+                
+            except Exception as e:
+                print(f"  ❌ ຜິດພາດກັບ ID {id_dispust}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                results.append({
+                    'id_dispust': id_dispust,
+                    'success': False,
+                    'message': str(e)
+                })
+                total_failed += 1
+        
+
+        
+        print(f"\n{'='*60}")
+        print(f"ສຳເລັດການປະມວນຜົນທັງໝົດ")
+        print(f"✅ ສຳເລັດ: {total_success}/{len(id_dispust_list)}")
+        print(f"❌ ຜິດພາດ: {total_failed}/{len(id_dispust_list)}")
+        print(f"{'='*60}")
+        
+        return Response({
+            'success': True,
+            'message': f'ປະມວນຜົນສຳເລັດ {total_success}/{len(id_dispust_list)} ລາຍການ',
+            'summary': {
+                'total': len(id_dispust_list),
+                'success': total_success,
+                'failed': total_failed
+            },
+            'results': results
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        print(f"\n❌ ເກີດຂໍ້ຜິດພາດທີ່ບໍ່ຄາດຄິດ: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return Response({
+            'success': False,
+            'message': 'ເກີດຂໍ້ຜິດພາດໃນການປະມວນຜົນ',
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+>>>>>>> 036e3706b49723ee5a11383918c7fbef76b070e9
 
 @csrf_exempt
 @require_POST
