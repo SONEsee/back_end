@@ -6480,39 +6480,9 @@ def confirm_upload(request):
 
         print(f"Found {len(disputed_data)} disputes and {len(non_disputed_data)} non-disputed records")
 
-        # ✅ ຈຸດໃໝ່: ນັບຈຳນວນ dispute ແລະອັບເດດໃສ່ Upload_File
-        total_disputes = len(disputed_data)
-        print(f"Total disputes found: {total_disputes}")
-        
-        # ແຍກຂໍ້ມູນ non-disputed ອອກເປັນ Insert, Update
-        b1_to_create = []
-        b1_to_update = []
-        b1_monthly_to_create = []
-        b1_monthly_to_update = []
-        
-        print("Categorizing non-disputed data...")
-        for item in non_disputed_data:
-            
-            key_b1_monthly = (item.bnk_code, item.branch_id, item.customer_id, item.loan_id, item.period)
-            key_b1 = (item.bnk_code, item.branch_id, item.customer_id, item.loan_id)
-            
-            if key_b1_monthly in existing_b1_monthly_keys:
-                # ມີຢູ່ແລ້ວໃນ B1_Monthly - Update
-                b1_monthly_to_update.append(item)
-            else:
-                # ບໍ່ມີໃນ B1_Monthly - Insert
-                b1_monthly_to_create.append(item)
-            
-            if key_b1 in existing_b1_keys:
-                # ມີຢູ່ແລ້ວໃນ B1 - Update
-                b1_to_update.append(item)
-            else:
-                # ບໍ່ມີໃນ B1 - Insert
-                b1_to_create.append(item)
-        
-        print(f"B1 - Create: {len(b1_to_create)}, Update: {len(b1_to_update)}")
-        print(f"B1_Monthly - Create: {len(b1_monthly_to_create)}, Update: {len(b1_monthly_to_update)}")
-        
+        # ບັນທຶກຈຳນວນ dispute ໄປໃສ່ Upload_File
+        Upload_File.objects.filter(FID=FID).update(dispuste=str(len(disputed_data)))
+
        
         try:
             with transaction.atomic():
@@ -6521,17 +6491,17 @@ def confirm_upload(request):
                     print(f"Creating {len(disputed_data)} dispute records...")
                     disputes_to_create = []
                     for item in disputed_data:
-                        # ✅ ແກ້ໄຂ: ໃຊ້ disputes (ບໍ່ແມ່ນ Dispute) ແລະລຶບ field ທີ່ບໍ່ມີອອກ
                         disputes_to_create.append(disputes(
-                            id_file=FID,  # ✅ ປ່ຽນຈາກ item.id_file ເປັນ FID
+                            id_file=FID,
                             lcicID=item.lcicID,
-                            period=item.period,
-                            product_type=item.product_type,
                             com_enterprise_code=item.com_enterprise_code,
                             segmentType=item.segmentType,
                             bnk_code=item.bnk_code,
                             customer_id=item.customer_id,
                             branch_id=item.branch_id,
+                            user_id=item.user_id,
+                            period=item.period,
+                            product_type=item.product_type,
                             lon_sys_id=item.lon_sys_id,
                             loan_id=item.loan_id,
                             lon_open_date=item.lon_open_date,
@@ -6551,67 +6521,30 @@ def confirm_upload(request):
                             lon_insert_date=item.lon_insert_date,
                             lon_update_date=item.lon_update_date,
                             lon_applied_date=item.lon_applied_date,
-                            user_id=item.user_id,
                             is_disputed=item.is_disputed,
                             LCIC_code=item.LCIC_code,
                             action_dispust=item.action_dispust
-                            # ✅ ລຶບ created_at ອອກ
                         ))
                     
                     disputes.objects.bulk_create(disputes_to_create, batch_size=1000)
-                    
-                    # ສ້າງ B1_Monthly ສຳລັບ disputed data
-                    print(f"Creating {len(disputed_data)} B1_Monthly records for disputed data...")
-                    b1_monthly_disputed_list = []
-                    for item in disputed_data:
-                        b1_monthly_disputed_list.append(B1_Monthly(
-                            lcicID=item.lcicID,
-                            com_enterprise_code=item.com_enterprise_code,
-                            segmentType=item.segmentType,
-                            bnk_code=item.bnk_code,
-                            customer_id=item.customer_id,
-                            branch_id=item.branch_id,
-                            user_id=item.user_id,
-                            period=item.period,
-                            product_type=item.product_type,
-                            lon_sys_id=item.lon_sys_id,
-                            loan_id=item.loan_id,
-                            lon_open_date=item.lon_open_date,
-                            lon_exp_date=item.lon_exp_date,
-                            lon_ext_date=item.lon_ext_date,
-                            lon_int_rate=item.lon_int_rate,
-                            lon_purpose_code=item.lon_purpose_code,
-                            lon_credit_line=item.lon_credit_line,
-                            lon_currency_code=item.lon_currency_code,
-                            lon_outstanding_balance=item.lon_outstanding_balance,
-                            lon_account_no=item.lon_account_no,
-                            lon_no_days_slow=item.lon_no_days_slow,
-                            lon_class=item.lon_class,
-                            lon_type=item.lon_type,
-                            lon_term=item.lon_term,
-                            lon_status=item.lon_status,
-                            lon_insert_date=item.lon_insert_date,
-                            lon_update_date=item.lon_update_date,
-                            lon_applied_date=item.lon_applied_date,
-                            is_disputed=True,  # ຕັ້ງເປັນ True ສຳລັບ disputed data
-                            id_file=FID,
-                            LCIC_code=item.LCIC_code,
-                            status_data='d'  # d = disputed
-                        ))
-                    
-                    B1_Monthly.objects.bulk_create(b1_monthly_disputed_list, batch_size=1000)
-                    print(f"  Created all disputed B1_Monthly records successfully")
+                    print(f"  Created all dispute records successfully")
                 
+                # ສ່ວນທີ່ເຫຼືອຂອງໂຄດເກົ່າຍັງຄົງຮັກສາໄວ້ເໝືອນເກົ່າ...
+                # (ໂຄດທີ່ເຫຼືອຂ້າງລຸ່ມນີ້ບໍ່ມີການປ່ຽນແປງ)
+                
+                b1_monthly_to_update = [item for item in non_disputed_data if (item.bnk_code, item.branch_id, item.customer_id, item.loan_id, item.period) in existing_b1_monthly_keys]
+                b1_monthly_to_create = [item for item in non_disputed_data if (item.bnk_code, item.branch_id, item.customer_id, item.loan_id, item.period) not in existing_b1_monthly_keys]
+                
+                b1_to_update = [item for item in non_disputed_data if (item.bnk_code, item.branch_id, item.customer_id, item.loan_id) in existing_b1_keys]
+                b1_to_create = [item for item in non_disputed_data if (item.bnk_code, item.branch_id, item.customer_id, item.loan_id) not in existing_b1_keys]
                 
                 if len(b1_monthly_to_update) > 0:
-                   
                     print(f"Updating {len(b1_monthly_to_update)} B1_Monthly records in batches...")
                     
                     batch_size = 1000
                     for i in range(0, len(b1_monthly_to_update), batch_size):
                         batch = b1_monthly_to_update[i:i + batch_size]
                         
-                       
                         delete_query = Q()
                         for item in batch:
                             delete_query |= Q(
@@ -6625,7 +6558,6 @@ def confirm_upload(request):
                         B1_Monthly.objects.filter(delete_query).delete()
                         print(f"  Deleted B1_Monthly batch {i//batch_size + 1}/{(len(b1_monthly_to_update)-1)//batch_size + 1}")
                     
-                   
                     print(f"Creating {len(b1_monthly_to_update)} new B1_Monthly records...")
                     b1_monthly_update_list = []
                     for item in b1_monthly_to_update:
@@ -6708,7 +6640,7 @@ def confirm_upload(request):
                     
                     B1_Monthly.objects.bulk_create(b1_monthly_create_list, batch_size=1000)
                 
-             
+                
                 if len(b1_to_update) > 0:
                    
                     print(f"Updating {len(b1_to_update)} B1 records in batches...")
@@ -6813,28 +6745,20 @@ def confirm_upload(request):
                     
                     B1.objects.bulk_create(b1_create_list, batch_size=1000)
 
-                
-                Upload_File.objects.filter(FID=FID).update(
-                    statussubmit='0',
-                    dispute=total_disputes 
-                )
-                print(f"✅ Transaction completed successfully! Updated dispute count: {total_disputes}")
+          
+                Upload_File.objects.filter(FID=FID).update(statussubmit='0')
+                print("✅ Transaction completed successfully!")
                 
         except Exception as e:
             
             Upload_File.objects.filter(FID=FID).update(statussubmit='2')
             return JsonResponse({'status': 'error', 'message': f'Transaction failed: {str(e)}'}, status=500)
 
-        return JsonResponse({
-            'status': 'success', 
-            'message': 'Data confirmed successfully',
-            'dispute_count': total_disputes  # ສົ່ງກັບຈຳນວນ dispute ໃນ response
-        })
+        return JsonResponse({'status': 'success', 'message': 'Data confirmed successfully'})
     
     except Exception as e:
         Upload_File.objects.filter(FID=FID).update(statussubmit='2')
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
-
 # good code
 from django.db import transaction
 from django.core.exceptions import ValidationError
