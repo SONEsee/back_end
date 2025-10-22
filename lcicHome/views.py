@@ -6444,7 +6444,7 @@ def confirm_upload(request):
                 is_dispute = False
                 action_dispust = None
                 
-                # ເງື່ອນໄຂທີ່ 1: ທຽບກັບ B1 - bnk_code, branch_id, customer_id, loan_id ຄືກັນ ແຕ່ com_enterprise_code ຫຼື LCIC_code ຕ່າງ
+             
                 key_for_condition1 = (item.bnk_code, item.branch_id, item.customer_id, item.loan_id, item.period)
                 if key_for_condition1 in existing_b1_dict:
                     existing_data = existing_b1_dict[key_for_condition1]
@@ -6453,12 +6453,12 @@ def confirm_upload(request):
                         is_dispute = True
                         action_dispust = '01'
                 
-                # ເງື່ອນໄຂທີ່ 2: ທຽບກັບ B1 - branch_id, customer_id, loan_id, com_enterprise_code, LCIC_code ຄືກັນ ແຕ່ bnk_code ຕ່າງ
-                if not is_dispute:  # ເຊັກເງື່ອນໄຂທີ່ 2 ຖ້າຍັງບໍ່ເປັນ dispute
+              
+                if not is_dispute:  
                     for existing_key, existing_data in existing_b1_dict.items():
                         existing_bnk_code, existing_branch_id, existing_customer_id, existing_loan_id, existing_period = existing_key
                         
-                        # ເຊັກວ່າ branch_id, customer_id, loan_id, com_enterprise_code, LCIC_code ຄືກັນ ແຕ່ bnk_code ຕ່າງ
+                      
                         if (existing_branch_id == item.branch_id and
                             existing_customer_id == item.customer_id and
                             existing_loan_id == item.loan_id and
@@ -6469,9 +6469,9 @@ def confirm_upload(request):
                             action_dispust = '02'
                             break
                 
-                # ແຍກຂໍ້ມູນ disputed ແລະ non-disputed
+               
                 if is_dispute:
-                    # ເພີ່ມ action_dispust ໃສ່ item
+                   
                     item.action_dispust = action_dispust
                     disputed_data.append(item)
                 else:
@@ -6483,7 +6483,7 @@ def confirm_upload(request):
 
         print(f"Found {len(disputed_data)} disputes and {len(non_disputed_data)} non-disputed records")
 
-        # ບັນທຶກຈຳນວນ dispute ໄປໃສ່ Upload_File
+       
         Upload_File.objects.filter(FID=FID).update(dispuste=str(len(disputed_data)))
 
        
@@ -6531,9 +6531,7 @@ def confirm_upload(request):
                     
                     disputes.objects.bulk_create(disputes_to_create, batch_size=1000)
                     print(f"  Created all dispute records successfully")
-                
-                # ສ່ວນທີ່ເຫຼືອຂອງໂຄດເກົ່າຍັງຄົງຮັກສາໄວ້ເໝືອນເກົ່າ...
-                # (ໂຄດທີ່ເຫຼືອຂ້າງລຸ່ມນີ້ບໍ່ມີການປ່ຽນແປງ)
+              
                 
                 b1_monthly_to_update = [item for item in non_disputed_data if (item.bnk_code, item.branch_id, item.customer_id, item.loan_id, item.period) in existing_b1_monthly_keys]
                 b1_monthly_to_create = [item for item in non_disputed_data if (item.bnk_code, item.branch_id, item.customer_id, item.loan_id, item.period) not in existing_b1_monthly_keys]
@@ -6790,28 +6788,28 @@ def process_dispute_notification(request):
         print(f"ເລີ່ມຕົ້ນການປະມວນຜົນ Dispute ID: {id_dispust}")
         print(f"{'='*60}")
         
-        # ດຶງຂໍ້ມູນໂດຍກົງຈາກ disputes_noti ໂດຍໃຊ້ id_dispust
+       
         dispute_notifications = disputes_noti.objects.filter(
             id_dispust=id_dispust
         )
         
         if not dispute_notifications.exists():
-            # ລອງວິທີອື່ນ
+           
             print("⚠️  ບໍ່ພົບດ້ວຍ id_dispust, ລອງວິທີອື່ນ...")
             
-            # ລອງດ້ວຍ id_file
+           
             dispute_notifications = disputes_noti.objects.filter(
                 id_file=str(id_dispust)
             )
             
             if not dispute_notifications.exists():
-                # ລອງດ້ວຍ confirm_dispust_id
+               
                 dispute_notifications = disputes_noti.objects.filter(
                     confirm_dispust_id__id_disput_loan=id_dispust
                 )
         
         if not dispute_notifications.exists():
-            # Debug: ສະແດງຂໍ້ມູນທີ່ມີ
+            
             total_disputes = disputes_noti.objects.count()
             sample_disputes = disputes_noti.objects.all()[:5]
             
@@ -6840,7 +6838,7 @@ def process_dispute_notification(request):
         total_records = dispute_notifications.count()
         print(f"\n✓ ພົບທັງໝົດ {total_records} ລາຍການທີ່ຕ້ອງດຳເນີນການ")
         
-        # ຂັ້ນຕອນທີ 1: ແຍກຂໍ້ມູນຕາມ action_dispust
+       
         action_01_records = []
         action_02_records = []
         
@@ -6859,7 +6857,7 @@ def process_dispute_notification(request):
         print(f"✓ Action 01: {len(action_01_records)} ລາຍການ")
         print(f"✓ Action 02: {len(action_02_records)} ລາຍການ")
         
-        # ຂັ້ນຕອນທີ 2: ຊອກຫາແລະເກັບຂໍ້ມູນທີ່ຈະອັບເດດໃນ B1_Monthly ແລະ B1
+       
         b1_monthly_to_update = []
         b1_to_update = []
         
@@ -6972,7 +6970,7 @@ def process_dispute_notification(request):
         print(f"✓ B1_Monthly ທີ່ຈະອັບເດດ: {len(b1_monthly_to_update)} ລາຍການ")
         print(f"✓ B1 ທີ່ຈະອັບເດດ: {len(b1_to_update)} ລາຍການ")
         
-        # ກຳນົດ fields ທີ່ຈະອັບເດດ
+        
         update_fields = [
             'lcicID', 'com_enterprise_code', 'segmentType', 'bnk_code',
             'customer_id', 'branch_id', 'user_id', 'period', 'product_type',
@@ -6984,7 +6982,7 @@ def process_dispute_notification(request):
             'is_disputed', 'LCIC_code'
         ]
         
-        # ຂັ້ນຕອນທີ 3: ດຳເນີນການອັບເດດພາຍໃນ Transaction
+       
         print(f"\n{'='*60}")
         print("ຂັ້ນຕອນທີ 3: ດຳເນີນການອັບເດດຂໍ້ມູນ")
         print(f"{'='*60}")
@@ -7427,13 +7425,13 @@ def process_multiple_disputes(request):
                 print(f"  ✓ Action 01: {len(action_01_records)} ລາຍການ")
                 print(f"  ✓ Action 02: {len(action_02_records)} ລາຍການ")
                 
-                # ຊອກຫາຂໍ້ມູນທີ່ຈະອັບເດດ
+             
                 b1_monthly_to_update = []
                 b1_to_update = []
                 
-                # ປະມວນຜົນ Action 01
+               
                 for record in action_01_records:
-                    # B1_Monthly
+                  
                     b1_monthly_matches = B1_Monthly.objects.filter(
                         bnk_code=record.bnk_code,
                         branch_id=record.branch_id,
@@ -7510,12 +7508,12 @@ def process_multiple_disputes(request):
                     'is_disputed', 'LCIC_code'
                 ]
                 
-                # ດຳເນີນການອັບເດດໃນ Transaction
+             
                 with transaction.atomic():
                     updated_b1_monthly_count = 0
                     updated_b1_count = 0
                     
-                    # ອັບເດດ B1_Monthly
+                   
                     for item in b1_monthly_to_update:
                         original = item['original']
                         new_data = item['new_data']
@@ -7529,7 +7527,7 @@ def process_multiple_disputes(request):
                         original.save()
                         updated_b1_monthly_count += 1
                     
-                    # ອັບເດດ B1
+                 
                     for item in b1_to_update:
                         original = item['original']
                         new_data = item['new_data']
@@ -7543,13 +7541,13 @@ def process_multiple_disputes(request):
                         original.save()
                         updated_b1_count += 1
                     
-                    # ອັບເດດສະຖານະ disputes_noti
+                   
                     updated_noti_count = disputes_noti.objects.filter(
                         id_dispust=id_dispust
                     ).update(status='2')
                     print(f"  ✓ ອັບເດດສະຖານະ {updated_noti_count} ລາຍການໃນ disputes_noti")
                     
-                    # ອັບເດດສະຖານະ disputes
+                    
                     updated_disputes_count = 0
                     if len(disputes_ids_to_update) > 0:
                         updated_disputes_count = disputes.objects.filter(
@@ -7559,7 +7557,7 @@ def process_multiple_disputes(request):
                     else:
                         print(f"  ⚠️  ບໍ່ມີ disputes IDs ທີ່ຕ້ອງອັບເດດ")
                     
-                    # ອັບເດດ ConfirmDispustLoan ຖ້າມີ
+                  
                     try:
                         confirm_record = ConfirmDispustLoan.objects.get(id_disput_loan=id_dispust)
                         confirm_record.status = '2'
@@ -7781,322 +7779,110 @@ def unload_upload(request):
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
-# @csrf_exempt
-# @require_POST
-# def unload_upload(request):
-#     try:
-#         FID = request.POST.get('FID')
-#         if not FID:
-#             return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
 
-       
-#         upload_file = Upload_File.objects.filter(FID=FID).first()
-#         if not upload_file:
-#             return JsonResponse({'status': 'error', 'message': 'No upload file found for the given File ID'}, status=404)
-        
-#         user_id = upload_file.user_id
-        
-        
-#         data_edits = data_edit.objects.filter(id_file=FID)
-#         if not data_edits.exists():
-#             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
-        
-       
-#         bank_codes = set(data_edits.values_list('bnk_code', flat=True))
-        
-        
-#         B1.objects.filter(id_file=FID).delete()
-#         B1_Monthly.objects.filter(id_file=FID).delete()
-        
-        
-#         for item in data_edits:
-#             try:
-                
-#                 previous_period = None
-                
-                
-#                 b1_monthly_periods = B1_Monthly.objects.filter(
-#                     bnk_code=item.bnk_code,
-#                     user_id=user_id
-#                 ).values_list('period', flat=True).distinct().order_by('-period')
-                
-               
-#                 b1_periods = B1.objects.filter(
-#                     bnk_code=item.bnk_code,
-#                     user_id=user_id
-#                 ).values_list('period', flat=True).distinct().order_by('-period')
-                
-                
-#                 all_periods = list(b1_monthly_periods) + list(b1_periods)
-#                 all_periods = sorted(set(all_periods), reverse=True)
-                
-                
-#                 current_period = item.period
-#                 for period in all_periods:
-#                     if period < current_period:
-#                         previous_period = period
-#                         break
-                
-                
-#                 B1_Monthly.objects.create(
-#                     lcicID=item.lcicID,
-#                     com_enterprise_code=item.com_enterprise_code,
-#                     segmentType=item.segmentType,
-#                     bnk_code=item.bnk_code,
-#                     customer_id=item.customer_id,
-#                     branch_id=item.branch_id,
-#                     user_id=user_id,
-#                     period=previous_period if previous_period else item.period,
-#                     product_type=item.product_type,
-#                     lon_sys_id=item.lon_sys_id,
-#                     loan_id=item.loan_id,
-#                     lon_open_date=item.lon_open_date,
-#                     lon_exp_date=item.lon_exp_date,
-#                     lon_ext_date=item.lon_ext_date,
-#                     lon_int_rate=item.lon_int_rate,
-#                     lon_purpose_code=item.lon_purpose_code,
-#                     lon_credit_line=item.lon_credit_line,
-#                     lon_currency_code=item.lon_currency_code,
-#                     lon_outstanding_balance=item.lon_outstanding_balance,
-#                     lon_account_no=item.lon_account_no,
-#                     lon_no_days_slow=item.lon_no_days_slow,
-#                     lon_class=item.lon_class,
-#                     lon_type=item.lon_type,
-#                     lon_term=item.lon_term,
-#                     lon_status=item.lon_status,
-#                     lon_insert_date=item.lon_insert_date,
-#                     lon_update_date=item.lon_update_date,
-#                     lon_applied_date=item.lon_applied_date,
-#                     is_disputed=item.is_disputed,
-#                     id_file=FID,
-#                     LCIC_code=item.LCIC_code
-#                 )
-                
-             
-#                 B1.objects.create(
-#                     lcicID=item.lcicID,
-#                     com_enterprise_code=item.com_enterprise_code,
-#                     segmentType=item.segmentType,
-#                     bnk_code=item.bnk_code,
-#                     user_id=user_id,
-#                     customer_id=item.customer_id,
-#                     branch_id=item.branch_id,
-#                     lon_sys_id=item.lon_sys_id,
-#                     loan_id=item.loan_id,
-#                     period=previous_period if previous_period else item.period,
-#                     product_type=item.product_type,    
-#                     lon_open_date=item.lon_open_date,
-#                     lon_exp_date=item.lon_exp_date,
-#                     lon_ext_date=item.lon_ext_date,
-#                     lon_int_rate=item.lon_int_rate,
-#                     lon_purpose_code=item.lon_purpose_code,
-#                     lon_credit_line=item.lon_credit_line,
-#                     lon_currency_code=item.lon_currency_code,
-#                     lon_outstanding_balance=item.lon_outstanding_balance,
-#                     lon_account_no=item.lon_account_no,
-#                     lon_no_days_slow=item.lon_no_days_slow,
-#                     lon_class=item.lon_class,
-#                     lon_type=item.lon_type,
-#                     lon_term=item.lon_term,
-#                     lon_status=item.lon_status,
-#                     lon_insert_date=item.lon_insert_date,
-#                     lon_update_date=item.lon_update_date,
-#                     lon_applied_date=item.lon_applied_date,
-#                     is_disputed=item.is_disputed,
-#                     id_file=FID,
-#                     LCIC_code=item.LCIC_code
-#                 )
-                
-#             except Exception as e:
-#                 return JsonResponse({'status': 'error', 'message': f'Error processing item: {str(e)}'}, status=500)
 
-      
-#         Upload_File.objects.filter(FID=FID).update(statussubmit='1')
-        
-#         return JsonResponse({'status': 'success', 'message': 'Data unloaded successfully'})
-    
-#     except Exception as e:
-#         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
   
 # from django.http import JsonResponse 
 # from django.views.decorators.http import require_POST    
 # from django.views.decorators.csrf import csrf_exempt
 # from .models import Upload_File, data_edit, B1, B1_Monthly, disputes
 
-# @csrf_exempt
-# @require_POST
-# def confirm_upload(request):
-#     try:
-#         FID = request.POST.get('FID')
-#         if not FID:
-#             return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.utils import timezone
+from django.core.exceptions import ValidationError
+import json
 
-#         data_edits = data_edit.objects.filter(id_file=FID)
-#         if not data_edits.exists():
-#             return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
+@csrf_exempt
+@require_http_methods(["PATCH"])
+def update_dispute_status(request, id_disput_loan):
+    """
+    ອັບເດດສະຖານະຂອງ dispute loan ຕາມ ID
+    
+    URL: /api/dispute-loan/{id_disput_loan}/status/
+    Method: PATCH
+    Body: {
+        "status": "APPROVED",  // ຫຼື "REJECTED", "PENDING", ອື່ນໆ
+        "user_update": "admin123"  // optional, ຖ້າບໍ່ມີຈະໃຊ້ request.user
+    }
+    """
+    try:
+        # 1. ກວດສອບວ່າມີ dispute loan ນີ້ຢູ່ບໍ່
+        try:
+            dispute = ConfirmDispustLoan.objects.get(id_disput_loan=id_disput_loan)
+        except ConfirmDispustLoan.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Dispute loan with ID {id_disput_loan} not found'
+            }, status=404)
 
-#         for item in data_edits:
-#             try:
-#                 b1_monthly_match = B1_Monthly.objects.filter(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id,
-#                     period=item.period
-                    
-#                 ).exists()
-                
-#                 b1_match = B1.objects.filter(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id,
-#                     period=item.period
-#                 ).exists()
+        # 2. ອ່ານຂໍ້ມູນຈາກ request body
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Invalid JSON format'
+            }, status=400)
 
-#                 if b1_monthly_match or b1_match:
-#                     b1_monthly_mismatch = B1_Monthly.objects.filter(
-#                         bnk_code=item.bnk_code,
-#                         branch_id=item.branch_id,
-#                         customer_id=item.customer_id,
-#                         loan_id=item.loan_id,
-#                         period=item.period
-#                     ).exclude(
-#                         com_enterprise_code=item.com_enterprise_code,
-#                         lcicID=item.lcicID
-#                     ).exists()
+        # 3. ກວດສອບວ່າມີ field status ບໍ່
+        new_status = data.get('status')
+        if not new_status:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Status field is required'
+            }, status=400)
 
-#                     b1_mismatch = B1.objects.filter(
-#                         bnk_code=item.bnk_code,
-#                         branch_id=item.branch_id,
-#                         customer_id=item.customer_id,
-#                         loan_id=item.loan_id,
-#                         period=item.period
-#                     ).exclude(
-#                         com_enterprise_code=item.com_enterprise_code,
-#                         lcicID=item.lcicID
-#                     ).exists()
+        # 4. ກວດສອບຄວາມຍາວຂອງ status (ຕາມ model ຄື max_length=100)
+        if len(new_status) > 100:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Status must be 100 characters or less'
+            }, status=400)
 
-#                     if b1_monthly_mismatch or b1_mismatch:
-#                         disputes.objects.create(
-#                             id_file=FID,
-#                             lcicID=item.lcicID,
-#                             user_id=item.user_id,
-#                             com_enterprise_code=item.com_enterprise_code,
-#                             segmentType=item.segmentType,
-#                             bnk_code=item.bnk_code,
-#                             customer_id=item.customer_id,
-#                             branch_id=item.branch_id,
-#                             period=item.period,
-#                             product_type=item.product_type,
-#                             lon_sys_id=item.lon_sys_id,
-#                             loan_id=item.loan_id,
-#                             lon_open_date=item.lon_open_date,
-#                             lon_exp_date=item.lon_exp_date,
-#                             lon_ext_date=item.lon_ext_date,
-#                             lon_int_rate=item.lon_int_rate,
-#                             lon_purpose_code=item.lon_purpose_code,
-#                             lon_credit_line=item.lon_credit_line,
-#                             lon_currency_code=item.lon_currency_code,
-#                             lon_outstanding_balance=item.lon_outstanding_balance,
-#                             lon_account_no=item.lon_account_no,
-#                             lon_no_days_slow=item.lon_no_days_slow,
-#                             lon_class=item.lon_class,
-#                             lon_type=item.lon_type,
-#                             lon_term=item.lon_term,
-#                             lon_status=item.lon_status,
-#                             lon_insert_date=item.lon_insert_date,
-#                             lon_update_date=item.lon_update_date,
-#                             lon_applied_date=item.lon_applied_date,
-#                             is_disputed=item.is_disputed
-#                         )
-#                         continue  
-#                 b1_monthly, created = B1_Monthly.objects.update_or_create(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id,
-#                     period=item.period,
-#                     defaults={
-#                         'lcicID': item.lcicID,
-#                         'com_enterprise_code': item.com_enterprise_code,
-#                         'segmentType': item.segmentType,
-#                         'bnk_code': item.bnk_code,
-#                         'customer_id': item.customer_id,
-#                         'branch_id': item.branch_id,
-#                         'user_id': item.user_id,
-#                         'period': item.period,
-#                         'product_type': item.product_type,
-#                         'lon_sys_id': item.lon_sys_id,
-#                         'loan_id': item.loan_id,
-#                         'lon_open_date': item.lon_open_date,
-#                         'lon_exp_date': item.lon_exp_date,
-#                         'lon_ext_date': item.lon_ext_date,
-#                         'lon_int_rate': item.lon_int_rate,
-#                         'lon_purpose_code': item.lon_purpose_code,
-#                         'lon_credit_line': item.lon_credit_line,
-#                         'lon_currency_code': item.lon_currency_code,
-#                         'lon_outstanding_balance': item.lon_outstanding_balance,
-#                         'lon_account_no': item.lon_account_no,
-#                         'lon_no_days_slow': item.lon_no_days_slow,
-#                         'lon_class': item.lon_class,
-#                         'lon_type': item.lon_type,
-#                         'lon_term': item.lon_term,
-#                         'lon_status': item.lon_status,
-#                         'lon_insert_date': item.lon_insert_date,
-#                         'lon_update_date': item.lon_update_date,
-#                         'lon_applied_date': item.lon_applied_date,
-#                         'is_disputed': item.is_disputed,
-#                         'id_file': FID,
-#                     }
-#                 )
-                
-#                 b1, created = B1.objects.update_or_create(
-#                     bnk_code=item.bnk_code,
-#                     branch_id=item.branch_id,
-#                     customer_id=item.customer_id,
-#                     loan_id=item.loan_id,
-#                     defaults={
-#                         'lcicID': item.lcicID,
-#                         'com_enterprise_code': item.com_enterprise_code,
-#                         'segmentType': item.segmentType,
-#                         'bnk_code': item.bnk_code,
-#                         'user_id': item.user_id,
-#                         'customer_id': item.customer_id,
-#                         'branch_id': item.branch_id,
-#                         'lon_sys_id': item.lon_sys_id,
-#                         'loan_id': item.loan_id,
-#                         'period': item.period,
-#                         'product_type': item.product_type,    
-#                         'lon_open_date': item.lon_open_date,
-#                         'lon_exp_date': item.lon_exp_date,
-#                         'lon_ext_date': item.lon_ext_date,
-#                         'lon_int_rate': item.lon_int_rate,
-#                         'lon_purpose_code': item.lon_purpose_code,
-#                         'lon_credit_line': item.lon_credit_line,
-#                         'lon_currency_code': item.lon_currency_code,
-#                         'lon_outstanding_balance': item.lon_outstanding_balance,
-#                         'lon_account_no': item.lon_account_no,
-#                         'lon_no_days_slow': item.lon_no_days_slow,
-#                         'lon_class': item.lon_class,
-#                         'lon_type': item.lon_type,
-#                         'lon_term': item.lon_term,
-#                         'lon_status': item.lon_status,
-#                         'lon_insert_date': item.lon_insert_date,
-#                         'lon_update_date': item.lon_update_date,
-#                         'lon_applied_date': item.lon_applied_date,
-#                         'is_disputed': item.is_disputed,
-#                         'id_file': FID,
-#                         'status_customer': '1' if created else '0'
-#                     }
-#                 )
-#             except Exception as e:
-#                 return JsonResponse({'status': 'error', 'message': f'Error while processing item with id {item.id}: {str(e)}'}, status=500)
+        # 5. ເກັບຂໍ້ມູນເກົ່າສຳລັບ response
+        old_status = dispute.status
+        
+        # 6. ອັບເດດຂໍ້ມູນ
+        dispute.status = new_status
+        dispute.user_update = data.get('user_update', getattr(request.user, 'username', 'system'))
+        dispute.updatedate = timezone.now()
+        
+        # 7. ບັນທຶກການເປັ່ຍນແປງ
+        try:
+            dispute.save()
+        except ValidationError as ve:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Validation error: {str(ve)}'
+            }, status=400)
+        except Exception as save_error:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Failed to save: {str(save_error)}'
+            }, status=500)
 
-#         return JsonResponse({'status': 'success', 'message': 'Data successfully confirmed and updated'})
-#     except Exception as e:
-#         return JsonResponse({'status': 'error', 'message': f'Error in confirm_upload: {str(e)}'}, status=500)
+        # 8. ສົ່ງຜົນລັບທີ່ສຳເລັດ
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Dispute loan status updated successfully',
+            'data': {
+                'id_disput_loan': dispute.id_disput_loan,
+                'bnk_code': dispute.bnk_code,
+                'old_status': old_status,
+                'new_status': dispute.status,
+                'user_update': dispute.user_update,
+                'updatedate': dispute.updatedate.isoformat(),
+                'total': dispute.total
+            }
+        })
 
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Unexpected error: {str(e)}'
+        }, status=500)
 
 # from django.http import JsonResponse
 # from django.views.decorators.http import require_POST
