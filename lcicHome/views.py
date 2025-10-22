@@ -6836,8 +6836,6 @@ def confirm_upload(request):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 # good code
-<<<<<<< HEAD
-=======
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from rest_framework.decorators import api_view
@@ -7700,7 +7698,6 @@ def process_multiple_disputes(request):
             'message': 'ເກີດຂໍ້ຜິດພາດໃນການປະມວນຜົນ',
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
->>>>>>> 036e3706b49723ee5a11383918c7fbef76b070e9
 
 @csrf_exempt
 @require_POST

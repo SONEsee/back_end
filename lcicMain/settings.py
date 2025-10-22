@@ -130,9 +130,9 @@ DATABASES = {
     'PASSWORD': 'Lcic@123',
     'HOST': '192.168.45.230',
     'PORT': '5432',
-    'OPTIONS': {  # ✅ ໃສ່ໃນ OPTIONS
-        'connect_timeout': 30,  # ✅ ລຸດເວລາລົງ
-        'options': '-c statement_timeout=300000'  # ✅ ຢູ່ໃນ OPTIONS
+    'OPTIONS': {  
+        'connect_timeout': 30,  
+        'options': '-c statement_timeout=300000' 
     },  
     },
     'utility': {
