@@ -6323,6 +6323,9 @@ logger = logging.getLogger(__name__)
 #     except Exception as e:
 #         Upload_File.objects.filter(FID=FID).update(statussubmit='2')
 #         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+
 @require_POST
 @csrf_exempt
 def confirm_upload(request):
