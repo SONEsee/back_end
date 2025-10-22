@@ -19656,427 +19656,548 @@ class WaterUploadDataAPIView(APIView):
                 logger.error(f"Failed to save error state: {str(save_error)}")
 
 
-# Updated fetch_and_process_water_data_optimized method
-def fetch_and_process_water_data_optimized(self, tracking, api_token):
-    """Optimized fetch for large water supply datasets with customer data"""
-    try:
-        water_api_base = getattr(settings, 'WATER_API_BASE_URL', 'http://202.137.141.244:3000')
-        
-        # Water Bill API endpoint
-        bill_api_url = f"{water_api_base}/v3/api/loans/allbillmonth/{tracking.upload_month}"
-        
-        # Customer API endpoint
-        customer_api_url = f"{water_api_base}/v3/api/loans/newconnection/{tracking.upload_month}"
-        
-        headers = {
-            'Auth': api_token,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Connection': 'close'
-        }
-        
-        # ========== Fetch Bill Data ==========
-        WaterUploadLog.objects.create(
-            tracking=tracking,
-            log_level='INFO',
-            message=f'Fetching water bill data from: {bill_api_url}'
-        )
-        
-        bill_response = requests.get(
-            bill_api_url, 
-            headers=headers, 
-            timeout=600,
-            stream=True
-        )
-        
-        tracking.api_response_code = bill_response.status_code
-        tracking.save()
-        
-        if bill_response.status_code != 200:
-            error_msg = f'Water Bill API failed with status {bill_response.status_code}'
-            try:
-                error_content = bill_response.text[:1000]
-                error_msg += f': {error_content}'
-            except:
-                pass
-            raise Exception(error_msg)
-        
-        # Process bill response
-        content = bill_response.content
-        bill_response.close()
-        
-        content_size_mb = len(content) / (1024 * 1024)
-        WaterUploadLog.objects.create(
-            tracking=tracking,
-            log_level='INFO',
-            message=f'Received {content_size_mb:.2f} MB of bill data'
-        )
-        
+    # Updated fetch_and_process_water_data_optimized method
+    def fetch_and_process_water_data_optimized(self, tracking, api_token):
+        """Optimized fetch for large water supply datasets with customer data"""
         try:
-            bill_data = json.loads(content.decode('utf-8'))
-        except json.JSONDecodeError as e:
-            raise Exception(f'Invalid JSON response from Water Bill API: {str(e)}')
-        
-        # Extract bill records
-        bill_records = self.extract_water_records(bill_data, tracking, 'bill')
-        
-        WaterUploadLog.objects.create(
-            tracking=tracking,
-            log_level='INFO',
-            message=f'Extracted {len(bill_records)} bill records'
-        )
-        
-        # ========== Fetch Customer Data ==========
-        WaterUploadLog.objects.create(
-            tracking=tracking,
-            log_level='INFO',
-            message=f'Fetching water customer data from: {customer_api_url}'
-        )
-        
-        customer_records = []
-        customer_error = None
-        
-        try:
-            customer_response = requests.get(
-                customer_api_url,
-                headers=headers,
+            water_api_base = getattr(settings, 'WATER_API_BASE_URL', 'http://202.137.141.244:3000')
+            
+            # Water Bill API endpoint
+            bill_api_url = f"{water_api_base}/v3/api/loans/allbillmonth/{tracking.upload_month}"
+            
+            # Customer API endpoint
+            customer_api_url = f"{water_api_base}/v3/api/loans/newconnection/{tracking.upload_month}"
+            
+            headers = {
+                'Auth': api_token,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Connection': 'close'
+            }
+            
+            # ========== Fetch Bill Data ==========
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Fetching water bill data from: {bill_api_url}'
+            )
+            
+            bill_response = requests.get(
+                bill_api_url, 
+                headers=headers, 
                 timeout=600,
                 stream=True
             )
             
-            if customer_response.status_code != 200:
-                customer_error = f'Customer API returned status {customer_response.status_code}'
-                WaterUploadLog.objects.create(
-                    tracking=tracking,
-                    log_level='WARNING',
-                    message=customer_error
-                )
-            else:
-                customer_content = customer_response.content
-                customer_response.close()
-                
-                customer_size_mb = len(customer_content) / (1024 * 1024)
-                WaterUploadLog.objects.create(
-                    tracking=tracking,
-                    log_level='INFO',
-                    message=f'Received {customer_size_mb:.2f} MB of customer data'
-                )
-                
+            tracking.api_response_code = bill_response.status_code
+            tracking.save()
+            
+            if bill_response.status_code != 200:
+                error_msg = f'Water Bill API failed with status {bill_response.status_code}'
                 try:
-                    customer_data = json.loads(customer_content.decode('utf-8'))
-                    customer_records = self.extract_water_records(customer_data, tracking, 'customer')
-                    
+                    error_content = bill_response.text[:1000]
+                    error_msg += f': {error_content}'
+                except:
+                    pass
+                raise Exception(error_msg)
+            
+            # Process bill response
+            content = bill_response.content
+            bill_response.close()
+            
+            content_size_mb = len(content) / (1024 * 1024)
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Received {content_size_mb:.2f} MB of bill data'
+            )
+            
+            try:
+                bill_data = json.loads(content.decode('utf-8'))
+            except json.JSONDecodeError as e:
+                raise Exception(f'Invalid JSON response from Water Bill API: {str(e)}')
+            
+            # Extract bill records
+            bill_records = self.extract_water_records(bill_data, tracking, 'bill')
+            
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Extracted {len(bill_records)} bill records'
+            )
+            
+            # ========== Fetch Customer Data ==========
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Fetching water customer data from: {customer_api_url}'
+            )
+            
+            customer_records = []
+            customer_error = None
+            
+            try:
+                customer_response = requests.get(
+                    customer_api_url,
+                    headers=headers,
+                    timeout=600,
+                    stream=True
+                )
+                
+                if customer_response.status_code != 200:
+                    customer_error = f'Customer API returned status {customer_response.status_code}'
                     WaterUploadLog.objects.create(
                         tracking=tracking,
-                        log_level='INFO',
-                        message=f'Extracted {len(customer_records)} customer records'
-                    )
-                except json.JSONDecodeError as e:
-                    customer_error = f'Invalid JSON from Customer API: {str(e)}'
-                    WaterUploadLog.objects.create(
-                        tracking=tracking,
-                        log_level='ERROR',
+                        log_level='WARNING',
                         message=customer_error
                     )
-        
-        except requests.exceptions.Timeout:
-            customer_error = 'Customer API request timed out after 10 minutes'
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='ERROR',
-                message=customer_error
-            )
-        
-        except requests.exceptions.RequestException as e:
-            customer_error = f'Customer API request failed: {str(e)}'
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='ERROR',
-                message=customer_error
-            )
-        
-        except Exception as e:
-            customer_error = f'Unexpected error fetching customer data: {str(e)}'
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='ERROR',
-                message=customer_error
-            )
-        
-        # ========== Process Data ==========
-        bill_processed = 0
-        bill_failed = 0
-        customer_processed = 0
-        customer_failed = 0
-        
-        # Process bill records
-        if bill_records:
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='INFO',
-                message=f'Processing {len(bill_records)} bill records'
-            )
-            bill_processed, bill_failed = self.insert_water_bill_data_optimized(
-                bill_records, tracking
-            )
-        
-        # Process customer records
-        if customer_records:
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='INFO',
-                message=f'Processing {len(customer_records)} customer records'
-            )
-            customer_processed, customer_failed = self.insert_water_customer_info_data(
-                customer_records, tracking
-            )
-        elif customer_error:
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='WARNING',
-                message=f'Skipping customer data processing: {customer_error}'
-            )
-        
-        # Calculate totals
-        total_records = len(bill_records) + len(customer_records)
-        total_processed = bill_processed + customer_processed
-        total_failed = bill_failed + customer_failed
-        
-        # Determine status
-        if total_failed == 0 and not customer_error:
-            final_status = 'completed'
-        elif bill_processed > 0 and customer_error:
-            final_status = 'partial'
-        elif total_failed > 0:
-            final_status = 'partial'
-        else:
-            final_status = 'failed'
-        
-        # Update tracking
-        tracking.status = final_status
-        tracking.upload_completed = timezone.now()
-        tracking.total_records = total_records
-        tracking.processed_records = total_processed
-        tracking.failed_records = total_failed
-        tracking.data_size_mb = round(content_size_mb, 2)
-        tracking.success_rates = (total_processed / total_records * 100) if total_records > 0 else 0
-        tracking.save()
-        
-        # Calculate duration
-        duration = None
-        if tracking.upload_started and tracking.upload_completed:
-            duration = (tracking.upload_completed - tracking.upload_started).total_seconds()
-        
-        message = f'Water upload completed - Bills: {bill_processed}/{len(bill_records)}, Customers: {customer_processed}/{len(customer_records)}'
-        if customer_error:
-            message += f' (Customer API Error: {customer_error})'
-        
-        WaterUploadLog.objects.create(
-            tracking=tracking,
-            log_level='INFO' if final_status == 'completed' else 'WARNING',
-            message=message
-        )
-        
-        return {
-            'message': 'Water supply data upload completed' + (' with warnings' if customer_error else ' successfully'),
-            'tracking_id': tracking.id,
-            'status': final_status,
-            'bill_records': {
-                'total': len(bill_records),
-                'processed': bill_processed,
-                'failed': bill_failed
-            },
-            'customer_records': {
-                'total': len(customer_records),
-                'processed': customer_processed,
-                'failed': customer_failed,
-                'error': customer_error
-            },
-            'data_size_mb': tracking.data_size_mb,
-            'success_rate': tracking.success_rates,
-            'upload_duration': duration
-        }
-        
-    except Exception as e:
-        tracking.status = 'failed'
-        tracking.error_message = str(e)
-        tracking.upload_completed = timezone.now()
-        tracking.save()
-        
-        WaterUploadLog.objects.create(
-            tracking=tracking,
-            log_level='ERROR',
-            message=f'Water supply processing failed: {str(e)}'
-        )
-        
-        return {
-            'error': f'Failed to process water supply data: {str(e)}',
-            'tracking_id': tracking.id,
-            'status': 'failed'
-        }
-
-
-def extract_water_records(self, data, tracking, data_type):
-    """Extract records from water supply API response"""
-    records = []
-    
-    if isinstance(data, dict):
-        # Log structure
-        top_keys = list(data.keys())
-        WaterUploadLog.objects.create(
-            tracking=tracking,
-            log_level='INFO',
-            message=f'{data_type.capitalize()} response keys: {top_keys}'
-        )
-        
-        # Find data recursively
-        def find_data_recursively(obj, path="root"):
-            found_arrays = []
-            if isinstance(obj, list):
-                if len(obj) > 0:
-                    found_arrays.append((path, len(obj), type(obj[0]).__name__))
-            elif isinstance(obj, dict):
-                for key, value in obj.items():
-                    new_path = f"{path}.{key}"
-                    if isinstance(value, list) and len(value) > 0:
-                        found_arrays.append((new_path, len(value), type(value[0]).__name__))
-                    elif isinstance(value, dict):
-                        found_arrays.extend(find_data_recursively(value, new_path))
-            return found_arrays
-        
-        found_arrays = find_data_recursively(data)
-        
-        if found_arrays:
-            # Get largest array
-            largest_array = max(found_arrays, key=lambda x: x[1])
-            path, size, item_type = largest_array
-            
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='INFO',
-                message=f'Using array at {path} with {size} items'
-            )
-            
-            # Extract data
-            try:
-                current = data
-                for part in path.split('.')[1:]:
-                    current = current[part]
-                if isinstance(current, list):
-                    records = current
-            except (KeyError, TypeError, IndexError) as e:
-                WaterUploadLog.objects.create(
-                    tracking=tracking,
-                    log_level='ERROR',
-                    message=f'Failed to extract from {path}: {str(e)}'
-                )
-        
-        # Fallback to common keys
-        if not records:
-            common_keys = ['data', 'records', 'bills', 'items', 'results', 'customers', 'newconnection']
-            for key in common_keys:
-                if key in data and isinstance(data[key], list):
-                    records = data[key]
+                else:
+                    customer_content = customer_response.content
+                    customer_response.close()
+                    
+                    customer_size_mb = len(customer_content) / (1024 * 1024)
                     WaterUploadLog.objects.create(
                         tracking=tracking,
                         log_level='INFO',
-                        message=f'Found data using key: {key}'
-                    )
-                    break
-    
-    elif isinstance(data, list):
-        records = data
-    
-    return records
-
-
-def insert_water_customer_info_data(self, records, tracking):
-    """Insert or update water customer records in w_customer_info table"""
-    processed_count = 0
-    failed_count = 0
-    
-    try:
-        WaterUploadLog.objects.create(
-            tracking=tracking,
-            log_level='INFO',
-            message=f'Starting to process {len(records)} water customer records'
-        )
-        
-        batch_size = 500
-        for i in range(0, len(records), batch_size):
-            batch = records[i:i + batch_size]
-            
-            for j, item in enumerate(batch):
-                try:
-                    if not isinstance(item, dict):
-                        failed_count += 1
-                        continue
-                    
-                    def safe_get(key, default=''):
-                        value = item.get(key, default)
-                        return value if value is not None else default
-                    
-                    customer_id = self.truncate(safe_get('CUSTOMER_ID', ''), 100)
-                    
-                    if not customer_id:
-                        failed_count += 1
-                        continue
-                    
-                    # Map API fields to model - adjust these based on actual API response
-                    customer, created = w_customer_info.objects.update_or_create(
-                        Customer_ID=customer_id,
-                        defaults={
-                            'No': self.truncate(safe_get('NO', safe_get('INDEX_NO', '')), 100),
-                            'Company_name': self.truncate(safe_get('COMPANY_NAME', ''), 100),
-                            'Name': self.truncate(safe_get('NAME', safe_get('GIVEN_NAME', '')), 100),
-                            'Surname': self.truncate(safe_get('SURNAME', safe_get('FAMILY_NAME', '')), 100),
-                            'National_ID': self.truncate(safe_get('NATIONAL_ID', safe_get('ID_NO', '')), 100),
-                            'Passport': self.truncate(safe_get('PASSPORT', safe_get('PASSPORT_NO', '')), 100),
-                            'Address': self.truncate(safe_get('ADDRESS', safe_get('FORW_ADDRESS', '')), 100),
-                            'Dustrict_ID': self.truncate(safe_get('DISTRICT_ID', safe_get('DIS_ID', '')), 100),
-                            'Province_ID': self.truncate(safe_get('PROVINCE_ID', safe_get('PRO_ID', '')), 100),
-                            'Tel': self.truncate(safe_get('TEL', safe_get('TEL_NO', '')), 100),
-                            'Email': self.truncate(safe_get('EMAIL', safe_get('EMAIL_NO', '')), 100),
-                            'Cus_type': self.truncate(safe_get('CUSTOMER_TYPE', safe_get('SUPPLY_TYPE', '')), 100),
-                            'Regis_date': self.truncate(safe_get('REGISTRATION_DATE', safe_get('REGIT_D', '')), 100)
-                        }
+                        message=f'Received {customer_size_mb:.2f} MB of customer data'
                     )
                     
-                    processed_count += 1
-                
-                except Exception as e:
-                    failed_count += 1
-                    if failed_count <= 10:
+                    try:
+                        customer_data = json.loads(customer_content.decode('utf-8'))
+                        customer_records = self.extract_water_records(customer_data, tracking, 'customer')
+                        
+                        WaterUploadLog.objects.create(
+                            tracking=tracking,
+                            log_level='INFO',
+                            message=f'Extracted {len(customer_records)} customer records'
+                        )
+                    except json.JSONDecodeError as e:
+                        customer_error = f'Invalid JSON from Customer API: {str(e)}'
                         WaterUploadLog.objects.create(
                             tracking=tracking,
                             log_level='ERROR',
-                            message=f'Failed to process customer record {i+j}: {str(e)}'
+                            message=customer_error
                         )
-                    continue
             
-            # Log progress
-            if (i + batch_size) % 1000 == 0 or (i + batch_size) >= len(records):
+            except requests.exceptions.Timeout:
+                customer_error = 'Customer API request timed out after 10 minutes'
+                WaterUploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='ERROR',
+                    message=customer_error
+                )
+            
+            except requests.exceptions.RequestException as e:
+                customer_error = f'Customer API request failed: {str(e)}'
+                WaterUploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='ERROR',
+                    message=customer_error
+                )
+            
+            except Exception as e:
+                customer_error = f'Unexpected error fetching customer data: {str(e)}'
+                WaterUploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='ERROR',
+                    message=customer_error
+                )
+            
+            # ========== Process Data ==========
+            bill_processed = 0
+            bill_failed = 0
+            customer_processed = 0
+            customer_failed = 0
+            
+            # Process bill records
+            if bill_records:
                 WaterUploadLog.objects.create(
                     tracking=tracking,
                     log_level='INFO',
-                    message=f'Customer records progress: {min(i + batch_size, len(records))}/{len(records)}'
+                    message=f'Processing {len(bill_records)} bill records'
                 )
+                bill_processed, bill_failed = self.insert_water_bill_data_optimized(
+                    bill_records, tracking
+                )
+            
+            # Process customer records
+            if customer_records:
+                WaterUploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='INFO',
+                    message=f'Processing {len(customer_records)} customer records'
+                )
+                customer_processed, customer_failed = self.insert_water_customer_info_data(
+                    customer_records, tracking
+                )
+            elif customer_error:
+                WaterUploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='WARNING',
+                    message=f'Skipping customer data processing: {customer_error}'
+                )
+            
+            # Calculate totals
+            total_records = len(bill_records) + len(customer_records)
+            total_processed = bill_processed + customer_processed
+            total_failed = bill_failed + customer_failed
+            
+            # Determine status
+            if total_failed == 0 and not customer_error:
+                final_status = 'completed'
+            elif bill_processed > 0 and customer_error:
+                final_status = 'partial'
+            elif total_failed > 0:
+                final_status = 'partial'
+            else:
+                final_status = 'failed'
+            
+            # Update tracking
+            tracking.status = final_status
+            tracking.upload_completed = timezone.now()
+            tracking.total_records = total_records
+            tracking.processed_records = total_processed
+            tracking.failed_records = total_failed
+            tracking.data_size_mb = round(content_size_mb, 2)
+            tracking.success_rates = (total_processed / total_records * 100) if total_records > 0 else 0
+            tracking.save()
+            
+            # Calculate duration
+            duration = None
+            if tracking.upload_started and tracking.upload_completed:
+                duration = (tracking.upload_completed - tracking.upload_started).total_seconds()
+            
+            message = f'Water upload completed - Bills: {bill_processed}/{len(bill_records)}, Customers: {customer_processed}/{len(customer_records)}'
+            if customer_error:
+                message += f' (Customer API Error: {customer_error})'
+            
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO' if final_status == 'completed' else 'WARNING',
+                message=message
+            )
+            
+            return {
+                'message': 'Water supply data upload completed' + (' with warnings' if customer_error else ' successfully'),
+                'tracking_id': tracking.id,
+                'status': final_status,
+                'bill_records': {
+                    'total': len(bill_records),
+                    'processed': bill_processed,
+                    'failed': bill_failed
+                },
+                'customer_records': {
+                    'total': len(customer_records),
+                    'processed': customer_processed,
+                    'failed': customer_failed,
+                    'error': customer_error
+                },
+                'data_size_mb': tracking.data_size_mb,
+                'success_rate': tracking.success_rates,
+                'upload_duration': duration
+            }
+            
+        except Exception as e:
+            tracking.status = 'failed'
+            tracking.error_message = str(e)
+            tracking.upload_completed = timezone.now()
+            tracking.save()
+            
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='ERROR',
+                message=f'Water supply processing failed: {str(e)}'
+            )
+            
+            return {
+                'error': f'Failed to process water supply data: {str(e)}',
+                'tracking_id': tracking.id,
+                'status': 'failed'
+            }
+
+
+    def extract_water_records(self, data, tracking, data_type):
+        """Extract records from water supply API response"""
+        records = []
         
-        WaterUploadLog.objects.create(
-            tracking=tracking,
-            log_level='INFO',
-            message=f'Customer data processing completed. Processed: {processed_count}, Failed: {failed_count}'
-        )
+        if isinstance(data, dict):
+            # Log structure
+            top_keys = list(data.keys())
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'{data_type.capitalize()} response keys: {top_keys}'
+            )
+            
+            # Find data recursively
+            def find_data_recursively(obj, path="root"):
+                found_arrays = []
+                if isinstance(obj, list):
+                    if len(obj) > 0:
+                        found_arrays.append((path, len(obj), type(obj[0]).__name__))
+                elif isinstance(obj, dict):
+                    for key, value in obj.items():
+                        new_path = f"{path}.{key}"
+                        if isinstance(value, list) and len(value) > 0:
+                            found_arrays.append((new_path, len(value), type(value[0]).__name__))
+                        elif isinstance(value, dict):
+                            found_arrays.extend(find_data_recursively(value, new_path))
+                return found_arrays
+            
+            found_arrays = find_data_recursively(data)
+            
+            if found_arrays:
+                # Get largest array
+                largest_array = max(found_arrays, key=lambda x: x[1])
+                path, size, item_type = largest_array
+                
+                WaterUploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='INFO',
+                    message=f'Using array at {path} with {size} items'
+                )
+                
+                # Extract data
+                try:
+                    current = data
+                    for part in path.split('.')[1:]:
+                        current = current[part]
+                    if isinstance(current, list):
+                        records = current
+                except (KeyError, TypeError, IndexError) as e:
+                    WaterUploadLog.objects.create(
+                        tracking=tracking,
+                        log_level='ERROR',
+                        message=f'Failed to extract from {path}: {str(e)}'
+                    )
+            
+            # Fallback to common keys
+            if not records:
+                common_keys = ['data', 'records', 'bills', 'items', 'results', 'customers', 'newconnection']
+                for key in common_keys:
+                    if key in data and isinstance(data[key], list):
+                        records = data[key]
+                        WaterUploadLog.objects.create(
+                            tracking=tracking,
+                            log_level='INFO',
+                            message=f'Found data using key: {key}'
+                        )
+                        break
         
-        return processed_count, failed_count
+        elif isinstance(data, list):
+            records = data
         
-    except Exception as e:
-        WaterUploadLog.objects.create(
-            tracking=tracking,
-            log_level='ERROR',
-            message=f'Customer data insert failed: {str(e)}'
-        )
-        raise e
+        return records
+
+
+    def insert_water_customer_info_data(self, records, tracking):
+        """Insert or update water customer records in w_customer_info table"""
+        processed_count = 0
+        failed_count = 0
+        
+        try:
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Starting to process {len(records)} water customer records'
+            )
+            
+            batch_size = 500
+            for i in range(0, len(records), batch_size):
+                batch = records[i:i + batch_size]
+                
+                for j, item in enumerate(batch):
+                    try:
+                        if not isinstance(item, dict):
+                            failed_count += 1
+                            continue
+                        
+                        def safe_get(key, default=''):
+                            value = item.get(key, default)
+                            return value if value is not None else default
+                        
+                        customer_id = self.truncate(safe_get('CUSTOMER_ID', ''), 100)
+                        
+                        if not customer_id:
+                            failed_count += 1
+                            continue
+                        
+                        # Map API fields to model - adjust these based on actual API response
+                        customer, created = w_customer_info.objects.update_or_create(
+                            Customer_ID=customer_id,
+                            defaults={
+                                'No': self.truncate(safe_get('NO', safe_get('INDEX_NO', '')), 100),
+                                'Company_name': self.truncate(safe_get('COMPANY_NAME', ''), 100),
+                                'Name': self.truncate(safe_get('NAME', safe_get('GIVEN_NAME', '')), 100),
+                                'Surname': self.truncate(safe_get('SURNAME', safe_get('FAMILY_NAME', '')), 100),
+                                'National_ID': self.truncate(safe_get('NATIONAL_ID', safe_get('ID_NO', '')), 100),
+                                'Passport': self.truncate(safe_get('PASSPORT', safe_get('PASSPORT_NO', '')), 100),
+                                'Address': self.truncate(safe_get('ADDRESS', safe_get('FORW_ADDRESS', '')), 100),
+                                'Dustrict_ID': self.truncate(safe_get('DISTRICT_ID', safe_get('DIS_ID', '')), 100),
+                                'Province_ID': self.truncate(safe_get('PROVINCE_ID', safe_get('PRO_ID', '')), 100),
+                                'Tel': self.truncate(safe_get('TEL', safe_get('TEL_NO', '')), 100),
+                                'Email': self.truncate(safe_get('EMAIL', safe_get('EMAIL_NO', '')), 100),
+                                'Cus_type': self.truncate(safe_get('CUSTOMER_TYPE', safe_get('SUPPLY_TYPE', '')), 100),
+                                'Regis_date': self.truncate(safe_get('REGISTRATION_DATE', safe_get('REGIT_D', '')), 100)
+                            }
+                        )
+                        
+                        processed_count += 1
+                    
+                    except Exception as e:
+                        failed_count += 1
+                        if failed_count <= 10:
+                            WaterUploadLog.objects.create(
+                                tracking=tracking,
+                                log_level='ERROR',
+                                message=f'Failed to process customer record {i+j}: {str(e)}'
+                            )
+                        continue
+                
+                # Log progress
+                if (i + batch_size) % 1000 == 0 or (i + batch_size) >= len(records):
+                    WaterUploadLog.objects.create(
+                        tracking=tracking,
+                        log_level='INFO',
+                        message=f'Customer records progress: {min(i + batch_size, len(records))}/{len(records)}'
+                    )
+            
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Customer data processing completed. Processed: {processed_count}, Failed: {failed_count}'
+            )
+            
+            return processed_count, failed_count
+            
+        except Exception as e:
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='ERROR',
+                message=f'Customer data insert failed: {str(e)}'
+            )
+            raise e
+        
+    def insert_water_bill_data_optimized(self, records, tracking):
+            """Optimized insert for large datasets"""
+            processed_count = 0
+            failed_count = 0
+            batch_size = 500  # Smaller batches for memory efficiency
+            total_items = len(records)
+            
+            try:
+                WaterUploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='INFO',
+                    message=f'Starting optimized insert of {total_items} water supply records'
+                )
+                
+                batch = []
+                
+                for i, item in enumerate(records):
+                    try:
+                        # Progress logging for large datasets
+                        if i > 0 and i % 5000 == 0:  # Log every 5000 records
+                            progress_percent = (i / total_items) * 100
+                            WaterUploadLog.objects.create(
+                                tracking=tracking,
+                                log_level='INFO',
+                                message=f'Processing progress: {i}/{total_items} ({progress_percent:.1f}%)'
+                            )
+                        
+                        # Validate record
+                        if not isinstance(item, dict):
+                            failed_count += 1
+                            continue
+                        
+                        # Helper function for safe value extraction
+                        def safe_get(key, default=''):
+                            value = item.get(key, default)
+                            return value if value is not None else default
+                        
+                        # Create bill record with your exact mapping
+                        payment_id = safe_get('PAYMENT_ID', '')
+                        
+                        bill = Utility_Bill(
+                            Customer_ID=self.truncate(safe_get('CUSTOMER_ID', ''), 255),
+                            InvoiceNo=self.truncate(safe_get('NO', ''), 255),
+                            TypeOfPro=self.truncate(safe_get('SUPPLY_TYPE', ''), 100),
+                            Outstanding=self.safe_decimal(safe_get('OUTSTANDING', 0)),
+                            Basic_Tax=self.safe_decimal(safe_get('BASIC+TAX', 0)),
+                            Bill_Amount=self.safe_decimal(safe_get('BILL_AMOUNT', 0)),
+                            Debt_Amount=0.00,
+                            Payment_ID=payment_id,
+                            PaymentType=self.truncate(safe_get('PAY_TYPE', ''), 255),
+                            Payment_Date=self.truncate(safe_get('PAYMENT_DATE', ''), 255),
+                            InvoiceMonth=self.truncate(safe_get('BILL_OF_MONTH', ''), 50),
+                            InvoiceDate=self.truncate(safe_get('DATE_OF_ISSUE', ''), 100),
+                            DisID=self.truncate(safe_get('DIS_ID', ''), 100),
+                            ProID=self.truncate(safe_get('PRO_ID', ''), 100),
+                            UserID=tracking.user_upload
+                        )
+                        
+                        batch.append(bill)
+                        
+                        # Process batch when full
+                        if len(batch) >= batch_size:
+                            with transaction.atomic():
+                                Utility_Bill.objects.bulk_create(batch, ignore_conflicts=True)
+                            processed_count += len(batch)
+                            batch = []
+                            
+                            # Update progress in tracking
+                            tracking.processed_records = processed_count
+                            tracking.save()
+                    
+                    except Exception as e:
+                        failed_count += 1
+                        # Log only first few errors to avoid log spam
+                        if failed_count <= 10:
+                            WaterUploadLog.objects.create(
+                                tracking=tracking,
+                                log_level='ERROR',
+                                message=f'Record {i} failed: {str(e)[:200]}'
+                            )
+                        continue
+                
+                # Process remaining records
+                if batch:
+                    with transaction.atomic():
+                        Utility_Bill.objects.bulk_create(batch, ignore_conflicts=True)
+                    processed_count += len(batch)
+                
+                # Final update
+                tracking.processed_records = processed_count
+                tracking.save()
+                
+                WaterUploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='INFO',
+                    message=f'Insert completed. Processed: {processed_count}, Failed: {failed_count}'
+                )
+                
+                return processed_count, failed_count
+                
+            except Exception as e:
+                WaterUploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='ERROR',
+                    message=f'Bulk insert failed: {str(e)}'
+                )
+                raise e
+        
+    def truncate(self, value, max_length):
+        """Safely truncate string to max length"""
+        if value is None:
+            return ''
+        return str(value)[:max_length]
+
+    def safe_decimal(self, value):
+        """Safely convert to decimal"""
+        try:
+            return float(value or 0)
+        except (ValueError, TypeError):
+            return 0.0
 
 
 class WaterUploadTrackingDetailAPIView(APIView):
