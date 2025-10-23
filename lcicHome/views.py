@@ -7624,161 +7624,171 @@ def process_multiple_disputes(request):
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+from django.db import models
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+
 @csrf_exempt
 @require_POST
 def unload_upload(request):
     try:
         FID = request.POST.get('FID')
         if not FID:
-            Upload_File.objects.filter(FID=FID).update(statussubmit='1')
-            
             return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
 
-        
+        # ກວດສອບວ່າມີໄຟລ์ອັບໂຫລດຢູ່ບໍ
         upload_file = Upload_File.objects.filter(FID=FID).first()
         if not upload_file:
-            Upload_File.objects.filter(FID=FID).update(statussubmit='1')
             return JsonResponse({'status': 'error', 'message': 'No upload file found for the given File ID'}, status=404)
         
         user_id = upload_file.user_id
         
+        # ກວດສອບວ່າມີ FID ໃນຕາຕະລາງ B1 ແລະ B1_Monthly ບໍ
+        b1_exists = B1.objects.filter(id_file=FID).exists()
+        b1_monthly_exists = B1_Monthly.objects.filter(id_file=FID).exists()
         
-        data_edits = data_edit.objects.filter(id_file=FID)
-        if not data_edits.exists():
-            Upload_File.objects.filter(FID=FID).update(statussubmit='1')
-            return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
-        
-        
-        bank_codes = set(data_edits.values_list('bnk_code', flat=True))
-        
-       
-        for bnk_code in bank_codes:
+        if b1_exists or b1_monthly_exists:
+            # ລຶບຂໍ້ມູນທີ່ມີ id_file ເທົ່າກັບ FID ອອກທັງໝົດ
+            B1.objects.filter(id_file=FID).delete()
+            B1_Monthly.objects.filter(id_file=FID).delete()
             
-            max_period_in_b1 = B1.objects.filter(
-                bnk_code=bnk_code
-            ).exclude(id_file=FID).aggregate(Max('period'))['period__max']
+            # ຫາຂໍ້ມູນໃນ data_edit ທີ່ມີ id_file ນ້ອຍກວ່າ FID ປະຈຸບັນ
+            data_edits = data_edit.objects.filter(id_file=FID)
+            if not data_edits.exists():
+                return JsonResponse({'status': 'error', 'message': 'No data found for the given File ID'}, status=404)
             
-            if max_period_in_b1 is not None:
+            # ເອົາ bank codes ທັງໝົດຈາກຂໍ້ມູນທີ່ຖືກລຶບ (ຈາກ B1 ແລະ B1_Monthly ທີ່ຖືກລຶບກ່ອນໜ້ານີ້)
+            deleted_bank_codes = set()
+            
+            # ຫາ bnk_code ຈາກຂໍ້ມູນທີ່ຖືກລຶບ
+            # ເນື່ອງຈາກເຮົາລຶບແລ້ວ ໃຫ້ເອົາຈາກ data_edit ທີ່ມີ id_file ເທົ່າກັບ FID
+            current_data_edits = data_edit.objects.filter(id_file=FID)
+            if current_data_edits.exists():
+                deleted_bank_codes = set(current_data_edits.values_list('bnk_code', flat=True))
+            
+            # ຫາຂໍ້ມູນເກົ່າສຳລັບ bnk_code ທີ່ຖືກລຶບ
+            previous_data = []
+            
+            for bnk_code in deleted_bank_codes:
+                # ຫາ id_file ທີ່ໃຫຍ່ທີ່ສຸດທີ່ນ້ອຍກວ່າ FID ປະຈຸບັນສຳລັບ bnk_code ນີ້
+                latest_previous_file_id = data_edit.objects.filter(
+                    bnk_code=bnk_code,
+                    id_file__lt=FID  # id_file ນ້ອຍກວ່າ FID ປະຈຸບັນ
+                ).aggregate(max_id_file=models.Max('id_file'))['max_id_file']
                 
-                data_item_periods = data_edits.filter(bnk_code=bnk_code).values_list('period', flat=True)
-                for period in data_item_periods:
-                    if period <= max_period_in_b1:
-                        Upload_File.objects.filter(FID=FID).update(statussubmit='1')
-                        return JsonResponse({
-                            'status': 'error', 
-                            'message': f'Cannot upload data with period less than or equal to the maximum existing period for bank code {bnk_code}. Maximum existing period: {max_period_in_b1}, Upload period: {period}'
-                        }, status=406)
-        
-        
-        items_to_process = []
-        for item in data_edits:
-            
-            b1_items = B1.objects.filter(
-                bnk_code=item.bnk_code,
-                customer_id=item.customer_id,
-                loan_id=item.loan_id
-            )
-            
-            status_data = None
-            if b1_items.exists():
-                status_data = b1_items.first().status_data
-            
-            items_to_process.append({
-                'item': item,
-                'status_data': status_data
-            })
-        
-        
-        for process_item in items_to_process:
-            item = process_item['item']
-            status_data = process_item['status_data']
-            
-            
-            if status_data is None or status_data == 'i':
-               
-                B1.objects.filter(
-                    id_file=FID,
-                    bnk_code=item.bnk_code,
-                    customer_id=item.customer_id,
-                    loan_id=item.loan_id
-                ).delete()
-                
-                B1_Monthly.objects.filter(
-                    id_file=FID,
-                    bnk_code=item.bnk_code,
-                    customer_id=item.customer_id,
-                    loan_id=item.loan_id
-                ).delete()
-                
-            
-            elif status_data == 'u':
-                
-                B1.objects.filter(
-                    id_file=FID,
-                    bnk_code=item.bnk_code,
-                    customer_id=item.customer_id,
-                    loan_id=item.loan_id
-                ).delete()
-                
-                B1_Monthly.objects.filter(
-                    id_file=FID,
-                    bnk_code=item.bnk_code,
-                    customer_id=item.customer_id,
-                    loan_id=item.loan_id
-                ).delete()
-                
-               
-                latest_b1_monthly = B1_Monthly.objects.filter(
-                    bnk_code=item.bnk_code,
-                    customer_id=item.customer_id,
-                    loan_id=item.loan_id
-                ).exclude(id_file=FID).order_by('-id').first()
-                
-                if latest_b1_monthly:
-                   
-                    B1.objects.create(
-                        lcicID=latest_b1_monthly.lcicID,
-                        com_enterprise_code=latest_b1_monthly.com_enterprise_code,
-                        segmentType=latest_b1_monthly.segmentType,
-                        bnk_code=latest_b1_monthly.bnk_code,
-                        user_id=latest_b1_monthly.user_id,
-                        customer_id=latest_b1_monthly.customer_id,
-                        branch_id=latest_b1_monthly.branch_id,
-                        lon_sys_id=latest_b1_monthly.lon_sys_id,
-                        loan_id=latest_b1_monthly.loan_id,
-                        period=latest_b1_monthly.period,
-                        product_type=latest_b1_monthly.product_type,    
-                        lon_open_date=latest_b1_monthly.lon_open_date,
-                        lon_exp_date=latest_b1_monthly.lon_exp_date,
-                        lon_ext_date=latest_b1_monthly.lon_ext_date,
-                        lon_int_rate=latest_b1_monthly.lon_int_rate,
-                        lon_purpose_code=latest_b1_monthly.lon_purpose_code,
-                        lon_credit_line=latest_b1_monthly.lon_credit_line,
-                        lon_currency_code=latest_b1_monthly.lon_currency_code,
-                        lon_outstanding_balance=latest_b1_monthly.lon_outstanding_balance,
-                        lon_account_no=latest_b1_monthly.lon_account_no,
-                        lon_no_days_slow=latest_b1_monthly.lon_no_days_slow,
-                        lon_class=latest_b1_monthly.lon_class,
-                        lon_type=latest_b1_monthly.lon_type,
-                        lon_term=latest_b1_monthly.lon_term,
-                        lon_status=latest_b1_monthly.lon_status,
-                        lon_insert_date=latest_b1_monthly.lon_insert_date,
-                        lon_update_date=latest_b1_monthly.lon_update_date,
-                        lon_applied_date=latest_b1_monthly.lon_applied_date,
-                        is_disputed=latest_b1_monthly.is_disputed,
-                        id_file=latest_b1_monthly.id_file,
-                        LCIC_code=latest_b1_monthly.LCIC_code,
-                        status_data=latest_b1_monthly.status_data if hasattr(latest_b1_monthly, 'status_data') else 'u'
+                if latest_previous_file_id:
+                    # ຫາທຸກ records ທີ່ມີ bnk_code ນີ້ແລະ id_file ເທົ່າກັບ latest_previous_file_id
+                    previous_records = data_edit.objects.filter(
+                        bnk_code=bnk_code,
+                        id_file=latest_previous_file_id
                     )
-        
-    
-        Upload_File.objects.filter(FID=FID).update(statussubmit='5')
-        
-        return JsonResponse({'status': 'success', 'message': 'Data unloaded successfully'})
+                    
+                    # ເພີ່ມທຸກ records ທີ່ພົບເຫັນສຳລັບ bnk_code ນີ້
+                    previous_data.extend(list(previous_records))
+            
+            if previous_data:
+                # ສົ່ງຂໍ້ມູນໄປຟັງຊັນ confirm_upload
+                return confirm_upload(request, previous_data, FID, user_id)
+            else:
+                return JsonResponse({'status': 'info', 'message': 'No previous data found to process'}, status=200)
+        else:
+            return JsonResponse({'status': 'info', 'message': 'No existing data found for this FID in B1 or B1_Monthly tables'}, status=200)
     
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
+
+def confirm_upload(request, previous_data, FID, user_id):
+    """
+    ຟັງຊັນສຳລັບປະມວນຜົນຂໍ້ມູນທີ່ຫາມາໄດ້
+    """
+    try:
+        for item in previous_data:
+            try:
+                # ສ້າງຂໍ້ມູນໃໝ່ໃນ B1_Monthly
+                B1_Monthly.objects.create(
+                    lcicID=item.lcicID,
+                    com_enterprise_code=item.com_enterprise_code,
+                    segmentType=item.segmentType,
+                    bnk_code=item.bnk_code,
+                    customer_id=item.customer_id,
+                    branch_id=item.branch_id,
+                    user_id=user_id,
+                    period=item.period,
+                    product_type=item.product_type,
+                    lon_sys_id=item.lon_sys_id,
+                    loan_id=item.loan_id,
+                    lon_open_date=item.lon_open_date,
+                    lon_exp_date=item.lon_exp_date,
+                    lon_ext_date=item.lon_ext_date,
+                    lon_int_rate=item.lon_int_rate,
+                    lon_purpose_code=item.lon_purpose_code,
+                    lon_credit_line=item.lon_credit_line,
+                    lon_currency_code=item.lon_currency_code,
+                    lon_outstanding_balance=item.lon_outstanding_balance,
+                    lon_account_no=item.lon_account_no,
+                    lon_no_days_slow=item.lon_no_days_slow,
+                    lon_class=item.lon_class,
+                    lon_type=item.lon_type,
+                    lon_term=item.lon_term,
+                    lon_status=item.lon_status,
+                    lon_insert_date=item.lon_insert_date,
+                    lon_update_date=item.lon_update_date,
+                    lon_applied_date=item.lon_applied_date,
+                    is_disputed=item.is_disputed,
+                    id_file=item.id_file,  # ໃຊ້ id_file ເກົ່າ
+                    LCIC_code=item.LCIC_code
+                )
+                
+                # ສ້າງຂໍ້ມູນໃໝ່ໃນ B1
+                B1.objects.create(
+                    lcicID=item.lcicID,
+                    com_enterprise_code=item.com_enterprise_code,
+                    segmentType=item.segmentType,
+                    bnk_code=item.bnk_code,
+                    user_id=user_id,
+                    customer_id=item.customer_id,
+                    branch_id=item.branch_id,
+                    lon_sys_id=item.lon_sys_id,
+                    loan_id=item.loan_id,
+                    period=item.period,
+                    product_type=item.product_type,    
+                    lon_open_date=item.lon_open_date,
+                    lon_exp_date=item.lon_exp_date,
+                    lon_ext_date=item.lon_ext_date,
+                    lon_int_rate=item.lon_int_rate,
+                    lon_purpose_code=item.lon_purpose_code,
+                    lon_credit_line=item.lon_credit_line,
+                    lon_currency_code=item.lon_currency_code,
+                    lon_outstanding_balance=item.lon_outstanding_balance,
+                    lon_account_no=item.lon_account_no,
+                    lon_no_days_slow=item.lon_no_days_slow,
+                    lon_class=item.lon_class,
+                    lon_type=item.lon_type,
+                    lon_term=item.lon_term,
+                    lon_status=item.lon_status,
+                    lon_insert_date=item.lon_insert_date,
+                    lon_update_date=item.lon_update_date,
+                    lon_applied_date=item.lon_applied_date,
+                    is_disputed=item.is_disputed,
+                    id_file=item.id_file,  # ໃຊ້ id_file ເກົ່າ
+                    LCIC_code=item.LCIC_code
+                )
+                
+            except Exception as e:
+                return JsonResponse({'status': 'error', 'message': f'Error processing item: {str(e)}'}, status=500)
+
+        # ອັບເດດສະຖານະຂອງໄຟລ์ອັບໂຫລດ
+        Upload_File.objects.filter(FID=FID).update(statussubmit='1')
+        
+        return JsonResponse({
+            'status': 'success', 
+            'message': f'Data unloaded successfully. Processed {len(previous_data)} records.'
+        })
+    
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
   
