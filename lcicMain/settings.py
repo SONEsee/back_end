@@ -163,7 +163,7 @@ CACHES = {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
         },
         'KEY_PREFIX': 'lcic',
-        'TIMEOUT': 300,  # 5 minutes default
+        'TIMEOUT': 300, 
     }
 }
 UPLOAD_PROCESSING_CONFIG = {
@@ -175,7 +175,7 @@ UPLOAD_PROCESSING_CONFIG = {
     'ENABLE_PROGRESS_TRACKING': True,
     'LOG_LEVEL': 'INFO'
 }
-# DATABASE_ROUTERS = ['sqlserver_models.router.NEDRouter']
+
 DATABASE_ROUTERS = ['lcicMain.db_router.DatabaseRouter']
 # DATABASE_ROUTERS = [
 #     'utility.db_router.UtilityDBRouter',
