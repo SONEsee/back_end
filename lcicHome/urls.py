@@ -56,7 +56,7 @@ from rest_framework_simplejwt.views import (
 from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView,ChargeMatrixViewSet, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files,BankUsersView,LoanCountByDate,CountSearchLogbyDate,CountFeebyDate
 from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView
 from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files,BankUsersView,LoanCountByDate,CountSearchLogbyDate,CountFeebyDate
-from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddLCICSystemUser, SysUserTokenRefresh,LCICSystemUserDetailView, LCICSystemUserListView, BankListCreateView,BankDetailView, EDLProvinceDetailAPIView, FileElectricListAPIView, ElectricReportAPIView, UserGroupViewSet,UploadTrackingListAPIView,UploadDataAPIView,UploadTrackingDetailAPIView,InitializeTrackingAPIView, DebugAPIView,InitializeTestDataAPIView, TestRealUploadAPIView, InitializeDistrictsAPIView, ChargeReportMainView, ChargeReportDetailView,confirm_dispute_upload,edl_customer_search,water_customer_search
+from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddLCICSystemUser, SysUserTokenRefresh,LCICSystemUserDetailView, LCICSystemUserListView, BankListCreateView,BankDetailView, EDLProvinceDetailAPIView, FileElectricListAPIView, ElectricReportAPIView, UserGroupViewSet,UploadTrackingListAPIView,UploadDataAPIView,UploadTrackingDetailAPIView,InitializeTrackingAPIView, DebugAPIView,InitializeTestDataAPIView, TestRealUploadAPIView, InitializeDistrictsAPIView, ChargeReportMainView, ChargeReportDetailView,confirm_dispute_upload,edl_customer_search,water_customer_search,SearchLogReportMainView,SearchLogReportDetailView,ChargeReportSummaryView,WaterUploadDataAPIView
 
 
 from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView,process_dispute_notification, process_multiple_disputes
@@ -91,9 +91,33 @@ water_supply_patterns = [
     # Step 4: Monitor Progress - Get Detailed Logs  
     path('tracking/<int:tracking_id>/', views.WaterUploadTrackingDetailAPIView.as_view(), name='water-tracking-detail'),
     
+    # NEW: Get District Statistics (grouped by Province and District)
+    path('statistics/districts/', views.WaterDistrictStatisticsAPIView.as_view(), name='water-district-statistics'),
+    
+    # NEW: Get Upload Summary (all periods with customer counts)
+    path('statistics/summary/', views.WaterUploadSummaryAPIView.as_view(), name='water-upload-summary'),
     # Debug and Testing endpoints
     # path('debug/', views.WaterDebugAPIView.as_view(), name='water-debug'),
     # path('test-upload/', views.WaterTestUploadAPIView.as_view(), name='water-test-upload'),
+    
+    
+    # #Step 1: Load Provinces
+    # path('provinces/', views.WaterProvinceListAPIView.as_view(), name='water-province-list'),
+    
+    # # Step 2: Load Districts for Selected Province  
+    # path('districts/', views.WaterDistrictListAPIView.as_view(), name='water-district-list'),
+    
+    # # Step 3: Initialize Districts Tracking for Province + Month
+    # path('initialize-districts/', views.WaterInitializeDistrictsAPIView.as_view(), name='water-initialize-districts'),
+    
+    # # Step 4: Upload Data for Individual District (Fetches from API → Inserts into Utility_Bill)
+    # path('upload-data/', views.WaterUploadDataAPIView.as_view(), name='water-upload-data'),
+    
+    # # Step 5: Monitor Progress - Get Tracking Status for Province
+    # path('upload-tracking/', views.WaterUploadTrackingListAPIView.as_view(), name='water-upload-tracking-list'),
+    
+    # # Step 6: Monitor Progress - Get Detailed Logs  
+    # path('upload-tracking/<int:tracking_id>/', views.WaterUploadTrackingDetailAPIView.as_view(), name='water-upload-tracking-detail'),
 ]
 
 # Water Supply Summary URL patterns
@@ -274,8 +298,6 @@ urlpatterns = [
     path('upload-filesC/', FileUploadViewC.as_view(), name='upload_files_view'),
     path('process-filesC/', process_uploaded_file, name='process_uploaded_file'),
 
-
-
     path('api/update-statussubmit/', update_statussubmit, name='update_statussubmit'),
     path('api/unload_statussubmit/', unload_statussubmit, name='update_statussubmit'),
     path('api/error_statussubmit/', error_statussubmit, name='update_statussubmit'),
@@ -290,7 +312,6 @@ urlpatterns = [
     path('process-dispute/', views.process_dispute_notification, name='process_dispute_notification'),
     path('process-multiple-disputes/', process_multiple_disputes, name='process_multiple_disputes'),
 
-  
     path('api/enterprise-info/', views.create_enterprise_info, name='create_enterprise_info'),
     path('api/last-lcicid/', get_last_lcicid, name='get_last_lcicid'),
     #path('api/confirm_image/', confirm_image, name='confirm_image'),
@@ -389,8 +410,12 @@ urlpatterns = [
     path('water-summary/', include(water_summary_patterns)),
     
     # API Mai Sumlup LCIC -----------------
+    path('charge_report_summary/', ChargeReportSummaryView.as_view(), name='charge-report-summary'),
     path('charge_report_main/', ChargeReportMainView.as_view(), name='charge-report-main'),
     path('charge_report_detail/', ChargeReportDetailView.as_view(), name='charge-report-detail'),
+    # SearchLog Reports  
+    path('searchlog_report_main/', SearchLogReportMainView.as_view(), name='searchlog-report-main'),
+    path('searchlog_report_detail/', SearchLogReportDetailView.as_view(), name='searchlog-report-detail'),
     
     #--------------------------------------
     path('systemlogin/', SysUserLogin.as_view(), name='sys_user_login'),

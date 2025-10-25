@@ -253,6 +253,18 @@ class edl_district_code(models.Model):
     dis_id = models.CharField(max_length=50)
     dis_name = models.CharField(max_length=100)
 
+    
+class w_province_code(models.Model):
+    id = models.BigAutoField(auto_created=True, primary_key=True)
+    pro_id = models.CharField(max_length=50)
+    pro_name = models.CharField(max_length=100)
+    
+class w_district_code(models.Model):
+    id = models.BigAutoField(auto_created=True, primary_key=True)
+    pro_id = models.CharField(max_length=50)
+    dis_id = models.CharField(max_length=50)
+    dis_name = models.CharField(max_length=100)
+
 # API Edl Tracking:
 from django.utils import timezone
 # pherm check update
@@ -326,12 +338,172 @@ class UploadLog(models.Model):
 # Water Supply Data Load Tracking --------------------------------------------------
 # Add these models to your utility/models.py
 
+# from django.db import models
+# from django.utils import timezone
+
+# class WaterUploadDataTracking(models.Model):
+#     """Model to track water supply data uploads for each month"""
+    
+#     STATUS_CHOICES = [
+#         ('pending', 'Pending'),
+#         ('in_progress', 'In Progress'),
+#         ('completed', 'Completed'),
+#         ('failed', 'Failed'),
+#         ('partial', 'Partial')
+#     ]
+    
+#     upload_month = models.CharField(
+#         max_length=6, 
+#         help_text="Month in MMYYYY format (e.g., 122024)"
+#     )
+#     status = models.CharField(
+#         max_length=20, 
+#         choices=STATUS_CHOICES, 
+#         default='pending'
+#     )
+#     description = models.CharField(
+#         max_length=255, 
+#         blank=True, 
+#         null=True,
+#         help_text="Description of the upload task"
+#     )
+    
+#     # Upload tracking fields
+#     total_records = models.IntegerField(default=0)
+#     processed_records = models.IntegerField(default=0)
+#     failed_records = models.IntegerField(default=0)
+#     success_rates = models.FloatField(
+#         default=0.0, 
+#         help_text="Success rate as percentage"
+#     )
+    
+#     # File and API info
+#     data_size_mb = models.FloatField(
+#         default=0.0, 
+#         help_text="Size of processed data in MB"
+#     )
+#     api_response_code = models.IntegerField(
+#         null=True, 
+#         blank=True,
+#         help_text="HTTP response code from water supply API"
+#     )
+    
+#     # Timing fields
+#     upload_started = models.DateTimeField(null=True, blank=True)
+#     upload_completed = models.DateTimeField(null=True, blank=True)
+#     upload_duration = models.FloatField(
+#         null=True, 
+#         blank=True,
+#         help_text="Upload duration in seconds"
+#     )
+    
+#     # User and error tracking
+#     user_upload = models.CharField(
+#         max_length=100, 
+#         help_text="Username who initiated the upload"
+#     )
+#     error_message = models.TextField(blank=True, null=True)
+#     payment_records = models.IntegerField(default=0)
+#     customer_records = models.IntegerField(default=0)
+
+    
+#     # Timestamps
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     updated_at = models.DateTimeField(auto_now=True)
+    
+#     class Meta:
+#         unique_together = ['upload_month']  # One tracking record per month
+#         ordering = ['-created_at']
+#         indexes = [
+#             models.Index(fields=['upload_month']),
+#             models.Index(fields=['status']),
+#             models.Index(fields=['created_at']),
+#         ]
+    
+#     def __str__(self):
+#         return f"Water Upload {self.upload_month} - {self.status}"
+    
+#     @property
+#     def formatted_month(self):
+#         """Convert MMYYYY to readable format"""
+#         if len(self.upload_month) == 6:
+#             month = self.upload_month[:2]
+#             year = self.upload_month[2:]
+#             try:
+#                 from datetime import datetime
+#                 date_obj = datetime.strptime(f"{month}/{year}", "%m/%Y")
+#                 return date_obj.strftime("%B %Y")
+#             except:
+#                 return self.upload_month
+#         return self.upload_month
+    
+#     @property
+#     def success_rate_percentage(self):
+#         """Get success rate as formatted percentage"""
+#         return f"{self.success_rates:.1f}%"
+    
+#     def save(self, *args, **kwargs):
+#         # Calculate success rate if we have records
+#         if self.total_records > 0:
+#             self.success_rates = (self.processed_records / self.total_records) * 100
+        
+#         # Calculate upload duration if both times are set
+#         if self.upload_started and self.upload_completed:
+#             duration = (self.upload_completed - self.upload_started).total_seconds()
+#             self.upload_duration = duration
+        
+#         super().save(*args, **kwargs)
+
+# class WaterUploadLog(models.Model):
+#     """Model to store detailed logs for water supply upload tracking"""
+    
+#     LOG_LEVELS = [
+#         ('DEBUG', 'Debug'),
+#         ('INFO', 'Info'),
+#         ('WARNING', 'Warning'),
+#         ('ERROR', 'Error'),
+#         ('CRITICAL', 'Critical')
+#     ]
+    
+#     tracking = models.ForeignKey(
+#         WaterUploadDataTracking, 
+#         on_delete=models.CASCADE, 
+#         related_name='logs'
+#     )
+#     timestamp = models.DateTimeField(auto_now_add=True)
+#     log_level = models.CharField(max_length=10, choices=LOG_LEVELS, default='INFO')
+#     message = models.TextField()
+    
+#     # Optional additional context
+#     context_data = models.JSONField(
+#         blank=True, 
+#         null=True,
+#         help_text="Additional context data in JSON format"
+#     )
+    
+#     class Meta:
+#         ordering = ['-timestamp']
+#         indexes = [
+#             models.Index(fields=['tracking', 'timestamp']),
+#             models.Index(fields=['log_level']),
+#             models.Index(fields=['timestamp']),
+#         ]
+    
+#     def __str__(self):
+#         return f"{self.log_level} - {self.tracking.upload_month} - {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
+    
+#     @property
+#     def formatted_timestamp(self):
+#         """Get formatted timestamp"""
+#         return self.timestamp.strftime("%Y-%m-%d %H:%M:%S")
 from django.db import models
 from django.utils import timezone
 
 class WaterUploadDataTracking(models.Model):
-    """Model to track water supply data uploads for each month"""
-    
+    """
+    Tracking model for water supply data uploads
+    Matches electric supply structure with separate payment and customer records
+    """
     STATUS_CHOICES = [
         ('pending', 'Pending'),
         ('in_progress', 'In Progress'),
@@ -340,114 +512,86 @@ class WaterUploadDataTracking(models.Model):
         ('partial', 'Partial')
     ]
     
-    upload_month = models.CharField(
-        max_length=6, 
-        help_text="Month in MMYYYY format (e.g., 122024)"
-    )
-    status = models.CharField(
-        max_length=20, 
-        choices=STATUS_CHOICES, 
-        default='pending'
-    )
-    description = models.CharField(
-        max_length=255, 
-        blank=True, 
-        null=True,
-        help_text="Description of the upload task"
-    )
+    # Location Information
+    pro_id = models.CharField(max_length=10, db_index=True)
+    pro_name = models.CharField(max_length=100)
+    dis_id = models.CharField(max_length=10, db_index=True)
+    dis_name = models.CharField(max_length=100)
     
-    # Upload tracking fields
-    total_records = models.IntegerField(default=0)
-    processed_records = models.IntegerField(default=0)
-    failed_records = models.IntegerField(default=0)
-    success_rates = models.FloatField(
-        default=0.0, 
-        help_text="Success rate as percentage"
-    )
+    # Period and Status
+    upload_month = models.CharField(max_length=6, db_index=True)  # Format: YYYYMM
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     
-    # File and API info
-    data_size_mb = models.FloatField(
-        default=0.0, 
-        help_text="Size of processed data in MB"
-    )
-    api_response_code = models.IntegerField(
-        null=True, 
-        blank=True,
-        help_text="HTTP response code from water supply API"
-    )
+    # Record Counts (UPDATED: Separate payment and customer records)
+    total_records = models.IntegerField(default=0)  # Total bills/payments
+    payment_records = models.IntegerField(default=0)  # Payment records inserted
+    customer_records = models.IntegerField(default=0)  # Customer records inserted
     
-    # Timing fields
+    # Processing Information
+    data_size_mb = models.FloatField(default=0.0)
     upload_started = models.DateTimeField(null=True, blank=True)
     upload_completed = models.DateTimeField(null=True, blank=True)
-    upload_duration = models.FloatField(
-        null=True, 
-        blank=True,
-        help_text="Upload duration in seconds"
-    )
-    
-    # User and error tracking
-    user_upload = models.CharField(
-        max_length=100, 
-        help_text="Username who initiated the upload"
-    )
-    error_message = models.TextField(blank=True, null=True)
+    upload_duration = models.FloatField(null=True, blank=True)  # Duration in seconds
     
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    # Statistics
+    processed_records = models.IntegerField(default=0)
+    failed_records = models.IntegerField(default=0)
+    success_rates = models.FloatField(default=0.0, blank=True, null=True)
+    
+    # User and Error Information
+    user_upload = models.CharField(max_length=50, blank=True, null=True)
+    error_message = models.TextField(blank=True, null=True)
+    api_response_code = models.IntegerField(null=True, blank=True)
+    description = models.CharField(max_length=255, blank=True, null=True)
+    
     class Meta:
-        unique_together = ['upload_month']  # One tracking record per month
-        ordering = ['-created_at']
+        unique_together = ['pro_id', 'dis_id', 'upload_month']
         indexes = [
-            models.Index(fields=['upload_month']),
-            models.Index(fields=['status']),
-            models.Index(fields=['created_at']),
+            models.Index(fields=['upload_month', 'status']),
+            models.Index(fields=['pro_id', 'dis_id']),
         ]
+        verbose_name = 'Water Upload Tracking'
+        verbose_name_plural = 'Water Upload Trackings'
     
     def __str__(self):
-        return f"Water Upload {self.upload_month} - {self.status}"
+        return f"{self.pro_name} - {self.dis_name} ({self.upload_month}) - {self.status}"
     
-    @property
-    def formatted_month(self):
-        """Convert MMYYYY to readable format"""
-        if len(self.upload_month) == 6:
-            month = self.upload_month[:2]
-            year = self.upload_month[2:]
-            try:
-                from datetime import datetime
-                date_obj = datetime.strptime(f"{month}/{year}", "%m/%Y")
-                return date_obj.strftime("%B %Y")
-            except:
-                return self.upload_month
-        return self.upload_month
-    
-    @property
-    def success_rate_percentage(self):
-        """Get success rate as formatted percentage"""
-        return f"{self.success_rates:.1f}%"
-    
-    def save(self, *args, **kwargs):
-        # Calculate success rate if we have records
-        if self.total_records > 0:
-            self.success_rates = (self.processed_records / self.total_records) * 100
-        
-        # Calculate upload duration if both times are set
+    def calculate_duration(self):
+        """Calculate upload duration if both timestamps exist"""
         if self.upload_started and self.upload_completed:
             duration = (self.upload_completed - self.upload_started).total_seconds()
             self.upload_duration = duration
-        
-        super().save(*args, **kwargs)
+            return duration
+        return None
+    
+    def calculate_success_rate(self):
+        """Calculate success rate based on processed vs total records"""
+        if self.total_records > 0:
+            self.success_rates = (self.processed_records / self.total_records) * 100
+            return self.success_rates
+        return 0.0
+    
+    @property
+    def is_uploaded_this_month(self):
+        """Check if uploaded in current month"""
+        current_month = timezone.now().strftime('%Y%m')
+        return self.upload_month == current_month and self.status == 'completed'
+
 
 class WaterUploadLog(models.Model):
-    """Model to store detailed logs for water supply upload tracking"""
-    
-    LOG_LEVELS = [
-        ('DEBUG', 'Debug'),
+    """
+    Log entries for upload tracking
+    Records all events during upload process
+    """
+    LOG_LEVEL_CHOICES = [
         ('INFO', 'Info'),
         ('WARNING', 'Warning'),
         ('ERROR', 'Error'),
-        ('CRITICAL', 'Critical')
+        ('SUCCESS', 'Success')
     ]
     
     tracking = models.ForeignKey(
@@ -455,33 +599,17 @@ class WaterUploadLog(models.Model):
         on_delete=models.CASCADE, 
         related_name='logs'
     )
-    timestamp = models.DateTimeField(auto_now_add=True)
-    log_level = models.CharField(max_length=10, choices=LOG_LEVELS, default='INFO')
+    log_level = models.CharField(max_length=10, choices=LOG_LEVEL_CHOICES)
     message = models.TextField()
-    
-    # Optional additional context
-    context_data = models.JSONField(
-        blank=True, 
-        null=True,
-        help_text="Additional context data in JSON format"
-    )
+    timestamp = models.DateTimeField(auto_now_add=True)
     
     class Meta:
         ordering = ['-timestamp']
-        indexes = [
-            models.Index(fields=['tracking', 'timestamp']),
-            models.Index(fields=['log_level']),
-            models.Index(fields=['timestamp']),
-        ]
+        verbose_name = 'Water Upload Log'
+        verbose_name_plural = 'Water Upload Logs'
     
     def __str__(self):
-        return f"{self.log_level} - {self.tracking.upload_month} - {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
-    
-    @property
-    def formatted_timestamp(self):
-        """Get formatted timestamp"""
-        return self.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-
+        return f"{self.log_level} - {self.message[:50]}"
 # Additional utility model for API configuration (optional)
 class WaterSupplyAPIConfig(models.Model):
     """Model to store water supply API configuration"""
