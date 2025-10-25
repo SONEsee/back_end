@@ -122,6 +122,7 @@ TEMPLATES = [
 
 import pyodbc
 
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
