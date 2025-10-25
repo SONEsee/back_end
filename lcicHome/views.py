@@ -12468,176 +12468,6 @@ class SearchlogReportDetailView(APIView):
 #             return Response({
 #                 'error': str(e)
 #             }, status=status.HTTP_400_BAD_REQUEST)
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
-from django.db.models import Sum, Count, F, Q
-from django.db.models.functions import ExtractYear, ExtractMonth
-from .models import request_charge
-
-
-class ChargeReportMainView(APIView):
-    """
-    API endpoint for aggregated charge report dashboard.
-    
-    Access Control:
-    - GID 1-5 (Admin/CoAdmin): View all banks' data
-    - GID 6-7 (Client): View only own bank's data
-    
-    Query Parameters:
-    - year: Filter by specific year
-    - month: Filter by specific month (1-12)
-    - bank: Filter by specific bank code
-    - fromDate: Start date filter (YYYY-MM-DD)
-    - toDate: End date filter (YYYY-MM-DD)
-    """
-    permission_classes = [IsAuthenticated]
-    
-    def get(self, request):
-        try:
-            user = request.user
-            
-            # Validate user attributes
-            if not hasattr(user, 'GID') or not user.GID:
-                return Response({
-                    'error': 'User role (GID) not found'
-                }, status=status.HTTP_403_FORBIDDEN)
-            
-            # Extract GID integer value from User_Group object
-            user_gid = user.GID.GID if hasattr(user.GID, 'GID') else None
-            
-            # Extract bank code from MID object (using 'id' field based on your login response)
-            user_bank_code = None
-            if hasattr(user, 'MID') and user.MID:
-                user_bank_code = getattr(user.MID, 'id', None)
-            
-            if user_gid is None:
-                return Response({
-                    'error': 'User role value not configured'
-                }, status=status.HTTP_403_FORBIDDEN)
-            
-            # Base queryset with proper filtering
-            queryset = request_charge.objects.filter(
-                status__isnull=False,
-                insert_date__isnull=False
-            )
-            
-            # Role-based access control
-            # Admin/CoAdmin: GID 1-5, Client: GID 6-7
-            is_admin = user_gid in [1, 2, 3, 4, 5]
-            
-            # Convert bank code to string with zero-padding for consistency
-            bank_code_str = str(user_bank_code).zfill(2) if user_bank_code else None
-            
-            if not is_admin:
-                if not bank_code_str:
-                    return Response({
-                        'error': 'Access denied: User bank code not configured'
-                    }, status=status.HTTP_403_FORBIDDEN)
-                
-                # Filter by user's bank code (format: "01", "02", etc.)
-                queryset = queryset.filter(bnk_code=bank_code_str)
-            
-            # Apply optional filters
-            queryset = self._apply_filters(request, queryset)
-            
-            # Aggregate data by bank, year, and month
-            aggregated_data = queryset.annotate(
-                year=ExtractYear('insert_date'),
-                month=ExtractMonth('insert_date')
-            ).values(
-                'bnk_code', 'year', 'month'
-            ).annotate(
-                total_charge_amount=Sum('chg_amount'),
-                transaction_count=Count('rec_charge_ID'),
-                avg_charge_amount=Avg('chg_amount')
-            ).order_by('-year', '-month', 'bnk_code')
-            
-            # Format response
-            dashboard_data = [
-                {
-                    'bank_code': item['bnk_code'],
-                    'year': item['year'],
-                    'month': item['month'],
-                    'month_name': self._get_month_name(item['month']),
-                    'total_charge_amount': round(item['total_charge_amount'] or 0, 2),
-                    'transaction_count': item['transaction_count'],
-                    'avg_charge_amount': round(item['avg_charge_amount'] or 0, 2)
-                }
-                for item in aggregated_data
-            ]
-            
-            # Summary statistics
-            total_summary = {
-                'total_transactions': sum(item['transaction_count'] for item in dashboard_data),
-                'total_amount': round(sum(item['total_charge_amount'] for item in dashboard_data), 2),
-                'unique_banks': len(set(item['bank_code'] for item in dashboard_data))
-            }
-            
-            return Response({
-                'status': 'success',
-                'user_info': {
-                    'role_id': user_gid,
-                    'is_admin': is_admin,
-                    'bank_code': 'ALL' if is_admin else bank_code_str
-                },
-                'summary': total_summary,
-                'data': dashboard_data
-            }, status=status.HTTP_200_OK)
-            
-        except AttributeError as e:
-            return Response({
-                'error': 'Authentication error',
-                'detail': str(e)
-            }, status=status.HTTP_401_UNAUTHORIZED)
-        except Exception as e:
-            return Response({
-                'error': 'Internal server error',
-                'detail': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def _apply_filters(self, request, queryset):
-        """Apply query parameter filters to queryset"""
-        year = request.query_params.get('year')
-        month = request.query_params.get('month')
-        bank = request.query_params.get('bank')
-        from_date = request.query_params.get('fromDate')
-        to_date = request.query_params.get('toDate')
-        
-        if year:
-            queryset = queryset.filter(insert_date__year=year)
-        
-        if month:
-            if not year and not (from_date or to_date):
-                # Month filter requires context
-                pass
-            else:
-                queryset = queryset.filter(insert_date__month=month)
-        
-        if bank:
-            queryset = queryset.filter(bnk_code=bank)
-        
-        # Date range filters
-        if from_date and to_date:
-            queryset = queryset.filter(insert_date__range=[from_date, to_date])
-        elif from_date:
-            queryset = queryset.filter(insert_date__gte=from_date)
-        elif to_date:
-            queryset = queryset.filter(insert_date__lte=to_date)
-        
-        return queryset
-    
-    @staticmethod
-    def _get_month_name(month_num):
-        """Convert month number to name"""
-        months = {
-            1: 'January', 2: 'February', 3: 'March', 4: 'April',
-            5: 'May', 6: 'June', 7: 'July', 8: 'August',
-            9: 'September', 10: 'October', 11: 'November', 12: 'December'
-        }
-        return months.get(month_num, 'Unknown')
-
 
 
 from .serializers import ChargeSerializer
@@ -19173,110 +19003,6 @@ class UploadDataAPIView(APIView):
             return float(value or 0)
         except (ValueError, TypeError):
             return 0.0
-        
-    # def insert_customer_info_data(self, records, tracking):
-    #     """Insert or update customer records in edl_customer_info table"""
-    #     processed_count = 0
-    #     failed_count = 0
-        
-    #     try:
-    #         UploadLog.objects.create(
-    #             tracking=tracking,
-    #             log_level='INFO',
-    #             message=f'Starting to process {len(records)} customer records'
-    #         )
-            
-    #         # Use batch processing for better performance
-    #         batch_size = 500
-    #         for i in range(0, len(records), batch_size):
-    #             batch = records[i:i + batch_size]
-                
-    #             for j, item in enumerate(batch):
-    #                 try:
-    #                     if not isinstance(item, dict):
-    #                         failed_count += 1
-    #                         continue
-                        
-    #                     def safe_get(key, default=''):
-    #                         value = item.get(key, default)
-    #                         return value if value is not None else default
-                        
-    #                     # Use update_or_create for upsert logic
-    #                     customer_id = self.truncate(safe_get('CUSTOMER_ID', ''), 100)
-                        
-    #                     if not customer_id:  # Skip if no customer ID
-    #                         failed_count += 1
-    #                         continue
-                        
-    #                     customer, created = edl_customer_info.objects.update_or_create(
-    #                         Customer_ID=customer_id,
-    #                         defaults={
-    #                             'No': self.truncate(safe_get('INDEX_NO', ''), 100),
-    #                             'Company_name': self.truncate(safe_get('COMPANY_NAME', ''), 100),
-    #                             'Name': self.truncate(safe_get('GIVEN_NAME', ''), 100),
-    #                             'Surname': self.truncate(safe_get('FAMILY_NAME', ''), 100),
-    #                             'National_ID': self.truncate(safe_get('ID_NO', ''), 100),
-    #                             'Passport': self.truncate(safe_get('PASSPORT_NO', ''), 100),
-    #                             'Address': self.truncate(safe_get('FORW_ADDRESS', ''), 100),
-    #                             'Dustrict_ID': self.truncate(safe_get('DIS_ID', ''), 100),
-    #                             'Province_ID': self.truncate(safe_get('PRO_ID', ''), 100),
-    #                             'Tel': self.truncate(safe_get('TEL_NO', ''), 100),
-    #                             'Email': self.truncate(safe_get('EMAIL_NO', ''), 100),
-    #                             'Cus_type': self.truncate(safe_get('SUPPLY_TYPE', ''), 100),
-    #                             'Regis_date': self.truncate(safe_get('REGIT_D', ''), 100)
-    #                         }
-    #                     )
-                        
-    #                     processed_count += 1
-                    
-    #                 except Exception as e:
-    #                     failed_count += 1
-    #                     if failed_count <= 10:  # Log only first 10 errors
-    #                         UploadLog.objects.create(
-    #                             tracking=tracking,
-    #                             log_level='ERROR',
-    #                             message=f'Failed to process customer record {i+j}: {str(e)}'
-    #                         )
-    #                     continue
-                
-    #             # Log progress after each batch
-    #             if (i + batch_size) % 1000 == 0 or (i + batch_size) >= len(records):
-    #                 UploadLog.objects.create(
-    #                     tracking=tracking,
-    #                     log_level='INFO',
-    #                     message=f'Customer records progress: {min(i + batch_size, len(records))}/{len(records)} processed'
-    #                 )
-            
-    #         UploadLog.objects.create(
-    #             tracking=tracking,
-    #             log_level='INFO',
-    #             message=f'Customer data processing completed. Processed: {processed_count}, Failed: {failed_count}'
-    #         )
-            
-    #         return processed_count, failed_count
-            
-    #     except Exception as e:
-    #         UploadLog.objects.create(
-    #             tracking=tracking,
-    #             log_level='ERROR',
-    #             message=f'Customer data insert failed: {str(e)}'
-    #         )
-    #         raise e
-
-
-    # def truncate(self, value, max_length):
-    #     """Safely truncate string to max length"""
-    #     if value is None:
-    #         return ''
-    #     return str(value)[:max_length]
-
-
-    # def safe_decimal(self, value):
-    #     """Safely convert to decimal"""
-    #     try:
-    #         return float(value or 0)
-    #     except (ValueError, TypeError):
-    #         return 0.0
 
 class UploadTrackingDetailAPIView(APIView):
     """Get detailed tracking information with logs"""
@@ -20879,25 +20605,709 @@ class InitializeWaterTrackingAPIView(APIView):
                 'error': f'Water tracking initialization failed: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+# class WaterUploadDataAPIView(APIView):
+#     """Handle water supply data upload with background processing for large datasets"""
+    
+#     def post(self, request):
+#         try:
+#             # Extract parameters
+#             month = request.data.get('month')
+#             username = request.data.get('username', 'system')
+#             api_token = request.data.get('api_token')  # Optional - we use fixed token
+
+#             # Fixed API token from supplier
+#             api_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbiI6IlUyRnNkR1ZrWDErdE9ja29vVDV0NXdqWlBqTzhVc0V1ZnR2QytPUXp3Z2ljWkFPdkhNUkNqdzh0NUhOSENBRVZsVXVNWHBrc1RudUFxaUE3R0VtVExRSTZMaWNTVUlaN1BMb0xGOVczMWtjWnFoQmxFUThHVUFwSFpNS0NDVjN1RURhWDJSSjFwZDNqaFRGc2lmdUF3Zz09IiwiaWF0IjoxNzA5MDEwNjU0fQ.mhmfUuasPQnAtxTQmwIyofClMuOAKVKZloNskpG9fHo'
+                        
+#             if not month:
+#                 return Response({
+#                     'error': 'Missing required parameter: month'
+#                 }, status=status.HTTP_400_BAD_REQUEST)
+            
+#             # Validate month format (MMYYYY)
+#             try:
+#                 datetime.strptime(month, '%m%Y')
+#             except ValueError:
+#                 return Response(
+#                     {"error": "Invalid month format. Use MMYYYY (e.g., 122024)"},
+#                     status=status.HTTP_400_BAD_REQUEST
+#                 )
+            
+#             # Get tracking record
+#             try:
+#                 tracking = WaterUploadDataTracking.objects.get(upload_month=month)
+#             except WaterUploadDataTracking.DoesNotExist:
+#                 return Response({
+#                     'error': 'Tracking record not found. Please initialize tracking first.'
+#                 }, status=status.HTTP_404_NOT_FOUND)
+            
+#             # Check if already completed
+#             if tracking.status == 'completed':
+#                 return Response({
+#                     'message': 'Water supply data already uploaded successfully',
+#                     'tracking_id': tracking.id,
+#                     'total_records': tracking.total_records,
+#                     'processed_records': tracking.processed_records
+#                 }, status=status.HTTP_200_OK)
+            
+#             # Check if already in progress
+#             if tracking.status == 'in_progress':
+#                 return Response({
+#                     'message': 'Water supply data upload is already in progress',
+#                     'tracking_id': tracking.id,
+#                     'status': tracking.status
+#                 }, status=status.HTTP_200_OK)
+            
+#             # Update status to in_progress
+#             tracking.status = 'in_progress'
+#             tracking.upload_started = timezone.now()
+#             tracking.user_upload = username
+#             tracking.error_message = None  # Clear any previous errors
+#             tracking.save()
+            
+#             # Log start
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO',
+#                 message=f'Water supply upload started by {username} for month {month}'
+#             )
+            
+#             # Start background processing for large datasets
+#             thread = threading.Thread(
+#                 target=self.process_water_data_background,
+#                 args=(tracking.id, api_token)
+#             )
+#             thread.daemon = True
+#             thread.start()
+            
+#             return Response({
+#                 'message': 'Water supply data upload started in background',
+#                 'tracking_id': tracking.id,
+#                 'status': 'in_progress',
+#                 'note': 'Large dataset processing initiated. Check tracking status for updates.'
+#             }, status=status.HTTP_200_OK)
+            
+#         except Exception as e:
+#             logger.error(f"Water upload failed: {str(e)}")
+#             return Response({
+#                 'error': f'Water upload failed: {str(e)}'
+#             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+#     def process_water_data_background(self, tracking_id, api_token):
+#         """Background processing for large water supply datasets"""
+#         try:
+#             tracking = WaterUploadDataTracking.objects.get(id=tracking_id)
+            
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO',
+#                 message='Background processing started for water supply data'
+#             )
+            
+#             # Fetch and process data with optimized handling
+#             result = self.fetch_and_process_water_data_optimized(tracking, api_token)
+            
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO',
+#                 message=f'Background processing completed: {result.get("message", "Unknown result")}'
+#             )
+            
+#         except Exception as e:
+#             logger.error(f"Background water processing failed: {str(e)}")
+#             try:
+#                 tracking = WaterUploadDataTracking.objects.get(id=tracking_id)
+#                 tracking.status = 'failed'
+#                 tracking.error_message = f'Background processing failed: {str(e)}'
+#                 tracking.upload_completed = timezone.now()
+#                 tracking.save()
+                
+#                 WaterUploadLog.objects.create(
+#                     tracking=tracking,
+#                     log_level='ERROR',
+#                     message=f'Background processing failed: {str(e)}'
+#                 )
+#             except Exception as save_error:
+#                 logger.error(f"Failed to save error state: {str(save_error)}")
+
+
+#     # Updated fetch_and_process_water_data_optimized method --- > to ni br hen
+#     def fetch_and_process_water_data_optimized(self, tracking, api_token):
+        
+#         """Optimized fetch for large water supply datasets with customer data"""
+#         try:
+#             water_api_base = getattr(settings, 'WATER_API_BASE_URL', 'http://202.137.141.244:3000')
+            
+#             # Water Bill API endpoint
+#             bill_api_url = f"{water_api_base}/v3/api/loans/allbillmonth/{tracking.upload_month}"
+            
+#             # Customer API endpoint
+#             customer_api_url = f"{water_api_base}/v3/api/loans/newconnection/{tracking.upload_month}"
+            
+#             headers = {
+#                 'Auth': api_token,
+#                 'Content-Type': 'application/json',
+#                 'Accept': 'application/json',
+#                 'Connection': 'close'
+#             }
+            
+#             # ========== Fetch Bill Data ==========
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO',
+#                 message=f'Fetching water bill data from: {bill_api_url}'
+#             )
+            
+#             bill_response = requests.get(
+#                 bill_api_url, 
+#                 headers=headers, 
+#                 timeout=600,
+#                 stream=True
+#             )
+            
+#             tracking.api_response_code = bill_response.status_code
+#             tracking.save()
+            
+#             if bill_response.status_code != 200:
+#                 error_msg = f'Water Bill API failed with status {bill_response.status_code}'
+#                 try:
+#                     error_content = bill_response.text[:1000]
+#                     error_msg += f': {error_content}'
+#                 except:
+#                     pass
+#                 raise Exception(error_msg)
+            
+#             # Process bill response
+#             content = bill_response.content
+#             bill_response.close()
+            
+#             content_size_mb = len(content) / (1024 * 1024)
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO',
+#                 message=f'Received {content_size_mb:.2f} MB of bill data'
+#             )
+            
+#             try:
+#                 bill_data = json.loads(content.decode('utf-8'))
+#             except json.JSONDecodeError as e:
+#                 raise Exception(f'Invalid JSON response from Water Bill API: {str(e)}')
+            
+#             # Extract bill records
+#             bill_records = self.extract_water_records(bill_data, tracking, 'bill')
+            
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO',
+#                 message=f'Extracted {len(bill_records)} bill records'
+#             )
+            
+#             # ========== Fetch Customer Data ==========
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO',
+#                 message=f'Fetching water customer data from: {customer_api_url}'
+#             )
+            
+#             customer_records = []
+#             customer_error = None
+            
+#             try:
+#                 customer_response = requests.get(
+#                     customer_api_url,
+#                     headers=headers,
+#                     timeout=600,
+#                     stream=True
+#                 )
+                
+#                 if customer_response.status_code != 200:
+#                     customer_error = f'Customer API returned status {customer_response.status_code}'
+#                     WaterUploadLog.objects.create(
+#                         tracking=tracking,
+#                         log_level='WARNING',
+#                         message=customer_error
+#                     )
+#                 else:
+#                     customer_content = customer_response.content
+#                     customer_response.close()
+                    
+#                     customer_size_mb = len(customer_content) / (1024 * 1024)
+#                     WaterUploadLog.objects.create(
+#                         tracking=tracking,
+#                         log_level='INFO',
+#                         message=f'Received {customer_size_mb:.2f} MB of customer data'
+#                     )
+                    
+#                     try:
+#                         customer_data = json.loads(customer_content.decode('utf-8'))
+#                         customer_records = self.extract_water_records(customer_data, tracking, 'customer')
+                        
+#                         WaterUploadLog.objects.create(
+#                             tracking=tracking,
+#                             log_level='INFO',
+#                             message=f'Extracted {len(customer_records)} customer records'
+#                         )
+#                     except json.JSONDecodeError as e:
+#                         customer_error = f'Invalid JSON from Customer API: {str(e)}'
+#                         WaterUploadLog.objects.create(
+#                             tracking=tracking,
+#                             log_level='ERROR',
+#                             message=customer_error
+#                         )
+            
+#             except requests.exceptions.Timeout:
+#                 customer_error = 'Customer API request timed out after 10 minutes'
+#                 WaterUploadLog.objects.create(
+#                     tracking=tracking,
+#                     log_level='ERROR',
+#                     message=customer_error
+#                 )
+            
+#             except requests.exceptions.RequestException as e:
+#                 customer_error = f'Customer API request failed: {str(e)}'
+#                 WaterUploadLog.objects.create(
+#                     tracking=tracking,
+#                     log_level='ERROR',
+#                     message=customer_error
+#                 )
+            
+#             except Exception as e:
+#                 customer_error = f'Unexpected error fetching customer data: {str(e)}'
+#                 WaterUploadLog.objects.create(
+#                     tracking=tracking,
+#                     log_level='ERROR',
+#                     message=customer_error
+#                 )
+            
+#             # ========== Process Data ==========
+#             bill_processed = 0
+#             bill_failed = 0
+#             customer_processed = 0
+#             customer_failed = 0
+            
+#             # Process bill records
+#             if bill_records:
+#                 WaterUploadLog.objects.create(
+#                     tracking=tracking,
+#                     log_level='INFO',
+#                     message=f'Processing {len(bill_records)} bill records'
+#                 )
+#                 bill_processed, bill_failed = self.insert_water_bill_data_optimized(
+#                     bill_records, tracking
+#                 )
+            
+#             # Process customer records
+#             if customer_records:
+#                 WaterUploadLog.objects.create(
+#                     tracking=tracking,
+#                     log_level='INFO',
+#                     message=f'Processing {len(customer_records)} customer records'
+#                 )
+#                 customer_processed, customer_failed = self.insert_water_customer_info_data(
+#                     customer_records, tracking
+#                 )
+#             elif customer_error:
+#                 WaterUploadLog.objects.create(
+#                     tracking=tracking,
+#                     log_level='WARNING',
+#                     message=f'Skipping customer data processing: {customer_error}'
+#                 )
+            
+#             # Calculate totals
+#             total_records = len(bill_records) + len(customer_records)
+#             total_processed = bill_processed + customer_processed
+#             total_failed = bill_failed + customer_failed
+            
+#             # Determine status
+#             if total_failed == 0 and not customer_error:
+#                 final_status = 'completed'
+#             elif bill_processed > 0 and customer_error:
+#                 final_status = 'partial'
+#             elif total_failed > 0:
+#                 final_status = 'partial'
+#             else:
+#                 final_status = 'failed'
+            
+#             # Update tracking
+#             tracking.status = final_status
+#             tracking.upload_completed = timezone.now()
+#             tracking.total_records = total_records
+#             tracking.processed_records = total_processed
+#             tracking.failed_records = total_failed
+#             tracking.data_size_mb = round(content_size_mb, 2)
+#             tracking.success_rates = (total_processed / total_records * 100) if total_records > 0 else 0
+#             tracking.save()
+            
+#             # Calculate duration
+#             duration = None
+#             if tracking.upload_started and tracking.upload_completed:
+#                 duration = (tracking.upload_completed - tracking.upload_started).total_seconds()
+            
+#             message = f'Water upload completed - Bills: {bill_processed}/{len(bill_records)}, Customers: {customer_processed}/{len(customer_records)}'
+#             if customer_error:
+#                 message += f' (Customer API Error: {customer_error})'
+            
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO' if final_status == 'completed' else 'WARNING',
+#                 message=message
+#             )
+            
+#             return {
+#                 'message': 'Water supply data upload completed' + (' with warnings' if customer_error else ' successfully'),
+#                 'tracking_id': tracking.id,
+#                 'status': final_status,
+#                 'bill_records': {
+#                     'total': len(bill_records),
+#                     'processed': bill_processed,
+#                     'failed': bill_failed
+#                 },
+#                 'customer_records': {
+#                     'total': len(customer_records),
+#                     'processed': customer_processed,
+#                     'failed': customer_failed,
+#                     'error': customer_error
+#                 },
+#                 'data_size_mb': tracking.data_size_mb,
+#                 'success_rate': tracking.success_rates,
+#                 'upload_duration': duration
+#             }
+            
+#         except Exception as e:
+#             tracking.status = 'failed'
+#             tracking.error_message = str(e)
+#             tracking.upload_completed = timezone.now()
+#             tracking.save()
+            
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='ERROR',
+#                 message=f'Water supply processing failed: {str(e)}'
+#             )
+            
+#             return {
+#                 'error': f'Failed to process water supply data: {str(e)}',
+#                 'tracking_id': tracking.id,
+#                 'status': 'failed'
+#             }
+
+
+#     def extract_water_records(self, data, tracking, data_type):
+#         """Extract records from water supply API response"""
+#         records = []
+        
+#         if isinstance(data, dict):
+#             # Log structure
+#             top_keys = list(data.keys())
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO',
+#                 message=f'{data_type.capitalize()} response keys: {top_keys}'
+#             )
+            
+#             # Find data recursively
+#             def find_data_recursively(obj, path="root"):
+#                 found_arrays = []
+#                 if isinstance(obj, list):
+#                     if len(obj) > 0:
+#                         found_arrays.append((path, len(obj), type(obj[0]).__name__))
+#                 elif isinstance(obj, dict):
+#                     for key, value in obj.items():
+#                         new_path = f"{path}.{key}"
+#                         if isinstance(value, list) and len(value) > 0:
+#                             found_arrays.append((new_path, len(value), type(value[0]).__name__))
+#                         elif isinstance(value, dict):
+#                             found_arrays.extend(find_data_recursively(value, new_path))
+#                 return found_arrays
+            
+#             found_arrays = find_data_recursively(data)
+            
+#             if found_arrays:
+#                 # Get largest array
+#                 largest_array = max(found_arrays, key=lambda x: x[1])
+#                 path, size, item_type = largest_array
+                
+#                 WaterUploadLog.objects.create(
+#                     tracking=tracking,
+#                     log_level='INFO',
+#                     message=f'Using array at {path} with {size} items'
+#                 )
+                
+#                 # Extract data
+#                 try:
+#                     current = data
+#                     for part in path.split('.')[1:]:
+#                         current = current[part]
+#                     if isinstance(current, list):
+#                         records = current
+#                 except (KeyError, TypeError, IndexError) as e:
+#                     WaterUploadLog.objects.create(
+#                         tracking=tracking,
+#                         log_level='ERROR',
+#                         message=f'Failed to extract from {path}: {str(e)}'
+#                     )
+            
+#             # Fallback to common keys
+#             if not records:
+#                 common_keys = ['data', 'records', 'bills', 'items', 'results', 'customers', 'newconnection']
+#                 for key in common_keys:
+#                     if key in data and isinstance(data[key], list):
+#                         records = data[key]
+#                         WaterUploadLog.objects.create(
+#                             tracking=tracking,
+#                             log_level='INFO',
+#                             message=f'Found data using key: {key}'
+#                         )
+#                         break
+        
+#         elif isinstance(data, list):
+#             records = data
+        
+#         return records
+
+
+#     def insert_water_customer_info_data(self, records, tracking):
+#         """Insert or update water customer records in w_customer_info table"""
+#         processed_count = 0
+#         failed_count = 0
+        
+#         try:
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO',
+#                 message=f'Starting to process {len(records)} water customer records'
+#             )
+            
+#             batch_size = 500
+#             for i in range(0, len(records), batch_size):
+#                 batch = records[i:i + batch_size]
+                
+#                 for j, item in enumerate(batch):
+#                     try:
+#                         if not isinstance(item, dict):
+#                             failed_count += 1
+#                             continue
+                        
+#                         def safe_get(key, default=''):
+#                             value = item.get(key, default)
+#                             return value if value is not None else default
+                        
+#                         customer_id = self.truncate(safe_get('CUSTOMER_ID', ''), 100)
+                        
+#                         if not customer_id:
+#                             failed_count += 1
+#                             continue
+                        
+#                         # Map API fields to model - adjust these based on actual API response
+#                         customer, created = w_customer_info.objects.update_or_create(
+#                             Customer_ID=customer_id,
+#                             defaults={
+#                                 'No': self.truncate(safe_get('NO', safe_get('INDEX_NO', '')), 100),
+#                                 'Company_name': self.truncate(safe_get('COMPANY_NAME', ''), 100),
+#                                 'Name': self.truncate(safe_get('NAME', safe_get('GIVEN_NAME', '')), 100),
+#                                 'Surname': self.truncate(safe_get('SURNAME', safe_get('FAMILY_NAME', '')), 100),
+#                                 'National_ID': self.truncate(safe_get('NATIONAL_ID', safe_get('ID_NO', '')), 100),
+#                                 'Passport': self.truncate(safe_get('PASSPORT', safe_get('PASSPORT_NO', '')), 100),
+#                                 'Address': self.truncate(safe_get('ADDRESS', safe_get('FORW_ADDRESS', '')), 100),
+#                                 'Dustrict_ID': self.truncate(safe_get('DISTRICT_ID', safe_get('DIS_ID', '')), 100),
+#                                 'Province_ID': self.truncate(safe_get('PROVINCE_ID', safe_get('PRO_ID', '')), 100),
+#                                 'Tel': self.truncate(safe_get('TEL', safe_get('TEL_NO', '')), 100),
+#                                 'Email': self.truncate(safe_get('EMAIL', safe_get('EMAIL_NO', '')), 100),
+#                                 'Cus_type': self.truncate(safe_get('CUSTOMER_TYPE', safe_get('SUPPLY_TYPE', '')), 100),
+#                                 'Regis_date': self.truncate(safe_get('REGISTRATION_DATE', safe_get('REGIT_D', '')), 100)
+#                             }
+#                         )
+                        
+#                         processed_count += 1
+                    
+#                     except Exception as e:
+#                         failed_count += 1
+#                         if failed_count <= 10:
+#                             WaterUploadLog.objects.create(
+#                                 tracking=tracking,
+#                                 log_level='ERROR',
+#                                 message=f'Failed to process customer record {i+j}: {str(e)}'
+#                             )
+#                         continue
+                
+#                 # Log progress
+#                 if (i + batch_size) % 1000 == 0 or (i + batch_size) >= len(records):
+#                     WaterUploadLog.objects.create(
+#                         tracking=tracking,
+#                         log_level='INFO',
+#                         message=f'Customer records progress: {min(i + batch_size, len(records))}/{len(records)}'
+#                     )
+            
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO',
+#                 message=f'Customer data processing completed. Processed: {processed_count}, Failed: {failed_count}'
+#             )
+            
+#             return processed_count, failed_count
+            
+#         except Exception as e:
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='ERROR',
+#                 message=f'Customer data insert failed: {str(e)}'
+#             )
+#             raise e
+        
+#     def insert_water_bill_data_optimized(self, records, tracking):
+#             """Optimized insert for large datasets"""
+#             processed_count = 0
+#             failed_count = 0
+#             batch_size = 500  # Smaller batches for memory efficiency
+#             total_items = len(records)
+            
+#             try:
+#                 WaterUploadLog.objects.create(
+#                     tracking=tracking,
+#                     log_level='INFO',
+#                     message=f'Starting optimized insert of {total_items} water supply records'
+#                 )
+                
+#                 batch = []
+                
+#                 for i, item in enumerate(records):
+#                     try:
+#                         # Progress logging for large datasets
+#                         if i > 0 and i % 5000 == 0:  # Log every 5000 records
+#                             progress_percent = (i / total_items) * 100
+#                             WaterUploadLog.objects.create(
+#                                 tracking=tracking,
+#                                 log_level='INFO',
+#                                 message=f'Processing progress: {i}/{total_items} ({progress_percent:.1f}%)'
+#                             )
+                        
+#                         # Validate record
+#                         if not isinstance(item, dict):
+#                             failed_count += 1
+#                             continue
+                        
+#                         # Helper function for safe value extraction
+#                         def safe_get(key, default=''):
+#                             value = item.get(key, default)
+#                             return value if value is not None else default
+                        
+#                         # Create bill record with your exact mapping
+#                         payment_id = safe_get('PAYMENT_ID', '')
+                        
+#                         bill = Utility_Bill(
+#                             Customer_ID=self.truncate(safe_get('CUSTOMER_ID', ''), 255),
+#                             InvoiceNo=self.truncate(safe_get('NO', ''), 255),
+#                             TypeOfPro=self.truncate(safe_get('SUPPLY_TYPE', ''), 100),
+#                             Outstanding=self.safe_decimal(safe_get('OUTSTANDING', 0)),
+#                             Basic_Tax=self.safe_decimal(safe_get('BASIC+TAX', 0)),
+#                             Bill_Amount=self.safe_decimal(safe_get('BILL_AMOUNT', 0)),
+#                             Debt_Amount=0.00,
+#                             Payment_ID=payment_id,
+#                             PaymentType=self.truncate(safe_get('PAY_TYPE', ''), 255),
+#                             Payment_Date=self.truncate(safe_get('PAYMENT_DATE', ''), 255),
+#                             InvoiceMonth=self.truncate(safe_get('BILL_OF_MONTH', ''), 50),
+#                             InvoiceDate=self.truncate(safe_get('DATE_OF_ISSUE', ''), 100),
+#                             DisID=self.truncate(safe_get('DIS_ID', ''), 100),
+#                             ProID=self.truncate(safe_get('PRO_ID', ''), 100),
+#                             UserID=tracking.user_upload
+#                         )
+                        
+#                         batch.append(bill)
+                        
+#                         # Process batch when full
+#                         if len(batch) >= batch_size:
+#                             with transaction.atomic():
+#                                 Utility_Bill.objects.bulk_create(batch, ignore_conflicts=True)
+#                             processed_count += len(batch)
+#                             batch = []
+                            
+#                             # Update progress in tracking
+#                             tracking.processed_records = processed_count
+#                             tracking.save()
+                    
+#                     except Exception as e:
+#                         failed_count += 1
+#                         # Log only first few errors to avoid log spam
+#                         if failed_count <= 10:
+#                             WaterUploadLog.objects.create(
+#                                 tracking=tracking,
+#                                 log_level='ERROR',
+#                                 message=f'Record {i} failed: {str(e)[:200]}'
+#                             )
+#                         continue
+                
+#                 # Process remaining records
+#                 if batch:
+#                     with transaction.atomic():
+#                         Utility_Bill.objects.bulk_create(batch, ignore_conflicts=True)
+#                     processed_count += len(batch)
+                
+#                 # Final update
+#                 tracking.processed_records = processed_count
+#                 tracking.save()
+                
+#                 WaterUploadLog.objects.create(
+#                     tracking=tracking,
+#                     log_level='INFO',
+#                     message=f'Insert completed. Processed: {processed_count}, Failed: {failed_count}'
+#                 )
+                
+#                 return processed_count, failed_count
+                
+#             except Exception as e:
+#                 WaterUploadLog.objects.create(
+#                     tracking=tracking,
+#                     log_level='ERROR',
+#                     message=f'Bulk insert failed: {str(e)}'
+#                 )
+#                 raise e
+        
+#     def truncate(self, value, max_length):
+#         """Safely truncate string to max length"""
+#         if value is None:
+#             return ''
+#         return str(value)[:max_length]
+
+#     def safe_decimal(self, value):
+#         """Safely convert to decimal"""
+#         try:
+#             return float(value or 0)
+#         except (ValueError, TypeError):
+#             return 0.0
+from django.db import models
+from django.utils import timezone
+import threading
+import json
+import requests
+from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.conf import settings
+from django.db import transaction
+
+# Assuming analogous models exist: water_province_code, w_district_code, w_customer_info, Utility_Bill
+# Adjust imports as needed
+
 class WaterUploadDataAPIView(APIView):
     """Handle water supply data upload with background processing for large datasets"""
     
     def post(self, request):
         try:
-            # Extract parameters
             month = request.data.get('month')
             username = request.data.get('username', 'system')
-            api_token = request.data.get('api_token')  # Optional - we use fixed token
 
-            # Fixed API token from supplier
+            # Fixed supplier token
             api_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbiI6IlUyRnNkR1ZrWDErdE9ja29vVDV0NXdqWlBqTzhVc0V1ZnR2QytPUXp3Z2ljWkFPdkhNUkNqdzh0NUhOSENBRVZsVXVNWHBrc1RudUFxaUE3R0VtVExRSTZMaWNTVUlaN1BMb0xGOVczMWtjWnFoQmxFUThHVUFwSFpNS0NDVjN1RURhWDJSSjFwZDNqaFRGc2lmdUF3Zz09IiwiaWF0IjoxNzA5MDEwNjU0fQ.mhmfUuasPQnAtxTQmwIyofClMuOAKVKZloNskpG9fHo'
-                        
+
+            # ✅ Only month is required
             if not month:
-                return Response({
-                    'error': 'Missing required parameter: month'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Validate month format (MMYYYY)
+                return Response({'error': 'Missing required parameter: month'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate month format
             try:
                 datetime.strptime(month, '%m%Y')
             except ValueError:
@@ -20905,71 +21315,66 @@ class WaterUploadDataAPIView(APIView):
                     {"error": "Invalid month format. Use MMYYYY (e.g., 122024)"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
-            # Get tracking record
-            try:
-                tracking = WaterUploadDataTracking.objects.get(upload_month=month)
-            except WaterUploadDataTracking.DoesNotExist:
-                return Response({
-                    'error': 'Tracking record not found. Please initialize tracking first.'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
-            # Check if already completed
+
+            # Get or create tracking record (no province/district)
+            tracking, created = WaterUploadDataTracking.objects.get_or_create(
+                upload_month=month,
+                defaults={'status': 'pending', 'user_upload': username}
+            )
+
             if tracking.status == 'completed':
                 return Response({
                     'message': 'Water supply data already uploaded successfully',
                     'tracking_id': tracking.id,
                     'total_records': tracking.total_records,
-                    'processed_records': tracking.processed_records
+                    'processed_records': tracking.processed_records,
                 }, status=status.HTTP_200_OK)
-            
-            # Check if already in progress
+
             if tracking.status == 'in_progress':
                 return Response({
-                    'message': 'Water supply data upload is already in progress',
+                    'message': 'Upload already in progress',
                     'tracking_id': tracking.id,
                     'status': tracking.status
                 }, status=status.HTTP_200_OK)
-            
-            # Update status to in_progress
+
             tracking.status = 'in_progress'
             tracking.upload_started = timezone.now()
             tracking.user_upload = username
-            tracking.error_message = None  # Clear any previous errors
+            tracking.error_message = None
             tracking.save()
-            
-            # Log start
+
             WaterUploadLog.objects.create(
                 tracking=tracking,
                 log_level='INFO',
                 message=f'Water supply upload started by {username} for month {month}'
             )
-            
-            # Start background processing for large datasets
+
+            # Background thread
             thread = threading.Thread(
                 target=self.process_water_data_background,
-                args=(tracking.id, api_token)
+                args=(tracking.id, api_token, month)
             )
             thread.daemon = True
             thread.start()
-            
+
             return Response({
-                'message': 'Water supply data upload started in background',
+                'message': 'Water supply upload started in background',
                 'tracking_id': tracking.id,
-                'status': 'in_progress',
-                'note': 'Large dataset processing initiated. Check tracking status for updates.'
+                'status': 'in_progress'
             }, status=status.HTTP_200_OK)
-            
+
         except Exception as e:
             logger.error(f"Water upload failed: {str(e)}")
-            return Response({
-                'error': f'Water upload failed: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-    def process_water_data_background(self, tracking_id, api_token):
-        """Background processing for large water supply datasets"""
+    def process_water_data_background(self, tracking_id, api_token, province_code, district_code, month):
+        """Background processing for large water supply datasets (UPDATED: Pass pro/dis/month)"""
         try:
             tracking = WaterUploadDataTracking.objects.get(id=tracking_id)
+            tracking.pro_id = province_code
+            tracking.dis_id = district_code
+            tracking.upload_month = month
+            tracking.save()
             
             WaterUploadLog.objects.create(
                 tracking=tracking,
@@ -21003,16 +21408,18 @@ class WaterUploadDataAPIView(APIView):
             except Exception as save_error:
                 logger.error(f"Failed to save error state: {str(save_error)}")
 
-
-    # Updated fetch_and_process_water_data_optimized method --- > to ni br hen
     def fetch_and_process_water_data_optimized(self, tracking, api_token):
-        
-        """Optimized fetch for large water supply datasets with customer data"""
+        """Optimized fetch for large water supply datasets with customer data (UPDATED: Match Electric structure)"""
         try:
             water_api_base = getattr(settings, 'WATER_API_BASE_URL', 'http://202.137.141.244:3000')
             
-            # Water Bill API endpoint
+            # Water Bill (Payment) API endpoint (UPDATED: Add params like Electric)
             bill_api_url = f"{water_api_base}/v3/api/loans/allbillmonth/{tracking.upload_month}"
+            # FIXED: Remove province/district from params; API only needs month in path
+            params = {
+                'page': 1,
+                'limit': 100000
+            }
             
             # Customer API endpoint
             customer_api_url = f"{water_api_base}/v3/api/loans/newconnection/{tracking.upload_month}"
@@ -21024,16 +21431,17 @@ class WaterUploadDataAPIView(APIView):
                 'Connection': 'close'
             }
             
-            # ========== Fetch Bill Data ==========
+            # ========== Fetch Bill (Payment) Data ==========
             WaterUploadLog.objects.create(
                 tracking=tracking,
                 log_level='INFO',
-                message=f'Fetching water bill data from: {bill_api_url}'
+                message=f'Fetching water bill (payment) data from: {bill_api_url}'
             )
             
             bill_response = requests.get(
                 bill_api_url, 
-                headers=headers, 
+                headers=headers,
+                params=params,  # FIXED: No province/district params
                 timeout=600,
                 stream=True
             )
@@ -21054,11 +21462,11 @@ class WaterUploadDataAPIView(APIView):
             content = bill_response.content
             bill_response.close()
             
-            content_size_mb = len(content) / (1024 * 1024)
+            content_size_mb_bill = len(content) / (1024 * 1024)
             WaterUploadLog.objects.create(
                 tracking=tracking,
                 log_level='INFO',
-                message=f'Received {content_size_mb:.2f} MB of bill data'
+                message=f'Received {content_size_mb_bill:.2f} MB of bill data'
             )
             
             try:
@@ -21069,10 +21477,15 @@ class WaterUploadDataAPIView(APIView):
             # Extract bill records
             bill_records = self.extract_water_records(bill_data, tracking, 'bill')
             
+            # FIXED: Filter records by province and district after extraction
+            filtered_bill_records = [
+                rec for rec in bill_records 
+                if rec.get('PRO_ID') == tracking.pro_id and rec.get('DIS_ID') == tracking.dis_id
+            ]
             WaterUploadLog.objects.create(
                 tracking=tracking,
                 log_level='INFO',
-                message=f'Extracted {len(bill_records)} bill records'
+                message=f'Extracted {len(bill_records)} bill (payment) records; filtered to {len(filtered_bill_records)} for {tracking.pro_id}-{tracking.dis_id}'
             )
             
             # ========== Fetch Customer Data ==========
@@ -21089,6 +21502,7 @@ class WaterUploadDataAPIView(APIView):
                 customer_response = requests.get(
                     customer_api_url,
                     headers=headers,
+                    params=params,  # FIXED: No province/district params
                     timeout=600,
                     stream=True
                 )
@@ -21115,11 +21529,18 @@ class WaterUploadDataAPIView(APIView):
                         customer_data = json.loads(customer_content.decode('utf-8'))
                         customer_records = self.extract_water_records(customer_data, tracking, 'customer')
                         
+                        # FIXED: Filter records by province and district after extraction
+                        filtered_customer_records = [
+                            rec for rec in customer_records 
+                            if rec.get('PRO_ID') == tracking.pro_id and rec.get('DIS_ID') == tracking.dis_id
+                        ]
                         WaterUploadLog.objects.create(
                             tracking=tracking,
                             log_level='INFO',
-                            message=f'Extracted {len(customer_records)} customer records'
+                            message=f'Extracted {len(customer_records)} customer records; filtered to {len(filtered_customer_records)} for {tracking.pro_id}-{tracking.dis_id}'
                         )
+                        customer_records = filtered_customer_records  # Use filtered for processing
+                        
                     except json.JSONDecodeError as e:
                         customer_error = f'Invalid JSON from Customer API: {str(e)}'
                         WaterUploadLog.objects.create(
@@ -21158,15 +21579,21 @@ class WaterUploadDataAPIView(APIView):
             customer_processed = 0
             customer_failed = 0
             
-            # Process bill records
-            if bill_records:
+            # Process bill (payment) records
+            if filtered_bill_records:
                 WaterUploadLog.objects.create(
                     tracking=tracking,
                     log_level='INFO',
-                    message=f'Processing {len(bill_records)} bill records'
+                    message=f'Processing {len(filtered_bill_records)} filtered bill (payment) records'
                 )
                 bill_processed, bill_failed = self.insert_water_bill_data_optimized(
-                    bill_records, tracking
+                    filtered_bill_records, tracking
+                )
+            else:
+                WaterUploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='WARNING',
+                    message=f'No bill records found for {tracking.pro_id}-{tracking.dis_id}'
                 )
             
             # Process customer records
@@ -21174,7 +21601,7 @@ class WaterUploadDataAPIView(APIView):
                 WaterUploadLog.objects.create(
                     tracking=tracking,
                     log_level='INFO',
-                    message=f'Processing {len(customer_records)} customer records'
+                    message=f'Processing {len(customer_records)} filtered customer records'
                 )
                 customer_processed, customer_failed = self.insert_water_customer_info_data(
                     customer_records, tracking
@@ -21186,12 +21613,18 @@ class WaterUploadDataAPIView(APIView):
                     message=f'Skipping customer data processing: {customer_error}'
                 )
             
-            # Calculate totals
-            total_records = len(bill_records) + len(customer_records)
+            # Calculate totals (UPDATED: Match Electric)
+            total_records = len(filtered_bill_records) + len(customer_records)
             total_processed = bill_processed + customer_processed
             total_failed = bill_failed + customer_failed
             
-            # Determine status
+            # Calculate total data size (UPDATED: Include both like Electric)
+            total_size = len(json.dumps({
+                'bill': filtered_bill_records,
+                'customer': customer_records
+            }).encode('utf-8')) / (1024 * 1024)
+            
+            # Determine status (Match Electric logic)
             if total_failed == 0 and not customer_error:
                 final_status = 'completed'
             elif bill_processed > 0 and customer_error:
@@ -21201,22 +21634,26 @@ class WaterUploadDataAPIView(APIView):
             else:
                 final_status = 'failed'
             
-            # Update tracking
+            # Update tracking (UPDATED: Set separate payment/customer counts)
             tracking.status = final_status
             tracking.upload_completed = timezone.now()
             tracking.total_records = total_records
             tracking.processed_records = total_processed
             tracking.failed_records = total_failed
-            tracking.data_size_mb = round(content_size_mb, 2)
+            tracking.payment_records = bill_processed  # Bills as payments
+            tracking.customer_records = customer_processed
+            tracking.data_size_mb = round(total_size, 2)
             tracking.success_rates = (total_processed / total_records * 100) if total_records > 0 else 0
             tracking.save()
             
-            # Calculate duration
+            # Calculate duration (UPDATED: Proper calculation)
             duration = None
             if tracking.upload_started and tracking.upload_completed:
                 duration = (tracking.upload_completed - tracking.upload_started).total_seconds()
+                tracking.upload_duration = duration  # Use model field
+                tracking.save()
             
-            message = f'Water upload completed - Bills: {bill_processed}/{len(bill_records)}, Customers: {customer_processed}/{len(customer_records)}'
+            message = f'Water upload completed - Bills/Payments: {bill_processed}/{len(filtered_bill_records)}, Customers: {customer_processed}/{len(customer_records)}'
             if customer_error:
                 message += f' (Customer API Error: {customer_error})'
             
@@ -21230,8 +21667,8 @@ class WaterUploadDataAPIView(APIView):
                 'message': 'Water supply data upload completed' + (' with warnings' if customer_error else ' successfully'),
                 'tracking_id': tracking.id,
                 'status': final_status,
-                'bill_records': {
-                    'total': len(bill_records),
+                'bill_records': {  # Renamed for clarity, but match Electric keys
+                    'total': len(filtered_bill_records),
                     'processed': bill_processed,
                     'failed': bill_failed
                 },
@@ -21264,9 +21701,8 @@ class WaterUploadDataAPIView(APIView):
                 'status': 'failed'
             }
 
-
     def extract_water_records(self, data, tracking, data_type):
-        """Extract records from water supply API response"""
+        """Extract records from water supply API response (UNCHANGED: Keep dynamic)"""
         records = []
         
         if isinstance(data, dict):
@@ -21338,11 +21774,11 @@ class WaterUploadDataAPIView(APIView):
         
         return records
 
-
     def insert_water_customer_info_data(self, records, tracking):
-        """Insert or update water customer records in w_customer_info table"""
+        """Insert or update water customer records in w_customer_info table (UPDATED: Optimize like Electric - bulk_create with existing check)"""
         processed_count = 0
         failed_count = 0
+        skipped_count = 0
         
         try:
             WaterUploadLog.objects.create(
@@ -21351,70 +21787,101 @@ class WaterUploadDataAPIView(APIView):
                 message=f'Starting to process {len(records)} water customer records'
             )
             
-            batch_size = 500
-            for i in range(0, len(records), batch_size):
-                batch = records[i:i + batch_size]
-                
-                for j, item in enumerate(batch):
-                    try:
-                        if not isinstance(item, dict):
-                            failed_count += 1
-                            continue
-                        
-                        def safe_get(key, default=''):
-                            value = item.get(key, default)
-                            return value if value is not None else default
-                        
-                        customer_id = self.truncate(safe_get('CUSTOMER_ID', ''), 100)
-                        
-                        if not customer_id:
-                            failed_count += 1
-                            continue
-                        
-                        # Map API fields to model - adjust these based on actual API response
-                        customer, created = w_customer_info.objects.update_or_create(
-                            Customer_ID=customer_id,
-                            defaults={
-                                'No': self.truncate(safe_get('NO', safe_get('INDEX_NO', '')), 100),
-                                'Company_name': self.truncate(safe_get('COMPANY_NAME', ''), 100),
-                                'Name': self.truncate(safe_get('NAME', safe_get('GIVEN_NAME', '')), 100),
-                                'Surname': self.truncate(safe_get('SURNAME', safe_get('FAMILY_NAME', '')), 100),
-                                'National_ID': self.truncate(safe_get('NATIONAL_ID', safe_get('ID_NO', '')), 100),
-                                'Passport': self.truncate(safe_get('PASSPORT', safe_get('PASSPORT_NO', '')), 100),
-                                'Address': self.truncate(safe_get('ADDRESS', safe_get('FORW_ADDRESS', '')), 100),
-                                'Dustrict_ID': self.truncate(safe_get('DISTRICT_ID', safe_get('DIS_ID', '')), 100),
-                                'Province_ID': self.truncate(safe_get('PROVINCE_ID', safe_get('PRO_ID', '')), 100),
-                                'Tel': self.truncate(safe_get('TEL', safe_get('TEL_NO', '')), 100),
-                                'Email': self.truncate(safe_get('EMAIL', safe_get('EMAIL_NO', '')), 100),
-                                'Cus_type': self.truncate(safe_get('CUSTOMER_TYPE', safe_get('SUPPLY_TYPE', '')), 100),
-                                'Regis_date': self.truncate(safe_get('REGISTRATION_DATE', safe_get('REGIT_D', '')), 100)
-                            }
-                        )
-                        
-                        processed_count += 1
-                    
-                    except Exception as e:
-                        failed_count += 1
-                        if failed_count <= 10:
-                            WaterUploadLog.objects.create(
-                                tracking=tracking,
-                                log_level='ERROR',
-                                message=f'Failed to process customer record {i+j}: {str(e)}'
-                            )
-                        continue
-                
-                # Log progress
-                if (i + batch_size) % 1000 == 0 or (i + batch_size) >= len(records):
-                    WaterUploadLog.objects.create(
-                        tracking=tracking,
-                        log_level='INFO',
-                        message=f'Customer records progress: {min(i + batch_size, len(records))}/{len(records)}'
-                    )
+            # OPTIMIZATION: Get all existing customer IDs in one query (like Electric)
+            existing_customer_ids = set(
+                w_customer_info.objects.values_list('Customer_ID', flat=True)
+            )
             
             WaterUploadLog.objects.create(
                 tracking=tracking,
                 log_level='INFO',
-                message=f'Customer data processing completed. Processed: {processed_count}, Failed: {failed_count}'
+                message=f'Found {len(existing_customer_ids)} existing customers in database'
+            )
+            
+            batch_size = 500
+            customers_to_insert = []
+            
+            for i, item in enumerate(records):
+                try:
+                    if not isinstance(item, dict):
+                        failed_count += 1
+                        continue
+                    
+                    def safe_get(key, default=''):
+                        value = item.get(key, default)
+                        return value if value is not None else default
+                    
+                    customer_id = self.truncate(safe_get('CUSTOMER_ID', ''), 100)
+                    
+                    if not customer_id:
+                        failed_count += 1
+                        continue
+                    
+                    # Skip if customer already exists
+                    if customer_id in existing_customer_ids:
+                        skipped_count += 1
+                        continue
+                    
+                    # Prepare object for bulk insert
+                    customer = w_customer_info(
+                        Customer_ID=customer_id,
+                        No=self.truncate(safe_get('NO', safe_get('INDEX_NO', '')), 100),
+                        Company_name=self.truncate(safe_get('COMPANY_NAME', ''), 100),
+                        Name=self.truncate(safe_get('NAME', safe_get('GIVEN_NAME', '')), 100),
+                        Surname=self.truncate(safe_get('SURNAME', safe_get('FAMILY_NAME', '')), 100),
+                        National_ID=self.truncate(safe_get('NATIONAL_ID', safe_get('ID_NO', '')), 100),
+                        Passport=self.truncate(safe_get('PASSPORT', safe_get('PASSPORT_NO', '')), 100),
+                        Address=self.truncate(safe_get('ADDRESS', safe_get('FORW_ADDRESS', '')), 100),
+                        Dustrict_ID=self.truncate(safe_get('DISTRICT_ID', safe_get('DIS_ID', '')), 100),
+                        Province_ID=self.truncate(safe_get('PROVINCE_ID', safe_get('PRO_ID', '')), 100),
+                        Tel=self.truncate(safe_get('TEL', safe_get('TEL_NO', '')), 100),
+                        Email=self.truncate(safe_get('EMAIL', safe_get('EMAIL_NO', '')), 100),
+                        Cus_type=self.truncate(safe_get('CUSTOMER_TYPE', safe_get('SUPPLY_TYPE', '')), 100),
+                        Regis_date=self.truncate(safe_get('REGISTRATION_DATE', safe_get('REGIT_D', '')), 100)
+                    )
+                    
+                    customers_to_insert.append(customer)
+                    
+                    # Bulk insert when batch is full
+                    if len(customers_to_insert) >= batch_size:
+                        with transaction.atomic():
+                            w_customer_info.objects.bulk_create(
+                                customers_to_insert, 
+                                ignore_conflicts=True
+                            )
+                        processed_count += len(customers_to_insert)
+                        customers_to_insert = []
+                        
+                        # Log progress
+                        WaterUploadLog.objects.create(
+                            tracking=tracking,
+                            log_level='INFO',
+                            message=f'Customer records progress: {i+1}/{len(records)} processed, {processed_count} new, {skipped_count} skipped'
+                        )
+                
+                except Exception as e:
+                    failed_count += 1
+                    if failed_count <= 10:
+                        WaterUploadLog.objects.create(
+                            tracking=tracking,
+                            log_level='ERROR',
+                            message=f'Failed to process customer record {i}: {str(e)}'
+                        )
+                    continue
+            
+            # Insert remaining customers
+            if customers_to_insert:
+                with transaction.atomic():
+                    w_customer_info.objects.bulk_create(
+                        customers_to_insert, 
+                        ignore_conflicts=True
+                    )
+                processed_count += len(customers_to_insert)
+            
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Customer data processing completed. New: {processed_count}, Skipped: {skipped_count}, Failed: {failed_count}'
             )
             
             return processed_count, failed_count
@@ -21428,112 +21895,119 @@ class WaterUploadDataAPIView(APIView):
             raise e
         
     def insert_water_bill_data_optimized(self, records, tracking):
-            """Optimized insert for large datasets"""
-            processed_count = 0
-            failed_count = 0
-            batch_size = 500  # Smaller batches for memory efficiency
-            total_items = len(records)
+        """Optimized insert for large datasets (UPDATED: Match Electric batch logging)"""
+        processed_count = 0
+        failed_count = 0
+        batch_size = 500  # Smaller batches for memory efficiency
+        total_items = len(records)
+        
+        try:
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Starting optimized insert of {total_items} water supply (bill/payment) records'
+            )
             
-            try:
-                WaterUploadLog.objects.create(
-                    tracking=tracking,
-                    log_level='INFO',
-                    message=f'Starting optimized insert of {total_items} water supply records'
-                )
-                
-                batch = []
-                
-                for i, item in enumerate(records):
-                    try:
-                        # Progress logging for large datasets
-                        if i > 0 and i % 5000 == 0:  # Log every 5000 records
-                            progress_percent = (i / total_items) * 100
-                            WaterUploadLog.objects.create(
-                                tracking=tracking,
-                                log_level='INFO',
-                                message=f'Processing progress: {i}/{total_items} ({progress_percent:.1f}%)'
-                            )
-                        
-                        # Validate record
-                        if not isinstance(item, dict):
-                            failed_count += 1
-                            continue
-                        
-                        # Helper function for safe value extraction
-                        def safe_get(key, default=''):
-                            value = item.get(key, default)
-                            return value if value is not None else default
-                        
-                        # Create bill record with your exact mapping
-                        payment_id = safe_get('PAYMENT_ID', '')
-                        
-                        bill = Utility_Bill(
-                            Customer_ID=self.truncate(safe_get('CUSTOMER_ID', ''), 255),
-                            InvoiceNo=self.truncate(safe_get('NO', ''), 255),
-                            TypeOfPro=self.truncate(safe_get('SUPPLY_TYPE', ''), 100),
-                            Outstanding=self.safe_decimal(safe_get('OUTSTANDING', 0)),
-                            Basic_Tax=self.safe_decimal(safe_get('BASIC+TAX', 0)),
-                            Bill_Amount=self.safe_decimal(safe_get('BILL_AMOUNT', 0)),
-                            Debt_Amount=0.00,
-                            Payment_ID=payment_id,
-                            PaymentType=self.truncate(safe_get('PAY_TYPE', ''), 255),
-                            Payment_Date=self.truncate(safe_get('PAYMENT_DATE', ''), 255),
-                            InvoiceMonth=self.truncate(safe_get('BILL_OF_MONTH', ''), 50),
-                            InvoiceDate=self.truncate(safe_get('DATE_OF_ISSUE', ''), 100),
-                            DisID=self.truncate(safe_get('DIS_ID', ''), 100),
-                            ProID=self.truncate(safe_get('PRO_ID', ''), 100),
-                            UserID=tracking.user_upload
+            batch = []
+            
+            for i, item in enumerate(records):
+                try:
+                    # Progress logging for large datasets (like Electric)
+                    if i > 0 and i % 5000 == 0:  # Log every 5000 records
+                        progress_percent = (i / total_items) * 100
+                        WaterUploadLog.objects.create(
+                            tracking=tracking,
+                            log_level='INFO',
+                            message=f'Processing progress: {i}/{total_items} ({progress_percent:.1f}%)'
                         )
-                        
-                        batch.append(bill)
-                        
-                        # Process batch when full
-                        if len(batch) >= batch_size:
-                            with transaction.atomic():
-                                Utility_Bill.objects.bulk_create(batch, ignore_conflicts=True)
-                            processed_count += len(batch)
-                            batch = []
-                            
-                            # Update progress in tracking
-                            tracking.processed_records = processed_count
-                            tracking.save()
                     
-                    except Exception as e:
+                    # Validate record
+                    if not isinstance(item, dict):
                         failed_count += 1
-                        # Log only first few errors to avoid log spam
-                        if failed_count <= 10:
-                            WaterUploadLog.objects.create(
-                                tracking=tracking,
-                                log_level='ERROR',
-                                message=f'Record {i} failed: {str(e)[:200]}'
-                            )
                         continue
+                    
+                    # Helper function for safe value extraction
+                    def safe_get(key, default=''):
+                        value = item.get(key, default)
+                        return value if value is not None else default
+                    
+                    # Create bill record with your exact mapping
+                    payment_id = safe_get('PAYMENT_ID', '')
+                    
+                    bill = Utility_Bill(
+                        Customer_ID=self.truncate(safe_get('CUSTOMER_ID', ''), 255),
+                        InvoiceNo=self.truncate(safe_get('NO', ''), 255),
+                        TypeOfPro=self.truncate(safe_get('SUPPLY_TYPE', ''), 100),
+                        Outstanding=self.safe_decimal(safe_get('OUTSTANDING', 0)),
+                        Basic_Tax=self.safe_decimal(safe_get('BASIC+TAX', 0)),
+                        Bill_Amount=self.safe_decimal(safe_get('BILL_AMOUNT', 0)),
+                        Debt_Amount=0.00,
+                        Payment_ID=payment_id,
+                        PaymentType=self.truncate(safe_get('PAY_TYPE', ''), 255),
+                        Payment_Date=self.truncate(safe_get('PAYMENT_DATE', ''), 255),
+                        InvoiceMonth=self.truncate(safe_get('BILL_OF_MONTH', ''), 50),
+                        InvoiceDate=self.truncate(safe_get('DATE_OF_ISSUE', ''), 100),
+                        DisID=self.truncate(safe_get('DIS_ID', ''), 100),
+                        ProID=self.truncate(safe_get('PRO_ID', ''), 100),
+                        UserID=tracking.user_upload
+                    )
+                    
+                    batch.append(bill)
+                    
+                    # Process batch when full
+                    if len(batch) >= batch_size:
+                        with transaction.atomic():
+                            Utility_Bill.objects.bulk_create(batch, ignore_conflicts=True)
+                        processed_count += len(batch)
+                        batch = []
+                        
+                        # Update progress in tracking
+                        tracking.processed_records = processed_count
+                        tracking.save()
+                        
+                        # Log batch progress (like Electric)
+                        WaterUploadLog.objects.create(
+                            tracking=tracking,
+                            log_level='INFO',
+                            message=f'Inserted batch: {processed_count}/{total_items} records processed'
+                        )
                 
-                # Process remaining records
-                if batch:
-                    with transaction.atomic():
-                        Utility_Bill.objects.bulk_create(batch, ignore_conflicts=True)
-                    processed_count += len(batch)
-                
-                # Final update
-                tracking.processed_records = processed_count
-                tracking.save()
-                
-                WaterUploadLog.objects.create(
-                    tracking=tracking,
-                    log_level='INFO',
-                    message=f'Insert completed. Processed: {processed_count}, Failed: {failed_count}'
-                )
-                
-                return processed_count, failed_count
-                
-            except Exception as e:
-                WaterUploadLog.objects.create(
-                    tracking=tracking,
-                    log_level='ERROR',
-                    message=f'Bulk insert failed: {str(e)}'
-                )
-                raise e
+                except Exception as e:
+                    failed_count += 1
+                    # Log only first few errors to avoid log spam
+                    if failed_count <= 10:
+                        WaterUploadLog.objects.create(
+                            tracking=tracking,
+                            log_level='ERROR',
+                            message=f'Record {i} failed: {str(e)[:200]}'
+                        )
+                    continue
+            
+            # Process remaining records
+            if batch:
+                with transaction.atomic():
+                    Utility_Bill.objects.bulk_create(batch, ignore_conflicts=True)
+                processed_count += len(batch)
+            
+            # Final update
+            tracking.processed_records = processed_count
+            tracking.save()
+            
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message=f'Insert completed. Processed: {processed_count}, Failed: {failed_count}'
+            )
+            
+            return processed_count, failed_count
+            
+        except Exception as e:
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='ERROR',
+                message=f'Bulk insert failed: {str(e)}'
+            )
+            raise e
         
     def truncate(self, value, max_length):
         """Safely truncate string to max length"""
@@ -21548,7 +22022,6 @@ class WaterUploadDataAPIView(APIView):
         except (ValueError, TypeError):
             return 0.0
 
-
 class WaterUploadTrackingDetailAPIView(APIView):
     """Get detailed water supply tracking information with logs"""
     
@@ -21562,6 +22035,202 @@ class WaterUploadTrackingDetailAPIView(APIView):
                 {'error': 'Water supply tracking record not found'}, 
                 status=status.HTTP_404_NOT_FOUND
             )
+import logging
+from django.db.models import Count
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from utility.models import Utility_Bill, w_province_code, w_district_code
+
+logger = logging.getLogger(__name__)
+
+class WaterDistrictStatisticsAPIView(APIView):
+    """
+    Get water supply upload statistics grouped by Province and District
+    CORRECTED: Proper matching of district and province names
+    
+    Relationships:
+    - Utility_Bill.ProID → w_province_code.pro_id → w_province_code.pro_name
+    - Utility_Bill.DisID → w_district_code.dis_id → w_district_code.dis_name
+    """
+    
+    def get(self, request):
+        try:
+            month = request.GET.get('month')
+            
+            if not month:
+                return Response(
+                    {"error": "month parameter is required (format: MMYYYY)"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Convert month format from MMYYYY to MM-YYYY for database query
+            # Example: 102025 -> 10-2025
+            if len(month) == 6:
+                formatted_month = f"{month[:2]}-{month[2:]}"
+            else:
+                return Response(
+                    {"error": "Invalid month format. Use MMYYYY (e.g., 102025)"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Query bills grouped by Province and District
+            district_stats = Utility_Bill.objects.filter(
+                InvoiceMonth=formatted_month
+            ).values(
+                'ProID', 'DisID'
+            ).annotate(
+                total_bills=Count('BillID')
+            ).order_by('ProID', 'DisID')
+            
+            # Get actual unique customers for this period
+            actual_customer_count = Utility_Bill.objects.filter(
+                InvoiceMonth=formatted_month
+            ).values('Customer_ID').distinct().count()
+            
+            # Get total bills count for this period
+            total_bills_count = Utility_Bill.objects.filter(
+                InvoiceMonth=formatted_month
+            ).count()
+            
+            # Build hierarchical structure
+            provinces_dict = {}
+            
+            for stat in district_stats:
+                pro_id = stat['ProID']
+                dis_id = stat['DisID']
+                total_bills = stat['total_bills']
+                
+                # CORRECTED: Get province name from w_province_code
+                # Match: Utility_Bill.ProID → w_province_code.pro_id
+                if pro_id not in provinces_dict:
+                    try:
+                        province = w_province_code.objects.get(pro_id=pro_id)
+                        pro_name = province.pro_name
+                    except w_province_code.DoesNotExist:
+                        logger.warning(f"Province not found for pro_id: {pro_id}")
+                        pro_name = f"Province {pro_id}"
+                    
+                    provinces_dict[pro_id] = {
+                        'pro_id': pro_id,
+                        'pro_name': pro_name,
+                        'total_bills': 0,
+                        'districts': []
+                    }
+                
+                # CORRECTED: Get district name from w_district_code
+                # Match: Utility_Bill.DisID → w_district_code.dis_id
+                # Also match pro_id for better accuracy
+                try:
+                    district = w_district_code.objects.get(
+                        pro_id=pro_id,
+                        dis_id=dis_id
+                    )
+                    dis_name = district.dis_name
+                except w_district_code.DoesNotExist:
+                    # Try without pro_id match (fallback)
+                    try:
+                        district = w_district_code.objects.filter(
+                            dis_id=dis_id
+                        ).first()
+                        
+                        if district:
+                            dis_name = district.dis_name
+                            logger.info(f"District found without pro_id match: {dis_id} -> {dis_name}")
+                        else:
+                            logger.warning(f"District not found for dis_id: {dis_id}, pro_id: {pro_id}")
+                            dis_name = f"District {dis_id}"
+                    except Exception as e:
+                        logger.error(f"Error fetching district: {str(e)}")
+                        dis_name = f"District {dis_id}"
+                
+                # Add district data
+                provinces_dict[pro_id]['districts'].append({
+                    'dis_id': dis_id,
+                    'dis_name': dis_name,
+                    'total_bills': total_bills
+                })
+                
+                # Update province total
+                provinces_dict[pro_id]['total_bills'] += total_bills
+            
+            # Convert to list and sort
+            provinces_list = list(provinces_dict.values())
+            
+            # Log summary for debugging
+            logger.info(f"Statistics for {formatted_month}:")
+            logger.info(f"  Total Bills: {total_bills_count}")
+            logger.info(f"  Unique Customers: {actual_customer_count}")
+            logger.info(f"  Provinces: {len(provinces_list)}")
+            
+            response_data = {
+                'period': month,
+                'formatted_period': formatted_month,
+                'total_bills': total_bills_count,
+                'total_customers': actual_customer_count,
+                'provinces': provinces_list
+            }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch district statistics: {str(e)}", exc_info=True)
+            return Response(
+                {"error": f"Failed to fetch district statistics: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class WaterUploadSummaryAPIView(APIView):
+    """
+    Get summary of all uploads with customer counts and status
+    """
+    
+    def get(self, request):
+        try:
+            # Get all tracking records with their statistics
+            from utility.models import WaterUploadDataTracking
+            
+            tracking_records = WaterUploadDataTracking.objects.all().order_by('-upload_month')
+            
+            summaries = []
+            for tracking in tracking_records:
+                month = tracking.upload_month
+                
+                # Convert month format for database query
+                if len(month) == 6:
+                    formatted_month = f"{month[:2]}-{month[2:]}"
+                else:
+                    continue
+                
+                # Get statistics for this month
+                bill_count = Utility_Bill.objects.filter(InvoiceMonth=formatted_month).count()
+                customer_count = Utility_Bill.objects.filter(
+                    InvoiceMonth=formatted_month
+                ).values('Customer_ID').distinct().count()
+                
+                summaries.append({
+                    'tracking_id': tracking.id,
+                    'month': month,
+                    'formatted_month': formatted_month,
+                    'status': tracking.status,
+                    'total_bills': bill_count,
+                    'total_customers': customer_count,
+                    'upload_completed': tracking.upload_completed,
+                    'user_upload': tracking.user_upload
+                })
+            
+            return Response({
+                'data': summaries
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch upload summary: {str(e)}", exc_info=True)
+            return Response(
+                {"error": f"Failed to fetch upload summary: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 # Debug Views
 class WaterDebugAPIView(APIView):
@@ -22040,197 +22709,9 @@ class WaterSummaryStatsAPIView(APIView):
         except Exception as e:
             logger.error(f"Error in water summary stats: {str(e)}")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
-from django.db.models import Q
-from .models import request_charge, EnterpriseInfo, Main_catalog_cat, memberInfo
-
-
-class ChargeReportDetailView(APIView):
-    """
-    API endpoint for detailed charge report transactions.
-    
-    Access Control:
-    - GID 1-5 (Admin/CoAdmin): View all banks' data
-    - GID 6-7 (Client): View only own bank's data
-    
-    Query Parameters:
-    - bank: Filter by bank code (e.g., "01", "02")
-    - year: Filter by year (e.g., 2025)
-    - month: Filter by month (1-12)
-    - fromDate: Start date (YYYY-MM-DD)
-    - toDate: End date (YYYY-MM-DD)
-    - status: Filter by status (pending, completed, etc.)
-    - limit: Number of records to return (default: 100, max: 1000)
-    """
-    permission_classes = [IsAuthenticated]
-    
-    def get(self, request):
-        try:
-            user = request.user
-            
-            # Validate user attributes
-            if not hasattr(user, 'GID') or not user.GID:
-                return Response({
-                    'error': 'User role (GID) not found'
-                }, status=status.HTTP_403_FORBIDDEN)
-            
-            # Extract user info
-            user_gid = user.GID.GID if hasattr(user.GID, 'GID') else None
-            user_bank_code = None
-            if hasattr(user, 'MID') and user.MID:
-                user_bank_code = getattr(user.MID, 'id', None)
-            
-            if user_gid is None:
-                return Response({
-                    'error': 'User role value not configured'
-                }, status=status.HTTP_403_FORBIDDEN)
-            
-            # Role-based access control
-            is_admin = user_gid in [1, 2, 3, 4, 5]
-            bank_code_str = str(user_bank_code).zfill(2) if user_bank_code else None
-            
-            # Base queryset
-            queryset = request_charge.objects.select_related(
-                'search_log'
-            ).filter(
-                insert_date__isnull=False
-            ).order_by('-rec_charge_ID')
-            
-            # Apply role-based filtering
-            if not is_admin:
-                if not bank_code_str:
-                    return Response({
-                        'error': 'Access denied: User bank code not configured'
-                    }, status=status.HTTP_403_FORBIDDEN)
-                queryset = queryset.filter(bnk_code=bank_code_str)
-            
-            # Apply query parameter filters
-            queryset = self._apply_filters(request, queryset)
-            
-            # Limit results
-            limit = int(request.query_params.get('limit', 100))
-            limit = min(limit, 1000)  # Max 1000 records
-            
-            queryset = queryset[:limit]
-            
-            # Build detailed response
-            charge_report_list = []
-            
-            for charge_field in queryset:
-                # Get enterprise name
-                enterprise_name = ""
-                try:
-                    enterprise = EnterpriseInfo.objects.filter(
-                        LCICID=charge_field.LCIC_ID
-                    ).first()
-                    if enterprise:
-                        enterprise_name = f"{charge_field.LCIC_ID} - {enterprise.enterpriseNameLao}"
-                    else:
-                        enterprise_name = charge_field.LCIC_ID or ""
-                except Exception:
-                    enterprise_name = charge_field.LCIC_ID or ""
-                
-                # Get loan purpose name
-                loan_purpose_name = ""
-                try:
-                    loan_purpose = Main_catalog_cat.objects.filter(
-                        cat_value=charge_field.lon_purpose
-                    ).first()
-                    if loan_purpose:
-                        loan_purpose_name = loan_purpose.cat_name
-                    else:
-                        loan_purpose_name = charge_field.lon_purpose or ""
-                except Exception:
-                    loan_purpose_name = charge_field.lon_purpose or ""
-                
-                # Get bank name
-                bank_name = ""
-                try:
-                    bank = memberInfo.objects.filter(
-                        bnk_code=charge_field.bnk_code
-                    ).first()
-                    if bank:
-                        bank_name = getattr(bank, 'bnk_name', '') or getattr(bank, 'name', '')
-                        bank_display = f"{charge_field.bnk_code}-{bank_name}"
-                    else:
-                        bank_display = charge_field.bnk_code or ""
-                except Exception:
-                    bank_display = charge_field.bnk_code or ""
-                
-                charge_data = {
-                    "rec_charge_ID": charge_field.rec_charge_ID,
-                    "bnk_code": bank_display,
-                    "bnk_type": charge_field.bnk_type or "",
-                    "chg_amount": float(charge_field.chg_amount) if charge_field.chg_amount else 0,
-                    "chg_code": charge_field.chg_code or "",
-                    "status": charge_field.status or "",
-                    "insert_date": charge_field.insert_date,
-                    "update_date": charge_field.update_date,
-                    "rtp_code": charge_field.rtp_code or "",
-                    "lon_purpose": loan_purpose_name,
-                    "chg_unit": charge_field.chg_unit or "",
-                    "user_sys_id": charge_field.user_sys_id or "",
-                    "LCIC_ID": enterprise_name,
-                    "cusType": charge_field.cusType or "",
-                    "user_session_id": charge_field.user_session_id or "",
-                    "rec_reference_code": charge_field.rec_reference_code or "",
-                    "rec_insert_date": charge_field.rec_insert_date,
-                    "search_log": charge_field.search_log.search_ID if charge_field.search_log else None
-                }
-                
-                charge_report_list.append(charge_data)
-            
-            return Response({
-                'status': 'success',
-                'user_info': {
-                    'role_id': user_gid,
-                    'is_admin': is_admin,
-                    'bank_code': 'ALL' if is_admin else bank_code_str
-                },
-                'total_records': len(charge_report_list),
-                'data': charge_report_list
-            }, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            return Response({
-                'error': 'Internal server error',
-                'detail': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def _apply_filters(self, request, queryset):
-        """Apply query parameter filters"""
-        bank = request.query_params.get('bank')
-        year = request.query_params.get('year')
-        month = request.query_params.get('month')
-        from_date = request.query_params.get('fromDate')
-        to_date = request.query_params.get('toDate')
-        status_filter = request.query_params.get('status')
         
-        if bank:
-            queryset = queryset.filter(bnk_code=bank)
         
-        if year:
-            queryset = queryset.filter(insert_date__year=year)
-        
-        if month:
-            queryset = queryset.filter(insert_date__month=month)
-        
-        if from_date and to_date:
-            queryset = queryset.filter(insert_date__range=[from_date, to_date])
-        elif from_date:
-            queryset = queryset.filter(insert_date__gte=from_date)
-        elif to_date:
-            queryset = queryset.filter(insert_date__lte=to_date)
-        
-        if status_filter:
-            queryset = queryset.filter(status=status_filter)
-        
-        return queryset
-
+      
 # ============================================
 # urls.py
 # ============================================
@@ -23112,3 +23593,2065 @@ def water_customer_search(request):
             'error': 'An error occurred during search',
             'results': []
         }, status=500)
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from django.db.models import Sum, Count, Avg
+from django.db.models.functions import ExtractYear, ExtractMonth
+from .models import searchLog, memberInfo
+
+
+class SearchLogReportMainView(APIView):
+    """
+    API endpoint for aggregated search log report dashboard.
+    
+    ການຄວບຄຸມການເຂົ້າເຖິງ:
+    - GID 1-5 (ຜູ້ເບິ່ງແຍງລະບົບ): ເບິ່ງຂໍ້ມູນທັງໝົດ
+    - GID 6-7 (ລູກຄ້າ): ເບິ່ງພຽງຂໍ້ມູນຂອງທະນາຄານຕົນເອງ
+    
+    ຕົວກອງ Query:
+    - year: ກອງປີ
+    - month: ກອງເດືອນ (1-12)
+    - bank: ກອງລະຫັດທະນາຄານ
+    - fromDate: ວັນທີເລີ່ມຕົ້ນ (YYYY-MM-DD)
+    - toDate: ວັນທີສິ້ນສຸດ (YYYY-MM-DD)
+    - credit_type: ກອງປະເພດສິນເຊື່ອ
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        try:
+            user = request.user
+            
+            # ກວດສອບຂໍ້ມູນຜູ້ໃຊ້
+            if not hasattr(user, 'GID') or not user.GID:
+                return Response({
+                    'error': 'ບໍ່ພົບບົດບາດຜູ້ໃຊ້ (GID)'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            # ດຶງຄ່າ GID
+            user_gid = user.GID.GID if hasattr(user.GID, 'GID') else None
+            
+            # ດຶງລະຫັດທະນາຄານ
+            user_bank_code = None
+            if hasattr(user, 'MID') and user.MID:
+                user_bank_code = getattr(user.MID, 'id', None)
+            
+            if user_gid is None:
+                return Response({
+                    'error': 'ບໍ່ໄດ້ຕັ້ງຄ່າບົດບາດຜູ້ໃຊ້'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            # ຂໍ້ມູນພື້ນຖານ
+            queryset = searchLog.objects.filter(
+                inquiry_date__isnull=False
+            )
+            
+            # ການຄວບຄຸມຕາມບົດບາດ
+            is_admin = user_gid in [1, 2, 3, 4, 5]
+            bank_code_str = str(user_bank_code).zfill(2) if user_bank_code else None
+            
+            if not is_admin:
+                if not bank_code_str:
+                    return Response({
+                        'error': 'ການເຂົ້າເຖິງຖືກປະຕິເສດ: ບໍ່ໄດ້ຕັ້ງຄ່າລະຫັດທະນາຄານ'
+                    }, status=status.HTTP_403_FORBIDDEN)
+                queryset = queryset.filter(bnk_code=bank_code_str)
+            
+            # ນຳໃຊ້ຕົວກອງ
+            queryset = self._apply_filters(request, queryset)
+            
+            # ລວມຂໍ້ມູນຕາມທະນາຄານ, ປີ, ແລະ ເດືອນ
+            aggregated_data = queryset.annotate(
+                year=ExtractYear('inquiry_date'),
+                month=ExtractMonth('inquiry_date')
+            ).values(
+                'bnk_code', 'year', 'month'
+            ).annotate(
+                total_searches=Count('search_ID'),
+                unique_enterprises=Count('LCIC_code', distinct=True),
+                total_loan_amount=Sum('rec_loan_amount'),
+                avg_loan_amount=Avg('rec_loan_amount')
+            ).order_by('-year', '-month', 'bnk_code')
+            
+            # ຈັດຮູບແບບຂໍ້ມູນ
+            dashboard_data = []
+            for item in aggregated_data:
+                # ດຶງຊື່ທະນາຄານ
+                bank_info = self._get_bank_info(item['bnk_code'])
+                
+                dashboard_data.append({
+                    'bank_code': item['bnk_code'],
+                    'bank_name': bank_info['name'],
+                    'bank_display': bank_info['display'],
+                    'year': item['year'],
+                    'month': item['month'],
+                    'month_name': self._get_month_name_lao(item['month']),
+                    'total_searches': item['total_searches'],
+                    'unique_enterprises': item['unique_enterprises'],
+                    'total_loan_amount': round(item['total_loan_amount'] or 0, 2),
+                    'avg_loan_amount': round(item['avg_loan_amount'] or 0, 2),
+                    'currency': 'ກີບ',
+                    'currency_code': 'LAK'
+                })
+            
+            # ສະຫຼຸບສະຖິຕິ
+            total_summary = {
+                'total_searches': sum(item['total_searches'] for item in dashboard_data),
+                'total_enterprises': sum(item['unique_enterprises'] for item in dashboard_data),
+                'total_loan_amount': round(sum(item['total_loan_amount'] for item in dashboard_data), 2),
+                'unique_banks': len(set(item['bank_code'] for item in dashboard_data)),
+                'currency': 'ກີບ',
+                'currency_code': 'LAK'
+            }
+            
+            return Response({
+                'status': 'success',
+                'message': 'ດຶງຂໍ້ມູນສຳເລັດ',
+                'user_info': {
+                    'role_id': user_gid,
+                    'is_admin': is_admin,
+                    'bank_code': 'ທັງໝົດ' if is_admin else bank_code_str,
+                    'role_name': 'ຜູ້ເບິ່ງແຍງລະບົບ' if is_admin else 'ລູກຄ້າ'
+                },
+                'summary': total_summary,
+                'data': dashboard_data
+            }, status=status.HTTP_200_OK)
+            
+        except AttributeError as e:
+            return Response({
+                'error': 'ຂໍ້ຜິດພາດການກວດສອບສິດ',
+                'detail': str(e)
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        except Exception as e:
+            return Response({
+                'error': 'ຂໍ້ຜິດພາດພາຍໃນລະບົບ',
+                'detail': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _apply_filters(self, request, queryset):
+        """ນຳໃຊ້ຕົວກອງກັບ queryset"""
+        year = request.query_params.get('year')
+        month = request.query_params.get('month')
+        bank = request.query_params.get('bank')
+        from_date = request.query_params.get('fromDate')
+        to_date = request.query_params.get('toDate')
+        credit_type = request.query_params.get('credit_type')
+        
+        if year:
+            queryset = queryset.filter(inquiry_date__year=year)
+        
+        if month:
+            if not year and not (from_date or to_date):
+                pass
+            else:
+                queryset = queryset.filter(inquiry_date__month=month)
+        
+        if bank:
+            queryset = queryset.filter(bnk_code=bank)
+        
+        if from_date and to_date:
+            queryset = queryset.filter(inquiry_date__range=[from_date, to_date])
+        elif from_date:
+            queryset = queryset.filter(inquiry_date__gte=from_date)
+        elif to_date:
+            queryset = queryset.filter(inquiry_date__lte=to_date)
+        
+        if credit_type:
+            queryset = queryset.filter(credit_type=credit_type)
+        
+        return queryset
+    
+    @staticmethod
+    def _get_bank_info(bank_code):
+        """ດຶງຂໍ້ມູນທະນາຄານຈາກລະຫັດ"""
+        try:
+            bank = memberInfo.objects.filter(bnk_code=bank_code).first()
+            if bank:
+                bank_name = getattr(bank, 'bnk_name', '') or getattr(bank, 'name', '')
+                return {
+                    'name': bank_name or bank_code,
+                    'display': f"{bank_code} - {bank_name}" if bank_name else bank_code
+                }
+            return {
+                'name': bank_code,
+                'display': bank_code
+            }
+        except Exception:
+            return {
+                'name': bank_code,
+                'display': bank_code
+            }
+    
+    @staticmethod
+    def _get_month_name_lao(month_num):
+        """ແປເລກເດືອນເປັນຊື່ເດືອນພາສາລາວ"""
+        months = {
+            1: 'ມັງກອນ', 2: 'ກຸມພາ', 3: 'ມີນາ', 4: 'ເມສາ',
+            5: 'ພຶດສະພາ', 6: 'ມິຖຸນາ', 7: 'ກໍລະກົດ', 8: 'ສິງຫາ',
+            9: 'ກັນຍາ', 10: 'ຕຸລາ', 11: 'ພະຈິກ', 12: 'ທັນວາ'
+        }
+        return months.get(month_num, 'ບໍ່ຮູ້ຈັກ')
+    
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from django.db.models import Q
+from .models import searchLog, EnterpriseInfo, Main_catalog_cat, memberInfo
+
+
+class SearchLogReportDetailView(APIView):
+    """
+    API endpoint for detailed search log report.
+    
+    ການຄວບຄຸມການເຂົ້າເຖິງ:
+    - GID 1-5 (ຜູ້ເບິ່ງແຍງລະບົບ): ເບິ່ງຂໍ້ມູນທັງໝົດ
+    - GID 6-7 (ລູກຄ້າ): ເບິ່ງພຽງຂໍ້ມູນຂອງທະນາຄານຕົນເອງ
+    
+    ຕົວກອງ Query:
+    - bank: ກອງລະຫັດທະນາຄານ (e.g., "01", "02")
+    - year: ກອງປີ (e.g., 2025)
+    - month: ກອງເດືອນ (1-12)
+    - fromDate: ວັນທີເລີ່ມຕົ້ນ (YYYY-MM-DD)
+    - toDate: ວັນທີສິ້ນສຸດ (YYYY-MM-DD)
+    - credit_type: ກອງປະເພດສິນເຊື່ອ
+    - cusType: ກອງປະເພດລູກຄ້າ
+    - limit: ຈຳນວນບັນທຶກທີ່ສົ່ງກັບຄືນ (ຄ່າເລີ່ມຕົ້ນ: 100, ສູງສຸດ: 1000)
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        try:
+            user = request.user
+            
+            # ກວດສອບຂໍ້ມູນຜູ້ໃຊ້
+            if not hasattr(user, 'GID') or not user.GID:
+                return Response({
+                    'error': 'ບໍ່ພົບບົດບາດຜູ້ໃຊ້ (GID)'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            # ດຶງຂໍ້ມູນຜູ້ໃຊ້
+            user_gid = user.GID.GID if hasattr(user.GID, 'GID') else None
+            user_bank_code = None
+            if hasattr(user, 'MID') and user.MID:
+                user_bank_code = getattr(user.MID, 'id', None)
+            
+            if user_gid is None:
+                return Response({
+                    'error': 'ບໍ່ໄດ້ຕັ້ງຄ່າບົດບາດຜູ້ໃຊ້'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            # ການຄວບຄຸມຕາມບົດບາດ
+            is_admin = user_gid in [1, 2, 3, 4, 5]
+            bank_code_str = str(user_bank_code).zfill(2) if user_bank_code else None
+            
+            # ຂໍ້ມູນພື້ນຖານ
+            queryset = searchLog.objects.filter(
+                inquiry_date__isnull=False
+            ).order_by('-search_ID')
+            
+            # ນຳໃຊ້ການກອງຕາມບົດບາດ
+            if not is_admin:
+                if not bank_code_str:
+                    return Response({
+                        'error': 'ການເຂົ້າເຖິງຖືກປະຕິເສດ: ບໍ່ໄດ້ຕັ້ງຄ່າລະຫັດທະນາຄານ'
+                    }, status=status.HTTP_403_FORBIDDEN)
+                queryset = queryset.filter(bnk_code=bank_code_str)
+            
+            # ນຳໃຊ້ຕົວກອງ
+            queryset = self._apply_filters(request, queryset)
+            
+            # ຈຳກັດຜົນລັບ
+            limit = int(request.query_params.get('limit', 100))
+            limit = min(limit, 1000)  # ສູງສຸດ 1000 ບັນທຶກ
+            
+            queryset = queryset[:limit]
+            
+            # ສ້າງລາຍລະອຽດຂໍ້ມູນ
+            search_log_list = []
+            
+            for log in queryset:
+                # ດຶງຊື່ວິສາຫະກິດຈາກ LCIC_code
+                enterprise_info = self._get_enterprise_info(log.LCIC_code)
+                
+                # ດຶງຊື່ຈຸດປະສົງສິນເຊື່ອ
+                loan_purpose_name = self._get_loan_purpose(log.rec_loan_purpose)
+                
+                # ດຶງຊື່ທະນາຄານ
+                bank_info = self._get_bank_info(log.bnk_code)
+                
+                # ແປຫນ່ວຍເງິນ
+                currency = self._convert_currency(log.rec_loan_amount_currency)
+                
+                # ແປປະເພດສິນເຊື່ອ
+                credit_type_lao = self._get_credit_type_lao(log.credit_type)
+                
+                # ແປປະເພດການສອບຖາມ
+                enquiry_type_lao = self._get_enquiry_type_lao(log.rec_enquiry_type)
+                
+                log_data = {
+                    "search_ID": log.search_ID,
+                    "bnk_code": log.bnk_code,
+                    "bank_name": bank_info['name'],
+                    "bank_display": bank_info['display'],
+                    "bnk_type": log.bnk_type or "",
+                    "LCIC_code": log.LCIC_code or "",
+                    "enterprise_ID": log.enterprise_ID or "",
+                    "enterprise_name": enterprise_info['name'],
+                    "enterprise_display": enterprise_info['display'],
+                    "cus_ID": log.cus_ID or "",
+                    "cusType": log.cusType or "",
+                    "credit_type": log.credit_type or "",
+                    "credit_type_lao": credit_type_lao,
+                    "rec_loan_amount": float(log.rec_loan_amount) if log.rec_loan_amount else 0,
+                    "rec_loan_amount_currency": currency,
+                    "currency_code": log.rec_loan_amount_currency or "LAK",
+                    "rec_loan_purpose": loan_purpose_name,
+                    "rec_enquiry_type": log.rec_enquiry_type or "",
+                    "rec_enquiry_type_lao": enquiry_type_lao,
+                    "inquiry_date": log.inquiry_date,
+                    "inquiry_month": log.inquiry_month or "",
+                    "inquiry_time": log.inquiry_time,
+                    "branch": log.branch or "",
+                    "sys_usr": log.sys_usr or "",
+                    "com_tel": log.com_tel or "",
+                    "com_location": log.com_location or ""
+                }
+                
+                search_log_list.append(log_data)
+            
+            return Response({
+                'status': 'success',
+                'message': 'ດຶງລາຍລະອຽດສຳເລັດ',
+                'user_info': {
+                    'role_id': user_gid,
+                    'is_admin': is_admin,
+                    'bank_code': 'ທັງໝົດ' if is_admin else bank_code_str,
+                    'role_name': 'ຜູ້ເບິ່ງແຍງລະບົບ' if is_admin else 'ລູກຄ້າ'
+                },
+                'total_records': len(search_log_list),
+                'data': search_log_list
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': 'ຂໍ້ຜິດພາດພາຍໃນລະບົບ',
+                'detail': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _apply_filters(self, request, queryset):
+        """ນຳໃຊ້ຕົວກອງ"""
+        bank = request.query_params.get('bank')
+        year = request.query_params.get('year')
+        month = request.query_params.get('month')
+        from_date = request.query_params.get('fromDate')
+        to_date = request.query_params.get('toDate')
+        credit_type = request.query_params.get('credit_type')
+        cus_type = request.query_params.get('cusType')
+        
+        if bank:
+            queryset = queryset.filter(bnk_code=bank)
+        
+        if year:
+            queryset = queryset.filter(inquiry_date__year=year)
+        
+        if month:
+            queryset = queryset.filter(inquiry_date__month=month)
+        
+        if from_date and to_date:
+            queryset = queryset.filter(inquiry_date__range=[from_date, to_date])
+        elif from_date:
+            queryset = queryset.filter(inquiry_date__gte=from_date)
+        elif to_date:
+            queryset = queryset.filter(inquiry_date__lte=to_date)
+        
+        if credit_type:
+            queryset = queryset.filter(credit_type=credit_type)
+        
+        if cus_type:
+            queryset = queryset.filter(cusType=cus_type)
+        
+        return queryset
+    
+    @staticmethod
+    def _get_enterprise_info(lcic_code):
+        """ດຶງຂໍ້ມູນວິສາຫະກິດຈາກ LCIC_code"""
+        if not lcic_code:
+            return {'name': '', 'display': ''}
+        
+        try:
+            enterprise = EnterpriseInfo.objects.filter(LCIC_code=lcic_code).first()
+            if enterprise:
+                enterprise_name_lao = getattr(enterprise, 'enterpriseNameLao', '')
+                if enterprise_name_lao:
+                    return {
+                        'name': enterprise_name_lao,
+                        'display': f"{lcic_code} - {enterprise_name_lao}"
+                    }
+            return {
+                'name': lcic_code,
+                'display': lcic_code
+            }
+        except Exception:
+            return {
+                'name': lcic_code,
+                'display': lcic_code
+            }
+    
+    @staticmethod
+    def _get_loan_purpose(loan_purpose_code):
+        """ດຶງຊື່ຈຸດປະສົງສິນເຊື່ອ"""
+        if not loan_purpose_code:
+            return ""
+        
+        try:
+            loan_purpose = Main_catalog_cat.objects.filter(cat_value=loan_purpose_code).first()
+            if loan_purpose:
+                return getattr(loan_purpose, 'cat_name', loan_purpose_code)
+            return loan_purpose_code
+        except Exception:
+            return loan_purpose_code
+    
+    @staticmethod
+    def _get_bank_info(bank_code):
+        """ດຶງຂໍ້ມູນທະນາຄານ"""
+        if not bank_code:
+            return {'name': '', 'display': ''}
+        
+        try:
+            bank = memberInfo.objects.filter(bnk_code=bank_code).first()
+            if bank:
+                bank_name = getattr(bank, 'bnk_name', '') or getattr(bank, 'name', '')
+                if bank_name:
+                    return {
+                        'name': bank_name,
+                        'display': f"{bank_code} - {bank_name}"
+                    }
+            return {
+                'name': bank_code,
+                'display': bank_code
+            }
+        except Exception:
+            return {
+                'name': bank_code,
+                'display': bank_code
+            }
+    
+    @staticmethod
+    def _convert_currency(currency_code):
+        """ແປຫນ່ວຍເງິນເປັນພາສາລາວ"""
+        currency_map = {
+            'LAK': 'ກີບ',
+            'USD': 'ໂດລາສະຫະລັດ',
+            'THB': 'ບາດໄທ',
+            'VND': 'ດົງຫວຽດນາມ',
+            'EUR': 'ເອີໂຣ',
+            'CNY': 'ຢວນຈີນ',
+            'JPY': 'ເຢນຍີ່ປຸ່ນ',
+            'KRW': 'ວອນເກົາຫຼີ'
+        }
+        if not currency_code:
+            return 'ກີບ'
+        return currency_map.get(currency_code.upper(), currency_code)
+    
+    @staticmethod
+    def _get_credit_type_lao(credit_type):
+        """ແປປະເພດສິນເຊື່ອເປັນພາສາລາວ"""
+        credit_type_map = {
+            'personal': 'ສິນເຊື່ອສ່ວນບຸກຄົນ',
+            'business': 'ສິນເຊື່ອທຸລະກິດ',
+            'mortgage': 'ສິນເຊື່ອເຊື່ອບ້ານ',
+            'auto': 'ສິນເຊື່ອລົດ',
+            'education': 'ສິນເຊື່ອການສຶກສາ',
+            'agriculture': 'ສິນເຊື່ອກະສິກຳ',
+            'sme': 'ສິນເຊື່ອວິສາຫະກິດຂະໜາດນ້ອຍ',
+            'corporate': 'ສິນເຊື່ອນິຕິບຸກຄົນ'
+        }
+        if not credit_type:
+            return ''
+        return credit_type_map.get(credit_type.lower(), credit_type)
+    
+    @staticmethod
+    def _get_enquiry_type_lao(enquiry_type):
+        """ແປປະເພດການສອບຖາມເປັນພາສາລາວ"""
+        enquiry_type_map = {
+            'new': 'ໃໝ່',
+            'renewal': 'ຕໍ່ອາຍຸ',
+            'review': 'ທົບທວນ',
+            'inquiry': 'ສອບຖາມ',
+            'assessment': 'ປະເມີນ'
+        }
+        if not enquiry_type:
+            return ''
+        return enquiry_type_map.get(enquiry_type.lower(), enquiry_type)
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from django.db.models import Sum, Count, Q
+from django.db.models.functions import TruncMonth, TruncDate
+from django.utils import timezone
+from datetime import datetime, date, timedelta
+import calendar
+from .models import request_charge, memberInfo, EnterpriseInfo, Main_catalog_cat
+
+
+class ChargeReportSummaryView(APIView):
+    """
+    Enhanced API endpoint for charge report summary statistics.
+    Provides monthly, daily, and top bank statistics.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        try:
+            user = request.user
+            
+            # User validation
+            if not hasattr(user, 'GID') or not user.GID:
+                return Response({
+                    'error': 'ບໍ່ພົບບົດບາດຜູ້ໃຊ້ (GID)'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            user_gid = user.GID.GID if hasattr(user.GID, 'GID') else None
+            user_bank_code = None
+            if hasattr(user, 'MID') and user.MID:
+                user_bank_code = str(getattr(user.MID, 'id', '')).zfill(2)
+            
+            is_admin = user_gid in [1, 2, 3, 4, 5]
+            
+            # Get current date info
+            today = timezone.now().date()
+            current_month = today.month
+            current_year = today.year
+            
+            # Build base queryset
+            base_queryset = request_charge.objects.filter(
+                status__isnull=False,
+                rec_insert_date__isnull=False
+            )
+            
+            # Apply role-based filtering
+            if not is_admin and user_bank_code:
+                base_queryset = base_queryset.filter(bnk_code=user_bank_code)
+            
+            # Apply optional filters from request
+            filters = self._get_filters(request)
+            
+            # Calculate summary statistics
+            summary_data = {
+                'current_month_stats': self._get_monthly_stats(
+                    base_queryset, filters, current_year, current_month, today
+                ),
+                'today_stats': self._get_today_stats(base_queryset, today, user_bank_code, is_admin),
+                'top_banks': self._get_top_banks(base_queryset, filters, is_admin) if is_admin else None,
+                'filter_applied': filters,
+                'user_info': {
+                    'role_id': user_gid,
+                    'is_admin': is_admin,
+                    'bank_code': 'ທັງໝົດ' if is_admin else user_bank_code,
+                    'role_name': 'ຜູ້ເບິ່ງແຍງລະບົບ' if is_admin else 'ລູກຄ້າ'
+                }
+            }
+            
+            return Response({
+                'status': 'success',
+                'message': 'ດຶງຂໍ້ມູນສະຫຼຸບສຳເລັດ',
+                'data': summary_data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': 'ຂໍ້ຜິດພາດພາຍໃນລະບົບ',
+                'detail': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _get_filters(self, request):
+        """Extract and validate filters from request"""
+        filters = {}
+        
+        # Date range filter
+        from_date = request.query_params.get('fromDate')
+        to_date = request.query_params.get('toDate')
+        if from_date:
+            filters['from_date'] = datetime.strptime(from_date, '%Y-%m-%d').date()
+        if to_date:
+            filters['to_date'] = datetime.strptime(to_date, '%Y-%m-%d').date()
+            
+        # Month/Year filter
+        month = request.query_params.get('month')
+        year = request.query_params.get('year')
+        if month and month.isdigit():
+            filters['month'] = int(month)
+        if year and year.isdigit():
+            filters['year'] = int(year)
+            
+        # Bank filter
+        bank = request.query_params.get('bank')
+        if bank and bank != 'all':
+            filters['bank'] = bank
+            
+        return filters
+    
+    def _get_monthly_stats(self, queryset, filters, current_year, current_month, today):
+        """Calculate monthly statistics"""
+        # Apply filters or use current month
+        if filters.get('from_date') and filters.get('to_date'):
+            month_queryset = queryset.filter(
+                rec_insert_date__date__gte=filters['from_date'],
+                rec_insert_date__date__lte=filters['to_date']
+            )
+            month_label = f"{filters['from_date'].strftime('%d/%m')} - {filters['to_date'].strftime('%d/%m/%Y')}"
+        elif filters.get('month') and filters.get('year'):
+            month_queryset = queryset.filter(
+                rec_insert_date__year=filters['year'],
+                rec_insert_date__month=filters['month']
+            )
+            month_label = f"{filters['month']:02d}-{filters['year']}"
+        else:
+            # Default to current month
+            month_queryset = queryset.filter(
+                rec_insert_date__year=current_year,
+                rec_insert_date__month=current_month
+            )
+            month_label = f"{current_month:02d}-{current_year}"
+        
+        # Apply bank filter if specified
+        if filters.get('bank'):
+            month_queryset = month_queryset.filter(bnk_code=filters['bank'])
+        
+        # Calculate aggregates
+        month_stats = month_queryset.aggregate(
+            total_transactions=Count('rec_charge_ID'),
+            total_amount=Sum('chg_amount')
+        )
+        
+        # Today's stats for the same filters - Fixed with __date lookup
+        today_queryset = month_queryset.filter(rec_insert_date__date=today)
+        today_stats = today_queryset.aggregate(
+            today_transactions=Count('rec_charge_ID'),
+            today_amount=Sum('chg_amount')
+        )
+        
+        return {
+            'month_label': month_label,
+            'total_transactions': month_stats['total_transactions'] or 0,
+            'total_amount': float(month_stats['total_amount'] or 0),
+            'today_transactions': today_stats['today_transactions'] or 0,
+            'today_amount': float(today_stats['today_amount'] or 0),
+            'formatted_amount': self._format_amount(month_stats['total_amount'] or 0),
+            'formatted_today_amount': self._format_amount(today_stats['today_amount'] or 0)
+        }
+    
+    def _get_today_stats(self, queryset, today, user_bank_code, is_admin):
+        """Get today's statistics - Fixed with __date lookup"""
+        today_queryset = queryset.filter(rec_insert_date__date=today)
+        
+        if not is_admin and user_bank_code:
+            today_queryset = today_queryset.filter(bnk_code=user_bank_code)
+        
+        stats = today_queryset.aggregate(
+            transactions=Count('rec_charge_ID'),
+            amount=Sum('chg_amount')
+        )
+        
+        return {
+            'date': today.strftime('%d/%m/%Y'),
+            'transactions': stats['transactions'] or 0,
+            'amount': float(stats['amount'] or 0),
+            'formatted_amount': self._format_amount(stats['amount'] or 0)
+        }
+    
+    def _get_top_banks(self, queryset, filters, is_admin):
+        """Get top performing banks (admin only)"""
+        if not is_admin:
+            return None
+        
+        # Apply date filters
+        if filters.get('from_date') and filters.get('to_date'):
+            queryset = queryset.filter(
+                rec_insert_date__date__gte=filters['from_date'],
+                rec_insert_date__date__lte=filters['to_date']
+            )
+        elif filters.get('month') and filters.get('year'):
+            queryset = queryset.filter(
+                rec_insert_date__year=filters['year'],
+                rec_insert_date__month=filters['month']
+            )
+        else:
+            # Current month by default
+            today = timezone.now().date()
+            queryset = queryset.filter(
+                rec_insert_date__year=today.year,
+                rec_insert_date__month=today.month
+            )
+        
+        # Top bank by amount
+        top_by_amount = queryset.values('bnk_code').annotate(
+            total_amount=Sum('chg_amount'),
+            total_transactions=Count('rec_charge_ID')
+        ).order_by('-total_amount').first()
+        
+        # Top bank by transactions
+        top_by_transactions = queryset.values('bnk_code').annotate(
+            total_transactions=Count('rec_charge_ID'),
+            total_amount=Sum('chg_amount')
+        ).order_by('-total_transactions').first()
+        
+        # Get today's stats for top banks - Fixed with __date lookup
+        today = timezone.now().date()
+        
+        result = {
+            'by_amount': None,
+            'by_transactions': None
+        }
+        
+        if top_by_amount:
+            bank_info = self._get_bank_info(top_by_amount['bnk_code'])
+            today_stats = queryset.filter(
+                bnk_code=top_by_amount['bnk_code'],
+                rec_insert_date__date=today
+            ).aggregate(
+                today_amount=Sum('chg_amount'),
+                today_transactions=Count('rec_charge_ID')
+            )
+            
+            result['by_amount'] = {
+                'bank_code': top_by_amount['bnk_code'],
+                'bank_name': bank_info['name'],
+                'total_amount': float(top_by_amount['total_amount'] or 0),
+                'total_transactions': top_by_amount['total_transactions'] or 0,
+                'today_amount': float(today_stats['today_amount'] or 0),
+                'today_transactions': today_stats['today_transactions'] or 0,
+                'formatted_amount': self._format_amount(top_by_amount['total_amount'] or 0),
+                'formatted_today_amount': self._format_amount(today_stats['today_amount'] or 0)
+            }
+        
+        if top_by_transactions:
+            bank_info = self._get_bank_info(top_by_transactions['bnk_code'])
+            today_stats = queryset.filter(
+                bnk_code=top_by_transactions['bnk_code'],
+                rec_insert_date__date=today
+            ).aggregate(
+                today_transactions=Count('rec_charge_ID'),
+                today_amount=Sum('chg_amount')
+            )
+            
+            result['by_transactions'] = {
+                'bank_code': top_by_transactions['bnk_code'],
+                'bank_name': bank_info['name'],
+                'total_transactions': top_by_transactions['total_transactions'] or 0,
+                'total_amount': float(top_by_transactions['total_amount'] or 0),
+                'today_transactions': today_stats['today_transactions'] or 0,
+                'today_amount': float(today_stats['today_amount'] or 0),
+                'formatted_amount': self._format_amount(top_by_transactions['total_amount'] or 0),
+                'formatted_today_amount': self._format_amount(today_stats['today_amount'] or 0)
+            }
+        
+        return result
+    
+    @staticmethod
+    def _get_bank_info(bank_code):
+        """Get bank information"""
+        try:
+            bank = memberInfo.objects.filter(bnk_code=bank_code).first()
+            if bank:
+                bank_name = getattr(bank, 'nameL', '') or getattr(bank, 'nameE', '')
+                return {
+                    'name': bank_name or bank_code,
+                    'display': f"{bank_code} - {bank_name}" if bank_name else bank_code
+                }
+            return {'name': bank_code, 'display': bank_code}
+        except Exception:
+            return {'name': bank_code, 'display': bank_code}
+    
+    @staticmethod
+    def _format_amount(amount):
+        """Format amount with thousand separators"""
+        if amount is None:
+            return "0"
+        return "{:,.0f}".format(float(amount))
+
+
+class ChargeReportMainView(APIView):
+    """
+    Enhanced API endpoint for aggregated charge report with proper filtering.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        try:
+            user = request.user
+            
+            # User validation
+            if not hasattr(user, 'GID') or not user.GID:
+                return Response({
+                    'error': 'ບໍ່ພົບບົດບາດຜູ້ໃຊ້ (GID)'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            user_gid = user.GID.GID if hasattr(user.GID, 'GID') else None
+            user_bank_code = None
+            if hasattr(user, 'MID') and user.MID:
+                user_bank_code = str(getattr(user.MID, 'id', '')).zfill(2)
+            
+            is_admin = user_gid in [1, 2, 3, 4, 5]
+            
+            # Base queryset
+            queryset = request_charge.objects.filter(
+                status__isnull=False,
+                rec_insert_date__isnull=False
+            )
+            
+            # Role-based filtering
+            if not is_admin and user_bank_code:
+                queryset = queryset.filter(bnk_code=user_bank_code)
+            
+            # Apply filters
+            queryset, filter_info = self._apply_filters(request, queryset)
+            
+            # Group by bank for aggregation
+            aggregated_data = queryset.values('bnk_code').annotate(
+                total_charge_amount=Sum('chg_amount'),
+                transaction_count=Count('rec_charge_ID')
+            ).order_by('bnk_code')
+            
+            # Format response data
+            dashboard_data = []
+            for item in aggregated_data:
+                bank_info = self._get_bank_info(item['bnk_code'])
+                
+                dashboard_data.append({
+                    'bank_code': item['bnk_code'],
+                    'bank_name': bank_info['name'],
+                    'bank_display': bank_info['display'],
+                    'total_charge_amount': round(float(item['total_charge_amount'] or 0), 2),
+                    'transaction_count': item['transaction_count'] or 0,
+                    'formatted_amount': self._format_amount(item['total_charge_amount'] or 0),
+                    'currency': 'ກີບ',
+                    'currency_code': 'LAK'
+                })
+            
+            # Calculate totals
+            total_summary = {
+                'total_transactions': sum(item['transaction_count'] for item in dashboard_data),
+                'total_amount': round(sum(item['total_charge_amount'] for item in dashboard_data), 2),
+                'unique_banks': len(dashboard_data),
+                'formatted_total_amount': self._format_amount(
+                    sum(item['total_charge_amount'] for item in dashboard_data)
+                ),
+                'currency': 'ກີບ',
+                'currency_code': 'LAK'
+            }
+            
+            return Response({
+                'status': 'success',
+                'message': 'ດຶງຂໍ້ມູນສຳເລັດ',
+                'user_info': {
+                    'role_id': user_gid,
+                    'is_admin': is_admin,
+                    'bank_code': 'ທັງໝົດ' if is_admin else user_bank_code,
+                    'role_name': 'ຜູ້ເບິ່ງແຍງລະບົບ' if is_admin else 'ລູກຄ້າ'
+                },
+                'filter_info': filter_info,
+                'summary': total_summary,
+                'data': dashboard_data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': 'ຂໍ້ຜິດພາດພາຍໃນລະບົບ',
+                'detail': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _apply_filters(self, request, queryset):
+        """Apply filters with proper validation"""
+        filter_info = {}
+        
+        # Date range filter (highest priority)
+        from_date = request.query_params.get('fromDate')
+        to_date = request.query_params.get('toDate')
+        
+        if from_date and to_date:
+            # Parse dates if they are strings
+            if isinstance(from_date, str):
+                from_date = datetime.strptime(from_date, '%Y-%m-%d').date()
+            if isinstance(to_date, str):
+                to_date = datetime.strptime(to_date, '%Y-%m-%d').date()
+            # Use __date__gte and __date__lte to handle DateTimeField properly
+            queryset = queryset.filter(
+                rec_insert_date__date__gte=from_date,
+                rec_insert_date__date__lte=to_date
+            )
+            filter_info['date_range'] = f"{from_date} to {to_date}"
+            filter_info['type'] = 'date_range'
+        elif from_date:
+            if isinstance(from_date, str):
+                from_date = datetime.strptime(from_date, '%Y-%m-%d').date()
+            # For gte on date, use __date__gte lookup
+            queryset = queryset.filter(rec_insert_date__date__gte=from_date)
+            filter_info['from_date'] = from_date
+            filter_info['type'] = 'from_date'
+        elif to_date:
+            if isinstance(to_date, str):
+                to_date = datetime.strptime(to_date, '%Y-%m-%d').date()
+            # For lte on date, use __date__lte lookup
+            queryset = queryset.filter(rec_insert_date__date__lte=to_date)
+            filter_info['to_date'] = to_date
+            filter_info['type'] = 'to_date'
+        else:
+            # Month/Year filter (if no date range)
+            month = request.query_params.get('month')
+            year = request.query_params.get('year')
+            
+            if year:
+                if isinstance(year, str) and year.isdigit():
+                    year = int(year)
+                queryset = queryset.filter(rec_insert_date__year=year)
+                filter_info['year'] = year
+                
+                if month:
+                    if isinstance(month, str) and month.isdigit():
+                        month = int(month)
+                    queryset = queryset.filter(rec_insert_date__month=month)
+                    filter_info['month'] = month
+                    filter_info['type'] = 'month_year'
+                else:
+                    filter_info['type'] = 'year'
+            elif month:
+                # Month without year - use current year
+                current_year = timezone.now().year
+                if isinstance(month, str) and month.isdigit():
+                    month = int(month)
+                queryset = queryset.filter(
+                    rec_insert_date__year=current_year,
+                    rec_insert_date__month=month
+                )
+                filter_info['month'] = month
+                filter_info['year'] = current_year
+                filter_info['type'] = 'month_current_year'
+        
+        # Bank filter (applies regardless)
+        bank = request.query_params.get('bank')
+        if bank and bank != 'all':
+            queryset = queryset.filter(bnk_code=bank)
+            filter_info['bank'] = bank
+        
+        return queryset, filter_info
+    
+    @staticmethod
+    def _get_bank_info(bank_code):
+        """Get bank information"""
+        try:
+            bank = memberInfo.objects.filter(bnk_code=bank_code).first()
+            if bank:
+                bank_name = getattr(bank, 'nameL', '') or getattr(bank, 'nameE', '')
+                return {
+                    'name': bank_name or bank_code,
+                    'display': f"{bank_code} - {bank_name}" if bank_name else bank_code
+                }
+            return {'name': bank_code, 'display': bank_code}
+        except Exception:
+            return {'name': bank_code, 'display': bank_code}
+    
+    @staticmethod
+    def _format_amount(amount):
+        """Format amount with thousand separators"""
+        if amount is None:
+            return "0"
+        return "{:,.0f}".format(float(amount))
+
+
+# Keep the existing ChargeReportDetailView class as is, but fix filters
+class ChargeReportDetailView(APIView):
+    """
+    API endpoint for detailed charge report transactions.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        try:
+            user = request.user
+            
+            # User validation
+            if not hasattr(user, 'GID') or not user.GID:
+                return Response({
+                    'error': 'ບໍ່ພົບບົດບາດຜູ້ໃຊ້ (GID)'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            user_gid = user.GID.GID if hasattr(user.GID, 'GID') else None
+            user_bank_code = None
+            if hasattr(user, 'MID') and user.MID:
+                user_bank_code = str(getattr(user.MID, 'id', '')).zfill(2)
+            
+            is_admin = user_gid in [1, 2, 3, 4, 5]
+            
+            # Base queryset
+            queryset = request_charge.objects.select_related(
+                'search_log'
+            ).filter(
+                rec_insert_date__isnull=False
+            ).order_by('-rec_charge_ID')
+            
+            # Role-based filtering
+            if not is_admin and user_bank_code:
+                queryset = queryset.filter(bnk_code=user_bank_code)
+            
+            # Apply filters
+            queryset = self._apply_filters(request, queryset)
+            
+            # Limit results
+            limit = int(request.query_params.get('limit', 100))
+            limit = min(limit, 1000)
+            
+            queryset = queryset[:limit]
+            
+            # Build detail list
+            charge_report_list = []
+            
+            for charge_field in queryset:
+                enterprise_info = self._get_enterprise_info(charge_field.LCIC_code)
+                loan_purpose_name = self._get_loan_purpose(charge_field.lon_purpose)
+                bank_info = self._get_bank_info(charge_field.bnk_code)
+                currency = self._convert_currency(charge_field.chg_unit)
+                
+                charge_data = {
+                    "rec_charge_ID": charge_field.rec_charge_ID,
+                    "bnk_code": charge_field.bnk_code,
+                    "bank_name": bank_info['name'],
+                    "bank_display": bank_info['display'],
+                    "bnk_type": charge_field.bnk_type or "",
+                    "chg_amount": float(charge_field.chg_amount) if charge_field.chg_amount else 0,
+                    "formatted_amount": self._format_amount(charge_field.chg_amount or 0),
+                    "chg_code": charge_field.chg_code or "",
+                    "status": charge_field.status or "",
+                    "status_lao": self._get_status_lao(charge_field.status),
+                    "insert_date": charge_field.insert_date,
+                    "update_date": charge_field.update_date,
+                    "rtp_code": charge_field.rtp_code or "",
+                    "lon_purpose": loan_purpose_name,
+                    "chg_unit": currency,
+                    "currency_code": charge_field.chg_unit or "LAK",
+                    "user_sys_id": charge_field.user_sys_id or "",
+                    "LCIC_code": charge_field.LCIC_code or "",
+                    "enterprise_name": enterprise_info['name'],
+                    "enterprise_display": enterprise_info['display'],
+                    "cusType": charge_field.cusType or "",
+                    "user_session_id": charge_field.user_session_id or "",
+                    "rec_reference_code": charge_field.rec_reference_code or "",
+                    "rec_insert_date": charge_field.rec_insert_date,
+                    "search_log": charge_field.search_log.search_ID if charge_field.search_log else None
+                }
+                
+                charge_report_list.append(charge_data)
+            
+            return Response({
+                'status': 'success',
+                'message': 'ດຶງລາຍລະອຽດສຳເລັດ',
+                'user_info': {
+                    'role_id': user_gid,
+                    'is_admin': is_admin,
+                    'bank_code': 'ທັງໝົດ' if is_admin else user_bank_code,
+                    'role_name': 'ຜູ້ເບິ່ງແຍງລະບົບ' if is_admin else 'ລູກຄ້າ'
+                },
+                'total_records': len(charge_report_list),
+                'data': charge_report_list
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': 'ຂໍ້ຜິດພາດພາຍໃນລະບົບ',
+                'detail': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _apply_filters(self, request, queryset):
+        """Apply filters - Fixed date filters for DateTimeField compatibility"""
+        bank = request.query_params.get('bank')
+        year = request.query_params.get('year')
+        month = request.query_params.get('month')
+        from_date = request.query_params.get('fromDate')
+        to_date = request.query_params.get('toDate')
+        status_filter = request.query_params.get('status')
+        
+        if bank and bank != 'all':
+            queryset = queryset.filter(bnk_code=bank)
+        
+        if from_date and to_date:
+            # Parse if strings
+            if isinstance(from_date, str):
+                from_date = datetime.strptime(from_date, '%Y-%m-%d').date()
+            if isinstance(to_date, str):
+                to_date = datetime.strptime(to_date, '%Y-%m-%d').date()
+            queryset = queryset.filter(
+                rec_insert_date__date__gte=from_date,
+                rec_insert_date__date__lte=to_date
+            )
+        elif from_date:
+            if isinstance(from_date, str):
+                from_date = datetime.strptime(from_date, '%Y-%m-%d').date()
+            queryset = queryset.filter(rec_insert_date__date__gte=from_date)
+        elif to_date:
+            if isinstance(to_date, str):
+                to_date = datetime.strptime(to_date, '%Y-%m-%d').date()
+            queryset = queryset.filter(rec_insert_date__date__lte=to_date)
+        elif year:
+            if isinstance(year, str) and year.isdigit():
+                year = int(year)
+            queryset = queryset.filter(rec_insert_date__year=year)
+            if month:
+                if isinstance(month, str) and month.isdigit():
+                    month = int(month)
+                queryset = queryset.filter(rec_insert_date__month=month)
+        
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        
+        return queryset
+    
+    @staticmethod
+    def _get_enterprise_info(lcic_code):
+        """Get enterprise info from LCIC code"""
+        if not lcic_code:
+            return {'name': '', 'display': ''}
+        
+        try:
+            enterprise = EnterpriseInfo.objects.filter(LCIC_code=lcic_code).first()
+            if enterprise:
+                enterprise_name_lao = getattr(enterprise, 'enterpriseNameLao', '')
+                if enterprise_name_lao:
+                    return {
+                        'name': enterprise_name_lao,
+                        'display': f"{lcic_code} - {enterprise_name_lao}"
+                    }
+            return {'name': lcic_code, 'display': lcic_code}
+        except Exception:
+            return {'name': lcic_code, 'display': lcic_code}
+    
+    @staticmethod
+    def _get_loan_purpose(lon_purpose_code):
+        """Get loan purpose name"""
+        if not lon_purpose_code:
+            return ""
+        
+        try:
+            loan_purpose = Main_catalog_cat.objects.filter(cat_value=lon_purpose_code).first()
+            if loan_purpose:
+                return getattr(loan_purpose, 'cat_name', lon_purpose_code)
+            return lon_purpose_code
+        except Exception:
+            return lon_purpose_code
+    
+    @staticmethod
+    def _get_bank_info(bank_code):
+        """Get bank information"""
+        if not bank_code:
+            return {'name': '', 'display': ''}
+        
+        try:
+            bank = memberInfo.objects.filter(bnk_code=bank_code).first()
+            if bank:
+                bank_name = getattr(bank, 'nameL', '') or getattr(bank, 'nameE', '')
+                if bank_name:
+                    return {
+                        'name': bank_name,
+                        'display': f"{bank_code} - {bank_name}"
+                    }
+            return {'name': bank_code, 'display': bank_code}
+        except Exception:
+            return {'name': bank_code, 'display': bank_code}
+    
+    @staticmethod
+    def _convert_currency(currency_code):
+        """Convert currency code to Lao name"""
+        currency_map = {
+            'LAK': 'ກີບ',
+            'USD': 'ໂດລາສະຫະລັດ',
+            'THB': 'ບາດໄທ',
+            'VND': 'ດົງຫວຽດນາມ',
+            'EUR': 'ເອີໂຣ',
+            'CNY': 'ຢວນຈີນ',
+            'JPY': 'ເຢນຍີ່ປຸ່ນ',
+            'KRW': 'ວອນເກົາຫຼີ'
+        }
+        if not currency_code:
+            return 'ກີບ'
+        return currency_map.get(currency_code.upper(), currency_code)
+    
+    @staticmethod
+    def _get_status_lao(status):
+        """Convert status to Lao"""
+        status_map = {
+            'pending': 'ລໍຖ້າດຳເນີນການ',
+            'completed': 'ສຳເລັດແລ້ວ',
+            'approved': 'ອະນຸມັດແລ້ວ',
+            'rejected': 'ປະຕິເສດ',
+            'cancelled': 'ຍົກເລີກ',
+            'processing': 'ກຳລັງດຳເນີນການ',
+            'failed': 'ລົ້ມເຫຼວ',
+            'success': 'ສຳເລັດ',
+            'paid': 'ຈ່າຍແລ້ວ',
+            'unpaid': 'ຍັງບໍ່ໄດ້ຈ່າຍ'
+        }
+        if not status:
+            return 'ບໍ່ຮູ້ຈັກ'
+        return status_map.get(status.lower(), status)
+    
+    @staticmethod
+    def _format_amount(amount):
+        """Format amount with thousand separators"""
+        if amount is None:
+            return "0"
+        return "{:,.0f}".format(float(amount))
+    
+# ----------------------------------------------- UPDATE HERE -----------------------------------------------
+    
+# # water_supply_views_UPDATED.py
+# # Updated views for water supply tracking system
+# # Matches electric supply implementation
+
+# import requests
+# import json
+# from django.utils import timezone
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from rest_framework import status
+# from django.db.models import Q, Count, Sum, Avg
+# from datetime import datetime
+# from django.conf import settings
+# import logging
+# from django.db import transaction
+
+# from utility.models import (
+#     WaterUploadDataTracking,  # Updated model name
+#     WaterUploadLog,  # Updated model name
+#     Utility_Bill,  # Water bills
+#     w_province_code,
+#     w_district_code,
+#     w_customer_info
+# )
+
+# logger = logging.getLogger(__name__)
+
+
+# class WaterProvinceListAPIView(APIView):
+#     """Get list of provinces from w_province_code model"""
+    
+#     def get(self, request):
+#         try:
+#             provinces = w_province_code.objects.all().order_by('pro_id')
+            
+#             # Serialize manually or use serializer
+#             result = []
+#             for province in provinces:
+#                 result.append({
+#                     'pro_id': province.pro_id,
+#                     'pro_name': province.pro_name
+#                 })
+            
+#             return Response(result, status=status.HTTP_200_OK)
+            
+#         except Exception as e:
+#             logger.error(f"Error fetching provinces: {str(e)}")
+#             return Response(
+#                 {"error": "Failed to fetch provinces"},
+#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+#             )
+
+
+# class WaterDistrictListAPIView(APIView):
+#     """Get districts for a specific province from w_district_code model"""
+    
+#     def get(self, request):
+#         province_id = request.GET.get('province_id')
+        
+#         if not province_id:
+#             return Response(
+#                 {"error": "province_id parameter is required"},
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+        
+#         try:
+#             # Get province info
+#             try:
+#                 province = w_province_code.objects.get(pro_id=province_id)
+#             except w_province_code.DoesNotExist:
+#                 return Response(
+#                     {"error": f"Province with ID {province_id} not found"},
+#                     status=status.HTTP_404_NOT_FOUND
+#                 )
+            
+#             # Get districts for this province
+#             districts = w_district_code.objects.filter(
+#                 pro_id=province_id
+#             ).order_by('dis_id')
+            
+#             if not districts.exists():
+#                 return Response(
+#                     {"error": f"No districts found for province {province_id}"},
+#                     status=status.HTTP_404_NOT_FOUND
+#                 )
+            
+#             # Add province name to each district
+#             result = []
+#             for district in districts:
+#                 result.append({
+#                     'pro_id': district.pro_id,
+#                     'pro_name': province.pro_name,
+#                     'dis_id': district.dis_id,
+#                     'dis_name': district.dis_name
+#                 })
+            
+#             return Response(result, status=status.HTTP_200_OK)
+            
+#         except Exception as e:
+#             logger.error(f"Error fetching districts: {str(e)}")
+#             return Response(
+#                 {"error": "Failed to fetch districts"},
+#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+#             )
+
+
+# class WaterInitializeDistrictsAPIView(APIView):
+#     """Initialize tracking records for all districts in a province for a specific month"""
+    
+#     def post(self, request):
+#         try:
+#             province_id = request.data.get('province_id')
+#             month = request.data.get('month', timezone.now().strftime('%Y%m'))
+#             username = request.data.get('username', 'system')
+            
+#             if not province_id:
+#                 return Response(
+#                     {"error": "province_id is required"},
+#                     status=status.HTTP_400_BAD_REQUEST
+#                 )
+            
+#             # Validate month format
+#             try:
+#                 datetime.strptime(month, '%Y%m')
+#             except ValueError:
+#                 return Response(
+#                     {"error": "Invalid month format. Use YYYYMM (e.g., 202509)"},
+#                     status=status.HTTP_400_BAD_REQUEST
+#                 )
+            
+#             # Get province
+#             try:
+#                 province = w_province_code.objects.get(pro_id=province_id)
+#             except w_province_code.DoesNotExist:
+#                 return Response(
+#                     {"error": f"Province {province_id} not found"},
+#                     status=status.HTTP_404_NOT_FOUND
+#                 )
+            
+#             # Get districts for this province
+#             districts = w_district_code.objects.filter(pro_id=province_id)
+            
+#             if not districts.exists():
+#                 return Response(
+#                     {"error": f"No districts found for province {province_id}"},
+#                     status=status.HTTP_404_NOT_FOUND
+#                 )
+            
+#             created_count = 0
+#             updated_count = 0
+            
+#             # Create or update tracking records for each district
+#             for district in districts:
+#                 tracking, created = WaterUploadDataTracking.objects.get_or_create(
+#                     pro_id=province_id,
+#                     dis_id=district.dis_id,
+#                     upload_month=month,
+#                     defaults={
+#                         'pro_name': province.pro_name,
+#                         'dis_name': district.dis_name,
+#                         'status': 'pending',
+#                         'user_upload': username
+#                     }
+#                 )
+                
+#                 if created:
+#                     created_count += 1
+#                     # Create initial log
+#                     WaterUploadLog.objects.create(
+#                         tracking=tracking,
+#                         log_level='INFO',
+#                         message=f'Tracking initialized for {province.pro_name} - {district.dis_name}'
+#                     )
+#                 else:
+#                     # Reset status if was failed or partial
+#                     if tracking.status in ['failed', 'partial']:
+#                         tracking.status = 'pending'
+#                         tracking.error_message = None
+#                         tracking.save()
+#                         updated_count += 1
+            
+#             return Response({
+#                 'message': f'Initialized tracking for {province.pro_name}',
+#                 'province': {
+#                     'pro_id': province_id,
+#                     'pro_name': province.pro_name
+#                 },
+#                 'month': month,
+#                 'total_districts': districts.count(),
+#                 'created_count': created_count,
+#                 'updated_count': updated_count
+#             }, status=status.HTTP_200_OK)
+            
+#         except Exception as e:
+#             logger.error(f"Initialization failed: {str(e)}")
+#             return Response({
+#                 'error': f'Initialization failed: {str(e)}'
+#             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# class WaterUploadTrackingListAPIView(APIView):
+#     """List tracking records for specific province and month"""
+    
+#     def get(self, request):
+#         try:
+#             month = request.GET.get('month', timezone.now().strftime('%Y%m'))
+#             province_id = request.GET.get('province_id')
+            
+#             if not province_id:
+#                 return Response(
+#                     {"error": "province_id parameter is required"},
+#                     status=status.HTTP_400_BAD_REQUEST
+#                 )
+            
+#             # Validate month format
+#             try:
+#                 datetime.strptime(month, '%Y%m')
+#             except ValueError:
+#                 return Response(
+#                     {"error": "Invalid month format. Use YYYYMM (e.g., 202509)"},
+#                     status=status.HTTP_400_BAD_REQUEST
+#                 )
+            
+#             # Get tracking records for the specific province and month
+#             queryset = WaterUploadDataTracking.objects.filter(
+#                 upload_month=month,
+#                 pro_id=province_id
+#             ).order_by('dis_id')
+            
+#             # Serialize data
+#             serialized_data = []
+#             for item in queryset:
+#                 data = {
+#                     'id': item.id,
+#                     'pro_id': item.pro_id,
+#                     'pro_name': item.pro_name,
+#                     'dis_id': item.dis_id,
+#                     'dis_name': item.dis_name,
+#                     'upload_month': item.upload_month,
+#                     'status': item.status,
+#                     'total_records': item.total_records,
+#                     'payment_records': item.payment_records,
+#                     'customer_records': item.customer_records,
+#                     'data_size_mb': item.data_size_mb,
+#                     'upload_started': item.upload_started,
+#                     'upload_completed': item.upload_completed,
+#                     'processed_records': item.processed_records,
+#                     'failed_records': item.failed_records,
+#                     'user_upload': item.user_upload,
+#                     'error_message': item.error_message,
+#                     'success_rate_formatted': f"{item.success_rates:.1f}" if item.success_rates else "0.0",
+#                     'formatted_size': self.format_file_size(item.data_size_mb),
+#                     'upload_duration': self.format_duration(item.upload_duration) if item.upload_duration else None
+#                 }
+#                 serialized_data.append(data)
+            
+#             # Get statistics
+#             stats = self.get_statistics(month, province_id)
+            
+#             return Response({
+#                 'data': serialized_data,
+#                 'statistics': stats
+#             }, status=status.HTTP_200_OK)
+            
+#         except Exception as e:
+#             logger.error(f"Failed to fetch tracking data: {str(e)}")
+#             return Response(
+#                 {"error": "Failed to fetch tracking data"},
+#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+#             )
+    
+#     def get_statistics(self, month, province_id):
+#         """Calculate statistics for the dashboard"""
+#         try:
+#             queryset = WaterUploadDataTracking.objects.filter(
+#                 upload_month=month,
+#                 pro_id=province_id
+#             )
+            
+#             total_count = queryset.count()
+#             if total_count == 0:
+#                 return {
+#                     'total_locations': 0,
+#                     'status_breakdown': {},
+#                     'total_data_size_mb': 0.0,
+#                     'average_records': 0,
+#                     'total_payment_records': 0,
+#                     'total_customer_records': 0
+#                 }
+            
+#             # Status breakdown
+#             status_data = queryset.values('status').annotate(count=Count('id'))
+#             status_counts = {item['status']: item['count'] for item in status_data}
+            
+#             # Aggregated data
+#             aggregated = queryset.aggregate(
+#                 total_size=Sum('data_size_mb'),
+#                 avg_records=Avg('total_records'),
+#                 total_payments=Sum('payment_records'),
+#                 total_customers=Sum('customer_records')
+#             )
+            
+#             return {
+#                 'total_locations': total_count,
+#                 'status_breakdown': status_counts,
+#                 'total_data_size_mb': round(float(aggregated['total_size'] or 0), 2),
+#                 'average_records': round(float(aggregated['avg_records'] or 0)),
+#                 'total_payment_records': int(aggregated['total_payments'] or 0),
+#                 'total_customer_records': int(aggregated['total_customers'] or 0)
+#             }
+            
+#         except Exception as e:
+#             logger.error(f"Error in get_statistics: {str(e)}")
+#             return {
+#                 'total_locations': 0,
+#                 'status_breakdown': {},
+#                 'total_data_size_mb': 0.0,
+#                 'average_records': 0,
+#                 'total_payment_records': 0,
+#                 'total_customer_records': 0
+#             }
+    
+#     def format_file_size(self, size_mb):
+#         """Format file size for display"""
+#         if not size_mb or size_mb < 1:
+#             return f"{(size_mb or 0) * 1024:.1f} KB"
+#         elif size_mb < 1024:
+#             return f"{size_mb:.1f} MB"
+#         else:
+#             return f"{size_mb / 1024:.1f} GB"
+    
+#     def format_duration(self, duration_seconds):
+#         """Format duration for display"""
+#         if not duration_seconds:
+#             return None
+        
+#         if duration_seconds < 60:
+#             return f"{duration_seconds:.0f}s"
+#         elif duration_seconds < 3600:
+#             minutes = duration_seconds / 60
+#             return f"{minutes:.1f}min"
+#         else:
+#             hours = duration_seconds / 3600
+#             return f"{hours:.1f}hr"
+
+
+# # CONTINUED IN PART 2...
+
+
+# class WaterUploadDataAPIView(APIView):
+#     """
+#     Upload water supply data for a specific district
+#     Fetches from external API and inserts into database
+#     """
+    
+#     def post(self, request):
+#         try:
+#             tracking_id = request.data.get('tracking_id')
+            
+#             if not tracking_id:
+#                 return Response(
+#                     {"error": "tracking_id is required"},
+#                     status=status.HTTP_400_BAD_REQUEST
+#                 )
+            
+#             # Get tracking record
+#             try:
+#                 tracking = WaterUploadDataTracking.objects.get(id=tracking_id)
+#             except WaterUploadDataTracking.DoesNotExist:
+#                 return Response(
+#                     {"error": "Tracking record not found"},
+#                     status=status.HTTP_404_NOT_FOUND
+#                 )
+            
+#             # Check if already completed
+#             if tracking.status == 'completed':
+#                 return Response({
+#                     'message': 'Data already uploaded for this location',
+#                     'tracking_id': tracking.id,
+#                     'status': 'completed'
+#                 }, status=status.HTTP_200_OK)
+            
+#             # Update status to in_progress
+#             tracking.status = 'in_progress'
+#             tracking.upload_started = timezone.now()
+#             tracking.error_message = None
+#             tracking.save()
+            
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO',
+#                 message=f'Starting data upload for {tracking.pro_name} - {tracking.dis_name}'
+#             )
+            
+#             # Fetch data from water supply API
+#             # Format month as MM-YYYY for API (e.g., 09-2025)
+#             month_formatted = f"{tracking.upload_month[4:]}-{tracking.upload_month[:4]}"
+            
+#             # Build API URL - Update this to match your water supply API
+#             api_url = getattr(
+#                 settings, 
+#                 'WATER_SUPPLY_API_URL',
+#                 'http://202.137.141.244:3000'
+#             )
+            
+#             params = {
+#                 'pro_id': tracking.pro_id,
+#                 'dis_id': tracking.dis_id,
+#                 'month': month_formatted
+#             }
+            
+#             # Fetch data
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO',
+#                 message=f'Fetching data from API: {api_url} with params {params}'
+#             )
+            
+#             try:
+#                 response = requests.get(api_url, params=params, timeout=60)
+#                 response.raise_for_status()
+#                 data = response.json()
+#             except requests.exceptions.RequestException as e:
+#                 tracking.status = 'failed'
+#                 tracking.error_message = f'API request failed: {str(e)}'
+#                 tracking.upload_completed = timezone.now()
+#                 tracking.save()
+                
+#                 WaterUploadLog.objects.create(
+#                     tracking=tracking,
+#                     log_level='ERROR',
+#                     message=f'Failed to fetch data from API: {str(e)}'
+#                 )
+                
+#                 return Response({
+#                     'error': f'Failed to fetch data: {str(e)}',
+#                     'tracking_id': tracking.id,
+#                     'status': 'failed'
+#                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+#             # Parse response
+#             # Assuming API returns: { "payment_records": [...], "customer_records": [...] }
+#             payment_records = data.get('payment_records', [])
+#             customer_records = data.get('customer_records', [])
+            
+#             # Calculate data size
+#             data_size_bytes = len(json.dumps(data).encode('utf-8'))
+#             tracking.data_size_mb = data_size_bytes / (1024 * 1024)
+#             tracking.total_records = len(payment_records)
+#             tracking.save()
+            
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO',
+#                 message=f'Received {len(payment_records)} payment records and {len(customer_records)} customer records'
+#             )
+            
+#             # Insert payment records (Utility_Bill)
+#             payment_processed, payment_failed = self.insert_water_bill_data(
+#                 payment_records, 
+#                 tracking
+#             )
+            
+#             # Insert customer records (w_customer_info)
+#             customer_error = None
+#             try:
+#                 customer_processed, customer_failed = self.insert_customer_info_data(
+#                     customer_records,
+#                     tracking
+#                 )
+#             except Exception as e:
+#                 customer_processed = 0
+#                 customer_failed = len(customer_records)
+#                 customer_error = str(e)
+#                 WaterUploadLog.objects.create(
+#                     tracking=tracking,
+#                     log_level='ERROR',
+#                     message=f'Customer data insert failed: {str(e)}'
+#                 )
+            
+#             # Update tracking record
+#             tracking.payment_records = payment_processed
+#             tracking.customer_records = customer_processed if not customer_error else 0
+#             tracking.processed_records = payment_processed
+#             tracking.failed_records = payment_failed + customer_failed
+#             tracking.upload_completed = timezone.now()
+            
+#             # Calculate duration
+#             if tracking.upload_started:
+#                 duration = (tracking.upload_completed - tracking.upload_started).total_seconds()
+#                 tracking.upload_duration = duration
+            
+#             # Calculate success rate
+#             if tracking.total_records > 0:
+#                 tracking.success_rates = (payment_processed / tracking.total_records) * 100
+            
+#             # Determine final status
+#             if payment_processed == len(payment_records) and not customer_error:
+#                 tracking.status = 'completed'
+#                 final_status = 'completed'
+#                 message = 'Data upload completed successfully'
+#             elif payment_processed > 0:
+#                 tracking.status = 'partial'
+#                 final_status = 'partial'
+#                 message = 'Data upload partially completed with some errors'
+#             else:
+#                 tracking.status = 'failed'
+#                 final_status = 'failed'
+#                 message = 'Data upload failed'
+            
+#             tracking.save()
+            
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='SUCCESS' if final_status == 'completed' else 'WARNING',
+#                 message=message
+#             )
+            
+#             return Response({
+#                 'message': message + (' with warnings' if customer_error else ''),
+#                 'tracking_id': tracking.id,
+#                 'status': final_status,
+#                 'payment_records': {
+#                     'total': len(payment_records),
+#                     'processed': payment_processed,
+#                     'failed': payment_failed
+#                 },
+#                 'customer_records': {
+#                     'total': len(customer_records),
+#                     'processed': customer_processed if not customer_error else 0,
+#                     'failed': customer_failed,
+#                     'error': customer_error
+#                 },
+#                 'data_size_mb': tracking.data_size_mb,
+#                 'success_rate': tracking.success_rates,
+#                 'upload_duration': tracking.upload_duration
+#             }, status=status.HTTP_200_OK)
+            
+#         except Exception as e:
+#             logger.error(f"Upload failed: {str(e)}", exc_info=True)
+            
+#             try:
+#                 tracking.status = 'failed'
+#                 tracking.error_message = str(e)
+#                 tracking.upload_completed = timezone.now()
+#                 tracking.save()
+                
+#                 WaterUploadLog.objects.create(
+#                     tracking=tracking,
+#                     log_level='ERROR',
+#                     message=f'Upload failed: {str(e)}'
+#                 )
+#             except:
+#                 pass
+            
+#             return Response({
+#                 'error': f'Failed to process upload: {str(e)}',
+#                 'tracking_id': tracking_id if tracking_id else None,
+#                 'status': 'failed'
+#             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    
+#     def insert_water_bill_data(self, records, tracking):
+#         """Insert records into Utility_Bill table (water bills)"""
+#         processed_count = 0
+#         failed_count = 0
+#         batch_size = 1000
+        
+#         try:
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO',
+#                 message=f'Starting to insert {len(records)} records into Utility_Bill table'
+#             )
+            
+#             with transaction.atomic():
+#                 batch = []
+                
+#                 for i, item in enumerate(records):
+#                     try:
+#                         # Validate that item is a dictionary
+#                         if not isinstance(item, dict):
+#                             failed_count += 1
+#                             if failed_count <= 10:  # Log first 10 errors only
+#                                 WaterUploadLog.objects.create(
+#                                     tracking=tracking,
+#                                     log_level='ERROR',
+#                                     message=f'Record {i} is not a dictionary: {type(item)}'
+#                                 )
+#                             continue
+                        
+#                         # Helper function to safely get values
+#                         def safe_get(key, default=''):
+#                             value = item.get(key, default)
+#                             return value if value is not None else default
+                        
+#                         # Create Utility_Bill object - UPDATE FIELD MAPPING BASED ON YOUR API
+#                         bill = Utility_Bill(
+#                             Customer_ID=self.truncate(safe_get('CUSTOMER_ID', ''), 100),
+#                             BillID=self.truncate(safe_get('BILL_ID', ''), 100),
+#                             InvoiceNo=self.truncate(safe_get('INVOICE_NO', ''), 100),
+#                             TypeOfPro=self.truncate(safe_get('SUPPLY_TYPE', ''), 100),
+#                             Outstanding=self.safe_decimal(safe_get('OUTSTANDING', 0)),
+#                             Basic_Tax=self.safe_decimal(safe_get('BASIC_TAX', 0)),
+#                             Bill_Amount=self.safe_decimal(safe_get('BILL_AMOUNT', 0)),
+#                             Water_Consumption=self.safe_decimal(safe_get('WATER_CONSUMPTION', 0)),
+#                             Previous_Reading=self.safe_decimal(safe_get('PREVIOUS_READING', 0)),
+#                             Current_Reading=self.safe_decimal(safe_get('CURRENT_READING', 0)),
+#                             Payment_ID=safe_get('PAYMENT_ID', ''),
+#                             PaymentType=safe_get('PAYMENT_TYPE', ''),
+#                             Payment_Date=safe_get('PAYMENT_DATE', ''),
+#                             InvoiceMonth=self.truncate(safe_get('INVOICE_MONTH', ''), 50),
+#                             InvoiceDate=self.truncate(safe_get('INVOICE_DATE', ''), 100),
+#                             DisID=self.truncate(safe_get('DIS_ID', ''), 100),
+#                             ProID=self.truncate(safe_get('PRO_ID', ''), 100),
+#                             UserID=tracking.user_upload
+#                         )
+                        
+#                         batch.append(bill)
+                        
+#                         # Bulk insert when batch is full
+#                         if len(batch) >= batch_size:
+#                             Utility_Bill.objects.bulk_create(batch, ignore_conflicts=True)
+#                             processed_count += len(batch)
+#                             batch = []
+                            
+#                             # Log progress every 1000 records
+#                             WaterUploadLog.objects.create(
+#                                 tracking=tracking,
+#                                 log_level='INFO',
+#                                 message=f'Payment records progress: {processed_count}/{len(records)} processed'
+#                             )
+                    
+#                     except Exception as e:
+#                         failed_count += 1
+#                         if failed_count <= 10:  # Log first 10 errors only
+#                             WaterUploadLog.objects.create(
+#                                 tracking=tracking,
+#                                 log_level='ERROR',
+#                                 message=f'Failed to process payment record {i}: {str(e)}'
+#                             )
+#                         continue
+                
+#                 # Insert remaining batch
+#                 if batch:
+#                     Utility_Bill.objects.bulk_create(batch, ignore_conflicts=True)
+#                     processed_count += len(batch)
+            
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO',
+#                 message=f'Payment data insertion completed. Processed: {processed_count}, Failed: {failed_count}'
+#             )
+            
+#             return processed_count, failed_count
+            
+#         except Exception as e:
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='ERROR',
+#                 message=f'Bulk insert failed: {str(e)}'
+#             )
+#             raise e
+    
+    
+#     def insert_customer_info_data(self, records, tracking):
+#         """Insert customer records - Skip if already exists (OPTIMIZED)"""
+#         processed_count = 0
+#         failed_count = 0
+#         skipped_count = 0
+        
+#         try:
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO',
+#                 message=f'Starting to process {len(records)} customer records'
+#             )
+            
+#             # OPTIMIZATION: Get all existing customer IDs in one query
+#             existing_customer_ids = set(
+#                 w_customer_info.objects.values_list('Customer_ID', flat=True)
+#             )
+            
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO',
+#                 message=f'Found {len(existing_customer_ids)} existing customers in database'
+#             )
+            
+#             # Prepare batch insert list
+#             customers_to_insert = []
+#             batch_size = 500
+            
+#             for i, item in enumerate(records):
+#                 try:
+#                     if not isinstance(item, dict):
+#                         failed_count += 1
+#                         continue
+                    
+#                     def safe_get(key, default=''):
+#                         value = item.get(key, default)
+#                         return value if value is not None else default
+                    
+#                     customer_id = self.truncate(safe_get('CUSTOMER_ID', ''), 100)
+                    
+#                     if not customer_id:  # Skip if no customer ID
+#                         failed_count += 1
+#                         continue
+                    
+#                     # Skip if customer already exists
+#                     if customer_id in existing_customer_ids:
+#                         skipped_count += 1
+#                         continue
+                    
+#                     # Prepare object for bulk insert - UPDATE FIELD MAPPING
+#                     customer = w_customer_info(
+#                         Customer_ID=customer_id,
+#                         No=self.truncate(safe_get('INDEX_NO', ''), 100),
+#                         Company_name=self.truncate(safe_get('COMPANY_NAME', ''), 100),
+#                         Name=self.truncate(safe_get('GIVEN_NAME', ''), 100),
+#                         Surname=self.truncate(safe_get('FAMILY_NAME', ''), 100),
+#                         National_ID=self.truncate(safe_get('ID_NO', ''), 100),
+#                         Passport=self.truncate(safe_get('PASSPORT_NO', ''), 100),
+#                         Address=self.truncate(safe_get('ADDRESS', ''), 100),
+#                         Dustrict_ID=self.truncate(safe_get('DIS_ID', ''), 100),
+#                         Province_ID=self.truncate(safe_get('PRO_ID', ''), 100),
+#                         Tel=self.truncate(safe_get('TEL_NO', ''), 100),
+#                         Email=self.truncate(safe_get('EMAIL', ''), 100),
+#                         Cus_type=self.truncate(safe_get('SUPPLY_TYPE', ''), 100),
+#                         Regis_date=self.truncate(safe_get('REGIT_DATE', ''), 100)
+#                     )
+                    
+#                     customers_to_insert.append(customer)
+                    
+#                     # Bulk insert when batch is full
+#                     if len(customers_to_insert) >= batch_size:
+#                         w_customer_info.objects.bulk_create(
+#                             customers_to_insert,
+#                             ignore_conflicts=True
+#                         )
+#                         processed_count += len(customers_to_insert)
+#                         customers_to_insert = []
+                        
+#                         # Log progress
+#                         WaterUploadLog.objects.create(
+#                             tracking=tracking,
+#                             log_level='INFO',
+#                             message=f'Customer records progress: {i+1}/{len(records)} processed, {processed_count} new, {skipped_count} skipped'
+#                         )
+                
+#                 except Exception as e:
+#                     failed_count += 1
+#                     if failed_count <= 10:  # Log only first 10 errors
+#                         WaterUploadLog.objects.create(
+#                             tracking=tracking,
+#                             log_level='ERROR',
+#                             message=f'Failed to process customer record {i}: {str(e)}'
+#                         )
+#                     continue
+            
+#             # Insert remaining customers
+#             if customers_to_insert:
+#                 w_customer_info.objects.bulk_create(
+#                     customers_to_insert,
+#                     ignore_conflicts=True
+#                 )
+#                 processed_count += len(customers_to_insert)
+            
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='INFO',
+#                 message=f'Customer data processing completed. New: {processed_count}, Skipped: {skipped_count}, Failed: {failed_count}'
+#             )
+            
+#             return processed_count, failed_count
+            
+#         except Exception as e:
+#             WaterUploadLog.objects.create(
+#                 tracking=tracking,
+#                 log_level='ERROR',
+#                 message=f'Customer data insert failed: {str(e)}'
+#             )
+#             raise e
+    
+    
+#     def truncate(self, value, max_length):
+#         """Safely truncate string to max length"""
+#         if value is None:
+#             return ''
+#         return str(value)[:max_length]
+    
+    
+#     def safe_decimal(self, value):
+#         """Safely convert to decimal"""
+#         try:
+#             return float(value or 0)
+#         except (ValueError, TypeError):
+#             return 0.0
+
+
+# class WaterUploadTrackingDetailAPIView(APIView):
+#     """Get detailed tracking information with logs"""
+    
+#     def get(self, request, tracking_id):
+#         try:
+#             tracking = WaterUploadDataTracking.objects.get(id=tracking_id)
+            
+#             # Get logs
+#             logs = WaterUploadLog.objects.filter(tracking=tracking).order_by('-timestamp')
+            
+#             # Serialize
+#             data = {
+#                 'id': tracking.id,
+#                 'pro_id': tracking.pro_id,
+#                 'pro_name': tracking.pro_name,
+#                 'dis_id': tracking.dis_id,
+#                 'dis_name': tracking.dis_name,
+#                 'upload_month': tracking.upload_month,
+#                 'status': tracking.status,
+#                 'total_records': tracking.total_records,
+#                 'payment_records': tracking.payment_records,
+#                 'customer_records': tracking.customer_records,
+#                 'data_size_mb': tracking.data_size_mb,
+#                 'upload_started': tracking.upload_started,
+#                 'upload_completed': tracking.upload_completed,
+#                 'upload_duration': tracking.upload_duration,
+#                 'processed_records': tracking.processed_records,
+#                 'failed_records': tracking.failed_records,
+#                 'success_rates': tracking.success_rates,
+#                 'user_upload': tracking.user_upload,
+#                 'error_message': tracking.error_message,
+#                 'logs': [
+#                     {
+#                         'log_level': log.log_level,
+#                         'message': log.message,
+#                         'timestamp': log.timestamp
+#                     }
+#                     for log in logs
+#                 ]
+#             }
+            
+#             return Response(data, status=status.HTTP_200_OK)
+            
+#         except WaterUploadDataTracking.DoesNotExist:
+#             return Response(
+#                 {'error': 'Tracking record not found'},
+#                 status=status.HTTP_404_NOT_FOUND
+#             )
