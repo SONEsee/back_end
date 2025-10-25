@@ -311,6 +311,7 @@ urlpatterns = [
     path('api/disputes/confirm/', confirm_dispute_upload, name='confirm_dispute'),
     path('process-dispute/', views.process_dispute_notification, name='process_dispute_notification'),
     path('process-multiple-disputes/', process_multiple_disputes, name='process_multiple_disputes'),
+    path('api/dispute-loan/<int:id_disput_loan>/status/', views.update_dispute_status, name='update_dispute_status'),
 
     path('api/enterprise-info/', views.create_enterprise_info, name='create_enterprise_info'),
     path('api/last-lcicid/', get_last_lcicid, name='get_last_lcicid'),

@@ -564,7 +564,8 @@ class Upload_File_C(models.Model):
     statussubmit = models.CharField(max_length=150)     
     status_upload = models.CharField(max_length=150)
     FileType = models.CharField(max_length=10)  
-    percentage = models.FloatField(default=0.0 ,max_length=255)   
+    percentage = models.FloatField(default=0.0 ,max_length=255)
+    dispuste = models.CharField(max_length=50, null=True, blank=True)   
 
     def __str__(self):
         return self.fileName  # or self.period
@@ -1115,6 +1116,7 @@ class C1 (models.Model):
     user_id = models.CharField(max_length=100)
     com_enterprise_code = models.CharField(max_length=50)
     data_status = models.CharField(max_length=100, blank=True, null=True)
+
 class C1_disptes (models.Model):
     id = models.AutoField(primary_key=True)
     id_file = models.CharField(max_length=100)
@@ -1134,6 +1136,56 @@ class C1_disptes (models.Model):
     com_enterprise_code = models.CharField(max_length=50)
     LCIC_code = models.CharField(max_length=255, blank=True, null=True)
     data_status = models.CharField(max_length=100, blank=True, null=True)
+    is_disputed = models.BigIntegerField(default=0, null=True)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
+    status = models.CharField(max_length=100)
+    action_dispust = models.CharField(max_length=100)
+
+class ConfirmDispustCollateral(models.Model):
+    id_disput_loan = models.AutoField(primary_key=True)
+    bnk_code = models.CharField(max_length=100)
+    image = models.ImageField(upload_to='disput_colateral_images/')
+    user_insert = models.CharField(max_length=100)
+    user_update = models.CharField(max_length=100, blank=True, null=True)
+    insertdate = models.DateTimeField(auto_now_add=True)
+    updatedate = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=100)
+    total = models.FloatField()   
+
+class C1_disptes_noti (models.Model):
+    id = models.AutoField(primary_key=True)
+    id_file = models.CharField(max_length=100)
+    period = models.CharField(max_length=150)
+    bnk_code = models.CharField(max_length=30)
+    segmentType = models.CharField(max_length=10)
+    branch_id_code = models.CharField(max_length=30)
+    bank_customer_ID = models.CharField(max_length=50)
+    loan_id = models.CharField(max_length=50)
+    col_id = models.CharField(max_length=30) 
+    col_type = models.CharField(max_length=30)
+    collateral_status = models.CharField(max_length=30)
+    insert_date = models.DateTimeField(blank=True)
+    update_date = models.DateTimeField(blank=True)
+    lcicID = models.CharField(max_length=30)
+    user_id = models.CharField(max_length=100)
+    com_enterprise_code = models.CharField(max_length=50)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
+    data_status = models.CharField(max_length=100, blank=True, null=True)
+    is_disputed = models.BigIntegerField(default=0, null=True)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
+    status = models.CharField(max_length=100)
+    action_dispust = models.CharField(max_length=100)
+   
+    confirm_dispust_id = models.ForeignKey(
+        ConfirmDispustCollateral, 
+        on_delete=models.SET_NULL,  
+        null=True, 
+        blank=True,
+        related_name='disputes',  
+        db_column='confirm_dispust_id' 
+    )
+    
+
 
 from django.db import models
 from django.utils import timezone

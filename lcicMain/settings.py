@@ -125,15 +125,13 @@ import pyodbc
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-    'NAME': 'lcicwebsitedb',
-    'USER': 'postgres', 
-    'PASSWORD': 'Lcic@123',
-    'HOST': '192.168.45.230',
-    'PORT': '5432',
-    'OPTIONS': {  # ✅ ໃສ່ໃນ OPTIONS
-        'connect_timeout': 30,  # ✅ ລຸດເວລາລົງ
-        'options': '-c statement_timeout=300000'  # ✅ ຢູ່ໃນ OPTIONS
-    },  
+        'NAME': 'lcicwebsitedb',
+        'USER': 'postgres', 
+        'PASSWORD': 'Lcic@123',
+        'HOST': '192.168.45.230',
+        'PORT': '5432',
+         'connect_timeout': 30,  
+            'options': '-c statement_timeout=600000'  
     },
     'utility': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -152,7 +150,7 @@ DATABASES = {
         'HOST': '192.168.45.245\EXPRESS',
         'PORT': '57004',
         'OPTIONS': {
-            'driver': 'ODBC Driver 17 for SQL Server',
+            'driver': 'ODBC Driver 18 for SQL Server',
         },
     },
 }
@@ -165,11 +163,19 @@ CACHES = {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
         },
         'KEY_PREFIX': 'lcic',
-        'TIMEOUT': 300,  # 5 minutes default
+        'TIMEOUT': 300, 
     }
 }
+UPLOAD_PROCESSING_CONFIG = {
+    'BATCH_SIZE': 2000,
+    'MAX_MEMORY_MB': 500,
+    'ENABLE_PARALLEL': True,
+    'MAX_WORKERS': 4,
+    'CACHE_TIMEOUT': 3600,
+    'ENABLE_PROGRESS_TRACKING': True,
+    'LOG_LEVEL': 'INFO'
+}
 
-# DATABASE_ROUTERS = ['sqlserver_models.router.NEDRouter']
 DATABASE_ROUTERS = ['lcicMain.db_router.DatabaseRouter']
 # DATABASE_ROUTERS = [
 #     'utility.db_router.UtilityDBRouter',
