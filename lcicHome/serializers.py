@@ -327,7 +327,34 @@ class disputesSerializer(serializers.ModelSerializer):
     class Meta:
         model = disputes
         fields = '__all__'
+# serializers.py
+from rest_framework import serializers
+from .models import ConfirmDispustCollateral
 
+class ConfirmDispustCollateralSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ConfirmDispustCollateral
+        fields = [
+            'id_disput_loan',
+            'bnk_code',
+            'image_url',           # URL ຮູບ
+            'user_insert',
+            'user_update',
+            'insertdate',
+            'updatedate',
+            'status',
+            'total'
+        ]
+
+    def get_image_url(self, obj):
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
 
 from rest_framework import serializers
 from django.contrib.auth.models import User

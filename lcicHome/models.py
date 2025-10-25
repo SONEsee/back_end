@@ -1140,6 +1140,7 @@ class C1_disptes (models.Model):
     LCIC_code = models.CharField(max_length=255, blank=True, null=True)
     status = models.CharField(max_length=100)
     action_dispust = models.CharField(max_length=100)
+    deception = models.TextField(blank=True, null=True)
 
 class ConfirmDispustCollateral(models.Model):
     id_disput_loan = models.AutoField(primary_key=True)
@@ -1175,6 +1176,7 @@ class C1_disptes_noti (models.Model):
     LCIC_code = models.CharField(max_length=255, blank=True, null=True)
     status = models.CharField(max_length=100)
     action_dispust = models.CharField(max_length=100)
+    deception = models.TextField(blank=True, null=True)
    
     confirm_dispust_id = models.ForeignKey(
         ConfirmDispustCollateral, 

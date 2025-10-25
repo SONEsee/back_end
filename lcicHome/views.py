@@ -4151,6 +4151,553 @@ import json
 #         }, status=500)
 
 
+# def process_uploaded_file(uploaded_data, user_id, period, file_period):
+#     try:
+#         total_records = 0
+#         error_records = 0
+        
+#         with uploaded_data.fileUpload.open('rb') as file:
+#             file_content = file.read()
+#             json_content = json.loads(smart_str(file_content))
+        
+#         file_size = file.size
+#         file_size_hrc = human_readable_sizec(file.size) if 'human_readable_sizec' in globals() else str(file_size)
+        
+#         total_records = len(json_content)
+#         print(f"Total records: {total_records}")
+#         print(f"Period: {period}")
+        
+#         print("Loading reference data...")
+        
+#         all_lcic_codes = set(EnterpriseInfo.objects.values_list('LCIC_code', flat=True))
+#         print(f"Loaded {len(all_lcic_codes)} LCIC codes")
+        
+#         all_enterprise_ids = set(EnterpriseInfo.objects.values_list('EnterpriseID', flat=True))
+#         print(f"Loaded {len(all_enterprise_ids)} Enterprise IDs")
+        
+#         lcic_to_enterprise = dict(EnterpriseInfo.objects.values_list('LCIC_code', 'EnterpriseID'))
+#         enterprise_to_lcic = dict(EnterpriseInfo.objects.values_list('EnterpriseID', 'LCIC_code'))
+#         print(f"Loaded mappings")
+        
+#         print("Loading C1 data and building indexes...")
+        
+#         c1_case1_index = defaultdict(list)  
+#         c1_case2_index = defaultdict(list)  
+        
+#         c1_data = C1.objects.values_list(
+#             'bank_customer_ID', 'bnk_code', 'loan_id', 'col_id',
+#             'com_enterprise_code', 'LCIC_code'
+#         )
+        
+#         total_c1 = 0
+#         for c1_record in c1_data:
+#             bank_id, bnk, loan, col, ent, lcic = c1_record
+            
+#             key1 = (bank_id, bnk, loan, col)
+#             c1_case1_index[key1].append((ent, lcic))
+            
+#             key2 = (bank_id, loan, col, ent, lcic)
+#             c1_case2_index[key2].append(bnk)
+            
+#             total_c1 += 1
+        
+#         print(f"Loaded {total_c1} C1 records and built indexes")
+#         print("Starting processing...\n")
+        
+#         BATCH_SIZE = 1000
+        
+#         error_list = []
+#         dispute_list = []
+#         cdl_by_type = {f'c2.{i}': [] for i in range(1, 9)}
+        
+#         cid = uploaded_data.CID
+#         processed_count = 0
+        
+      
+#         action_01_count = 0
+#         action_02_count = 0
+
+#         for idx, item in enumerate(json_content, 1):
+#             if idx % 1000 == 0 or idx == total_records:
+#                 progress = (idx / total_records) * 100
+#                 print(f"Processing: {idx}/{total_records} ({progress:.1f}%)")
+            
+#             LCIC_code = item.get('LCIC_code', None)
+#             if LCIC_code == '':
+#                 LCIC_code = None
+            
+#             com_enterprise_code = item.get('com_enterprise_code', '')
+            
+#             lcic_exists = LCIC_code in all_lcic_codes
+#             enterprise_code_exists = com_enterprise_code in all_enterprise_ids
+            
+#             collateral_status = None
+#             datamatch = ''
+            
+#             if not LCIC_code and not com_enterprise_code:
+#                 collateral_status = '33'
+#             elif not LCIC_code:
+#                 if enterprise_code_exists:
+#                     collateral_status = '01'
+#                     datamatch = enterprise_to_lcic.get(com_enterprise_code, '')
+#                 else:
+#                     collateral_status = '03'
+#             elif not com_enterprise_code:
+#                 if lcic_exists:
+#                     collateral_status = '10'
+#                     datamatch = lcic_to_enterprise.get(LCIC_code, '')
+#                 else:
+#                     collateral_status = '30'
+#             elif lcic_exists and not enterprise_code_exists:
+#                 collateral_status = '31'
+#                 datamatch = lcic_to_enterprise.get(LCIC_code, '')
+#             elif not lcic_exists and enterprise_code_exists:
+#                 collateral_status = '13'
+#                 datamatch = enterprise_to_lcic.get(com_enterprise_code, '')
+#             elif not lcic_exists and not enterprise_code_exists:
+#                 collateral_status = '11'
+#             elif LCIC_code and com_enterprise_code:
+#                 expected_ent = lcic_to_enterprise.get(LCIC_code, '')
+#                 if expected_ent != com_enterprise_code:
+#                     collateral_status = '44'
+#                 else:
+#                     collateral_status = '00'
+#             elif lcic_exists and enterprise_code_exists:
+#                 collateral_status = '00'
+            
+#             if collateral_status != '00':
+#                 error_list.append(
+#                     C_error(
+#                         id_file=cid,
+#                         LCIC_code=LCIC_code,
+#                         com_enterprise_code=com_enterprise_code,
+#                         bnk_code=item.get('bnk_code', ''),
+#                         branch_id_code=item.get('branch_id_code', ''),
+#                         bank_customer_ID=item.get('bank_customer_ID', ''),
+#                         loan_id=item.get('loan_id', ''),
+#                         col_id=item.get('col_id', ''),
+#                         col_type=item.get('col_type', ''),
+#                         collateral_status=collateral_status,
+#                         datamatch=datamatch,
+#                         user_id=user_id,
+#                         period=file_period,
+#                         collateral_insert_date=timezone.now(),
+#                         collateral_update_date=timezone.now()
+#                     )
+#                 )
+#                 error_records += 1
+#                 continue
+            
+#             bank_customer_ID = item.get('bank_customer_ID', '')
+#             bnk_code = item.get('bnk_code', '')
+#             loan_id = item.get('loan_id', '')
+#             col_id = item.get('col_id', '')
+            
+#             inconsistency_found = False
+#             action_code = None
+
+            
+#             key1 = (bank_customer_ID, bnk_code, loan_id, col_id)
+#             if key1 in c1_case1_index:
+#                 for existing_ent, existing_lcic in c1_case1_index[key1]:
+#                     if existing_ent != com_enterprise_code or existing_lcic != LCIC_code:
+#                         action_code = '01'
+#                         action_01_count += 1
+#                         inconsistency_found = True
+#                         break
+
+           
+#             if not inconsistency_found:
+#                 key2 = (bank_customer_ID, loan_id, col_id, com_enterprise_code, LCIC_code)
+#                 if key2 in c1_case2_index:
+#                     for existing_bnk in c1_case2_index[key2]:
+#                         if existing_bnk != bnk_code:
+#                             action_code = '02'
+#                             action_02_count += 1
+#                             inconsistency_found = True
+#                             break
+
+           
+#             if inconsistency_found:
+#                 dispute_list.append(
+#                     C1_disptes(
+#                         LCIC_code=LCIC_code,
+#                         id_file=cid,
+#                         user_id=user_id,
+#                         period=file_period,
+#                         com_enterprise_code=com_enterprise_code,
+#                         bank_customer_ID=bank_customer_ID,
+#                         bnk_code=bnk_code,
+#                         branch_id_code=item.get('branch_id_code', ''),
+#                         loan_id=loan_id,
+#                         col_id=col_id,
+#                         col_type=item.get('col_type', ''),
+#                         insert_date=timezone.now(),
+#                         update_date=timezone.now(),
+#                         action_dispust=action_code,
+#                         status='disputed',
+#                         is_disputed=1,
+#                         data_status='inconsistent',
+#                         lcicID=LCIC_code or '',
+#                         segmentType=item.get('segmentType', '')
+#                     )
+#                 )
+#                 continue
+
+           
+#             col_type = item.get('col_type', '').lower()
+           
+#             col_type = item.get('col_type', '').lower()
+
+#             if col_type == 'c2.1':
+#                 cdl_by_type['c2.1'].append(
+#                     CDL(
+#                         id_file=cid,
+#                         c1=LCIC_code,
+#                         col_type='C2.1',
+#                         c2=com_enterprise_code,
+#                         c3=item.get('bnk_code', ''),
+#                         c4=item.get('bank_customer_ID', ''),
+#                         c5=item.get('branch_id_code', ''),
+#                         c6=item.get('loan_id', ''),
+#                         c7=item.get('col_id', ''),
+#                         c8=item.get('col_value', ''),
+#                         c9=item.get('land_plot_no', ''),
+#                         c10=item.get('land_area', ''),
+#                         c11=item.get('land_unit', ''),
+#                         c12=item.get('land_map_no', ''),
+#                         c13=item.get('land_document_no', ''),
+#                         c14=item.get('land_registry_book_no', ''),
+#                         c15=item.get('land_type', ''),
+#                         c16=item.get('land_no', ''),
+#                         c17=item.get('land_out_time', ''),
+#                         c18=item.get('land_regis_date', ''),
+#                         c19=item.get('place_regist', ''),
+#                         c20=item.get('plot_vilid', ''),
+#                         c21=item.get('plot_unit', ''),
+#                         c22=item.get('owner_name', ''),
+#                         c23=item.get('owner_birth_date', ''),
+#                         c24=item.get('owner_nationality', ''),
+#                         c25=item.get('owner_occupation', ''),
+#                         c26=item.get('current_vilid', ''),
+#                         c27=item.get('current_unit', ''),
+#                         c28=item.get('ownership_status', ''),
+#                         c29=item.get('spous_name', ''),
+#                         c30=item.get('spous_birth_date', ''),
+#                         c31=item.get('spous_nationality', ''),
+#                         c32=item.get('spous_occupation', ''),
+#                         c33=item.get('spous_acquisition', ''),
+#                         c39=item.get('segmentType', ''),
+#                         user_id=user_id,
+#                         period=file_period,
+#                         c40=timezone.now().date(),
+#                         c41=timezone.now().date()
+#                     )
+#                 )
+
+#             elif col_type == 'c2.2':
+#                 cdl_by_type['c2.2'].append(
+#                     CDL(
+#                         id_file=cid,
+#                         c1=LCIC_code,
+#                         col_type='C2.2',
+#                         c2=com_enterprise_code,
+#                         c3=item.get('bnk_code', ''),
+#                         c4=item.get('bank_customer_ID', ''),
+#                         c5=item.get('branch_id_code', ''),
+#                         c6=item.get('loan_id', ''),
+#                         c7=item.get('col_id', ''),
+#                         c8=item.get('ministry', ''),
+#                         c9=item.get('project_name_en', ''),
+#                         c10=item.get('project_name_la', ''),
+#                         c11=item.get('project_number', ''),
+#                         c12=item.get('value', ''),
+#                         c13=item.get('value_unit', ''),
+#                         c14=item.get('project_status', ''),
+#                         c15=item.get('project_insert_date', ''),
+#                         c16=item.get('owner_name', ''),
+#                         c17=item.get('owner_surname', ''),
+#                         c18=item.get('owner_gender', ''),
+#                         c19=item.get('owner_lao_name', ''),
+#                         c20=item.get('owner_lao_surname', ''),
+#                         c39=item.get('segmentType', ''),
+#                         user_id=user_id,
+#                         period=file_period,
+#                         c40=timezone.now().date(),
+#                         c41=timezone.now().date()
+#                     )
+#                 )
+
+#             elif col_type == 'c2.3':
+#                 cdl_by_type['c2.3'].append(
+#                     CDL(
+#                         id_file=cid,
+#                         c1=LCIC_code,
+#                         col_type='C2.3',
+#                         c2=com_enterprise_code,
+#                         c3=item.get('bnk_code', ''),
+#                         c4=item.get('bank_customer_ID', ''),
+#                         c5=item.get('branch_id_code', ''),
+#                         c6=item.get('loan_id', ''),
+#                         c7=item.get('col_id', ''),
+#                         c8=item.get('machine_type', ''),
+#                         c9=item.get('machine_no', ''),
+#                         c10=item.get('value', ''),
+#                         c11=item.get('value_unit', ''),
+#                         c12=item.get('machine_status', ''),
+#                         c13=item.get('machine_insert_date', ''),
+#                         c14=item.get('owner_name', ''),
+#                         c15=item.get('owner_surname', ''),
+#                         c16=item.get('owner_gender', ''),
+#                         c17=item.get('owner_lao_name', ''),
+#                         c18=item.get('owner_lao_surname', ''),
+#                         c39=item.get('segmentType', ''),
+#                         user_id=user_id,
+#                         period=file_period,
+#                         c40=timezone.now().date(),
+#                         c41=timezone.now().date()
+#                     )
+#                 )
+
+#             elif col_type == 'c2.4':
+#                 cdl_by_type['c2.4'].append(
+#                     CDL(
+#                         id_file=cid,
+#                         c1=LCIC_code,
+#                         col_type='C2.4',
+#                         c2=com_enterprise_code,
+#                         c3=item.get('bnk_code', ''),
+#                         c4=item.get('bank_customer_ID', ''),
+#                         c5=item.get('branch_id_code', ''),
+#                         c6=item.get('loan_id', ''),
+#                         c7=item.get('col_id', ''),
+#                         c8=item.get('ministry', ''),
+#                         c9=item.get('project_name_en', ''),
+#                         c10=item.get('project_name_la', ''),
+#                         c11=item.get('project_number', ''),
+#                         c12=item.get('value', ''),
+#                         c13=item.get('value_unit', ''),
+#                         c14=item.get('project_status', ''),
+#                         c15=item.get('project_insert_date', ''),
+#                         c16=item.get('owner_name', ''),
+#                         c17=item.get('owner_surname', ''),
+#                         c18=item.get('owner_gender', ''),
+#                         c19=item.get('owner_lao_name', ''),
+#                         c20=item.get('owner_lao_surname', ''),
+#                         c39=item.get('segmentType', ''),
+#                         user_id=user_id,
+#                         period=file_period,
+#                         c40=timezone.now().date(),
+#                         c41=timezone.now().date()
+#                     )
+#                 )
+
+#             elif col_type == 'c2.5':
+#                 cdl_by_type['c2.5'].append(
+#                     CDL(
+#                         id_file=cid,
+#                         c1=LCIC_code,
+#                         col_type='C2.5',
+#                         c2=com_enterprise_code,
+#                         c3=item.get('bnk_code', ''),
+#                         c4=item.get('bank_customer_ID', ''),
+#                         c5=item.get('branch_id_code', ''),
+#                         c6=item.get('loan_id', ''),
+#                         c7=item.get('col_id', ''),
+#                         c8=item.get('plate_number', ''),
+#                         c9=item.get('engine_number', ''),
+#                         c10=item.get('body_number', ''),
+#                         c11=item.get('model', ''),
+#                         c12=item.get('value', ''),
+#                         c13=item.get('value_unit', ''),
+#                         c14=item.get('vehicle_status', ''),
+#                         c15=item.get('vehicle_insert_date', ''),
+#                         c16=item.get('owner_name', ''),
+#                         c17=item.get('owner_surname', ''),
+#                         c18=item.get('owner_gender', ''),
+#                         c19=item.get('owner_lao_name', ''),
+#                         c20=item.get('owner_lao_surname', ''),
+#                         c39=item.get('segmentType', ''),
+#                         user_id=user_id,
+#                         period=file_period,
+#                         c40=timezone.now().date(),
+#                         c41=timezone.now().date()
+#                     )
+#                 )
+
+#             elif col_type == 'c2.6':
+#                 cdl_by_type['c2.6'].append(
+#                     CDL(
+#                         id_file=cid,
+#                         c1=LCIC_code,
+#                         col_type='C2.6',
+#                         c2=com_enterprise_code,
+#                         c3=item.get('bnk_code', ''),
+#                         c4=item.get('bank_customer_ID', ''),
+#                         c5=item.get('branch_id_code', ''),
+#                         c6=item.get('loan_id', ''),
+#                         c7=item.get('col_id', ''),
+#                         c8=item.get('value', ''),
+#                         c9=item.get('value_unit', ''),
+#                         c10=item.get('gua_ind_status', ''),
+#                         c11=item.get('gua_ind_insert_date', ''),
+#                         c12=item.get('guarantor_nationality', ''),
+#                         c13=item.get('gua_national_id', ''),
+#                         c14=item.get('national_id_expiry_date', ''),
+#                         c15=item.get('gua_passport_id', ''),
+#                         c16=item.get('gua_passport_expiry_date', ''),
+#                         c17=item.get('gua_familybook_id', ''),
+#                         c18=item.get('familybook_province_code', ''),
+#                         c19=item.get('familybook_issue_date', ''),
+#                         c20=item.get('gua_birthdate', ''),
+#                         c21=item.get('gua_gender', ''),
+#                         c22=item.get('gua_name', ''),
+#                         c23=item.get('gua_surname', ''),
+#                         c24=item.get('gua_lao_name', ''),
+#                         c25=item.get('gua_lao_surname', ''),
+#                         c26=item.get('adress_number_street_eng', ''),
+#                         c27=item.get('adress_vill_eng', ''),
+#                         c28=item.get('adress_district_eng', ''),
+#                         c29=item.get('adress_number_street_la', ''),
+#                         c30=item.get('adress_vill_la', ''),
+#                         c31=item.get('adress_district_la', ''),
+#                         c32=item.get('adress_province_code', ''),
+#                         c33=item.get('owner_name', ''),
+#                         c34=item.get('owner_surname', ''),
+#                         c35=item.get('owner_gender', ''),
+#                         c36=item.get('owner_lao_name', ''),
+#                         c37=item.get('owner_lao_surname', ''),
+#                         c39=item.get('segmentType', ''),
+#                         user_id=user_id,
+#                         period=file_period,
+#                         c40=timezone.now().date(),
+#                         c41=timezone.now().date()
+#                     )
+#                 )
+
+#             elif col_type == 'c2.7':
+#                 cdl_by_type['c2.7'].append(
+#                     CDL(
+#                         id_file=cid,
+#                         c1=LCIC_code,
+#                         col_type='C2.7',
+#                         c2=com_enterprise_code,
+#                         c3=item.get('bnk_code', ''),
+#                         c4=item.get('bank_customer_ID', ''),
+#                         c5=item.get('branch_id_code', ''),
+#                         c6=item.get('loan_id', ''),
+#                         c7=item.get('col_id', ''),
+#                         c8=item.get('weight', ''),
+#                         c9=item.get('value', ''),
+#                         c10=item.get('unit', ''),
+#                         c11=item.get('value_unit', ''),
+#                         c12=item.get('gld_status', ''),
+#                         c13=item.get('gld_insert_date', ''),
+#                         c14=item.get('owner_name', ''),
+#                         c15=item.get('owner_surname', ''),
+#                         c16=item.get('owner_gender', ''),
+#                         c17=item.get('owner_lao_name', ''),
+#                         c18=item.get('owner_lao_surname', ''),
+#                         c39=item.get('segmentType', ''),
+#                         user_id=user_id,
+#                         period=file_period,
+#                         c40=timezone.now().date(),
+#                         c41=timezone.now().date()
+#                     )
+#                 )
+
+#             elif col_type == 'c2.8':
+#                 cdl_by_type['c2. видела'].append(
+#                     CDL(
+#                         id_file=cid,
+#                         c1=LCIC_code,
+#                         col_type='C2.8',
+#                         c2=com_enterprise_code,
+#                         c3=item.get('bnk_code', ''),
+#                         c4=item.get('bank_customer_ID', ''),
+#                         c5=item.get('branch_id_code', ''),
+#                         c6=item.get('loan_id', ''),
+#                         c7=item.get('col_id', ''),
+#                         c8=item.get('value', ''),
+#                         c9=item.get('value_unit', ''),
+#                         c10=item.get('gua_com_status', ''),
+#                         c11=item.get('gua_com_insert_date', ''),
+#                         c12=item.get('gua_enterprise_code', ''),
+#                         c13=item.get('enterprise_regist_date', ''),
+#                         c14=item.get('enterprise_regist_place', ''),
+#                         c15=item.get('company_name', ''),
+#                         c16=item.get('company_lao_name', ''),
+#                         c17=item.get('enterprise_category', ''),
+#                         c18=item.get('owner_name', ''),
+#                         c19=item.get('owner_surname', ''),
+#                         c20=item.get('owner_gender', ''),
+#                         c21=item.get('owner_lao_name', ''),
+#                         c22=item.get('owner_lao_surname', ''),
+#                         c39=item.get('segmentType', ''),
+#                         user_id=user_id,
+#                         period=file_period,
+#                         c40=timezone.now().date(),
+#                         c41=timezone.now().date()
+#                     )
+#                 )
+        
+#         with transaction.atomic():
+#             if error_list:
+#                 print(f"Inserting {len(error_list)} error records...")
+#                 C_error.objects.bulk_create(error_list, batch_size=BATCH_SIZE)
+            
+#             if dispute_list:
+#                 print(f"Inserting {len(dispute_list)} dispute records...")
+#                 C1_disptes.objects.bulk_create(dispute_list, batch_size=BATCH_SIZE)
+            
+#             total_cdl_inserted = 0
+#             for col_type_key, cdl_list in cdl_by_type.items():
+#                 if cdl_list:
+#                     print(f"Inserting {len(cdl_list)} {col_type_key.upper()} records...")
+#                     CDL.objects.bulk_create(cdl_list, batch_size=BATCH_SIZE)
+#                     total_cdl_inserted += len(cdl_list)
+            
+#             print(f"Transaction complete! Total CDL: {total_cdl_inserted}")
+
+#             total_disputes = len(dispute_list)
+#             updated = Upload_File_C.objects.filter(CID=cid).update(dispuste=str(total_disputes))
+#             print(f"Updated Upload_File_C.dispuste = {total_disputes} (rows affected: {updated})")     
+#         print("\n" + "="*60)
+#         print("SUMMARY")
+#         print("="*60)
+#         print(f"Total records: {total_records}")
+#         print(f"Error records: {error_records}")
+#         print(f"Dispute records (01 - LCIC/Ent mismatch): {action_01_count}")
+#         print(f"Dispute records (02 - Bank code mismatch): {action_02_count}")
+#         print(f"Total dispute records: {total_disputes}")
+#         print(f"Successful CDL records: {total_cdl_inserted}")
+#         print("="*60)
+        
+#         t2 = (error_records / total_records) * 100 if total_records > 0 else 0
+#         uploaded_data.percentage = t2
+#         uploaded_data.statussubmit = "2" if t2 > 15 else "1"
+#         uploaded_data.save()
+
+#         return JsonResponse({
+#             'status': 'success',
+#             'message': 'File uploaded successfully',
+#             'total_records': total_records,
+#             'error_records': error_records,
+#             'dispute_records': total_disputes,
+#             'dispute_01': action_01_count,
+#             'dispute_02': action_02_count,
+#             'cdl_records': total_cdl_inserted,
+#             'error_percentage': round(t2, 2)
+#         })
+    
+#     except Exception as e:
+#         print(f"\nAn error occurred: {e}")
+#         import traceback
+#         traceback.print_exc()
+#         return JsonResponse({
+#             'status': 'error',
+#             'message': str(e)
+#         }, status=500)
 def process_uploaded_file(uploaded_data, user_id, period, file_period):
     try:
         total_records = 0
@@ -4192,28 +4739,20 @@ def process_uploaded_file(uploaded_data, user_id, period, file_period):
         total_c1 = 0
         for c1_record in c1_data:
             bank_id, bnk, loan, col, ent, lcic = c1_record
-            
             key1 = (bank_id, bnk, loan, col)
             c1_case1_index[key1].append((ent, lcic))
-            
             key2 = (bank_id, loan, col, ent, lcic)
             c1_case2_index[key2].append(bnk)
-            
             total_c1 += 1
         
         print(f"Loaded {total_c1} C1 records and built indexes")
         print("Starting processing...\n")
         
         BATCH_SIZE = 1000
-        
         error_list = []
         dispute_list = []
         cdl_by_type = {f'c2.{i}': [] for i in range(1, 9)}
-        
         cid = uploaded_data.CID
-        processed_count = 0
-        
-      
         action_01_count = 0
         action_02_count = 0
 
@@ -4222,10 +4761,7 @@ def process_uploaded_file(uploaded_data, user_id, period, file_period):
                 progress = (idx / total_records) * 100
                 print(f"Processing: {idx}/{total_records} ({progress:.1f}%)")
             
-            LCIC_code = item.get('LCIC_code', None)
-            if LCIC_code == '':
-                LCIC_code = None
-            
+            LCIC_code = item.get('LCIC_code', None) or (None if item.get('LCIC_code') == '' else item.get('LCIC_code'))
             com_enterprise_code = item.get('com_enterprise_code', '')
             
             lcic_exists = LCIC_code in all_lcic_codes
@@ -4237,17 +4773,11 @@ def process_uploaded_file(uploaded_data, user_id, period, file_period):
             if not LCIC_code and not com_enterprise_code:
                 collateral_status = '33'
             elif not LCIC_code:
-                if enterprise_code_exists:
-                    collateral_status = '01'
-                    datamatch = enterprise_to_lcic.get(com_enterprise_code, '')
-                else:
-                    collateral_status = '03'
+                collateral_status = '01' if enterprise_code_exists else '03'
+                datamatch = enterprise_to_lcic.get(com_enterprise_code, '') if enterprise_code_exists else ''
             elif not com_enterprise_code:
-                if lcic_exists:
-                    collateral_status = '10'
-                    datamatch = lcic_to_enterprise.get(LCIC_code, '')
-                else:
-                    collateral_status = '30'
+                collateral_status = '10' if lcic_exists else '30'
+                datamatch = lcic_to_enterprise.get(LCIC_code, '') if lcic_exists else ''
             elif lcic_exists and not enterprise_code_exists:
                 collateral_status = '31'
                 datamatch = lcic_to_enterprise.get(LCIC_code, '')
@@ -4258,11 +4788,8 @@ def process_uploaded_file(uploaded_data, user_id, period, file_period):
                 collateral_status = '11'
             elif LCIC_code and com_enterprise_code:
                 expected_ent = lcic_to_enterprise.get(LCIC_code, '')
-                if expected_ent != com_enterprise_code:
-                    collateral_status = '44'
-                else:
-                    collateral_status = '00'
-            elif lcic_exists and enterprise_code_exists:
+                collateral_status = '44' if expected_ent != com_enterprise_code else '00'
+            else:
                 collateral_status = '00'
             
             if collateral_status != '00':
@@ -4296,7 +4823,6 @@ def process_uploaded_file(uploaded_data, user_id, period, file_period):
             inconsistency_found = False
             action_code = None
 
-            
             key1 = (bank_customer_ID, bnk_code, loan_id, col_id)
             if key1 in c1_case1_index:
                 for existing_ent, existing_lcic in c1_case1_index[key1]:
@@ -4306,7 +4832,6 @@ def process_uploaded_file(uploaded_data, user_id, period, file_period):
                         inconsistency_found = True
                         break
 
-           
             if not inconsistency_found:
                 key2 = (bank_customer_ID, loan_id, col_id, com_enterprise_code, LCIC_code)
                 if key2 in c1_case2_index:
@@ -4317,7 +4842,6 @@ def process_uploaded_file(uploaded_data, user_id, period, file_period):
                             inconsistency_found = True
                             break
 
-           
             if inconsistency_found:
                 dispute_list.append(
                     C1_disptes(
@@ -4344,11 +4868,9 @@ def process_uploaded_file(uploaded_data, user_id, period, file_period):
                 )
                 continue
 
-           
-            col_type = item.get('col_type', '').lower()
-           
             col_type = item.get('col_type', '').lower()
 
+          
             if col_type == 'c2.1':
                 cdl_by_type['c2.1'].append(
                     CDL(
@@ -4640,28 +5162,25 @@ def process_uploaded_file(uploaded_data, user_id, period, file_period):
                         c41=timezone.now().date()
                     )
                 )
-        
+      
         with transaction.atomic():
             if error_list:
-                print(f"Inserting {len(error_list)} error records...")
                 C_error.objects.bulk_create(error_list, batch_size=BATCH_SIZE)
             
             if dispute_list:
-                print(f"Inserting {len(dispute_list)} dispute records...")
                 C1_disptes.objects.bulk_create(dispute_list, batch_size=BATCH_SIZE)
             
             total_cdl_inserted = 0
             for col_type_key, cdl_list in cdl_by_type.items():
                 if cdl_list:
-                    print(f"Inserting {len(cdl_list)} {col_type_key.upper()} records...")
                     CDL.objects.bulk_create(cdl_list, batch_size=BATCH_SIZE)
                     total_cdl_inserted += len(cdl_list)
             
-            print(f"Transaction complete! Total CDL: {total_cdl_inserted}")
-
-        
-        total_disputes = len(dispute_list)
-        Upload_File_C.objects.filter(CID=cid).update(dispuste=str(total_disputes))
+          
+            total_disputes = len(dispute_list)
+            uploaded_data.dispuste = str(total_disputes)
+            uploaded_data.save(update_fields=['dispuste'])
+            print(f"Saved dispuste = {total_disputes} to Upload_File_C (CID={cid})")
 
       
         print("\n" + "="*60)
@@ -4669,8 +5188,8 @@ def process_uploaded_file(uploaded_data, user_id, period, file_period):
         print("="*60)
         print(f"Total records: {total_records}")
         print(f"Error records: {error_records}")
-        print(f"Dispute records (01 - LCIC/Ent mismatch): {action_01_count}")
-        print(f"Dispute records (02 - Bank code mismatch): {action_02_count}")
+        print(f"Dispute records (01): {action_01_count}")
+        print(f"Dispute records (02): {action_02_count}")
         print(f"Total dispute records: {total_disputes}")
         print(f"Successful CDL records: {total_cdl_inserted}")
         print("="*60)
@@ -4700,7 +5219,6 @@ def process_uploaded_file(uploaded_data, user_id, period, file_period):
             'status': 'error',
             'message': str(e)
         }, status=500)
-
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -8817,7 +9335,8 @@ def confirm_upload(request):
                             lon_applied_date=item.lon_applied_date,
                             is_disputed=item.is_disputed,
                             LCIC_code=item.LCIC_code,
-                            action_dispust=item.action_dispust
+                            action_dispust=item.action_dispust,
+                            status = "1"
                         ))
                     
                     disputes.objects.bulk_create(disputes_to_create, batch_size=1000)
@@ -17596,59 +18115,7 @@ def filter_data_by_criteria(id_file, **kwargs):
     return result
 
 
-# def get_data_api(request):
-   
-#     id_file = request.GET.get('id_file')
-#     if not id_file:
-#         return JsonResponse({
-         
-#         }, status=400)
-    
-   
-#     filter_params = {}
-#     allowed_filters = ['bnk_code', 'period', 'customer_id', 'loan_id', 'branch_id', 
-#                       'segmentType', 'com_enterprise_code', 'product_type', 'lcicID']
-    
-#     for key in allowed_filters:
-#         if request.GET.get(key):
-#             filter_params[key] = request.GET.get(key)
-    
 
-#     data = filter_data_by_criteria(id_file, **filter_params)
-    
-#     if data is None:
-#         return JsonResponse({
-#             'error': 'ເກີດຂໍ້ຜິດພາດໃນການດຶງຂໍ້ມູນ'
-#         }, status=500)
-    
-    
-#     response_data = {
-#         'id_file': id_file,
-#         'filters': filter_params,
-#         'counts': {
-#             'b1': data['b1_data'].count(),
-#             'data_edit': data['data_edit'].count(),
-#             'disputes': data['disputes'].count(),
-#             'b_data_damaged': data['b_data_damaged'].count(),
-#             'b1_monthly': data['b1_monthly'].count()
-#         },
-#         'total_records': (
-#             data['b1_data'].count() + 
-#             data['data_edit'].count() + 
-#             data['disputes'].count() + 
-#             data['b_data_damaged'].count() + 
-#             data['b1_monthly'].count()
-#         ),
-#         'data': {
-#             'b1': list(data['b1_data'].values()),
-#             'data_edit': list(data['data_edit'].values()),
-#             'disputes': list(data['disputes'].values()),
-#             'b_data_damaged': list(data['b_data_damaged'].values()),
-#             'b1_monthly': list(data['b1_monthly'].values())
-#         }
-#     }
-    
-#     return JsonResponse(response_data, safe=False)
 from django.core.paginator import Paginator
 
 def get_data_api(request):
@@ -17718,8 +18185,123 @@ def get_data_api(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
+from django.core.paginator import Paginator
+from django.http import JsonResponse
+from .models import C1_disptes
 
-
+def get_c1_disputes_api(request):
+    try:
+        id_file = request.GET.get('id_file')
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 20))
+        
+        if not id_file:
+            return JsonResponse({'error': 'ກະລຸນາລະບຸ id_file'}, status=400)
+        
+        # ດຶງຂໍ້ມູນຈາກ C1_disputes ຕາມ id_file
+        disputes_data = C1_disptes.objects.filter(id_file=id_file)
+        
+        # ຈັດກຸ່ມຂໍ້ມູນຕາມສະຖານະຕ່າງໆ
+        data_groups = {
+            'all_disputes': disputes_data,
+            'active_disputes': disputes_data.filter(is_disputed=1),
+            'pending_disputes': disputes_data.filter(status='pending'),
+            'resolved_disputes': disputes_data.filter(status='resolved'),
+            'by_action': disputes_data.exclude(action_dispust__isnull=True)  # ແກ້ໄຂຊື່ field
+        }
+        
+        # ນັບຈຳນວນແຕ່ລະກຸ່ມ
+        counts = {
+            'all_disputes': data_groups['all_disputes'].count(),
+            'active_disputes': data_groups['active_disputes'].count(),
+            'pending_disputes': data_groups['pending_disputes'].count(),
+            'resolved_disputes': data_groups['resolved_disputes'].count(),
+            'by_action': data_groups['by_action'].count()
+        }
+        
+        def safe_serialize_queryset(queryset):
+            items = []
+            for obj in queryset:
+                item = {
+                    'id': obj.id,
+                    'id_file': obj.id_file,
+                    'period': obj.period,
+                    'bnk_code': obj.bnk_code,
+                    'segmentType': obj.segmentType,
+                    'branch_id_code': obj.branch_id_code,
+                    'bank_customer_ID': obj.bank_customer_ID,
+                    'loan_id': obj.loan_id,
+                    'col_id': obj.col_id,
+                    'col_type': obj.col_type,
+                    'collateral_status': obj.collateral_status,
+                    'insert_date': obj.insert_date.isoformat() if obj.insert_date else None,
+                    'update_date': obj.update_date.isoformat() if obj.update_date else None,
+                    'lcicID': obj.lcicID,
+                    'user_id': obj.user_id,
+                    'com_enterprise_code': obj.com_enterprise_code,
+                    'LCIC_code': obj.LCIC_code,
+                    'data_status': obj.data_status,
+                    'is_disputed': obj.is_disputed,
+                    'status': obj.status,
+                    'action_dispust': obj.action_dispust  # ໃຊ້ຊື່ field ທີ່ຖືກຕ້ອງ
+                }
+                items.append(item)
+            return items
+        
+        def paginate_data(queryset, page, page_size):
+            try:
+                paginator = Paginator(queryset, page_size)
+                paginated = paginator.page(page)
+                
+                return {
+                    'items': safe_serialize_queryset(paginated.object_list),
+                    'total_pages': paginator.num_pages,
+                    'current_page': page,
+                    'has_next': paginated.has_next(),
+                    'has_previous': paginated.has_previous(),
+                    'total_items': paginator.count
+                }
+            except Exception as paginate_error:
+                return {
+                    'items': [],
+                    'total_pages': 0,
+                    'current_page': page,
+                    'has_next': False,
+                    'has_previous': False,
+                    'total_items': 0,
+                    'error': str(paginate_error)
+                }
+        
+        response_data = {
+            'id_file': id_file,
+            'pagination': {
+                'page': page,
+                'page_size': page_size
+            },
+            'counts': counts,
+            'total_records': counts['all_disputes'],
+            'data': {
+                'all_disputes': paginate_data(data_groups['all_disputes'], page, page_size),
+                'active_disputes': paginate_data(data_groups['active_disputes'], page, page_size),
+                'pending_disputes': paginate_data(data_groups['pending_disputes'], page, page_size),
+                'resolved_disputes': paginate_data(data_groups['resolved_disputes'], page, page_size),
+                'by_action': paginate_data(data_groups['by_action'], page, page_size)
+            }
+        }
+        
+        return JsonResponse(response_data, safe=False)
+        
+    except Exception as e:
+        return JsonResponse({
+            'error': str(e),
+            'available_fields': [
+                'LCIC_code', 'action_dispust', 'bank_customer_ID', 'bnk_code', 
+                'branch_id_code', 'col_id', 'col_type', 'collateral_status', 
+                'com_enterprise_code', 'data_status', 'id', 'id_file', 
+                'insert_date', 'is_disputed', 'lcicID', 'loan_id', 'period', 
+                'segmentType', 'status', 'update_date', 'user_id'
+            ]
+        }, status=500)
 import requests
 import json
 from django.utils import timezone
@@ -21674,15 +22256,10 @@ from .models import disputes, ConfirmDispustLoan, disputes_noti
 from datetime import datetime
 
 
-@api_view(['POST'])
-def confirm_dispute_upload(request):
-   
-    
-    try:
-        import json
-       
 
-       
+def confirm_dispute_upload(request):   
+    try:
+        import json       
         uploaded_file = request.FILES.get('file')
         dispute_ids_raw = request.data.get('dispute_ids', [])
         id_dispust = request.data.get('id_dispust')
@@ -21846,7 +22423,152 @@ def confirm_dispute_upload(request):
             'message': 'ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກຂໍ້ມູນ',
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
+from django.db import transaction
+from rest_framework.response import Response
+from rest_framework import status
+from .models import C1_disptes, ConfirmDispustCollateral, C1_disptes_noti
+import json
+from rest_framework.decorators import api_view, parser_classes
+from rest_framework.parsers import MultiPartParser, FormParser
+@api_view(['POST'])
+@parser_classes([MultiPartParser, FormParser])
+def confirm_dispute_colatteral(request):
+    try:
+        uploaded_file = request.FILES.get('file')
+        dispute_ids_raw = request.POST.get('dispute_ids') or request.data.get('dispute_ids', [])
+        id_dispust = request.POST.get('id_dispust') or request.data.get('id_dispust')
+        user_id = request.POST.get('user_id') or request.data.get('user_id')
+        user_insert = request.POST.get('user_insert') or request.data.get('user_insert')
+        deception = request.POST.get('deception') or request.data.get('deception', '')
+
+       
+        if isinstance(dispute_ids_raw, str):
+            try:
+                dispute_ids = json.loads(dispute_ids_raw)
+            except json.JSONDecodeError:
+                dispute_ids = []
+        else:
+            dispute_ids = dispute_ids_raw if isinstance(dispute_ids_raw, list) else []
+
+        validation_errors = []
+
+        if not uploaded_file:
+            validation_errors.append("ກະລຸນາອັບໂຫຼດເອກະສານຢັ້ງຢືນ")
+
+        if not dispute_ids or len(dispute_ids) == 0:
+            validation_errors.append("ກະລຸນາເລືອກລາຍການ Dispute ຢ່າງໜ້ອຍ 1 ລາຍການ")
+
+        if not id_dispust:
+            validation_errors.append("ບໍ່ພົບ ID ຂອງ Dispute File")
+
+        if not user_id:
+            validation_errors.append("ບໍ່ພົບຂໍ້ມູນຜູ້ໃຊ້")
+
+        if validation_errors:
+            return Response({
+                'success': False,
+                'message': 'ການກວດສອບຂໍ້ມູນບໍ່ຜ່ານ',
+                'errors': validation_errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        
+        dispute_records = list(
+            C1_disptes.objects.filter(id__in=dispute_ids).values()
+        )
+
+        if not dispute_records:
+            return Response({
+                'success': False,
+                'message': 'ບໍ່ພົບຂໍ້ມູນ Dispute ທີ່ເລືອກ'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        if len(dispute_records) != len(dispute_ids):
+            found_ids = [r['id'] for r in dispute_records]
+            missing_ids = [id for id in dispute_ids if id not in found_ids]
+            return Response({
+                'success': False,
+                'message': 'ບໍ່ພົບຂໍ້ມູນບາງລາຍການ',
+                'missing_ids': missing_ids
+            }, status=status.HTTP_404_NOT_FOUND)
+
+       
+        bnk_codes = {r['bnk_code'] for r in dispute_records}
+        if len(bnk_codes) > 1:
+            return Response({
+                'success': False,
+                'message': 'ລາຍການທີ່ເລືອກຕ້ອງມາຈາກສະມາຊິກດຽວກັນເທົ່ານັ້ນ',
+                'bank_codes': list(bnk_codes)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        bnk_code = bnk_codes.pop()
+        total_records = len(dispute_records)
+
+        with transaction.atomic():
+           
+            confirm_record = ConfirmDispustCollateral.objects.create(
+                bnk_code=bnk_code,
+                image=uploaded_file,
+                user_insert=user_insert,
+                status='1',
+                total=total_records
+            )
+
+          
+            noti_records = []
+            for record in dispute_records:
+                noti_records.append(
+                    C1_disptes_noti(
+                        id_file=record['id_file'],
+                        period=record['period'],
+                        bnk_code=record['bnk_code'],
+                        segmentType=record['segmentType'],
+                        branch_id_code=record['branch_id_code'],
+                        bank_customer_ID=record['bank_customer_ID'],
+                        loan_id=record['loan_id'],
+                        col_id=record['col_id'],
+                        col_type=record['col_type'],
+                        collateral_status=record['collateral_status'],
+                        insert_date=record['insert_date'],
+                        update_date=record['update_date'],
+                        lcicID=record['lcicID'],
+                        user_id=record['user_id'],
+                        com_enterprise_code=record['com_enterprise_code'],
+                        LCIC_code=record.get('LCIC_code'),  
+                        data_status=record.get('data_status'),
+                        is_disputed=1,
+                        status='1',
+                        action_dispust=record.get('action_dispust'),
+                        confirm_dispust_id=confirm_record,
+                      
+                    )
+                )
+
+            C1_disptes_noti.objects.bulk_create(noti_records)
+
+        
+            C1_disptes.objects.filter(id__in=dispute_ids).update(
+                is_disputed=1,
+                
+            )
+
+        return Response({
+            'success': True,
+            'message': 'ບັນທຶກຂໍ້ມູນສຳເລັດ',
+            'data': {
+                'confirm_id': confirm_record.id_disput_loan,
+                'bnk_code': bnk_code,
+                'total_records': total_records,
+                'status': confirm_record.status,
+                'inserted_at': confirm_record.insertdate
+            }
+        }, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': 'ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກຂໍ້ມູນ',
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)    
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
@@ -21941,6 +22663,108 @@ def get_dispute_loans(request):
             'status': 'error',
             'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from .models import ConfirmDispustCollateral
+from .serializers import ConfirmDispustCollateralSerializer  # ຈະສ້າງຕໍ່ໄປ
+import math
+
+@api_view(['GET'])
+def get_dispute_collateral(request):
+    try:
+        # ດຶງພາລາມີເຕີ
+        user_bnk_code = request.GET.get('bnk_code', '').strip()
+        filter_bnk_code = request.GET.get('filter_bnk_code', '').strip()
+        filter_status = request.GET.get('status', '').strip()
+        id_disput_loan = request.GET.get('id_disput_loan', '').strip()
+        
+        try:
+            page = int(request.GET.get('page', 1))
+            page_size = int(request.GET.get('page_size', 10))
+            if page < 1: page = 1
+            if page_size < 1: page_size = 10
+        except ValueError:
+            return Response({
+                'status': 'error',
+                'message': 'ຄ່າ page ຫຼື page_size ຕ້ອງເປັນໂຕເລກ'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # ກວດສອບ bnk_code ຂອງຜູ້ໃຊ້
+        if not user_bnk_code:
+            return Response({
+                'status': 'error',
+                'message': 'ກະລຸນາລະບຸ bnk_code'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # ເລີ່ມສ້າງ Query
+        queryset = ConfirmDispustCollateral.objects.all()
+
+        # === ການຄວບຄຸມສິດ ===
+        if user_bnk_code == '01':  # Admin
+            if filter_bnk_code:
+                queryset = queryset.filter(bnk_code=filter_bnk_code)
+        else:  # ຜູ້ໃຊ້ທຳມະດາ
+            queryset = queryset.filter(bnk_code=user_bnk_code)
+
+        # === ການກັ່ນຕອງອື່ນໆ ===
+        if filter_status:
+            queryset = queryset.filter(status=filter_status)
+
+        if id_disput_loan:
+            try:
+                queryset = queryset.filter(id_disput_loan=int(id_disput_loan))
+            except ValueError:
+                return Response({
+                    'status': 'error',
+                    'message': 'id_disput_loan ຕ້ອງເປັນໂຕເລກ'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        # === ຈັດລຳດັບ ===
+        queryset = queryset.order_by('-id_disput_loan')  # ໃໝ່ສຸດຂຶ້ນກ່ອນ
+
+        # === ການນັບຈຳນວນທັງໝົດ ===
+        total_count = queryset.count()
+
+        # === ການແບ່ງໜ້າ (Manual) ===
+        start = (page - 1) * page_size
+        end = start + page_size
+        paginated_queryset = queryset[start:end]
+
+        # === ປ່ຽນຂໍ້ມູນເປັນ JSON ===
+        serializer = ConfirmDispustCollateralSerializer(paginated_queryset, many=True)
+
+        # === ຄຳນວນ pagination ===
+        total_pages = math.ceil(total_count / page_size)
+
+        # === ສົ່ງກັບ ===
+        return Response({
+            'status': 'success',
+            'data': {
+                'items': serializer.data,
+                'pagination': {
+                    'page': page,
+                    'page_size': page_size,
+                    'total_items': total_count,
+                    'total_pages': total_pages,
+                    'has_next': page < total_pages,
+                    'has_previous': page > 1
+                }
+            },
+            'filters_applied': {
+                'user_bnk_code': user_bnk_code,
+                'filter_bnk_code': filter_bnk_code if filter_bnk_code else 'ທັງໝົດ',
+                'status': filter_status if filter_status else 'ທັງໝົດ',
+                'id_disput_loan': id_disput_loan if id_disput_loan else 'ທັງໝົດ'
+            }
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)    
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
