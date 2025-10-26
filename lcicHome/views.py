@@ -23275,7 +23275,7 @@ def get_disputes_by_confirm_id(request):
                 'message': 'ກະລຸນາລະບຸ confirm_dispust_id'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # ກວດສອບວ່າ ConfirmDispustLoan ມີຢູ່ບໍ່
+        
         try:
             confirm_loan = ConfirmDispustLoan.objects.get(id_disput_loan=confirm_dispust_id)
         except ConfirmDispustLoan.DoesNotExist:
@@ -23284,10 +23284,10 @@ def get_disputes_by_confirm_id(request):
                 'message': f'ບໍ່ພົບຂໍ້ມູນ ConfirmDispustLoan ID: {confirm_dispust_id}'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Query base
+        
         queryset = disputes_noti.objects.filter(confirm_dispust_id=confirm_dispust_id)
         
-        # ກັ່ນຕອງເພີ່ມເຕີມ
+      
         if bnk_code:
             queryset = queryset.filter(bnk_code=bnk_code)
         
@@ -23300,13 +23300,13 @@ def get_disputes_by_confirm_id(request):
         if product_type:
             queryset = queryset.filter(product_type=product_type)
         
-        # ລຽງລຳດັບ
+      
         queryset = queryset.order_by(sort_by)
         
-        # ນັບຈຳນວນທັງໝົດ
+       
         total_count = queryset.count()
         
-        # ສະຖິຕິ
+      
         statistics = {
             'total_disputes': total_count,
             'total_outstanding': float(queryset.aggregate(Sum('lon_outstanding_balance'))['lon_outstanding_balance__sum'] or 0),
@@ -23328,25 +23328,25 @@ def get_disputes_by_confirm_id(request):
         for item in bank_counts:
             statistics['by_bank'][item['bnk_code']] = item['count']
         
-        # ນັບຕາມປະເພດຜະລິດຕະພັນ
+      
         product_counts = queryset.values('product_type').annotate(count=Count('id'))
         for item in product_counts:
             statistics['by_product_type'][item['product_type']] = item['count']
         
-        # ນັບຕາມໄລຍະເວລາ
+      
         period_counts = queryset.values('period').annotate(count=Count('id'))
         for item in period_counts:
             statistics['by_period'][item['period']] = item['count']
         
-        # Pagination
+     
         start = (page - 1) * page_size
         end = start + page_size
         paginated_queryset = queryset[start:end]
         
-        # Serialize
+       
         serializer = DisputesNotiSerializer(paginated_queryset, many=True)
         
-        # ຄຳນວນຈຳນວນໜ້າທັງໝົດ
+      
         total_pages = (total_count + page_size - 1) // page_size
         
         return Response({
@@ -23390,8 +23390,119 @@ def get_disputes_by_confirm_id(request):
             'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+from .models import ConfirmDispustCollateral, C1_disptes_noti
+from .serializers import C1DisptesNotiSerializer
+from django.db.models import Sum, Avg, Count
+@api_view(['GET'])
+def get_disputes_by_confirm_id_callateral(request):
+    try:
+        confirm_dispust_id = request.GET.get('confirm_dispust_id')
+        bnk_code = request.GET.get('bnk_code', '')
+        period = request.GET.get('period', '')
+        dispute_status = request.GET.get('status', '')
+        # ລຶບ product_type ອອກ ເພາະບໍ່ມີໃນ model
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 20))
+        sort_by = request.GET.get('sort_by', '-id')
 
+        if not confirm_dispust_id:
+            return Response({
+                'status': 'error',
+                'message': 'ກະລຸນາລະບຸ confirm_dispust_id'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
+        try:
+            confirm_loan = ConfirmDispustCollateral.objects.get(id_disput_loan=confirm_dispust_id)
+        except ConfirmDispustCollateral.DoesNotExist:
+            return Response({
+                'status': 'error',
+                'message': f'ບໍ່ພົບຂໍ້ມູນ ConfirmDispustCollateral ID: {confirm_dispust_id}'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # ໃຊ້ C1_disptes_noti
+        queryset = C1_disptes_noti.objects.filter(confirm_dispust_id=confirm_dispust_id)
+
+        if bnk_code:
+            queryset = queryset.filter(bnk_code=bnk_code)
+        if period:
+            queryset = queryset.filter(period=period)
+        if dispute_status:
+            queryset = queryset.filter(status=dispute_status)
+
+        queryset = queryset.order_by(sort_by)
+        total_count = queryset.count()
+
+        # === ສະຖິຕິ (ປັບໃຫ້ເໝາະກັບ field ທີ່ມີ) ===
+        statistics = {
+            'total_disputes': total_count,
+            'by_status': {},
+            'by_bank': {},
+            'by_period': {}
+        }
+
+        # ສະຖານະ
+        status_counts = queryset.values('status').annotate(count=Count('id'))
+        for item in status_counts:
+            statistics['by_status'][item['status'] or 'unknown'] = item['count']
+
+        # ທະນາຄານ
+        bank_counts = queryset.values('bnk_code').annotate(count=Count('id'))
+        for item in bank_counts:
+            statistics['by_bank'][item['bnk_code']] = item['count']
+
+        # ເດືອນ/ປຢ
+        period_counts = queryset.values('period').annotate(count=Count('id'))
+        for item in period_counts:
+            statistics['by_period'][item['period']] = item['count']
+
+        # Pagination
+        start = (page - 1) * page_size
+        end = start + page_size
+        paginated_queryset = queryset[start:end]
+
+        serializer = C1DisptesNotiSerializer(paginated_queryset, many=True)
+        total_pages = (total_count + page_size - 1) // page_size
+
+        return Response({
+            'status': 'success',
+            'data': {
+                'confirm_loan_info': {
+                    'id_disput_loan': confirm_loan.id_disput_loan,
+                    'bnk_code': confirm_loan.bnk_code,
+                    'status': confirm_loan.status,
+                    'total': float(confirm_loan.total),
+                    'insertdate': confirm_loan.insertdate.isoformat(),
+                    'image_url': request.build_absolute_uri(confirm_loan.image.url) if confirm_loan.image else None
+                },
+                'disputes': serializer.data,
+                'pagination': {
+                    'page': page,
+                    'page_size': page_size,
+                    'total_items': total_count,
+                    'total_pages': total_pages,
+                    'has_next': page < total_pages,
+                    'has_previous': page > 1
+                },
+                'statistics': statistics
+            },
+            'filters_applied': {
+                'confirm_dispust_id': confirm_dispust_id,
+                'bnk_code': bnk_code if bnk_code else 'ທັງໝົດ',
+                'period': period if period else 'ທັງໝົດ',
+                'status': dispute_status if dispute_status else 'ທັງໝົດ'
+            }
+        }, status=status.HTTP_200_OK)
+
+    except ValueError as e:
+        return Response({
+            'status': 'error',
+            'message': f'ຄ່າ parameter ບໍ່ຖືກຕ້ອງ: {str(e)}'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
         

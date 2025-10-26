@@ -297,6 +297,7 @@ urlpatterns = [
     path('process-files/', upload_files, name='upload_files'),
     path('unload-upload/', views.unload_upload, name='unload_upload'),
     path('api/disputes-by-confirm/', views.get_disputes_by_confirm_id, name='disputes_by_confirm'),
+    path('api/disputes-by-confirm_collateral/', views.get_disputes_by_confirm_id_callateral, name='disputes-by-confirm_collateral'),
     path('upload-filesC/', FileUploadViewC.as_view(), name='upload_files_view'),
     path('process-filesC/', process_uploaded_file, name='process_uploaded_file'),
 
