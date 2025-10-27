@@ -156,17 +156,16 @@ DATABASES = {
     },
 }
 
+# ✅ ແກ້ໄຂແລ້ວ: ໃຊ້ Django's built-in Redis (ບໍ່ຕ້ອງຕິດຕັ້ງ django-redis)
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': 'redis://127.0.0.1:6379/1',
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        },
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
         'KEY_PREFIX': 'lcic',
-        'TIMEOUT': 300, 
+        'TIMEOUT': 300,
     }
 }
+
 UPLOAD_PROCESSING_CONFIG = {
     'BATCH_SIZE': 2000,
     'MAX_MEMORY_MB': 500,
