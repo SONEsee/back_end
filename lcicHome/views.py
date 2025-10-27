@@ -25626,3 +25626,63 @@ class WaterUploadSummaryAPIView(APIView):
         serializer = UploadSummarySerializer(summary, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.db.models import Q
+from .models import IndividualBankIbk
+
+class SearchIndividualBankView(APIView):
+    def get(self, request):
+        customerid = request.query_params.get('customerid')
+        lcic_id = request.query_params.get('lcic_id')
+        bnk_code = request.query_params.get('bnk_code')  
+
+       
+        if not any([customerid, lcic_id]):
+            return Response({
+                "results": [],
+                "message": "ກະລຸນາປ້ອນ customerid ຫຼື lcic_id"
+            }, status=200)
+
+        query = Q()
+
+       
+        if customerid:
+            query &= Q(customerid=customerid)
+
+            
+            if bnk_code:
+                query &= Q(bnk_code=bnk_code)
+            else:
+               
+                valid_bnk_codes = IndividualBankIbk.objects.filter(
+                    customerid=customerid
+                ).values_list('bnk_code', flat=True).distinct()
+
+                if not valid_bnk_codes:
+                    return Response({
+                        "results": [],
+                        "message": "ບໍ່ພົບ customerid ນີ້"
+                    }, status=200)
+
+                query &= Q(bnk_code__in=valid_bnk_codes)
+
+            
+            if lcic_id:
+                query &= Q(lcic_id=lcic_id)
+
+        
+        elif lcic_id:
+            query &= Q(lcic_id=lcic_id)
+            
+
+       
+        results = IndividualBankIbk.objects.filter(query).values(
+            'customerid', 'lcic_id', 'bnk_code',
+            'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname','bnk_code'
+        )
+
+        return Response({
+            "count": len(results),
+            "results": list(results)
+        })
