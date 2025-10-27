@@ -27550,14 +27550,7 @@ from .models import IndividualBankIbk
 
 
 def search_individual_bank_advanced(customerid=None, lcic_id=None):
-    """
-    Function ຄົ້ນຫາຂໍ້ມູນໃນ IndividualBankIbk ຕາມ customerid ຫຼື lcic_id (OR condition).
-    - ຖ້າປ້ອນ customerid: ດຶງຂໍ້ມູນທີ່ກົງກັນກັບ customerid, ແລະສະແດງ lcic_id ຖ້າມີ.
-    - ຖ້າປ້ອນ lcic_id: ດຶງຂໍ້ມູນທີ່ກົງກັນກັບ lcic_id, ແລະສະແດງ customerid ຖ້າມີ.
-    - ຖ້າປ້ອນທັງສອງ: ດຶງຂໍ້ມູນທີ່ກົງກັນກັບຢ່າງໜ້ອຍນຶ່ງຄ່າ.
-    - ຖ້າມີຫຼາຍ record: ດຶງມາທັງໝົດ.
-    - Return: Queryset ຂອງ model.
-    """
+  
     query = Q()
     
     if customerid:
@@ -27571,3 +27564,7 @@ def search_individual_bank_advanced(customerid=None, lcic_id=None):
         return IndividualBankIbk.objects.none()
     
     return IndividualBankIbk.objects.filter(query)
+
+
+
+    
