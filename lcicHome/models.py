@@ -1763,26 +1763,118 @@ class Collateral(models.Model):
 
 
 
+# class Role(models.Model):
+#     name = models.CharField(max_length=100)
+#     name_lao = models.CharField(max_length=100, blank=True, null=True)
+#     can_access_all_paths = models.BooleanField(default=False)
+#     name_la = models.CharField(max_length=100, blank=True, null=True)
+
+#     def __str__(self):
+#         return self.name
+    
+# class SidebarItem(models.Model):
+#     name = models.CharField(max_length=100)
+#     url = models.CharField(max_length=255)
+#     icon = models.CharField(max_length=100, blank=True, null=True)
+#     roles = models.ManyToManyField(Role, related_name="sidebar_items")
+#     order = models.IntegerField(default=0, help_text="Sequence for layout (lower numbers first)")
+
+#     class Meta:
+#         ordering = ['order']  # Default ordering for querysets
+
+#     def __str__(self):
+#         return self.name
+
+# class SidebarSubItem(models.Model):
+#     name = models.CharField(max_length=100)
+#     url = models.CharField(max_length=255)
+#     parent = models.ForeignKey(SidebarItem, on_delete=models.CASCADE, related_name="sub_items")
+#     roles = models.ManyToManyField(Role, related_name="sidebar_sub_items")
+#     order = models.IntegerField(default=0, help_text="Sequence for layout under parent (lower numbers first)")
+
+#     class Meta:
+#         ordering = ['order']  # Default ordering for querysets
+
+#     def __str__(self):
+#         return f"{self.name} ({self.parent.name})"
+
+from django.db import models
+from django.core.validators import MinValueValidator
+
+
 class Role(models.Model):
-    name = models.CharField(max_length=100)
-    name_lao = models.CharField(max_length=100, blank=True, null=True)
-    can_access_all_paths = models.BooleanField(default=False)
-    name_la = models.CharField(max_length=100, blank=True, null=True)
+    """User role for permission management"""
+    
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        # db_table = 'roles'
 
     def __str__(self):
         return self.name
-    
+
+
 class SidebarItem(models.Model):
-    name = models.CharField(max_length=100)
-    url = models.CharField(max_length=255)
-    icon = models.CharField(max_length=100, blank=True, null=True)
-    roles = models.ManyToManyField(Role, related_name="sidebar_items")
+    """Main sidebar menu item"""
+    
+    title = models.CharField(max_length=100)
+    icon = models.CharField(max_length=50, blank=True, null=True)
+    route = models.CharField(max_length=200, blank=True, null=True)
+    order = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        db_index=True
+    )
+    roles = models.ManyToManyField(Role, related_name='sidebar_items', blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order', 'id']
+        # db_table = 'sidebar_items'
+        indexes = [
+            models.Index(fields=['order', 'id']),
+        ]
+
+    def __str__(self):
+        return f"{self.order} - {self.title}"
+
 
 class SidebarSubItem(models.Model):
-    name = models.CharField(max_length=100)
-    url = models.CharField(max_length=255)
-    parent = models.ForeignKey(SidebarItem, on_delete=models.CASCADE, related_name="sub_items")
-    roles = models.ManyToManyField(Role, related_name="sidebar_sub_items")
+    """Nested sub-menu items under main sidebar items"""
+    
+    parent = models.ForeignKey(
+        SidebarItem,
+        on_delete=models.CASCADE,
+        related_name='sub_items'
+    )
+    title = models.CharField(max_length=100)
+    icon = models.CharField(max_length=50, blank=True, null=True)
+    route = models.CharField(max_length=200)
+    order = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        db_index=True
+    )
+    roles = models.ManyToManyField(Role, related_name='sidebar_sub_items', blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['parent__order', 'order', 'id']
+        # db_table = 'sidebar_sub_items'
+        indexes = [
+            models.Index(fields=['parent', 'order', 'id']),
+        ]
+
+    def __str__(self):
+        return f"{self.parent.title} > {self.order} - {self.title}"
 
 # from django.conf import settings
 # from django.db import models
