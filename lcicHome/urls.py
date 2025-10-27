@@ -43,7 +43,7 @@ from .views import confirm_upload
 from .views import upload_image, upload_imageprofile
 from .views import get_collaterals
 from .views import get_login3
-from .views import get_last_lcicid, upload_enterprise_info,unload_statussubmit,error_statussubmit,unload_data,unload_statussubmitc,search_individual_bank_advanced
+from .views import get_last_lcicid, upload_enterprise_info,unload_statussubmit,error_statussubmit,unload_data,unload_statussubmitc
 from .views import confirm_image
 from .views import UserLoginView
 from django.contrib.auth import views as auth_views
@@ -285,7 +285,7 @@ urlpatterns = [
     path('api/dispute-loans/', views.get_dispute_loans, name='get_dispute_loans'),
     path('api/dispute-collateral/', views.get_dispute_collateral, name='get_dispute_collateral'),
     path('api/disputes/confirmc/', views.confirm_dispute_colatteral, name='confirm_dispute_colatteral'),
-    path('api/search-individual/', views.search_individual_bank_advanced, name='search_individual_bank_advanced'),
+    # path('api/search-individual/', views.search_individual_bank_advanced, name='search_individual_bank_advanced'),
 
     path('api/productinfo3/', get_data3, name='get_data_by_id_file_and_period'),
     path('api/productinfoc3/', get_data4, name='get_data_by_id_file_and_period'),
