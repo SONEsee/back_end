@@ -1048,12 +1048,60 @@ class B1_Yearly(models.Model):
 
 
 
-class CDL (models.Model):
+# class CDL (models.Model):
+#     id = models.AutoField(primary_key=True)
+#     id_file = models.CharField(max_length=100)
+#     c2 = models.CharField(max_length=255)
+#     c1 = models.CharField(max_length=255)
+#     c3 = models.CharField(max_length=255)
+#     c4 = models.CharField(max_length=255)
+#     c5 = models.CharField(max_length=255)
+#     c6 = models.CharField(max_length=255)
+#     c7 = models.CharField(max_length=255)
+#     c8 = models.CharField(max_length=255)
+#     c9 = models.CharField(max_length=255)
+#     c10 = models.CharField(max_length=255)
+#     c11 = models.CharField(max_length=255)
+#     c12 = models.CharField(max_length=255)
+#     c13 = models.CharField(max_length=255)
+#     c14 = models.CharField(max_length=255)
+#     c15 = models.CharField(max_length=255)
+#     c16 = models.CharField(max_length=255)
+#     c17 = models.CharField(max_length=255)
+#     c18 = models.CharField(max_length=255)
+#     c19 = models.CharField(max_length=255)
+#     c20 = models.CharField(max_length=255)
+#     c21 = models.CharField(max_length=255)
+#     c22 = models.CharField(max_length=255)
+#     c23 = models.CharField(max_length=255)
+#     c24 = models.CharField(max_length=255)
+#     c25 = models.CharField(max_length=255)
+#     c26 = models.CharField(max_length=255)
+#     c27 = models.CharField(max_length=255)
+#     c28 = models.CharField(max_length=255)
+#     c29 = models.CharField(max_length=255)
+#     c30 = models.CharField(max_length=255)
+#     c31 = models.CharField(max_length=255)
+#     c32 = models.CharField(max_length=255)
+#     c33 = models.CharField(max_length=255)
+#     c34 = models.CharField(max_length=255)
+#     c35 = models.CharField(max_length=255)
+#     c36 = models.CharField(max_length=255)
+#     c37 = models.CharField(max_length=255)
+#     c38 = models.CharField(max_length=255)
+#     c39 = models.CharField(max_length=255)
+#     c40 = models.CharField(max_length=255)
+#     c41 = models.CharField(max_length=255)
+#     c42 = models.CharField(max_length=255)
+#     user_id = models.CharField(max_length=255)
+#     period = models.CharField(max_length=255)
+#     col_type = models.CharField(max_length=30)
+class CDL(models.Model):
     id = models.AutoField(primary_key=True)
-    id_file = models.CharField(max_length=100)
+    id_file = models.CharField(max_length=100, db_index=True)
     c2 = models.CharField(max_length=255)
-    c1 = models.CharField(max_length=255)
-    c3 = models.CharField(max_length=255)
+    c1 = models.CharField(max_length=255, db_index=True)
+    c3 = models.CharField(max_length=255, db_index=True)
     c4 = models.CharField(max_length=255)
     c5 = models.CharField(max_length=255)
     c6 = models.CharField(max_length=255)
@@ -1094,9 +1142,14 @@ class CDL (models.Model):
     c41 = models.CharField(max_length=255)
     c42 = models.CharField(max_length=255)
     user_id = models.CharField(max_length=255)
-    period = models.CharField(max_length=255)
-    col_type = models.CharField(max_length=30)
+    period = models.CharField(max_length=255, db_index=True)
+    col_type = models.CharField(max_length=30, db_index=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['id_file', 'col_type']),  
+            models.Index(fields=['c1', 'period', 'c3']),  
+        ]
 class C1 (models.Model):
     id = models.AutoField(primary_key=True)
     id_file = models.CharField(max_length=100)
@@ -1140,6 +1193,7 @@ class C1_disptes (models.Model):
     LCIC_code = models.CharField(max_length=255, blank=True, null=True)
     status = models.CharField(max_length=100)
     action_dispust = models.CharField(max_length=100)
+    deception = models.TextField(blank=True, null=True)
 
 class ConfirmDispustCollateral(models.Model):
     id_disput_loan = models.AutoField(primary_key=True)
@@ -1175,6 +1229,7 @@ class C1_disptes_noti (models.Model):
     LCIC_code = models.CharField(max_length=255, blank=True, null=True)
     status = models.CharField(max_length=100)
     action_dispust = models.CharField(max_length=100)
+    deception = models.TextField(blank=True, null=True)
    
     confirm_dispust_id = models.ForeignKey(
         ConfirmDispustCollateral, 
