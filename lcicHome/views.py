@@ -26220,7 +26220,9 @@ class ChargeReportDetailView(APIView):
         return "{:,.0f}".format(float(amount))
     
 # ----------------------------------------------- UPDATE HERE -----------------------------------------------
-    
+
+
+# update 
 import requests
 import logging
 from django.db import transaction
