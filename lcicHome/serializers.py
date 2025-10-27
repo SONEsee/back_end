@@ -579,60 +579,85 @@ class LoginSerializer(serializers.ModelSerializer):
 from rest_framework import serializers
 from .models import memberInfo
 
+from rest_framework import serializers
+from .models import SidebarItem, Role, SidebarSubItem
 
-        
-        
-
-from .models import SidebarItem, SidebarSubItem, Role
 
 class RoleSerializer(serializers.ModelSerializer):
+    """Role serializer"""
+    
     class Meta:
         model = Role
-        # fields = ['id', 'name','name_la', 'can_access_all_paths']
-        fields = '__all__'
-
-
-# class SidebarItemSerializer(serializers.ModelSerializer):
-#     roles = RoleSerializer(many=True, read_only=True)
-
-#     class Meta:
-#         model = SidebarItem
-#         fields = ['id', 'name', 'url', 'roles']
-
-# class SidebarSubItemSerializer(serializers.ModelSerializer):
-#     parent = SidebarItemSerializer(read_only=True)
-#     roles = RoleSerializer(many=True, read_only=True)
-
-#     class Meta:
-#         model = SidebarSubItem
-#         fields = ['id', 'name', 'url', 'parent', 'roles']
+        fields = ['id', 'name', 'description', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
 
 
 class SidebarSubItemSerializer(serializers.ModelSerializer):
+    """Sub-item serializer with proper ordering"""
+    
+    roles = RoleSerializer(many=True, read_only=True)
+    parent_title = serializers.CharField(source='parent.title', read_only=True)
+    
     class Meta:
         model = SidebarSubItem
-        fields = ['id', 'name', 'url', 'parent', 'roles']
-    
-    def validate(self, data):
-        # Ensure parent exists when creating sub-item
-        if 'parent' in data and not SidebarItem.objects.filter(id=data['parent'].id).exists():
-            raise serializers.ValidationError("Invalid parent item")
-        return data
+        fields = ['id', 'parent', 'parent_title', 'title', 'icon', 'route', 'order', 'roles', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
+
 class SidebarItemSerializer(serializers.ModelSerializer):
-    sub_items = SidebarSubItemSerializer(many=True, read_only=True)
+    """Main sidebar item serializer with nested sub-items"""
+    
+    sub_items = serializers.SerializerMethodField()
+    roles = RoleSerializer(many=True, read_only=True)
     
     class Meta:
         model = SidebarItem
-        fields = ['id', 'name', 'url', 'icon', 'roles', 'sub_items']
+        fields = ['id', 'title', 'icon', 'route', 'order', 'sub_items', 'roles', 'is_active', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
     
-    def to_representation(self, instance):
-        """Include sub_items in the response"""
-        representation = super().to_representation(instance)
-        representation['sub_items'] = SidebarSubItemSerializer(
-            instance.sub_items.all(), 
-            many=True
-        ).data
-        return representation
+    def get_sub_items(self, obj):
+        """Get filtered sub-items if available, otherwise all sub-items"""
+        if hasattr(obj, 'filtered_sub_items'):
+            sub_items = obj.filtered_sub_items
+        else:
+            sub_items = obj.sub_items.filter(is_active=True).order_by('order', 'id')
+        
+        return SidebarSubItemSerializer(sub_items, many=True).data
+
+# from .models import SidebarItem, SidebarSubItem, Role
+
+# class RoleSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Role
+#         # fields = ['id', 'name','name_la', 'can_access_all_paths']
+#         fields = '__all__'
+
+
+# class SidebarSubItemSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = SidebarSubItem
+#         fields = ['id', 'name', 'url', 'parent', 'roles','order']
+    
+#     def validate(self, data):
+#         # Ensure parent exists when creating sub-item
+#         if 'parent' in data and not SidebarItem.objects.filter(id=data['parent'].id).exists():
+#             raise serializers.ValidationError("Invalid parent item")
+#         return data
+# class SidebarItemSerializer(serializers.ModelSerializer):
+#     sub_items = SidebarSubItemSerializer(many=True, read_only=True)
+    
+#     class Meta:
+#         model = SidebarItem
+#         fields = ['id', 'name', 'url', 'icon', 'roles', 'sub_items','order']
+    
+#     def to_representation(self, instance):
+#         """Include sub_items in the response"""
+#         representation = super().to_representation(instance)
+#         representation['sub_items'] = SidebarSubItemSerializer(
+#             instance.sub_items.all(), 
+#             many=True
+#         ).data
+#         return representation
 
 from .models import Customer_Info_IND,EnterpriseInfo, InvestorInfo, bank_bnk, B1_Yearly, B1
 from django.core.validators import MinLengthValidator
@@ -1193,203 +1218,365 @@ class MinimalUploadTrackingDetailSerializer(MinimalUploadTrackingSerializer):
 
 
 
-# Water Supply Data Load Tracking --------------------------------------------------
+# # Water Supply Data Load Tracking --------------------------------------------------
 
-from utility.models import WaterUploadDataTracking, WaterUploadLog
+# from utility.models import WaterUploadDataTracking, WaterUploadLog
 
-class WaterUploadTrackingSerializer(serializers.ModelSerializer):
-    """Serializer for water supply upload tracking list view"""
+# class WaterUploadTrackingSerializer(serializers.ModelSerializer):
+#     """Serializer for water supply upload tracking list view"""
     
-    formatted_month = serializers.ReadOnlyField()
-    success_rate_percentage = serializers.ReadOnlyField()
+#     formatted_month = serializers.ReadOnlyField()
+#     success_rate_percentage = serializers.ReadOnlyField()
     
-    class Meta:
-        model = WaterUploadDataTracking
-        fields = [
-            'id',
-            'upload_month',
-            'formatted_month',
-            'status',
-            'description',
-            'total_records',
-            'processed_records',
-            'failed_records',
-            'success_rates',
-            'success_rate_percentage',
-            'data_size_mb',
-            'api_response_code',
-            'upload_started',
-            'upload_completed', 
-            'upload_duration',
-            'user_upload',
-            'error_message',
-            'created_at',
-            'updated_at'
-        ]
-        read_only_fields = [
-            'id', 
-            'created_at', 
-            'updated_at',
-            'formatted_month',
-            'success_rate_percentage'
-        ]
+#     class Meta:
+#         model = WaterUploadDataTracking
+#         fields = [
+#             'id',
+#             'upload_month',
+#             'formatted_month',
+#             'status',
+#             'description',
+#             'total_records',
+#             'processed_records',
+#             'failed_records',
+#             'success_rates',
+#             'success_rate_percentage',
+#             'data_size_mb',
+#             'api_response_code',
+#             'upload_started',
+#             'upload_completed', 
+#             'upload_duration',
+#             'user_upload',
+#             'error_message',
+#             'created_at',
+#             'updated_at'
+#         ]
+#         read_only_fields = [
+#             'id', 
+#             'created_at', 
+#             'updated_at',
+#             'formatted_month',
+#             'success_rate_percentage'
+#         ]
 
-class WaterUploadLogSerializer(serializers.ModelSerializer):
-    """Serializer for water supply upload logs"""
+# class WaterUploadLogSerializer(serializers.ModelSerializer):
+#     """Serializer for water supply upload logs"""
     
-    formatted_timestamp = serializers.ReadOnlyField()
+#     formatted_timestamp = serializers.ReadOnlyField()
     
-    class Meta:
-        model = WaterUploadLog
-        fields = [
-            'id',
-            'timestamp',
-            'formatted_timestamp',
-            'log_level',
-            'message',
-            'context_data'
-        ]
-        read_only_fields = ['id', 'timestamp', 'formatted_timestamp']
+#     class Meta:
+#         model = WaterUploadLog
+#         fields = [
+#             'id',
+#             'timestamp',
+#             'formatted_timestamp',
+#             'log_level',
+#             'message',
+#             'context_data'
+#         ]
+#         read_only_fields = ['id', 'timestamp', 'formatted_timestamp']
 
-class WaterUploadTrackingDetailSerializer(serializers.ModelSerializer):
-    """Detailed serializer for water supply upload tracking with logs"""
+# class WaterUploadTrackingDetailSerializer(serializers.ModelSerializer):
+#     """Detailed serializer for water supply upload tracking with logs"""
     
-    logs = WaterUploadLogSerializer(many=True, read_only=True)
-    formatted_month = serializers.ReadOnlyField()
-    success_rate_percentage = serializers.ReadOnlyField()
+#     logs = WaterUploadLogSerializer(many=True, read_only=True)
+#     formatted_month = serializers.ReadOnlyField()
+#     success_rate_percentage = serializers.ReadOnlyField()
     
-    class Meta:
-        model = WaterUploadDataTracking
-        fields = [
-            'id',
-            'upload_month',
-            'formatted_month',
-            'status',
-            'description',
-            'total_records',
-            'processed_records',
-            'failed_records',
-            'success_rates',
-            'success_rate_percentage',
-            'data_size_mb',
-            'api_response_code',
-            'upload_started',
-            'upload_completed',
-            'upload_duration',
-            'user_upload',
-            'error_message',
-            'created_at',
-            'updated_at',
-            'logs'
-        ]
-        read_only_fields = [
-            'id', 
-            'created_at', 
-            'updated_at',
-            'formatted_month',
-            'success_rate_percentage',
-            'logs'
-        ]
+#     class Meta:
+#         model = WaterUploadDataTracking
+#         fields = [
+#             'id',
+#             'upload_month',
+#             'formatted_month',
+#             'status',
+#             'description',
+#             'total_records',
+#             'processed_records',
+#             'failed_records',
+#             'success_rates',
+#             'success_rate_percentage',
+#             'data_size_mb',
+#             'api_response_code',
+#             'upload_started',
+#             'upload_completed',
+#             'upload_duration',
+#             'user_upload',
+#             'error_message',
+#             'created_at',
+#             'updated_at',
+#             'logs'
+#         ]
+#         read_only_fields = [
+#             'id', 
+#             'created_at', 
+#             'updated_at',
+#             'formatted_month',
+#             'success_rate_percentage',
+#             'logs'
+#         ]
 
-class WaterSupplyUploadRequestSerializer(serializers.Serializer):
-    """Serializer for water supply upload request"""
+# class WaterSupplyUploadRequestSerializer(serializers.Serializer):
+#     """Serializer for water supply upload request"""
     
-    month = serializers.CharField(
-        max_length=6,
-        help_text="Month in MMYYYY format (e.g., 122024)"
-    )
-    username = serializers.CharField(
-        max_length=100,
-        default='system'
-    )
-    api_token = serializers.CharField(
-        max_length=500,
-        help_text="Bearer token for water supply API authentication",
-        style={'input_type': 'password'}  # Hide token in browsable API
-    )
+#     month = serializers.CharField(
+#         max_length=6,
+#         help_text="Month in MMYYYY format (e.g., 122024)"
+#     )
+#     username = serializers.CharField(
+#         max_length=100,
+#         default='system'
+#     )
+#     api_token = serializers.CharField(
+#         max_length=500,
+#         help_text="Bearer token for water supply API authentication",
+#         style={'input_type': 'password'}  # Hide token in browsable API
+#     )
     
-    def validate_month(self, value):
-        """Validate month format"""
-        if not value or len(value) != 6:
-            raise serializers.ValidationError("Month must be in MMYYYY format (e.g., 122024)")
+#     def validate_month(self, value):
+#         """Validate month format"""
+#         if not value or len(value) != 6:
+#             raise serializers.ValidationError("Month must be in MMYYYY format (e.g., 122024)")
         
-        try:
-            month_part = value[:2]
-            year_part = value[2:]
+#         try:
+#             month_part = value[:2]
+#             year_part = value[2:]
             
-            # Validate month (01-12)
-            month_int = int(month_part)
-            if month_int < 1 or month_int > 12:
-                raise serializers.ValidationError("Month part must be between 01 and 12")
+#             # Validate month (01-12)
+#             month_int = int(month_part)
+#             if month_int < 1 or month_int > 12:
+#                 raise serializers.ValidationError("Month part must be between 01 and 12")
             
-            # Validate year (reasonable range)
-            year_int = int(year_part)
-            if year_int < 2020 or year_int > 2030:
-                raise serializers.ValidationError("Year part must be between 2020 and 2030")
+#             # Validate year (reasonable range)
+#             year_int = int(year_part)
+#             if year_int < 2020 or year_int > 2030:
+#                 raise serializers.ValidationError("Year part must be between 2020 and 2030")
                 
-        except ValueError:
-            raise serializers.ValidationError("Month must contain only numeric characters")
+#         except ValueError:
+#             raise serializers.ValidationError("Month must contain only numeric characters")
         
-        return value
+#         return value
     
-    def validate_api_token(self, value):
-        """Basic validation for API token"""
-        if not value or len(value.strip()) < 10:
-            raise serializers.ValidationError("API token is required and must be at least 10 characters")
-        return value.strip()
+#     def validate_api_token(self, value):
+#         """Basic validation for API token"""
+#         if not value or len(value.strip()) < 10:
+#             raise serializers.ValidationError("API token is required and must be at least 10 characters")
+#         return value.strip()
 
-class WaterTrackingInitializationSerializer(serializers.Serializer):
-    """Serializer for initializing water supply tracking"""
+# class WaterTrackingInitializationSerializer(serializers.Serializer):
+#     """Serializer for initializing water supply tracking"""
     
-    month = serializers.CharField(
-        max_length=6,
-        help_text="Month in MMYYYY format (e.g., 122024)"
-    )
-    username = serializers.CharField(
-        max_length=100,
-        default='system'
-    )
+#     month = serializers.CharField(
+#         max_length=6,
+#         help_text="Month in MMYYYY format (e.g., 122024)"
+#     )
+#     username = serializers.CharField(
+#         max_length=100,
+#         default='system'
+#     )
     
-    def validate_month(self, value):
-        """Validate month format"""
-        if not value or len(value) != 6:
-            raise serializers.ValidationError("Month must be in MMYYYY format (e.g., 122024)")
+#     def validate_month(self, value):
+#         """Validate month format"""
+#         if not value or len(value) != 6:
+#             raise serializers.ValidationError("Month must be in MMYYYY format (e.g., 122024)")
         
-        try:
-            month_part = value[:2]
-            year_part = value[2:]
+#         try:
+#             month_part = value[:2]
+#             year_part = value[2:]
             
-            month_int = int(month_part)
-            if month_int < 1 or month_int > 12:
-                raise serializers.ValidationError("Month part must be between 01 and 12")
+#             month_int = int(month_part)
+#             if month_int < 1 or month_int > 12:
+#                 raise serializers.ValidationError("Month part must be between 01 and 12")
             
-            year_int = int(year_part)
-            if year_int < 2020 or year_int > 2030:
-                raise serializers.ValidationError("Year part must be between 2020 and 2030")
+#             year_int = int(year_part)
+#             if year_int < 2020 or year_int > 2030:
+#                 raise serializers.ValidationError("Year part must be between 2020 and 2030")
                 
-        except ValueError:
-            raise serializers.ValidationError("Month must contain only numeric characters")
+#         except ValueError:
+#             raise serializers.ValidationError("Month must contain only numeric characters")
         
-        return value
+#         return value
 
 # Statistics serializers for dashboard
-class WaterSupplyStatisticsSerializer(serializers.Serializer):
-    """Serializer for water supply statistics"""
+# class WaterSupplyStatisticsSerializer(serializers.Serializer):
+#     """Serializer for water supply statistics"""
     
-    total_uploads = serializers.IntegerField()
-    status_breakdown = serializers.DictField()
-    total_data_size_mb = serializers.FloatField()
-    total_records = serializers.IntegerField()
+#     total_uploads = serializers.IntegerField()
+#     status_breakdown = serializers.DictField()
+#     total_data_size_mb = serializers.FloatField()
+#     total_records = serializers.IntegerField()
     
-    # Additional computed fields
-    avg_success_rate = serializers.FloatField(required=False)
-    avg_upload_duration = serializers.FloatField(required=False)
-    last_upload_date = serializers.DateTimeField(required=False)
+#     # Additional computed fields
+#     avg_success_rate = serializers.FloatField(required=False)
+#     avg_upload_duration = serializers.FloatField(required=False)
+#     last_upload_date = serializers.DateTimeField(required=False)
 
-class WaterSupplyDashboardSerializer(serializers.Serializer):
-    """Serializer for water supply dashboard response"""
+# class WaterSupplyDashboardSerializer(serializers.Serializer):
+#     """Serializer for water supply dashboard response"""
     
-    data = WaterUploadTrackingSerializer(many=True)
-    statistics = WaterSupplyStatisticsSerializer()
-    month = serializers.CharField()
-    total_count = serializers.IntegerField()
+#     data = WaterUploadTrackingSerializer(many=True)
+#     statistics = WaterSupplyStatisticsSerializer()
+#     month = serializers.CharField()
+#     total_count = serializers.IntegerField()
+
+
+# Water Supply Data Load Tracking --------------------------------------------------
+from rest_framework import serializers
+from utility.models import (
+    WaterUploadDataTracking, 
+    WaterUploadLog,
+    w_customer_info,
+    w_province_code,
+    w_district_code
+)
+
+
+class WaterUploadLogSerializer(serializers.ModelSerializer):
+    """Serializer for upload logs"""
+    class Meta:
+        model = WaterUploadLog
+        fields = ['id', 'log_level', 'message', 'timestamp']
+        read_only_fields = ['timestamp']
+
+
+class WaterUploadTrackingSerializer(serializers.ModelSerializer):
+    """Serializer for tracking water uploads"""
+    logs = WaterUploadLogSerializer(many=True, read_only=True)
+    duration_formatted = serializers.SerializerMethodField()
+    success_rate_formatted = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = WaterUploadDataTracking
+        fields = [
+            'id', 'pro_id', 'pro_name', 'dis_id', 'dis_name',
+            'upload_month', 'status', 'total_records', 
+            'payment_records', 'customer_records',
+            'data_size_mb', 'upload_started', 'upload_completed',
+            'upload_duration', 'duration_formatted',
+            'processed_records', 'failed_records', 
+            'success_rates', 'success_rate_formatted',
+            'user_upload', 'error_message', 'api_response_code',
+            'description', 'created_at', 'updated_at', 'logs'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def get_duration_formatted(self, obj):
+        """Format duration in human-readable format"""
+        if obj.upload_duration:
+            minutes = int(obj.upload_duration // 60)
+            seconds = int(obj.upload_duration % 60)
+            return f"{minutes}m {seconds}s"
+        return None
+    
+    def get_success_rate_formatted(self, obj):
+        """Format success rate as percentage"""
+        if obj.success_rates is not None:
+            return f"{obj.success_rates:.2f}%"
+        return "0.00%"
+
+
+class WaterUploadTrackingListSerializer(serializers.ModelSerializer):
+    """Simplified serializer for listing trackings"""
+    duration_formatted = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = WaterUploadDataTracking
+        fields = [
+            'id', 'pro_id', 'pro_name', 'dis_id', 'dis_name',
+            'upload_month', 'status', 'total_records',
+            'payment_records', 'customer_records',
+            'processed_records', 'success_rates',
+            'upload_completed', 'duration_formatted'
+        ]
+    
+    def get_duration_formatted(self, obj):
+        if obj.upload_duration:
+            minutes = int(obj.upload_duration // 60)
+            seconds = int(obj.upload_duration % 60)
+            return f"{minutes}m {seconds}s"
+        return None
+
+
+class InitializeTrackingSerializer(serializers.Serializer):
+    """Serializer for initializing tracking"""
+    upload_month = serializers.CharField(
+        max_length=6,
+        help_text="Format: YYYYMM (e.g., 012025)"
+    )
+    pro_id = serializers.CharField(max_length=10, required=False)
+    dis_id = serializers.CharField(max_length=10, required=False)
+    user_upload = serializers.CharField(max_length=50, required=False)
+    
+    def validate_upload_month(self, value):
+        """Validate month format"""
+        if len(value) != 6:
+            raise serializers.ValidationError("Month must be in MMYYYY format (e.g., 012025)")
+        try:
+            month = int(value[:2])
+            year = int(value[2:])
+            if not (1 <= month <= 12):
+                raise serializers.ValidationError("Month must be between 01 and 12")
+            if year < 2020 or year > 2030:
+                raise serializers.ValidationError("Year must be between 2020 and 2030")
+        except ValueError:
+            raise serializers.ValidationError("Invalid month format")
+        return value
+
+
+class WaterUploadSerializer(serializers.Serializer):
+    """Serializer for uploading water data"""
+    upload_month = serializers.CharField(
+        max_length=6,
+        help_text="Format: MMYYYY (e.g., 012025)"
+    )
+    pro_id = serializers.CharField(max_length=10, required=False, allow_blank=True)
+    dis_id = serializers.CharField(max_length=10, required=False, allow_blank=True)
+    user_upload = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    force_reupload = serializers.BooleanField(default=False)
+    
+    def validate_upload_month(self, value):
+        """Validate month format"""
+        if len(value) != 6:
+            raise serializers.ValidationError("Month must be in MMYYYY format (e.g., 012025)")
+        try:
+            month = int(value[:2])
+            year = int(value[2:])
+            if not (1 <= month <= 12):
+                raise serializers.ValidationError("Month must be between 01 and 12")
+            if year < 2020 or year > 2030:
+                raise serializers.ValidationError("Year must be between 2020 and 2030")
+        except ValueError:
+            raise serializers.ValidationError("Invalid month format")
+        return value
+
+
+class DistrictStatisticsSerializer(serializers.Serializer):
+    """Serializer for district statistics"""
+    pro_id = serializers.CharField()
+    pro_name = serializers.CharField()
+    dis_id = serializers.CharField()
+    dis_name = serializers.CharField()
+    upload_month = serializers.CharField()
+    total_bills = serializers.IntegerField()
+    total_customers = serializers.IntegerField()
+    status = serializers.CharField()
+    last_updated = serializers.DateTimeField()
+
+
+class UploadSummarySerializer(serializers.Serializer):
+    """Serializer for upload summary"""
+    upload_month = serializers.CharField()
+    total_provinces = serializers.IntegerField()
+    total_districts = serializers.IntegerField()
+    total_bills = serializers.IntegerField()
+    total_customers = serializers.IntegerField()
+    completed_uploads = serializers.IntegerField()
+    pending_uploads = serializers.IntegerField()
+    failed_uploads = serializers.IntegerField()
+
+
+class CustomerInfoSerializer(serializers.ModelSerializer):
+    """Serializer for customer information"""
+    class Meta:
+        model = w_customer_info
+        fields = '__all__'
