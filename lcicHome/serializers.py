@@ -365,6 +365,14 @@ class C1DisptesNotiSerializer(serializers.ModelSerializer):
             'lcicID', 'user_id', 'com_enterprise_code', 'LCIC_code', 'data_status',
             'is_disputed', 'status', 'action_dispust'
         ]
+
+from rest_framework import serializers
+from .models import IndividualBankIbk
+
+class IndividualBankIbkSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IndividualBankIbk
+        fields = '__all__'
 from rest_framework import serializers
 from django.contrib.auth.models import User
 

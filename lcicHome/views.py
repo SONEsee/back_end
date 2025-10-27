@@ -27537,4 +27537,37 @@ class ChargeReportDetailView(APIView):
 #             return Response(
 #                 {'error': 'Tracking record not found'},
 #                 status=status.HTTP_404_NOT_FOUND
-#             )
+#  
+#            )
+
+
+
+from django.db.models import Q
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_exempt
+from .models import IndividualBankIbk
+
+
+def search_individual_bank_advanced(customerid=None, lcic_id=None):
+    """
+    Function ຄົ້ນຫາຂໍ້ມູນໃນ IndividualBankIbk ຕາມ customerid ຫຼື lcic_id (OR condition).
+    - ຖ້າປ້ອນ customerid: ດຶງຂໍ້ມູນທີ່ກົງກັນກັບ customerid, ແລະສະແດງ lcic_id ຖ້າມີ.
+    - ຖ້າປ້ອນ lcic_id: ດຶງຂໍ້ມູນທີ່ກົງກັນກັບ lcic_id, ແລະສະແດງ customerid ຖ້າມີ.
+    - ຖ້າປ້ອນທັງສອງ: ດຶງຂໍ້ມູນທີ່ກົງກັນກັບຢ່າງໜ້ອຍນຶ່ງຄ່າ.
+    - ຖ້າມີຫຼາຍ record: ດຶງມາທັງໝົດ.
+    - Return: Queryset ຂອງ model.
+    """
+    query = Q()
+    
+    if customerid:
+        query |= Q(customerid=customerid)
+    
+    if lcic_id:
+        query |= Q(lcic_id=lcic_id)
+    
+  
+    if not query:
+        return IndividualBankIbk.objects.none()
+    
+    return IndividualBankIbk.objects.filter(query)
