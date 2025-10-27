@@ -327,8 +327,52 @@ class disputesSerializer(serializers.ModelSerializer):
     class Meta:
         model = disputes
         fields = '__all__'
+# serializers.py
+from rest_framework import serializers
+from .models import ConfirmDispustCollateral,C1_disptes_noti
 
+class ConfirmDispustCollateralSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
 
+    class Meta:
+        model = ConfirmDispustCollateral
+        fields = [
+            'id_disput_loan',
+            'bnk_code',
+            'image_url',           # URL ຮູບ
+            'user_insert',
+            'user_update',
+            'insertdate',
+            'updatedate',
+            'status',
+            'total'
+        ]
+
+    def get_image_url(self, obj):
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
+# serializers.py
+class C1DisptesNotiSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = C1_disptes_noti
+        fields = [
+            'id', 'id_file', 'period', 'bnk_code', 'segmentType', 'branch_id_code',
+            'bank_customer_ID', 'loan_id', 'col_id', 'col_type', 'collateral_status',
+            'lcicID', 'user_id', 'com_enterprise_code', 'LCIC_code', 'data_status',
+            'is_disputed', 'status', 'action_dispust'
+        ]
+
+from rest_framework import serializers
+from .models import IndividualBankIbk
+
+class IndividualBankIbkSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IndividualBankIbk
+        fields = '__all__'
 from rest_framework import serializers
 from django.contrib.auth.models import User
 
