@@ -156,7 +156,7 @@ DATABASES = {
     },
 }
 
-# ✅ ແກ້ໄຂແລ້ວ: ໃຊ້ Django's built-in Redis (ບໍ່ຕ້ອງຕິດຕັ້ງ django-redis)
+
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',

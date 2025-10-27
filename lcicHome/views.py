@@ -23258,7 +23258,7 @@ class WaterUploadDataAPIView(APIView):
                 message=f'Extracted {len(bill_records)} bill (payment) records; filtered to {len(filtered_bill_records)} for {tracking.pro_id}-{tracking.dis_id}'
             )
             
-            # ========== Fetch Customer Data ==========
+           
             WaterUploadLog.objects.create(
                 tracking=tracking,
                 log_level='INFO',
@@ -23272,7 +23272,7 @@ class WaterUploadDataAPIView(APIView):
                 customer_response = requests.get(
                     customer_api_url,
                     headers=headers,
-                    params=params,  # FIXED: No province/district params
+                    params=params,  
                     timeout=600,
                     stream=True
                 )
