@@ -2207,3 +2207,68 @@ class LCICSystemUser(models.Model):
 
     def __str__(self):
         return self.username
+    
+    
+class IndividualBankIbk(models.Model):
+    ind_sys_id = models.AutoField(primary_key=True)
+    lcic_id = models.CharField(max_length=150, blank=True, null=True)
+    segment = models.CharField(max_length=150, blank=True, null=True)
+    mm_ind_sys_id = models.CharField(max_length=150, blank=True, null=True)
+    bnk_code = models.CharField(max_length=150, blank=True, null=True)
+    branchcode = models.CharField(max_length=150, blank=True, null=True)
+    customerid = models.CharField(max_length=150, blank=True, null=True)
+    ind_national_id = models.CharField(max_length=150, blank=True, null=True)
+    ind_national_id_date = models.DateField(blank=True, null=True)
+    ind_passport = models.CharField(max_length=150, blank=True, null=True)
+    ind_passport_date = models.DateField(blank=True, null=True)
+    ind_familybook = models.CharField(max_length=150, blank=True, null=True)
+    ind_familybook_prov_code = models.CharField(max_length=150, blank=True, null=True)
+    ind_familybook_date = models.DateField(blank=True, null=True)
+    ind_birth_date = models.DateField(blank=True, null=True)
+    ind_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_second_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_surname = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_surname = models.CharField(max_length=150, blank=True, null=True)
+    ind_old_surname = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_old_surname = models.CharField(max_length=150, blank=True, null=True)
+    ind_nationality = models.CharField(max_length=150, blank=True, null=True)
+    ind_gender = models.CharField(max_length=10, blank=True, null=True)
+    ind_civil_status = models.CharField(max_length=150, blank=True, null=True)
+    ind_insert_date = models.DateTimeField(blank=True, null=True)
+    ind_update_date = models.DateTimeField(blank=True, null=True)
+    mm_action_date = models.DateTimeField(blank=True, null=True)
+    mm_log = models.TextField(blank=True, null=True)
+    mm_comment = models.TextField(blank=True, null=True)
+    mm_by = models.CharField(max_length=150, blank=True, null=True)
+    blk_sys_id = models.CharField(max_length=150, blank=True, null=True)
+    mm_status = models.CharField(max_length=150, blank=True, null=True)
+    is_manual = models.BooleanField(blank=True, null=True)
+    ind_lao_name_code = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_surname_code = models.CharField(max_length=150, blank=True, null=True)
+
+    class Meta:
+       
+        db_table = 'individual_bank_ibk'
+
+
+class IndividualBankIbkInfo(models.Model):
+    ind_sys_id = models.AutoField(primary_key=True)
+    mm_ind_sys_id = models.CharField(max_length=150, blank=True, null=True)
+    lcic_id = models.CharField(max_length=150, blank=True, null=True)
+    ind_national_id = models.CharField(max_length=150, blank=True, null=True)
+    ind_national_id_date = models.DateField(blank=True, null=True)
+    ind_passport = models.CharField(max_length=150, blank=True, null=True)
+    ind_passport_date = models.DateField(blank=True, null=True)
+    ind_familybook = models.CharField(max_length=150, blank=True, null=True)
+    ind_familybook_prov_code = models.CharField(max_length=150, blank=True, null=True)
+    ind_familybook_date = models.DateField(blank=True, null=True)
+    ind_birth_date = models.DateField(blank=True, null=True)
+    ind_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_surname = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_surname = models.CharField(max_length=150, blank=True, null=True)
+
+    class Meta:
+        
+        db_table = 'individual_bank_ibk_info'
