@@ -57,7 +57,8 @@ from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView,Charg
 from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView
 from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files,BankUsersView,LoanCountByDate,CountSearchLogbyDate,CountFeebyDate
 from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddLCICSystemUser, SysUserTokenRefresh,LCICSystemUserDetailView, LCICSystemUserListView, BankListCreateView,BankDetailView, EDLProvinceDetailAPIView, FileElectricListAPIView, ElectricReportAPIView, UserGroupViewSet,UploadTrackingListAPIView,UploadDataAPIView,UploadTrackingDetailAPIView,InitializeTrackingAPIView, DebugAPIView,InitializeTestDataAPIView, TestRealUploadAPIView, InitializeDistrictsAPIView, ChargeReportMainView, ChargeReportDetailView,confirm_dispute_upload,edl_customer_search,water_customer_search,SearchLogReportMainView,SearchLogReportDetailView,ChargeReportSummaryView,WaterUploadDataAPIView
-from .views import UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView
+# from .views import UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView
+from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddLCICSystemUser, SysUserTokenRefresh,LCICSystemUserDetailView, LCICSystemUserListView, BankListCreateView,BankDetailView, EDLProvinceDetailAPIView, FileElectricListAPIView, ElectricReportAPIView, UserGroupViewSet,UploadTrackingListAPIView,UploadDataAPIView,UploadTrackingDetailAPIView,InitializeTrackingAPIView, DebugAPIView,InitializeTestDataAPIView, TestRealUploadAPIView, InitializeDistrictsAPIView, ChargeReportMainView, ChargeReportDetailView,confirm_dispute_upload,edl_customer_search,water_customer_search,SearchLogReportMainView,SearchLogReportDetailView,ChargeReportSummaryView,WaterUploadDataAPIView, ReorderSidebarView,SearchIndividualBankView
 
 
 from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView,process_dispute_notification, process_multiple_disputes,process_multiple_disputescollateral
@@ -100,25 +101,6 @@ water_supply_patterns = [
     # Debug and Testing endpoints
     # path('debug/', views.WaterDebugAPIView.as_view(), name='water-debug'),
     # path('test-upload/', views.WaterTestUploadAPIView.as_view(), name='water-test-upload'),
-    
-    
-    # #Step 1: Load Provinces
-    # path('provinces/', views.WaterProvinceListAPIView.as_view(), name='water-province-list'),
-    
-    # # Step 2: Load Districts for Selected Province  
-    # path('districts/', views.WaterDistrictListAPIView.as_view(), name='water-district-list'),
-    
-    # # Step 3: Initialize Districts Tracking for Province + Month
-    # path('initialize-districts/', views.WaterInitializeDistrictsAPIView.as_view(), name='water-initialize-districts'),
-    
-    # # Step 4: Upload Data for Individual District (Fetches from API → Inserts into Utility_Bill)
-    # path('upload-data/', views.WaterUploadDataAPIView.as_view(), name='water-upload-data'),
-    
-    # # Step 5: Monitor Progress - Get Tracking Status for Province
-    # path('upload-tracking/', views.WaterUploadTrackingListAPIView.as_view(), name='water-upload-tracking-list'),
-    
-    # # Step 6: Monitor Progress - Get Detailed Logs  
-    # path('upload-tracking/<int:tracking_id>/', views.WaterUploadTrackingDetailAPIView.as_view(), name='water-upload-tracking-detail'),
 ]
 
 # Water Supply Summary URL patterns
@@ -193,6 +175,9 @@ urlpatterns = [
    path('sidebar-items/', SidebarItemListView.as_view(), name='sidebar-items'),
    path('sidebar-sub-items/', SidebarSubItemListView.as_view(), name='sidebar-sub-items'),
    path('assign-role/', AssignRoleView.as_view(), name='assign-role'),
+   path('reorder/', ReorderSidebarView.as_view(), name='reorder-sidebar'),
+   path('api/searchcollateral/', SearchIndividualBankView.as_view(), name='search'),
+
    path('userList/', ManageUserView.as_view(), name='mangeuser'),
    path('create_user/',UserManagementView.as_view(), name='create_user'),
    path('api2/', include(router.urls)),
@@ -270,15 +255,15 @@ urlpatterns = [
   #  path('upload_files/', upload_files, name='upload_files'),
    
       #tik
-    path('user/', UserListAPIView.as_view(), name='user-list'),
-    path('user/<int:uid>/', UserDetailAPIView.as_view(), name='user-detail'),
-    path('usergroup_list/', UserGroupList.as_view(), name='usergroup-list'),
-    path('member_list/', MemberListView.as_view(),name='memberinfo'),
-    path('member_list/<int:pk>/', MemberDetailView.as_view(), name='member_detail'),
-    path('membertypes/', MemberTypeListView.as_view(), name='membertype-list'),
-    path('villageinfos/', VillageInfoListView.as_view(), name='villageinfo-list'),
-    path('districtinfos/', DistrictInfoListView.as_view(), name='districtinfo-list'),
-    path('provinfos/', ProvInfoListView.as_view(), name='provinfo-list'),
+    # path('user/', UserListAPIView.as_view(), name='user-list'),
+    # path('user/<int:uid>/', UserDetailAPIView.as_view(), name='user-detail'),
+    # path('usergroup_list/', UserGroupList.as_view(), name='usergroup-list'),
+    # path('member_list/', MemberListView.as_view(),name='memberinfo'),
+    # path('member_list/<int:pk>/', MemberDetailView.as_view(), name='member_detail'),
+    # path('membertypes/', MemberTypeListView.as_view(), name='membertype-list'),
+    # path('villageinfos/', VillageInfoListView.as_view(), name='villageinfo-list'),
+    # path('districtinfos/', DistrictInfoListView.as_view(), name='districtinfo-list'),
+    # path('provinfos/', ProvInfoListView.as_view(), name='provinfo-list'),
   
 #    path('api/upload_files1', FileUploadView.as_view(), name='file-upload'),
     path('api/search-results/bulk-update-status/', 
@@ -293,6 +278,7 @@ urlpatterns = [
     path('api/dispute-loans/', views.get_dispute_loans, name='get_dispute_loans'),
     path('api/dispute-collateral/', views.get_dispute_collateral, name='get_dispute_collateral'),
     path('api/disputes/confirmc/', views.confirm_dispute_colatteral, name='confirm_dispute_colatteral'),
+    # path('api/search-individual/', views.search_individual_bank_advanced, name='search_individual_bank_advanced'),
 
     path('api/productinfo3/', get_data3, name='get_data_by_id_file_and_period'),
     path('api/productinfoc3/', get_data4, name='get_data_by_id_file_and_period'),
@@ -422,7 +408,7 @@ urlpatterns = [
     path('edl-summary/export/', views.EDLExportSummaryAPIView.as_view(), name='edl-summary-export'),
     path('overview/', views.EDLSummaryOverviewAPIView.as_view(), name='overview'),
     
-    path('water/', include(water_supply_patterns)),
+    path('water-supply/', include(water_supply_patterns)),
     path('water-summary/', include(water_summary_patterns)),
     
     # API Mai Sumlup LCIC -----------------

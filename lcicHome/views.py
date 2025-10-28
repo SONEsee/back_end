@@ -13721,72 +13721,258 @@ class memberinfolistView(APIView):
         serializer = MemberInfoSerializer(member_info, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-from .serializers import SidebarItemSerializer
-from .models import SidebarItem, Role
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from rest_framework import status
+# from django.db.models import Prefetch
+# from .serializers import SidebarItemSerializer, RoleSerializer, SidebarSubItemSerializer
+# from .models import SidebarItem, Role, SidebarSubItem  # Added SidebarSubItem import if needed
+
+
+# class SidebarItemsView(APIView):
+#     def get(self, request):
+#         # Get the user's GID from the X-User-Roles header
+#         user_gid = request.headers.get('X-User-Roles')
+#         print("USER_GID: ", user_gid)
+            
+#         if not user_gid:
+#             return Response({'detail': 'User GID not provided.'}, status=status.HTTP_400_BAD_REQUEST)
+
+#         try:
+#             # Filter the roles by the provided GID
+#             roles = Role.objects.filter(id=user_gid)
+#             if not roles.exists():
+#                 return Response({'detail': 'Invalid GID provided.'}, status=status.HTTP_404_NOT_FOUND)
+            
+#             print("GID from Vue: ", roles)
+
+#             # Get direction for ordering (ASC default, DESC if ?direction=desc)
+#             direction = request.query_params.get('direction', 'asc').lower()
+#             order_by = 'order' if direction == 'asc' else '-order'
+
+#             # Filter and order sidebar items by roles and order
+#             # Prefetch filtered and ordered sub-items for efficiency
+#             filtered_sub_qs = SidebarSubItem.objects.filter(roles__in=roles).order_by(order_by)
+#             sidebar_items = SidebarItem.objects.filter(roles__in=roles).distinct().order_by(order_by).prefetch_related(
+#                 Prefetch('sub_items', queryset=filtered_sub_qs, to_attr='filtered_sub_items')
+#             )
+            
+#             # Serialize the sidebar items (sub_items will be filtered via source='filtered_sub_items')
+#             serializer = SidebarItemSerializer(sidebar_items, many=True)
+#             return Response(serializer.data, status=status.HTTP_200_OK)
+
+#         except Exception as e:
+#             return Response({'detail': f'Error occurred: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# class RoleListView(APIView):
+#     def get(self, request):
+#         roles = Role.objects.all()
+#         serializer = RoleSerializer(roles, many=True)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+
+# class SidebarItemListView(APIView):
+#     def get(self, request):
+#         # Order by 'order' instead of 'id' for consistency
+#         sidebar_items = SidebarItem.objects.all().order_by('order')
+#         serializer = SidebarItemSerializer(sidebar_items, many=True)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+
+# class SidebarSubItemListView(APIView):
+#     def get(self, request):
+#         # Order by 'order' for consistency
+#         sidebar_sub_items = SidebarSubItem.objects.all().order_by('order')
+#         serializer = SidebarSubItemSerializer(sidebar_sub_items, many=True)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
+
+# class SidebarCreateView(APIView):
+#     def post(self, request):
+#         # Determine whether creating SidebarItem or SidebarSubItem
+#         item_type = request.data.get('item_type')
+
+#         if item_type == 'sidebar_item':
+#             serializer = SidebarItemSerializer(data=request.data)
+#         elif item_type == 'sidebar_sub_item':
+#             serializer = SidebarSubItemSerializer(data=request.data)
+#         else:
+#             return Response({"error": "Invalid item_type specified."}, status=status.HTTP_400_BAD_REQUEST)
+
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response(serializer.data, status=status.HTTP_201_CREATED)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+#     def put(self, request, pk):
+#         """Update SidebarItem or SidebarSubItem by ID"""
+#         item_type = request.data.get('item_type')
+
+#         if item_type == 'sidebar_item':
+#             try:
+#                 instance = SidebarItem.objects.get(pk=pk)
+#             except SidebarItem.DoesNotExist:
+#                 return Response({"error": "SidebarItem not found."}, status=status.HTTP_404_NOT_FOUND)
+#             serializer = SidebarItemSerializer(instance, data=request.data)
+        
+#         elif item_type == 'sidebar_sub_item':
+#             try:
+#                 instance = SidebarSubItem.objects.get(pk=pk)
+#             except SidebarSubItem.DoesNotExist:
+#                 return Response({"error": "SidebarSubItem not found."}, status=status.HTTP_404_NOT_FOUND)
+#             serializer = SidebarSubItemSerializer(instance, data=request.data)
+        
+#         else:
+#             return Response({"error": "Invalid item_type specified."}, status=status.HTTP_400_BAD_REQUEST)
+
+#         if serializer.is_valid():
+#             serializer.save()
+#             return Response(serializer.data, status=status.HTTP_200_OK)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+#     def delete(self, request, pk):
+#         """Delete SidebarItem or SidebarSubItem by ID"""
+#         item_type = request.query_params.get('item_type')
+
+#         if item_type == 'sidebar_item':
+#             try:
+#                 instance = SidebarItem.objects.get(pk=pk)
+#                 instance.delete()
+#                 return Response({"success": "SidebarItem deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+#             except SidebarItem.DoesNotExist:
+#                 return Response({"error": "SidebarItem not found."}, status=status.HTTP_404_NOT_FOUND)
+
+#         elif item_type == 'sidebar_sub_item':
+#             try:
+#                 instance = SidebarSubItem.objects.get(pk=pk)
+#                 instance.delete()
+#                 return Response({"success": "SidebarSubItem deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+#             except SidebarSubItem.DoesNotExist:
+#                 return Response({"error": "SidebarSubItem not found."}, status=status.HTTP_404_NOT_FOUND)
+
+#         return Response({"error": "Invalid item_type specified."}, status=status.HTTP_400_BAD_REQUEST) 
+
+# class AssignRoleView(APIView):
+#     def post(self, request):
+#         role_id = request.data.get('role_id')
+#         sidebar_item_ids = request.data.get('sidebar_items', [])
+#         sidebar_sub_item_ids = request.data.get('sidebar_sub_items', [])
+
+#         # Debugging log
+#         print(f"Received role_id: {role_id}, sidebar_item_ids: {sidebar_item_ids}, sidebar_sub_item_ids: {sidebar_sub_item_ids}")
+
+#         try:
+#             # Check if the role exists
+#             role = Role.objects.get(id=role_id)
+
+#             # Debugging log
+#             print(f"Found role: {role}")
+
+#             # Assign SidebarItems to the Role
+#             sidebar_items = SidebarItem.objects.filter(id__in=sidebar_item_ids)
+#             for item in sidebar_items:
+#                 item.roles.add(role)
+
+#             # Assign SidebarSubItems to the Role
+#             sidebar_sub_items = SidebarSubItem.objects.filter(id__in=sidebar_sub_item_ids)
+#             for sub_item in sidebar_sub_items:
+#                 sub_item.roles.add(role)
+
+#             return Response({"detail": "Role assigned successfully"}, status=status.HTTP_200_OK)
+
+#         except Role.DoesNotExist:
+#             # Log the error
+#             print(f"Role with id {role_id} does not exist.")
+#             return Response({"error": "Role not found"}, status=status.HTTP_404_NOT_FOUND)
+#         except Exception as e:
+#             print(f"Error: {e}")
+#             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db.models import Prefetch, Q
+from .serializers import SidebarItemSerializer, RoleSerializer, SidebarSubItemSerializer
+from .models import SidebarItem, Role, SidebarSubItem
 
 
 class SidebarItemsView(APIView):
+    """Get sidebar items filtered by user role with proper ordering"""
+    
     def get(self, request):
-        # Get the user's GID from the X-User-Roles header
         user_gid = request.headers.get('X-User-Roles')
-        print("USER_GID: ", user_gid)
             
         if not user_gid:
             return Response({'detail': 'User GID not provided.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Filter the roles by the provided GID
-            roles = Role.objects.filter(id=user_gid)
-            if not roles.exists():
+            role = Role.objects.filter(id=user_gid).first()
+            if not role:
                 return Response({'detail': 'Invalid GID provided.'}, status=status.HTTP_404_NOT_FOUND)
-            
-            print("GID from Vue: ", roles)
 
-            # Filter sidebar items by roles associated with the GID
-            sidebar_items = SidebarItem.objects.filter(roles__in=roles).distinct()
-            
-            # Optionally filter subitems here if needed
-            # sidebar_subitems = SidebarSubItem.objects.filter(roles__in=roles).distinct()
+            # Get ordering direction
+            direction = request.query_params.get('direction', 'asc').lower()
+            order_by = ['order', 'id'] if direction == 'asc' else ['-order', '-id']
 
-            # Serialize the sidebar items
-            serializer = SidebarItemSerializer(sidebar_items, many=True)
+            # Prefetch sub-items with proper ordering
+            filtered_sub_qs = SidebarSubItem.objects.filter(
+                roles=role,
+                is_active=True
+            ).order_by(*order_by)
+            
+            # Get main items with proper ordering
+            sidebar_items = SidebarItem.objects.filter(
+                roles=role,
+                is_active=True
+            ).prefetch_related(
+                Prefetch('sub_items', queryset=filtered_sub_qs, to_attr='filtered_sub_items')
+            ).order_by(*order_by)
+            
+            serializer = SidebarItemSerializer(sidebar_items, many=True, context={'request': request})
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({'detail': f'Error occurred: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+            return Response({'detail': f'Error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-from .serializers import RoleSerializer, SidebarItemSerializer, SidebarSubItemSerializer
 class RoleListView(APIView):
+    """List all roles"""
+    
     def get(self, request):
-        roles = Role.objects.all()
+        roles = Role.objects.all().order_by('name')
         serializer = RoleSerializer(roles, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+
 class SidebarItemListView(APIView):
+    """List all sidebar items with proper ordering"""
+    
     def get(self, request):
-        sidebar_items = SidebarItem.objects.all().order_by('id')
+        sidebar_items = SidebarItem.objects.all().order_by('order', 'id')
         serializer = SidebarItemSerializer(sidebar_items, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+
 class SidebarSubItemListView(APIView):
+    """List all sidebar sub-items with proper ordering"""
+    
     def get(self, request):
-        sidebar_sub_items = SidebarSubItem.objects.all()
+        sidebar_sub_items = SidebarSubItem.objects.select_related('parent').all().order_by('parent__order', 'order', 'id')
         serializer = SidebarSubItemSerializer(sidebar_sub_items, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-class SidebarCreateView(APIView):
-    def post(self, request):
-        # Determine whether creating SidebarItem or SidebarSubItem
-        item_type = request.data.get('item_type')
 
+class SidebarCreateView(APIView):
+    """Create, update, or delete sidebar items/sub-items"""
+    
+    def post(self, request):
+        item_type = request.data.get('item_type')
+        
         if item_type == 'sidebar_item':
             serializer = SidebarItemSerializer(data=request.data)
         elif item_type == 'sidebar_sub_item':
             serializer = SidebarSubItemSerializer(data=request.data)
         else:
-            return Response({"error": "Invalid item_type specified."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Invalid item_type. Use 'sidebar_item' or 'sidebar_sub_item'."}, 
+                          status=status.HTTP_400_BAD_REQUEST)
 
         if serializer.is_valid():
             serializer.save()
@@ -13794,87 +13980,101 @@ class SidebarCreateView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def put(self, request, pk):
-        """Update SidebarItem or SidebarSubItem by ID"""
         item_type = request.data.get('item_type')
 
-        if item_type == 'sidebar_item':
-            try:
+        try:
+            if item_type == 'sidebar_item':
                 instance = SidebarItem.objects.get(pk=pk)
-            except SidebarItem.DoesNotExist:
-                return Response({"error": "SidebarItem not found."}, status=status.HTTP_404_NOT_FOUND)
-            serializer = SidebarItemSerializer(instance, data=request.data)
-        
-        elif item_type == 'sidebar_sub_item':
-            try:
+                serializer = SidebarItemSerializer(instance, data=request.data, partial=True)
+            elif item_type == 'sidebar_sub_item':
                 instance = SidebarSubItem.objects.get(pk=pk)
-            except SidebarSubItem.DoesNotExist:
-                return Response({"error": "SidebarSubItem not found."}, status=status.HTTP_404_NOT_FOUND)
-            serializer = SidebarSubItemSerializer(instance, data=request.data)
-        
-        else:
-            return Response({"error": "Invalid item_type specified."}, status=status.HTTP_400_BAD_REQUEST)
+                serializer = SidebarSubItemSerializer(instance, data=request.data, partial=True)
+            else:
+                return Response({"error": "Invalid item_type."}, status=status.HTTP_400_BAD_REQUEST)
 
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+        except (SidebarItem.DoesNotExist, SidebarSubItem.DoesNotExist):
+            return Response({"error": "Item not found."}, status=status.HTTP_404_NOT_FOUND)
 
     def delete(self, request, pk):
-        """Delete SidebarItem or SidebarSubItem by ID"""
         item_type = request.query_params.get('item_type')
 
-        if item_type == 'sidebar_item':
-            try:
+        try:
+            if item_type == 'sidebar_item':
                 instance = SidebarItem.objects.get(pk=pk)
-                instance.delete()
-                return Response({"success": "SidebarItem deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
-            except SidebarItem.DoesNotExist:
-                return Response({"error": "SidebarItem not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        elif item_type == 'sidebar_sub_item':
-            try:
+            elif item_type == 'sidebar_sub_item':
                 instance = SidebarSubItem.objects.get(pk=pk)
-                instance.delete()
-                return Response({"success": "SidebarSubItem deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
-            except SidebarSubItem.DoesNotExist:
-                return Response({"error": "SidebarSubItem not found."}, status=status.HTTP_404_NOT_FOUND)
+            else:
+                return Response({"error": "Invalid item_type."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            instance.delete()
+            return Response({"success": "Item deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+            
+        except (SidebarItem.DoesNotExist, SidebarSubItem.DoesNotExist):
+            return Response({"error": "Item not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        return Response({"error": "Invalid item_type specified."}, status=status.HTTP_400_BAD_REQUEST) 
 
 class AssignRoleView(APIView):
+    """Assign roles to sidebar items and sub-items"""
+    
     def post(self, request):
         role_id = request.data.get('role_id')
         sidebar_item_ids = request.data.get('sidebar_items', [])
         sidebar_sub_item_ids = request.data.get('sidebar_sub_items', [])
 
-        # Debugging log
-        print(f"Received role_id: {role_id}, sidebar_item_ids: {sidebar_item_ids}, sidebar_sub_item_ids: {sidebar_sub_item_ids}")
-
         try:
-            # Check if the role exists
             role = Role.objects.get(id=role_id)
 
-            # Debugging log
-            print(f"Found role: {role}")
+            # Clear existing assignments if replace_existing is True
+            if request.data.get('replace_existing', False):
+                role.sidebar_items.clear()
+                SidebarSubItem.objects.filter(roles=role).update(roles=None)
 
-            # Assign SidebarItems to the Role
-            sidebar_items = SidebarItem.objects.filter(id__in=sidebar_item_ids)
-            for item in sidebar_items:
-                item.roles.add(role)
+            # Assign items
+            if sidebar_item_ids:
+                sidebar_items = SidebarItem.objects.filter(id__in=sidebar_item_ids)
+                role.sidebar_items.add(*sidebar_items)
 
-            # Assign SidebarSubItems to the Role
-            sidebar_sub_items = SidebarSubItem.objects.filter(id__in=sidebar_sub_item_ids)
-            for sub_item in sidebar_sub_items:
-                sub_item.roles.add(role)
+            # Assign sub-items
+            if sidebar_sub_item_ids:
+                sidebar_sub_items = SidebarSubItem.objects.filter(id__in=sidebar_sub_item_ids)
+                for sub_item in sidebar_sub_items:
+                    sub_item.roles.add(role)
 
             return Response({"detail": "Role assigned successfully"}, status=status.HTTP_200_OK)
 
         except Role.DoesNotExist:
-            # Log the error
-            print(f"Role with id {role_id} does not exist.")
             return Response({"error": "Role not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            print(f"Error: {e}")
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ReorderSidebarView(APIView):
+    """Reorder sidebar items efficiently"""
+    
+    def post(self, request):
+        item_type = request.data.get('item_type')
+        items_order = request.data.get('items_order', [])  # List of {id: x, order: y}
+        
+        try:
+            if item_type == 'sidebar_item':
+                Model = SidebarItem
+            elif item_type == 'sidebar_sub_item':
+                Model = SidebarSubItem
+            else:
+                return Response({"error": "Invalid item_type."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Bulk update orders
+            for item_data in items_order:
+                Model.objects.filter(id=item_data['id']).update(order=item_data['order'])
+            
+            return Response({"detail": "Items reordered successfully"}, status=status.HTTP_200_OK)
+            
+        except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
     
@@ -22192,1914 +22392,6 @@ class EDLExportSummaryAPIView(APIView):
             logger.error(f"Error in export summary: {str(e)}")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-        
-# water supply data load tracking views ----------------------------------
-import requests
-import json
-from django.utils import timezone
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from django.db.models import Q, Count, Sum, Avg
-from django.core.paginator import Paginator
-from datetime import datetime
-from django.conf import settings
-import logging
-from django.db import transaction
-from utility.models import WaterUploadDataTracking, WaterUploadLog
-from utility.models import Utility_Bill
-from .serializers import (
-    WaterUploadTrackingSerializer, 
-    WaterUploadTrackingDetailSerializer,
-)
-import threading
-from django.http import JsonResponse
-
-logger = logging.getLogger(__name__)
-
-class WaterUploadTrackingListAPIView(APIView):
-    """List water supply tracking records for specific month"""
-    
-    def get(self, request):
-        try:        
-            month = request.GET.get('month', timezone.now().strftime('%m%Y'))
-            
-            # Validate month format (MMYYYY)
-            try:
-                datetime.strptime(month, '%m%Y')
-            except ValueError:
-                return Response(
-                    {"error": "Invalid month format. Use MMYYYY (e.g., 122024)"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Get tracking records for the specific month
-            queryset = WaterUploadDataTracking.objects.filter(
-                upload_month=month
-            ).order_by('-created_at')
-            
-            # Serialize data
-            serialized_data = []
-            for item in queryset:
-                data = WaterUploadTrackingSerializer(item).data
-                data['success_rate_formatted'] = f"{item.success_rates:.1f}" if item.success_rates else "0.0"
-                data['formatted_size'] = self.format_file_size(item.data_size_mb)
-                data['upload_duration'] = self.format_duration(item.upload_duration) if item.upload_duration else None
-                serialized_data.append(data)
-            
-            # Get statistics
-            stats = self.get_statistics(month)
-            
-            return Response({
-                'data': serialized_data,
-                'statistics': stats
-            }, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            logger.error(f"Failed to fetch water tracking data: {str(e)}")
-            return Response(
-                {"error": "Failed to fetch water tracking data"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-    
-    def get_statistics(self, month):
-        """Calculate statistics for the dashboard"""
-        try:
-            queryset = WaterUploadDataTracking.objects.filter(upload_month=month)
-            
-            total_count = queryset.count()
-            if total_count == 0:
-                return {
-                    'total_uploads': 0,
-                    'status_breakdown': {},
-                    'total_data_size_mb': 0.0,
-                    'total_records': 0
-                }
-            
-            # Status breakdown
-            status_data = queryset.values('status').annotate(count=Count('id'))
-            status_counts = {item['status']: item['count'] for item in status_data}
-            
-            # Aggregated data
-            aggregated = queryset.aggregate(
-                total_size=Sum('data_size_mb'),
-                total_records=Sum('total_records')
-            )
-            
-            return {
-                'total_uploads': total_count,
-                'status_breakdown': status_counts,
-                'total_data_size_mb': round(float(aggregated['total_size'] or 0), 2),
-                'total_records': int(aggregated['total_records'] or 0)
-            }
-            
-        except Exception as e:
-            logger.error(f"Error in get_statistics: {str(e)}")
-            return {
-                'total_uploads': 0,
-                'status_breakdown': {},
-                'total_data_size_mb': 0.0,
-                'total_records': 0
-            }
-    
-    def format_file_size(self, size_mb):
-        """Format file size for display"""
-        if not size_mb or size_mb < 1:
-            return f"{(size_mb or 0) * 1024:.1f} KB"
-        elif size_mb < 1024:
-            return f"{size_mb:.1f} MB"
-        else:
-            return f"{size_mb / 1024:.1f} GB"
-    
-    def format_duration(self, seconds):
-        """Format duration for display"""
-        if not seconds:
-            return None
-        if seconds < 60:
-            return f"{seconds:.0f}s"
-        elif seconds < 3600:
-            return f"{seconds / 60:.1f}m"
-        else:
-            return f"{seconds / 3600:.1f}h"
-
-class InitializeWaterTrackingAPIView(APIView):
-    """Initialize water supply tracking record for a specific month"""
-    
-    def post(self, request):
-        try:
-            month = request.data.get('month', timezone.now().strftime('%m%Y'))
-            username = request.data.get('username', 'system')
-            
-            if not month:
-                return Response(
-                    {"error": "month is required"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            if not username:
-                return Response(
-                    {"error": "username is required"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Validate month format (MMYYYY)
-            try:
-                datetime.strptime(month, '%m%Y')
-            except ValueError:
-                return Response(
-                    {"error": "Invalid month format. Use MMYYYY (e.g., 122024)"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Create tracking record for the month
-            tracking, created = WaterUploadDataTracking.objects.get_or_create(
-                upload_month=month,
-                defaults={
-                    'status': 'pending',
-                    'user_upload': username,
-                    'description': f'Water supply data upload for {month}'
-                }
-            )
-            
-            action = 'created' if created else 'already exists'
-            
-            return Response({
-                'message': f'Water supply tracking for {month} {action}',
-                'tracking_id': tracking.id,
-                'created': created
-            }, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            logger.error(f"Water tracking initialization failed: {str(e)}")
-            return Response({
-                'error': f'Water tracking initialization failed: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-# class WaterUploadDataAPIView(APIView):
-#     """Handle water supply data upload with background processing for large datasets"""
-    
-#     def post(self, request):
-#         try:
-#             # Extract parameters
-#             month = request.data.get('month')
-#             username = request.data.get('username', 'system')
-#             api_token = request.data.get('api_token')  # Optional - we use fixed token
-
-#             # Fixed API token from supplier
-#             api_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbiI6IlUyRnNkR1ZrWDErdE9ja29vVDV0NXdqWlBqTzhVc0V1ZnR2QytPUXp3Z2ljWkFPdkhNUkNqdzh0NUhOSENBRVZsVXVNWHBrc1RudUFxaUE3R0VtVExRSTZMaWNTVUlaN1BMb0xGOVczMWtjWnFoQmxFUThHVUFwSFpNS0NDVjN1RURhWDJSSjFwZDNqaFRGc2lmdUF3Zz09IiwiaWF0IjoxNzA5MDEwNjU0fQ.mhmfUuasPQnAtxTQmwIyofClMuOAKVKZloNskpG9fHo'
-                        
-#             if not month:
-#                 return Response({
-#                     'error': 'Missing required parameter: month'
-#                 }, status=status.HTTP_400_BAD_REQUEST)
-            
-#             # Validate month format (MMYYYY)
-#             try:
-#                 datetime.strptime(month, '%m%Y')
-#             except ValueError:
-#                 return Response(
-#                     {"error": "Invalid month format. Use MMYYYY (e.g., 122024)"},
-#                     status=status.HTTP_400_BAD_REQUEST
-#                 )
-            
-#             # Get tracking record
-#             try:
-#                 tracking = WaterUploadDataTracking.objects.get(upload_month=month)
-#             except WaterUploadDataTracking.DoesNotExist:
-#                 return Response({
-#                     'error': 'Tracking record not found. Please initialize tracking first.'
-#                 }, status=status.HTTP_404_NOT_FOUND)
-            
-#             # Check if already completed
-#             if tracking.status == 'completed':
-#                 return Response({
-#                     'message': 'Water supply data already uploaded successfully',
-#                     'tracking_id': tracking.id,
-#                     'total_records': tracking.total_records,
-#                     'processed_records': tracking.processed_records
-#                 }, status=status.HTTP_200_OK)
-            
-#             # Check if already in progress
-#             if tracking.status == 'in_progress':
-#                 return Response({
-#                     'message': 'Water supply data upload is already in progress',
-#                     'tracking_id': tracking.id,
-#                     'status': tracking.status
-#                 }, status=status.HTTP_200_OK)
-            
-#             # Update status to in_progress
-#             tracking.status = 'in_progress'
-#             tracking.upload_started = timezone.now()
-#             tracking.user_upload = username
-#             tracking.error_message = None  # Clear any previous errors
-#             tracking.save()
-            
-#             # Log start
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO',
-#                 message=f'Water supply upload started by {username} for month {month}'
-#             )
-            
-#             # Start background processing for large datasets
-#             thread = threading.Thread(
-#                 target=self.process_water_data_background,
-#                 args=(tracking.id, api_token)
-#             )
-#             thread.daemon = True
-#             thread.start()
-            
-#             return Response({
-#                 'message': 'Water supply data upload started in background',
-#                 'tracking_id': tracking.id,
-#                 'status': 'in_progress',
-#                 'note': 'Large dataset processing initiated. Check tracking status for updates.'
-#             }, status=status.HTTP_200_OK)
-            
-#         except Exception as e:
-#             logger.error(f"Water upload failed: {str(e)}")
-#             return Response({
-#                 'error': f'Water upload failed: {str(e)}'
-#             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-#     def process_water_data_background(self, tracking_id, api_token):
-#         """Background processing for large water supply datasets"""
-#         try:
-#             tracking = WaterUploadDataTracking.objects.get(id=tracking_id)
-            
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO',
-#                 message='Background processing started for water supply data'
-#             )
-            
-#             # Fetch and process data with optimized handling
-#             result = self.fetch_and_process_water_data_optimized(tracking, api_token)
-            
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO',
-#                 message=f'Background processing completed: {result.get("message", "Unknown result")}'
-#             )
-            
-#         except Exception as e:
-#             logger.error(f"Background water processing failed: {str(e)}")
-#             try:
-#                 tracking = WaterUploadDataTracking.objects.get(id=tracking_id)
-#                 tracking.status = 'failed'
-#                 tracking.error_message = f'Background processing failed: {str(e)}'
-#                 tracking.upload_completed = timezone.now()
-#                 tracking.save()
-                
-#                 WaterUploadLog.objects.create(
-#                     tracking=tracking,
-#                     log_level='ERROR',
-#                     message=f'Background processing failed: {str(e)}'
-#                 )
-#             except Exception as save_error:
-#                 logger.error(f"Failed to save error state: {str(save_error)}")
-
-
-#     # Updated fetch_and_process_water_data_optimized method --- > to ni br hen
-#     def fetch_and_process_water_data_optimized(self, tracking, api_token):
-        
-#         """Optimized fetch for large water supply datasets with customer data"""
-#         try:
-#             water_api_base = getattr(settings, 'WATER_API_BASE_URL', 'http://202.137.141.244:3000')
-            
-#             # Water Bill API endpoint
-#             bill_api_url = f"{water_api_base}/v3/api/loans/allbillmonth/{tracking.upload_month}"
-            
-#             # Customer API endpoint
-#             customer_api_url = f"{water_api_base}/v3/api/loans/newconnection/{tracking.upload_month}"
-            
-#             headers = {
-#                 'Auth': api_token,
-#                 'Content-Type': 'application/json',
-#                 'Accept': 'application/json',
-#                 'Connection': 'close'
-#             }
-            
-#             # ========== Fetch Bill Data ==========
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO',
-#                 message=f'Fetching water bill data from: {bill_api_url}'
-#             )
-            
-#             bill_response = requests.get(
-#                 bill_api_url, 
-#                 headers=headers, 
-#                 timeout=600,
-#                 stream=True
-#             )
-            
-#             tracking.api_response_code = bill_response.status_code
-#             tracking.save()
-            
-#             if bill_response.status_code != 200:
-#                 error_msg = f'Water Bill API failed with status {bill_response.status_code}'
-#                 try:
-#                     error_content = bill_response.text[:1000]
-#                     error_msg += f': {error_content}'
-#                 except:
-#                     pass
-#                 raise Exception(error_msg)
-            
-#             # Process bill response
-#             content = bill_response.content
-#             bill_response.close()
-            
-#             content_size_mb = len(content) / (1024 * 1024)
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO',
-#                 message=f'Received {content_size_mb:.2f} MB of bill data'
-#             )
-            
-#             try:
-#                 bill_data = json.loads(content.decode('utf-8'))
-#             except json.JSONDecodeError as e:
-#                 raise Exception(f'Invalid JSON response from Water Bill API: {str(e)}')
-            
-#             # Extract bill records
-#             bill_records = self.extract_water_records(bill_data, tracking, 'bill')
-            
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO',
-#                 message=f'Extracted {len(bill_records)} bill records'
-#             )
-            
-#             # ========== Fetch Customer Data ==========
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO',
-#                 message=f'Fetching water customer data from: {customer_api_url}'
-#             )
-            
-#             customer_records = []
-#             customer_error = None
-            
-#             try:
-#                 customer_response = requests.get(
-#                     customer_api_url,
-#                     headers=headers,
-#                     timeout=600,
-#                     stream=True
-#                 )
-                
-#                 if customer_response.status_code != 200:
-#                     customer_error = f'Customer API returned status {customer_response.status_code}'
-#                     WaterUploadLog.objects.create(
-#                         tracking=tracking,
-#                         log_level='WARNING',
-#                         message=customer_error
-#                     )
-#                 else:
-#                     customer_content = customer_response.content
-#                     customer_response.close()
-                    
-#                     customer_size_mb = len(customer_content) / (1024 * 1024)
-#                     WaterUploadLog.objects.create(
-#                         tracking=tracking,
-#                         log_level='INFO',
-#                         message=f'Received {customer_size_mb:.2f} MB of customer data'
-#                     )
-                    
-#                     try:
-#                         customer_data = json.loads(customer_content.decode('utf-8'))
-#                         customer_records = self.extract_water_records(customer_data, tracking, 'customer')
-                        
-#                         WaterUploadLog.objects.create(
-#                             tracking=tracking,
-#                             log_level='INFO',
-#                             message=f'Extracted {len(customer_records)} customer records'
-#                         )
-#                     except json.JSONDecodeError as e:
-#                         customer_error = f'Invalid JSON from Customer API: {str(e)}'
-#                         WaterUploadLog.objects.create(
-#                             tracking=tracking,
-#                             log_level='ERROR',
-#                             message=customer_error
-#                         )
-            
-#             except requests.exceptions.Timeout:
-#                 customer_error = 'Customer API request timed out after 10 minutes'
-#                 WaterUploadLog.objects.create(
-#                     tracking=tracking,
-#                     log_level='ERROR',
-#                     message=customer_error
-#                 )
-            
-#             except requests.exceptions.RequestException as e:
-#                 customer_error = f'Customer API request failed: {str(e)}'
-#                 WaterUploadLog.objects.create(
-#                     tracking=tracking,
-#                     log_level='ERROR',
-#                     message=customer_error
-#                 )
-            
-#             except Exception as e:
-#                 customer_error = f'Unexpected error fetching customer data: {str(e)}'
-#                 WaterUploadLog.objects.create(
-#                     tracking=tracking,
-#                     log_level='ERROR',
-#                     message=customer_error
-#                 )
-            
-#             # ========== Process Data ==========
-#             bill_processed = 0
-#             bill_failed = 0
-#             customer_processed = 0
-#             customer_failed = 0
-            
-#             # Process bill records
-#             if bill_records:
-#                 WaterUploadLog.objects.create(
-#                     tracking=tracking,
-#                     log_level='INFO',
-#                     message=f'Processing {len(bill_records)} bill records'
-#                 )
-#                 bill_processed, bill_failed = self.insert_water_bill_data_optimized(
-#                     bill_records, tracking
-#                 )
-            
-#             # Process customer records
-#             if customer_records:
-#                 WaterUploadLog.objects.create(
-#                     tracking=tracking,
-#                     log_level='INFO',
-#                     message=f'Processing {len(customer_records)} customer records'
-#                 )
-#                 customer_processed, customer_failed = self.insert_water_customer_info_data(
-#                     customer_records, tracking
-#                 )
-#             elif customer_error:
-#                 WaterUploadLog.objects.create(
-#                     tracking=tracking,
-#                     log_level='WARNING',
-#                     message=f'Skipping customer data processing: {customer_error}'
-#                 )
-            
-#             # Calculate totals
-#             total_records = len(bill_records) + len(customer_records)
-#             total_processed = bill_processed + customer_processed
-#             total_failed = bill_failed + customer_failed
-            
-#             # Determine status
-#             if total_failed == 0 and not customer_error:
-#                 final_status = 'completed'
-#             elif bill_processed > 0 and customer_error:
-#                 final_status = 'partial'
-#             elif total_failed > 0:
-#                 final_status = 'partial'
-#             else:
-#                 final_status = 'failed'
-            
-#             # Update tracking
-#             tracking.status = final_status
-#             tracking.upload_completed = timezone.now()
-#             tracking.total_records = total_records
-#             tracking.processed_records = total_processed
-#             tracking.failed_records = total_failed
-#             tracking.data_size_mb = round(content_size_mb, 2)
-#             tracking.success_rates = (total_processed / total_records * 100) if total_records > 0 else 0
-#             tracking.save()
-            
-#             # Calculate duration
-#             duration = None
-#             if tracking.upload_started and tracking.upload_completed:
-#                 duration = (tracking.upload_completed - tracking.upload_started).total_seconds()
-            
-#             message = f'Water upload completed - Bills: {bill_processed}/{len(bill_records)}, Customers: {customer_processed}/{len(customer_records)}'
-#             if customer_error:
-#                 message += f' (Customer API Error: {customer_error})'
-            
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO' if final_status == 'completed' else 'WARNING',
-#                 message=message
-#             )
-            
-#             return {
-#                 'message': 'Water supply data upload completed' + (' with warnings' if customer_error else ' successfully'),
-#                 'tracking_id': tracking.id,
-#                 'status': final_status,
-#                 'bill_records': {
-#                     'total': len(bill_records),
-#                     'processed': bill_processed,
-#                     'failed': bill_failed
-#                 },
-#                 'customer_records': {
-#                     'total': len(customer_records),
-#                     'processed': customer_processed,
-#                     'failed': customer_failed,
-#                     'error': customer_error
-#                 },
-#                 'data_size_mb': tracking.data_size_mb,
-#                 'success_rate': tracking.success_rates,
-#                 'upload_duration': duration
-#             }
-            
-#         except Exception as e:
-#             tracking.status = 'failed'
-#             tracking.error_message = str(e)
-#             tracking.upload_completed = timezone.now()
-#             tracking.save()
-            
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='ERROR',
-#                 message=f'Water supply processing failed: {str(e)}'
-#             )
-            
-#             return {
-#                 'error': f'Failed to process water supply data: {str(e)}',
-#                 'tracking_id': tracking.id,
-#                 'status': 'failed'
-#             }
-
-
-#     def extract_water_records(self, data, tracking, data_type):
-#         """Extract records from water supply API response"""
-#         records = []
-        
-#         if isinstance(data, dict):
-#             # Log structure
-#             top_keys = list(data.keys())
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO',
-#                 message=f'{data_type.capitalize()} response keys: {top_keys}'
-#             )
-            
-#             # Find data recursively
-#             def find_data_recursively(obj, path="root"):
-#                 found_arrays = []
-#                 if isinstance(obj, list):
-#                     if len(obj) > 0:
-#                         found_arrays.append((path, len(obj), type(obj[0]).__name__))
-#                 elif isinstance(obj, dict):
-#                     for key, value in obj.items():
-#                         new_path = f"{path}.{key}"
-#                         if isinstance(value, list) and len(value) > 0:
-#                             found_arrays.append((new_path, len(value), type(value[0]).__name__))
-#                         elif isinstance(value, dict):
-#                             found_arrays.extend(find_data_recursively(value, new_path))
-#                 return found_arrays
-            
-#             found_arrays = find_data_recursively(data)
-            
-#             if found_arrays:
-#                 # Get largest array
-#                 largest_array = max(found_arrays, key=lambda x: x[1])
-#                 path, size, item_type = largest_array
-                
-#                 WaterUploadLog.objects.create(
-#                     tracking=tracking,
-#                     log_level='INFO',
-#                     message=f'Using array at {path} with {size} items'
-#                 )
-                
-#                 # Extract data
-#                 try:
-#                     current = data
-#                     for part in path.split('.')[1:]:
-#                         current = current[part]
-#                     if isinstance(current, list):
-#                         records = current
-#                 except (KeyError, TypeError, IndexError) as e:
-#                     WaterUploadLog.objects.create(
-#                         tracking=tracking,
-#                         log_level='ERROR',
-#                         message=f'Failed to extract from {path}: {str(e)}'
-#                     )
-            
-#             # Fallback to common keys
-#             if not records:
-#                 common_keys = ['data', 'records', 'bills', 'items', 'results', 'customers', 'newconnection']
-#                 for key in common_keys:
-#                     if key in data and isinstance(data[key], list):
-#                         records = data[key]
-#                         WaterUploadLog.objects.create(
-#                             tracking=tracking,
-#                             log_level='INFO',
-#                             message=f'Found data using key: {key}'
-#                         )
-#                         break
-        
-#         elif isinstance(data, list):
-#             records = data
-        
-#         return records
-
-
-#     def insert_water_customer_info_data(self, records, tracking):
-#         """Insert or update water customer records in w_customer_info table"""
-#         processed_count = 0
-#         failed_count = 0
-        
-#         try:
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO',
-#                 message=f'Starting to process {len(records)} water customer records'
-#             )
-            
-#             batch_size = 500
-#             for i in range(0, len(records), batch_size):
-#                 batch = records[i:i + batch_size]
-                
-#                 for j, item in enumerate(batch):
-#                     try:
-#                         if not isinstance(item, dict):
-#                             failed_count += 1
-#                             continue
-                        
-#                         def safe_get(key, default=''):
-#                             value = item.get(key, default)
-#                             return value if value is not None else default
-                        
-#                         customer_id = self.truncate(safe_get('CUSTOMER_ID', ''), 100)
-                        
-#                         if not customer_id:
-#                             failed_count += 1
-#                             continue
-                        
-#                         # Map API fields to model - adjust these based on actual API response
-#                         customer, created = w_customer_info.objects.update_or_create(
-#                             Customer_ID=customer_id,
-#                             defaults={
-#                                 'No': self.truncate(safe_get('NO', safe_get('INDEX_NO', '')), 100),
-#                                 'Company_name': self.truncate(safe_get('COMPANY_NAME', ''), 100),
-#                                 'Name': self.truncate(safe_get('NAME', safe_get('GIVEN_NAME', '')), 100),
-#                                 'Surname': self.truncate(safe_get('SURNAME', safe_get('FAMILY_NAME', '')), 100),
-#                                 'National_ID': self.truncate(safe_get('NATIONAL_ID', safe_get('ID_NO', '')), 100),
-#                                 'Passport': self.truncate(safe_get('PASSPORT', safe_get('PASSPORT_NO', '')), 100),
-#                                 'Address': self.truncate(safe_get('ADDRESS', safe_get('FORW_ADDRESS', '')), 100),
-#                                 'Dustrict_ID': self.truncate(safe_get('DISTRICT_ID', safe_get('DIS_ID', '')), 100),
-#                                 'Province_ID': self.truncate(safe_get('PROVINCE_ID', safe_get('PRO_ID', '')), 100),
-#                                 'Tel': self.truncate(safe_get('TEL', safe_get('TEL_NO', '')), 100),
-#                                 'Email': self.truncate(safe_get('EMAIL', safe_get('EMAIL_NO', '')), 100),
-#                                 'Cus_type': self.truncate(safe_get('CUSTOMER_TYPE', safe_get('SUPPLY_TYPE', '')), 100),
-#                                 'Regis_date': self.truncate(safe_get('REGISTRATION_DATE', safe_get('REGIT_D', '')), 100)
-#                             }
-#                         )
-                        
-#                         processed_count += 1
-                    
-#                     except Exception as e:
-#                         failed_count += 1
-#                         if failed_count <= 10:
-#                             WaterUploadLog.objects.create(
-#                                 tracking=tracking,
-#                                 log_level='ERROR',
-#                                 message=f'Failed to process customer record {i+j}: {str(e)}'
-#                             )
-#                         continue
-                
-#                 # Log progress
-#                 if (i + batch_size) % 1000 == 0 or (i + batch_size) >= len(records):
-#                     WaterUploadLog.objects.create(
-#                         tracking=tracking,
-#                         log_level='INFO',
-#                         message=f'Customer records progress: {min(i + batch_size, len(records))}/{len(records)}'
-#                     )
-            
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO',
-#                 message=f'Customer data processing completed. Processed: {processed_count}, Failed: {failed_count}'
-#             )
-            
-#             return processed_count, failed_count
-            
-#         except Exception as e:
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='ERROR',
-#                 message=f'Customer data insert failed: {str(e)}'
-#             )
-#             raise e
-        
-#     def insert_water_bill_data_optimized(self, records, tracking):
-#             """Optimized insert for large datasets"""
-#             processed_count = 0
-#             failed_count = 0
-#             batch_size = 500  # Smaller batches for memory efficiency
-#             total_items = len(records)
-            
-#             try:
-#                 WaterUploadLog.objects.create(
-#                     tracking=tracking,
-#                     log_level='INFO',
-#                     message=f'Starting optimized insert of {total_items} water supply records'
-#                 )
-                
-#                 batch = []
-                
-#                 for i, item in enumerate(records):
-#                     try:
-#                         # Progress logging for large datasets
-#                         if i > 0 and i % 5000 == 0:  # Log every 5000 records
-#                             progress_percent = (i / total_items) * 100
-#                             WaterUploadLog.objects.create(
-#                                 tracking=tracking,
-#                                 log_level='INFO',
-#                                 message=f'Processing progress: {i}/{total_items} ({progress_percent:.1f}%)'
-#                             )
-                        
-#                         # Validate record
-#                         if not isinstance(item, dict):
-#                             failed_count += 1
-#                             continue
-                        
-#                         # Helper function for safe value extraction
-#                         def safe_get(key, default=''):
-#                             value = item.get(key, default)
-#                             return value if value is not None else default
-                        
-#                         # Create bill record with your exact mapping
-#                         payment_id = safe_get('PAYMENT_ID', '')
-                        
-#                         bill = Utility_Bill(
-#                             Customer_ID=self.truncate(safe_get('CUSTOMER_ID', ''), 255),
-#                             InvoiceNo=self.truncate(safe_get('NO', ''), 255),
-#                             TypeOfPro=self.truncate(safe_get('SUPPLY_TYPE', ''), 100),
-#                             Outstanding=self.safe_decimal(safe_get('OUTSTANDING', 0)),
-#                             Basic_Tax=self.safe_decimal(safe_get('BASIC+TAX', 0)),
-#                             Bill_Amount=self.safe_decimal(safe_get('BILL_AMOUNT', 0)),
-#                             Debt_Amount=0.00,
-#                             Payment_ID=payment_id,
-#                             PaymentType=self.truncate(safe_get('PAY_TYPE', ''), 255),
-#                             Payment_Date=self.truncate(safe_get('PAYMENT_DATE', ''), 255),
-#                             InvoiceMonth=self.truncate(safe_get('BILL_OF_MONTH', ''), 50),
-#                             InvoiceDate=self.truncate(safe_get('DATE_OF_ISSUE', ''), 100),
-#                             DisID=self.truncate(safe_get('DIS_ID', ''), 100),
-#                             ProID=self.truncate(safe_get('PRO_ID', ''), 100),
-#                             UserID=tracking.user_upload
-#                         )
-                        
-#                         batch.append(bill)
-                        
-#                         # Process batch when full
-#                         if len(batch) >= batch_size:
-#                             with transaction.atomic():
-#                                 Utility_Bill.objects.bulk_create(batch, ignore_conflicts=True)
-#                             processed_count += len(batch)
-#                             batch = []
-                            
-#                             # Update progress in tracking
-#                             tracking.processed_records = processed_count
-#                             tracking.save()
-                    
-#                     except Exception as e:
-#                         failed_count += 1
-#                         # Log only first few errors to avoid log spam
-#                         if failed_count <= 10:
-#                             WaterUploadLog.objects.create(
-#                                 tracking=tracking,
-#                                 log_level='ERROR',
-#                                 message=f'Record {i} failed: {str(e)[:200]}'
-#                             )
-#                         continue
-                
-#                 # Process remaining records
-#                 if batch:
-#                     with transaction.atomic():
-#                         Utility_Bill.objects.bulk_create(batch, ignore_conflicts=True)
-#                     processed_count += len(batch)
-                
-#                 # Final update
-#                 tracking.processed_records = processed_count
-#                 tracking.save()
-                
-#                 WaterUploadLog.objects.create(
-#                     tracking=tracking,
-#                     log_level='INFO',
-#                     message=f'Insert completed. Processed: {processed_count}, Failed: {failed_count}'
-#                 )
-                
-#                 return processed_count, failed_count
-                
-#             except Exception as e:
-#                 WaterUploadLog.objects.create(
-#                     tracking=tracking,
-#                     log_level='ERROR',
-#                     message=f'Bulk insert failed: {str(e)}'
-#                 )
-#                 raise e
-        
-#     def truncate(self, value, max_length):
-#         """Safely truncate string to max length"""
-#         if value is None:
-#             return ''
-#         return str(value)[:max_length]
-
-#     def safe_decimal(self, value):
-#         """Safely convert to decimal"""
-#         try:
-#             return float(value or 0)
-#         except (ValueError, TypeError):
-#             return 0.0
-from django.db import models
-from django.utils import timezone
-import threading
-import json
-import requests
-from datetime import datetime
-import logging
-
-logger = logging.getLogger(__name__)
-
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from django.conf import settings
-from django.db import transaction
-
-# Assuming analogous models exist: water_province_code, w_district_code, w_customer_info, Utility_Bill
-# Adjust imports as needed
-
-class WaterUploadDataAPIView(APIView):
-    """Handle water supply data upload with background processing for large datasets"""
-    
-    def post(self, request):
-        try:
-            month = request.data.get('month')
-            username = request.data.get('username', 'system')
-
-            # Fixed supplier token
-            api_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbiI6IlUyRnNkR1ZrWDErdE9ja29vVDV0NXdqWlBqTzhVc0V1ZnR2QytPUXp3Z2ljWkFPdkhNUkNqdzh0NUhOSENBRVZsVXVNWHBrc1RudUFxaUE3R0VtVExRSTZMaWNTVUlaN1BMb0xGOVczMWtjWnFoQmxFUThHVUFwSFpNS0NDVjN1RURhWDJSSjFwZDNqaFRGc2lmdUF3Zz09IiwiaWF0IjoxNzA5MDEwNjU0fQ.mhmfUuasPQnAtxTQmwIyofClMuOAKVKZloNskpG9fHo'
-
-            # ✅ Only month is required
-            if not month:
-                return Response({'error': 'Missing required parameter: month'}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Validate month format
-            try:
-                datetime.strptime(month, '%m%Y')
-            except ValueError:
-                return Response(
-                    {"error": "Invalid month format. Use MMYYYY (e.g., 122024)"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Get or create tracking record (no province/district)
-            tracking, created = WaterUploadDataTracking.objects.get_or_create(
-                upload_month=month,
-                defaults={'status': 'pending', 'user_upload': username}
-            )
-
-            if tracking.status == 'completed':
-                return Response({
-                    'message': 'Water supply data already uploaded successfully',
-                    'tracking_id': tracking.id,
-                    'total_records': tracking.total_records,
-                    'processed_records': tracking.processed_records,
-                }, status=status.HTTP_200_OK)
-
-            if tracking.status == 'in_progress':
-                return Response({
-                    'message': 'Upload already in progress',
-                    'tracking_id': tracking.id,
-                    'status': tracking.status
-                }, status=status.HTTP_200_OK)
-
-            tracking.status = 'in_progress'
-            tracking.upload_started = timezone.now()
-            tracking.user_upload = username
-            tracking.error_message = None
-            tracking.save()
-
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='INFO',
-                message=f'Water supply upload started by {username} for month {month}'
-            )
-
-            # Background thread
-            thread = threading.Thread(
-                target=self.process_water_data_background,
-                args=(tracking.id, api_token, month)
-            )
-            thread.daemon = True
-            thread.start()
-
-            return Response({
-                'message': 'Water supply upload started in background',
-                'tracking_id': tracking.id,
-                'status': 'in_progress'
-            }, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            logger.error(f"Water upload failed: {str(e)}")
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def process_water_data_background(self, tracking_id, api_token, province_code, district_code, month):
-        """Background processing for large water supply datasets (UPDATED: Pass pro/dis/month)"""
-        try:
-            tracking = WaterUploadDataTracking.objects.get(id=tracking_id)
-            tracking.pro_id = province_code
-            tracking.dis_id = district_code
-            tracking.upload_month = month
-            tracking.save()
-            
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='INFO',
-                message='Background processing started for water supply data'
-            )
-            
-            # Fetch and process data with optimized handling
-            result = self.fetch_and_process_water_data_optimized(tracking, api_token)
-            
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='INFO',
-                message=f'Background processing completed: {result.get("message", "Unknown result")}'
-            )
-            
-        except Exception as e:
-            logger.error(f"Background water processing failed: {str(e)}")
-            try:
-                tracking = WaterUploadDataTracking.objects.get(id=tracking_id)
-                tracking.status = 'failed'
-                tracking.error_message = f'Background processing failed: {str(e)}'
-                tracking.upload_completed = timezone.now()
-                tracking.save()
-                
-                WaterUploadLog.objects.create(
-                    tracking=tracking,
-                    log_level='ERROR',
-                    message=f'Background processing failed: {str(e)}'
-                )
-            except Exception as save_error:
-                logger.error(f"Failed to save error state: {str(save_error)}")
-
-    def fetch_and_process_water_data_optimized(self, tracking, api_token):
-        """Optimized fetch for large water supply datasets with customer data (UPDATED: Match Electric structure)"""
-        try:
-            water_api_base = getattr(settings, 'WATER_API_BASE_URL', 'http://202.137.141.244:3000')
-            
-            # Water Bill (Payment) API endpoint (UPDATED: Add params like Electric)
-            bill_api_url = f"{water_api_base}/v3/api/loans/allbillmonth/{tracking.upload_month}"
-            # FIXED: Remove province/district from params; API only needs month in path
-            params = {
-                'page': 1,
-                'limit': 100000
-            }
-            
-            # Customer API endpoint
-            customer_api_url = f"{water_api_base}/v3/api/loans/newconnection/{tracking.upload_month}"
-            
-            headers = {
-                'Auth': api_token,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Connection': 'close'
-            }
-            
-            # ========== Fetch Bill (Payment) Data ==========
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='INFO',
-                message=f'Fetching water bill (payment) data from: {bill_api_url}'
-            )
-            
-            bill_response = requests.get(
-                bill_api_url, 
-                headers=headers,
-                params=params,  # FIXED: No province/district params
-                timeout=600,
-                stream=True
-            )
-            
-            tracking.api_response_code = bill_response.status_code
-            tracking.save()
-            
-            if bill_response.status_code != 200:
-                error_msg = f'Water Bill API failed with status {bill_response.status_code}'
-                try:
-                    error_content = bill_response.text[:1000]
-                    error_msg += f': {error_content}'
-                except:
-                    pass
-                raise Exception(error_msg)
-            
-            # Process bill response
-            content = bill_response.content
-            bill_response.close()
-            
-            content_size_mb_bill = len(content) / (1024 * 1024)
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='INFO',
-                message=f'Received {content_size_mb_bill:.2f} MB of bill data'
-            )
-            
-            try:
-                bill_data = json.loads(content.decode('utf-8'))
-            except json.JSONDecodeError as e:
-                raise Exception(f'Invalid JSON response from Water Bill API: {str(e)}')
-            
-            # Extract bill records
-            bill_records = self.extract_water_records(bill_data, tracking, 'bill')
-            
-            # FIXED: Filter records by province and district after extraction
-            filtered_bill_records = [
-                rec for rec in bill_records 
-                if rec.get('PRO_ID') == tracking.pro_id and rec.get('DIS_ID') == tracking.dis_id
-            ]
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='INFO',
-                message=f'Extracted {len(bill_records)} bill (payment) records; filtered to {len(filtered_bill_records)} for {tracking.pro_id}-{tracking.dis_id}'
-            )
-            
-           
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='INFO',
-                message=f'Fetching water customer data from: {customer_api_url}'
-            )
-            
-            customer_records = []
-            customer_error = None
-            
-            try:
-                customer_response = requests.get(
-                    customer_api_url,
-                    headers=headers,
-                    params=params,  
-                    timeout=600,
-                    stream=True
-                )
-                
-                if customer_response.status_code != 200:
-                    customer_error = f'Customer API returned status {customer_response.status_code}'
-                    WaterUploadLog.objects.create(
-                        tracking=tracking,
-                        log_level='WARNING',
-                        message=customer_error
-                    )
-                else:
-                    customer_content = customer_response.content
-                    customer_response.close()
-                    
-                    customer_size_mb = len(customer_content) / (1024 * 1024)
-                    WaterUploadLog.objects.create(
-                        tracking=tracking,
-                        log_level='INFO',
-                        message=f'Received {customer_size_mb:.2f} MB of customer data'
-                    )
-                    
-                    try:
-                        customer_data = json.loads(customer_content.decode('utf-8'))
-                        customer_records = self.extract_water_records(customer_data, tracking, 'customer')
-                        
-                        # FIXED: Filter records by province and district after extraction
-                        filtered_customer_records = [
-                            rec for rec in customer_records 
-                            if rec.get('PRO_ID') == tracking.pro_id and rec.get('DIS_ID') == tracking.dis_id
-                        ]
-                        WaterUploadLog.objects.create(
-                            tracking=tracking,
-                            log_level='INFO',
-                            message=f'Extracted {len(customer_records)} customer records; filtered to {len(filtered_customer_records)} for {tracking.pro_id}-{tracking.dis_id}'
-                        )
-                        customer_records = filtered_customer_records  # Use filtered for processing
-                        
-                    except json.JSONDecodeError as e:
-                        customer_error = f'Invalid JSON from Customer API: {str(e)}'
-                        WaterUploadLog.objects.create(
-                            tracking=tracking,
-                            log_level='ERROR',
-                            message=customer_error
-                        )
-            
-            except requests.exceptions.Timeout:
-                customer_error = 'Customer API request timed out after 10 minutes'
-                WaterUploadLog.objects.create(
-                    tracking=tracking,
-                    log_level='ERROR',
-                    message=customer_error
-                )
-            
-            except requests.exceptions.RequestException as e:
-                customer_error = f'Customer API request failed: {str(e)}'
-                WaterUploadLog.objects.create(
-                    tracking=tracking,
-                    log_level='ERROR',
-                    message=customer_error
-                )
-            
-            except Exception as e:
-                customer_error = f'Unexpected error fetching customer data: {str(e)}'
-                WaterUploadLog.objects.create(
-                    tracking=tracking,
-                    log_level='ERROR',
-                    message=customer_error
-                )
-            
-            # ========== Process Data ==========
-            bill_processed = 0
-            bill_failed = 0
-            customer_processed = 0
-            customer_failed = 0
-            
-            # Process bill (payment) records
-            if filtered_bill_records:
-                WaterUploadLog.objects.create(
-                    tracking=tracking,
-                    log_level='INFO',
-                    message=f'Processing {len(filtered_bill_records)} filtered bill (payment) records'
-                )
-                bill_processed, bill_failed = self.insert_water_bill_data_optimized(
-                    filtered_bill_records, tracking
-                )
-            else:
-                WaterUploadLog.objects.create(
-                    tracking=tracking,
-                    log_level='WARNING',
-                    message=f'No bill records found for {tracking.pro_id}-{tracking.dis_id}'
-                )
-            
-            # Process customer records
-            if customer_records:
-                WaterUploadLog.objects.create(
-                    tracking=tracking,
-                    log_level='INFO',
-                    message=f'Processing {len(customer_records)} filtered customer records'
-                )
-                customer_processed, customer_failed = self.insert_water_customer_info_data(
-                    customer_records, tracking
-                )
-            elif customer_error:
-                WaterUploadLog.objects.create(
-                    tracking=tracking,
-                    log_level='WARNING',
-                    message=f'Skipping customer data processing: {customer_error}'
-                )
-            
-            # Calculate totals (UPDATED: Match Electric)
-            total_records = len(filtered_bill_records) + len(customer_records)
-            total_processed = bill_processed + customer_processed
-            total_failed = bill_failed + customer_failed
-            
-            # Calculate total data size (UPDATED: Include both like Electric)
-            total_size = len(json.dumps({
-                'bill': filtered_bill_records,
-                'customer': customer_records
-            }).encode('utf-8')) / (1024 * 1024)
-            
-            # Determine status (Match Electric logic)
-            if total_failed == 0 and not customer_error:
-                final_status = 'completed'
-            elif bill_processed > 0 and customer_error:
-                final_status = 'partial'
-            elif total_failed > 0:
-                final_status = 'partial'
-            else:
-                final_status = 'failed'
-            
-            # Update tracking (UPDATED: Set separate payment/customer counts)
-            tracking.status = final_status
-            tracking.upload_completed = timezone.now()
-            tracking.total_records = total_records
-            tracking.processed_records = total_processed
-            tracking.failed_records = total_failed
-            tracking.payment_records = bill_processed  # Bills as payments
-            tracking.customer_records = customer_processed
-            tracking.data_size_mb = round(total_size, 2)
-            tracking.success_rates = (total_processed / total_records * 100) if total_records > 0 else 0
-            tracking.save()
-            
-            # Calculate duration (UPDATED: Proper calculation)
-            duration = None
-            if tracking.upload_started and tracking.upload_completed:
-                duration = (tracking.upload_completed - tracking.upload_started).total_seconds()
-                tracking.upload_duration = duration  # Use model field
-                tracking.save()
-            
-            message = f'Water upload completed - Bills/Payments: {bill_processed}/{len(filtered_bill_records)}, Customers: {customer_processed}/{len(customer_records)}'
-            if customer_error:
-                message += f' (Customer API Error: {customer_error})'
-            
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='INFO' if final_status == 'completed' else 'WARNING',
-                message=message
-            )
-            
-            return {
-                'message': 'Water supply data upload completed' + (' with warnings' if customer_error else ' successfully'),
-                'tracking_id': tracking.id,
-                'status': final_status,
-                'bill_records': {  # Renamed for clarity, but match Electric keys
-                    'total': len(filtered_bill_records),
-                    'processed': bill_processed,
-                    'failed': bill_failed
-                },
-                'customer_records': {
-                    'total': len(customer_records),
-                    'processed': customer_processed,
-                    'failed': customer_failed,
-                    'error': customer_error
-                },
-                'data_size_mb': tracking.data_size_mb,
-                'success_rate': tracking.success_rates,
-                'upload_duration': duration
-            }
-            
-        except Exception as e:
-            tracking.status = 'failed'
-            tracking.error_message = str(e)
-            tracking.upload_completed = timezone.now()
-            tracking.save()
-            
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='ERROR',
-                message=f'Water supply processing failed: {str(e)}'
-            )
-            
-            return {
-                'error': f'Failed to process water supply data: {str(e)}',
-                'tracking_id': tracking.id,
-                'status': 'failed'
-            }
-
-    def extract_water_records(self, data, tracking, data_type):
-        """Extract records from water supply API response (UNCHANGED: Keep dynamic)"""
-        records = []
-        
-        if isinstance(data, dict):
-            # Log structure
-            top_keys = list(data.keys())
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='INFO',
-                message=f'{data_type.capitalize()} response keys: {top_keys}'
-            )
-            
-            # Find data recursively
-            def find_data_recursively(obj, path="root"):
-                found_arrays = []
-                if isinstance(obj, list):
-                    if len(obj) > 0:
-                        found_arrays.append((path, len(obj), type(obj[0]).__name__))
-                elif isinstance(obj, dict):
-                    for key, value in obj.items():
-                        new_path = f"{path}.{key}"
-                        if isinstance(value, list) and len(value) > 0:
-                            found_arrays.append((new_path, len(value), type(value[0]).__name__))
-                        elif isinstance(value, dict):
-                            found_arrays.extend(find_data_recursively(value, new_path))
-                return found_arrays
-            
-            found_arrays = find_data_recursively(data)
-            
-            if found_arrays:
-                # Get largest array
-                largest_array = max(found_arrays, key=lambda x: x[1])
-                path, size, item_type = largest_array
-                
-                WaterUploadLog.objects.create(
-                    tracking=tracking,
-                    log_level='INFO',
-                    message=f'Using array at {path} with {size} items'
-                )
-                
-                # Extract data
-                try:
-                    current = data
-                    for part in path.split('.')[1:]:
-                        current = current[part]
-                    if isinstance(current, list):
-                        records = current
-                except (KeyError, TypeError, IndexError) as e:
-                    WaterUploadLog.objects.create(
-                        tracking=tracking,
-                        log_level='ERROR',
-                        message=f'Failed to extract from {path}: {str(e)}'
-                    )
-            
-            # Fallback to common keys
-            if not records:
-                common_keys = ['data', 'records', 'bills', 'items', 'results', 'customers', 'newconnection']
-                for key in common_keys:
-                    if key in data and isinstance(data[key], list):
-                        records = data[key]
-                        WaterUploadLog.objects.create(
-                            tracking=tracking,
-                            log_level='INFO',
-                            message=f'Found data using key: {key}'
-                        )
-                        break
-        
-        elif isinstance(data, list):
-            records = data
-        
-        return records
-
-    def insert_water_customer_info_data(self, records, tracking):
-        """Insert or update water customer records in w_customer_info table (UPDATED: Optimize like Electric - bulk_create with existing check)"""
-        processed_count = 0
-        failed_count = 0
-        skipped_count = 0
-        
-        try:
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='INFO',
-                message=f'Starting to process {len(records)} water customer records'
-            )
-            
-            # OPTIMIZATION: Get all existing customer IDs in one query (like Electric)
-            existing_customer_ids = set(
-                w_customer_info.objects.values_list('Customer_ID', flat=True)
-            )
-            
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='INFO',
-                message=f'Found {len(existing_customer_ids)} existing customers in database'
-            )
-            
-            batch_size = 500
-            customers_to_insert = []
-            
-            for i, item in enumerate(records):
-                try:
-                    if not isinstance(item, dict):
-                        failed_count += 1
-                        continue
-                    
-                    def safe_get(key, default=''):
-                        value = item.get(key, default)
-                        return value if value is not None else default
-                    
-                    customer_id = self.truncate(safe_get('CUSTOMER_ID', ''), 100)
-                    
-                    if not customer_id:
-                        failed_count += 1
-                        continue
-                    
-                    # Skip if customer already exists
-                    if customer_id in existing_customer_ids:
-                        skipped_count += 1
-                        continue
-                    
-                    # Prepare object for bulk insert
-                    customer = w_customer_info(
-                        Customer_ID=customer_id,
-                        No=self.truncate(safe_get('NO', safe_get('INDEX_NO', '')), 100),
-                        Company_name=self.truncate(safe_get('COMPANY_NAME', ''), 100),
-                        Name=self.truncate(safe_get('NAME', safe_get('GIVEN_NAME', '')), 100),
-                        Surname=self.truncate(safe_get('SURNAME', safe_get('FAMILY_NAME', '')), 100),
-                        National_ID=self.truncate(safe_get('NATIONAL_ID', safe_get('ID_NO', '')), 100),
-                        Passport=self.truncate(safe_get('PASSPORT', safe_get('PASSPORT_NO', '')), 100),
-                        Address=self.truncate(safe_get('ADDRESS', safe_get('FORW_ADDRESS', '')), 100),
-                        Dustrict_ID=self.truncate(safe_get('DISTRICT_ID', safe_get('DIS_ID', '')), 100),
-                        Province_ID=self.truncate(safe_get('PROVINCE_ID', safe_get('PRO_ID', '')), 100),
-                        Tel=self.truncate(safe_get('TEL', safe_get('TEL_NO', '')), 100),
-                        Email=self.truncate(safe_get('EMAIL', safe_get('EMAIL_NO', '')), 100),
-                        Cus_type=self.truncate(safe_get('CUSTOMER_TYPE', safe_get('SUPPLY_TYPE', '')), 100),
-                        Regis_date=self.truncate(safe_get('REGISTRATION_DATE', safe_get('REGIT_D', '')), 100)
-                    )
-                    
-                    customers_to_insert.append(customer)
-                    
-                    # Bulk insert when batch is full
-                    if len(customers_to_insert) >= batch_size:
-                        with transaction.atomic():
-                            w_customer_info.objects.bulk_create(
-                                customers_to_insert, 
-                                ignore_conflicts=True
-                            )
-                        processed_count += len(customers_to_insert)
-                        customers_to_insert = []
-                        
-                        # Log progress
-                        WaterUploadLog.objects.create(
-                            tracking=tracking,
-                            log_level='INFO',
-                            message=f'Customer records progress: {i+1}/{len(records)} processed, {processed_count} new, {skipped_count} skipped'
-                        )
-                
-                except Exception as e:
-                    failed_count += 1
-                    if failed_count <= 10:
-                        WaterUploadLog.objects.create(
-                            tracking=tracking,
-                            log_level='ERROR',
-                            message=f'Failed to process customer record {i}: {str(e)}'
-                        )
-                    continue
-            
-            # Insert remaining customers
-            if customers_to_insert:
-                with transaction.atomic():
-                    w_customer_info.objects.bulk_create(
-                        customers_to_insert, 
-                        ignore_conflicts=True
-                    )
-                processed_count += len(customers_to_insert)
-            
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='INFO',
-                message=f'Customer data processing completed. New: {processed_count}, Skipped: {skipped_count}, Failed: {failed_count}'
-            )
-            
-            return processed_count, failed_count
-            
-        except Exception as e:
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='ERROR',
-                message=f'Customer data insert failed: {str(e)}'
-            )
-            raise e
-        
-    def insert_water_bill_data_optimized(self, records, tracking):
-        """Optimized insert for large datasets (UPDATED: Match Electric batch logging)"""
-        processed_count = 0
-        failed_count = 0
-        batch_size = 500  # Smaller batches for memory efficiency
-        total_items = len(records)
-        
-        try:
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='INFO',
-                message=f'Starting optimized insert of {total_items} water supply (bill/payment) records'
-            )
-            
-            batch = []
-            
-            for i, item in enumerate(records):
-                try:
-                    # Progress logging for large datasets (like Electric)
-                    if i > 0 and i % 5000 == 0:  # Log every 5000 records
-                        progress_percent = (i / total_items) * 100
-                        WaterUploadLog.objects.create(
-                            tracking=tracking,
-                            log_level='INFO',
-                            message=f'Processing progress: {i}/{total_items} ({progress_percent:.1f}%)'
-                        )
-                    
-                    # Validate record
-                    if not isinstance(item, dict):
-                        failed_count += 1
-                        continue
-                    
-                    # Helper function for safe value extraction
-                    def safe_get(key, default=''):
-                        value = item.get(key, default)
-                        return value if value is not None else default
-                    
-                    # Create bill record with your exact mapping
-                    payment_id = safe_get('PAYMENT_ID', '')
-                    
-                    bill = Utility_Bill(
-                        Customer_ID=self.truncate(safe_get('CUSTOMER_ID', ''), 255),
-                        InvoiceNo=self.truncate(safe_get('NO', ''), 255),
-                        TypeOfPro=self.truncate(safe_get('SUPPLY_TYPE', ''), 100),
-                        Outstanding=self.safe_decimal(safe_get('OUTSTANDING', 0)),
-                        Basic_Tax=self.safe_decimal(safe_get('BASIC+TAX', 0)),
-                        Bill_Amount=self.safe_decimal(safe_get('BILL_AMOUNT', 0)),
-                        Debt_Amount=0.00,
-                        Payment_ID=payment_id,
-                        PaymentType=self.truncate(safe_get('PAY_TYPE', ''), 255),
-                        Payment_Date=self.truncate(safe_get('PAYMENT_DATE', ''), 255),
-                        InvoiceMonth=self.truncate(safe_get('BILL_OF_MONTH', ''), 50),
-                        InvoiceDate=self.truncate(safe_get('DATE_OF_ISSUE', ''), 100),
-                        DisID=self.truncate(safe_get('DIS_ID', ''), 100),
-                        ProID=self.truncate(safe_get('PRO_ID', ''), 100),
-                        UserID=tracking.user_upload
-                    )
-                    
-                    batch.append(bill)
-                    
-                    # Process batch when full
-                    if len(batch) >= batch_size:
-                        with transaction.atomic():
-                            Utility_Bill.objects.bulk_create(batch, ignore_conflicts=True)
-                        processed_count += len(batch)
-                        batch = []
-                        
-                        # Update progress in tracking
-                        tracking.processed_records = processed_count
-                        tracking.save()
-                        
-                        # Log batch progress (like Electric)
-                        WaterUploadLog.objects.create(
-                            tracking=tracking,
-                            log_level='INFO',
-                            message=f'Inserted batch: {processed_count}/{total_items} records processed'
-                        )
-                
-                except Exception as e:
-                    failed_count += 1
-                    # Log only first few errors to avoid log spam
-                    if failed_count <= 10:
-                        WaterUploadLog.objects.create(
-                            tracking=tracking,
-                            log_level='ERROR',
-                            message=f'Record {i} failed: {str(e)[:200]}'
-                        )
-                    continue
-            
-            # Process remaining records
-            if batch:
-                with transaction.atomic():
-                    Utility_Bill.objects.bulk_create(batch, ignore_conflicts=True)
-                processed_count += len(batch)
-            
-            # Final update
-            tracking.processed_records = processed_count
-            tracking.save()
-            
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='INFO',
-                message=f'Insert completed. Processed: {processed_count}, Failed: {failed_count}'
-            )
-            
-            return processed_count, failed_count
-            
-        except Exception as e:
-            WaterUploadLog.objects.create(
-                tracking=tracking,
-                log_level='ERROR',
-                message=f'Bulk insert failed: {str(e)}'
-            )
-            raise e
-        
-    def truncate(self, value, max_length):
-        """Safely truncate string to max length"""
-        if value is None:
-            return ''
-        return str(value)[:max_length]
-
-    def safe_decimal(self, value):
-        """Safely convert to decimal"""
-        try:
-            return float(value or 0)
-        except (ValueError, TypeError):
-            return 0.0
-
-class WaterUploadTrackingDetailAPIView(APIView):
-    """Get detailed water supply tracking information with logs"""
-    
-    def get(self, request, tracking_id):
-        try:
-            tracking = WaterUploadDataTracking.objects.get(id=tracking_id)
-            serializer = WaterUploadTrackingDetailSerializer(tracking)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except WaterUploadDataTracking.DoesNotExist:
-            return Response(
-                {'error': 'Water supply tracking record not found'}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-import logging
-from django.db.models import Count
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from utility.models import Utility_Bill, w_province_code, w_district_code
-
-logger = logging.getLogger(__name__)
-
-class WaterDistrictStatisticsAPIView(APIView):
-    """
-    Get water supply upload statistics grouped by Province and District
-    CORRECTED: Proper matching of district and province names
-    
-    Relationships:
-    - Utility_Bill.ProID → w_province_code.pro_id → w_province_code.pro_name
-    - Utility_Bill.DisID → w_district_code.dis_id → w_district_code.dis_name
-    """
-    
-    def get(self, request):
-        try:
-            month = request.GET.get('month')
-            
-            if not month:
-                return Response(
-                    {"error": "month parameter is required (format: MMYYYY)"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Convert month format from MMYYYY to MM-YYYY for database query
-            # Example: 102025 -> 10-2025
-            if len(month) == 6:
-                formatted_month = f"{month[:2]}-{month[2:]}"
-            else:
-                return Response(
-                    {"error": "Invalid month format. Use MMYYYY (e.g., 102025)"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Query bills grouped by Province and District
-            district_stats = Utility_Bill.objects.filter(
-                InvoiceMonth=formatted_month
-            ).values(
-                'ProID', 'DisID'
-            ).annotate(
-                total_bills=Count('BillID')
-            ).order_by('ProID', 'DisID')
-            
-            # Get actual unique customers for this period
-            actual_customer_count = Utility_Bill.objects.filter(
-                InvoiceMonth=formatted_month
-            ).values('Customer_ID').distinct().count()
-            
-            # Get total bills count for this period
-            total_bills_count = Utility_Bill.objects.filter(
-                InvoiceMonth=formatted_month
-            ).count()
-            
-            # Build hierarchical structure
-            provinces_dict = {}
-            
-            for stat in district_stats:
-                pro_id = stat['ProID']
-                dis_id = stat['DisID']
-                total_bills = stat['total_bills']
-                
-                # CORRECTED: Get province name from w_province_code
-                # Match: Utility_Bill.ProID → w_province_code.pro_id
-                if pro_id not in provinces_dict:
-                    try:
-                        province = w_province_code.objects.get(pro_id=pro_id)
-                        pro_name = province.pro_name
-                    except w_province_code.DoesNotExist:
-                        logger.warning(f"Province not found for pro_id: {pro_id}")
-                        pro_name = f"Province {pro_id}"
-                    
-                    provinces_dict[pro_id] = {
-                        'pro_id': pro_id,
-                        'pro_name': pro_name,
-                        'total_bills': 0,
-                        'districts': []
-                    }
-                
-                # CORRECTED: Get district name from w_district_code
-                # Match: Utility_Bill.DisID → w_district_code.dis_id
-                # Also match pro_id for better accuracy
-                try:
-                    district = w_district_code.objects.get(
-                        pro_id=pro_id,
-                        dis_id=dis_id
-                    )
-                    dis_name = district.dis_name
-                except w_district_code.DoesNotExist:
-                    # Try without pro_id match (fallback)
-                    try:
-                        district = w_district_code.objects.filter(
-                            dis_id=dis_id
-                        ).first()
-                        
-                        if district:
-                            dis_name = district.dis_name
-                            logger.info(f"District found without pro_id match: {dis_id} -> {dis_name}")
-                        else:
-                            logger.warning(f"District not found for dis_id: {dis_id}, pro_id: {pro_id}")
-                            dis_name = f"District {dis_id}"
-                    except Exception as e:
-                        logger.error(f"Error fetching district: {str(e)}")
-                        dis_name = f"District {dis_id}"
-                
-                # Add district data
-                provinces_dict[pro_id]['districts'].append({
-                    'dis_id': dis_id,
-                    'dis_name': dis_name,
-                    'total_bills': total_bills
-                })
-                
-                # Update province total
-                provinces_dict[pro_id]['total_bills'] += total_bills
-            
-            # Convert to list and sort
-            provinces_list = list(provinces_dict.values())
-            
-            # Log summary for debugging
-            logger.info(f"Statistics for {formatted_month}:")
-            logger.info(f"  Total Bills: {total_bills_count}")
-            logger.info(f"  Unique Customers: {actual_customer_count}")
-            logger.info(f"  Provinces: {len(provinces_list)}")
-            
-            response_data = {
-                'period': month,
-                'formatted_period': formatted_month,
-                'total_bills': total_bills_count,
-                'total_customers': actual_customer_count,
-                'provinces': provinces_list
-            }
-            
-            return Response(response_data, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            logger.error(f"Failed to fetch district statistics: {str(e)}", exc_info=True)
-            return Response(
-                {"error": f"Failed to fetch district statistics: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-
-class WaterUploadSummaryAPIView(APIView):
-    """
-    Get summary of all uploads with customer counts and status
-    """
-    
-    def get(self, request):
-        try:
-            # Get all tracking records with their statistics
-            from utility.models import WaterUploadDataTracking
-            
-            tracking_records = WaterUploadDataTracking.objects.all().order_by('-upload_month')
-            
-            summaries = []
-            for tracking in tracking_records:
-                month = tracking.upload_month
-                
-                # Convert month format for database query
-                if len(month) == 6:
-                    formatted_month = f"{month[:2]}-{month[2:]}"
-                else:
-                    continue
-                
-                # Get statistics for this month
-                bill_count = Utility_Bill.objects.filter(InvoiceMonth=formatted_month).count()
-                customer_count = Utility_Bill.objects.filter(
-                    InvoiceMonth=formatted_month
-                ).values('Customer_ID').distinct().count()
-                
-                summaries.append({
-                    'tracking_id': tracking.id,
-                    'month': month,
-                    'formatted_month': formatted_month,
-                    'status': tracking.status,
-                    'total_bills': bill_count,
-                    'total_customers': customer_count,
-                    'upload_completed': tracking.upload_completed,
-                    'user_upload': tracking.user_upload
-                })
-            
-            return Response({
-                'data': summaries
-            }, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            logger.error(f"Failed to fetch upload summary: {str(e)}", exc_info=True)
-            return Response(
-                {"error": f"Failed to fetch upload summary: {str(e)}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-
-# Debug Views
-class WaterDebugAPIView(APIView):
-    """Debug view for water supply API testing"""
-    
-    def get(self, request):
-        debug_info = {}
-        
-        try:
-            # Test model counts
-            tracking_count = WaterUploadDataTracking.objects.count()
-            bill_count = Utility_Bill.objects.count()
-            
-            debug_info['water_tracking_count'] = tracking_count
-            debug_info['total_utility_bills'] = bill_count
-            
-            # Recent tracking records
-            recent_tracking = WaterUploadDataTracking.objects.all()[:3]
-            debug_info['recent_tracking'] = [
-                {
-                    'id': record.id,
-                    'upload_month': record.upload_month,
-                    'status': record.status,
-                    'total_records': record.total_records,
-                    'processed_records': record.processed_records,
-                    'data_size_mb': record.data_size_mb,
-                    'user_upload': record.user_upload
-                }
-                for record in recent_tracking
-            ]
-            
-        except Exception as e:
-            debug_info['model_error'] = str(e)
-        
-        # Current month
-        current_month = timezone.now().strftime('%m%Y')
-        debug_info['current_month'] = current_month
-        debug_info['api_base_url'] = getattr(settings, 'WATER_API_BASE_URL', 'http://202.137.141.244:3000')
-        
-        return Response({
-            'debug_info': debug_info,
-            'status': 'water_debug_complete'
-        })
-
-class WaterAPITestView(APIView):
-    """Test water supply API connection and response"""
-    
-    def post(self, request):
-        try:
-            month = request.data.get('month', timezone.now().strftime('%m%Y'))
-            
-            # Fixed API token
-            api_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbiI6IlUyRnNkR1ZrWDErdE9ja29vVDV0NXdqWlBqTzhVc0V1ZnR2QytPUXp3Z2ljWkFPdkhNUkNqdzh0NUhOSENBRVZsVXVNWHBrc1RudUFxaUE3R0VtVExRSTZMaWNTVUlaN1BMb0xGOVczMWtjWnFoQmxFUThHVUFwSFpNS0NDVjN1RURhWDJSSjFwZDNqaFRGc2lmdUF3Zz09IiwiaWF0IjoxNzA5MDEwNjU0fQ.mhmfUuasPQnAtxTQmwIyofClMuOAKVKZloNskpG9fHo'
-            
-            # API endpoint
-            water_api_base = getattr(settings, 'WATER_API_BASE_URL', 'http://202.137.141.244:3000')
-            api_url = f"{water_api_base}/v3/api/loans/allbillmonth/{month}"
-            
-            headers = {
-                'Auth': api_token,
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            }
-            
-            # Test with shorter timeout and head request first
-            try:
-                # First, try a HEAD request to check if endpoint exists
-                head_response = requests.head(api_url, headers=headers, timeout=30)
-                
-                return JsonResponse({
-                    'success': True,
-                    'api_url': api_url,
-                    'head_status_code': head_response.status_code,
-                    'head_headers': dict(head_response.headers),
-                    'message': f'API endpoint accessible. HEAD request returned {head_response.status_code}',
-                    'note': 'GET request not attempted due to large response size. Use upload endpoint for full processing.'
-                })
-                
-            except requests.exceptions.Timeout:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'API request timeout (30 seconds)',
-                    'api_url': api_url,
-                    'suggestion': 'API may have large response. Use background upload process.'
-                })
-            except requests.exceptions.ConnectionError:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Cannot connect to water supply API',
-                    'api_url': api_url
-                })
-                
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': f'API test failed: {str(e)}'
-            })
-            
-            
 # Water Supply Summary API Views -------------------------------------
 
 
@@ -26689,1061 +24981,708 @@ class ChargeReportDetailView(APIView):
         return "{:,.0f}".format(float(amount))
     
 # ----------------------------------------------- UPDATE HERE -----------------------------------------------
-    
-# # water_supply_views_UPDATED.py
-# # Updated views for water supply tracking system
-# # Matches electric supply implementation
+ 
 
-# import requests
-# import json
-# from django.utils import timezone
-# from rest_framework.views import APIView
-# from rest_framework.response import Response
-# from rest_framework import status
-# from django.db.models import Q, Count, Sum, Avg
-# from datetime import datetime
-# from django.conf import settings
-# import logging
-# from django.db import transaction
-
-# from utility.models import (
-#     WaterUploadDataTracking,  # Updated model name
-#     WaterUploadLog,  # Updated model name
-#     Utility_Bill,  # Water bills
-#     w_province_code,
-#     w_district_code,
-#     w_customer_info
-# )
-
-# logger = logging.getLogger(__name__)
-
-
-# class WaterProvinceListAPIView(APIView):
-#     """Get list of provinces from w_province_code model"""
-    
-#     def get(self, request):
-#         try:
-#             provinces = w_province_code.objects.all().order_by('pro_id')
-            
-#             # Serialize manually or use serializer
-#             result = []
-#             for province in provinces:
-#                 result.append({
-#                     'pro_id': province.pro_id,
-#                     'pro_name': province.pro_name
-#                 })
-            
-#             return Response(result, status=status.HTTP_200_OK)
-            
-#         except Exception as e:
-#             logger.error(f"Error fetching provinces: {str(e)}")
-#             return Response(
-#                 {"error": "Failed to fetch provinces"},
-#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-#             )
-
-
-# class WaterDistrictListAPIView(APIView):
-#     """Get districts for a specific province from w_district_code model"""
-    
-#     def get(self, request):
-#         province_id = request.GET.get('province_id')
-        
-#         if not province_id:
-#             return Response(
-#                 {"error": "province_id parameter is required"},
-#                 status=status.HTTP_400_BAD_REQUEST
-#             )
-        
-#         try:
-#             # Get province info
-#             try:
-#                 province = w_province_code.objects.get(pro_id=province_id)
-#             except w_province_code.DoesNotExist:
-#                 return Response(
-#                     {"error": f"Province with ID {province_id} not found"},
-#                     status=status.HTTP_404_NOT_FOUND
-#                 )
-            
-#             # Get districts for this province
-#             districts = w_district_code.objects.filter(
-#                 pro_id=province_id
-#             ).order_by('dis_id')
-            
-#             if not districts.exists():
-#                 return Response(
-#                     {"error": f"No districts found for province {province_id}"},
-#                     status=status.HTTP_404_NOT_FOUND
-#                 )
-            
-#             # Add province name to each district
-#             result = []
-#             for district in districts:
-#                 result.append({
-#                     'pro_id': district.pro_id,
-#                     'pro_name': province.pro_name,
-#                     'dis_id': district.dis_id,
-#                     'dis_name': district.dis_name
-#                 })
-            
-#             return Response(result, status=status.HTTP_200_OK)
-            
-#         except Exception as e:
-#             logger.error(f"Error fetching districts: {str(e)}")
-#             return Response(
-#                 {"error": "Failed to fetch districts"},
-#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-#             )
-
-
-# class WaterInitializeDistrictsAPIView(APIView):
-#     """Initialize tracking records for all districts in a province for a specific month"""
-    
-#     def post(self, request):
-#         try:
-#             province_id = request.data.get('province_id')
-#             month = request.data.get('month', timezone.now().strftime('%Y%m'))
-#             username = request.data.get('username', 'system')
-            
-#             if not province_id:
-#                 return Response(
-#                     {"error": "province_id is required"},
-#                     status=status.HTTP_400_BAD_REQUEST
-#                 )
-            
-#             # Validate month format
-#             try:
-#                 datetime.strptime(month, '%Y%m')
-#             except ValueError:
-#                 return Response(
-#                     {"error": "Invalid month format. Use YYYYMM (e.g., 202509)"},
-#                     status=status.HTTP_400_BAD_REQUEST
-#                 )
-            
-#             # Get province
-#             try:
-#                 province = w_province_code.objects.get(pro_id=province_id)
-#             except w_province_code.DoesNotExist:
-#                 return Response(
-#                     {"error": f"Province {province_id} not found"},
-#                     status=status.HTTP_404_NOT_FOUND
-#                 )
-            
-#             # Get districts for this province
-#             districts = w_district_code.objects.filter(pro_id=province_id)
-            
-#             if not districts.exists():
-#                 return Response(
-#                     {"error": f"No districts found for province {province_id}"},
-#                     status=status.HTTP_404_NOT_FOUND
-#                 )
-            
-#             created_count = 0
-#             updated_count = 0
-            
-#             # Create or update tracking records for each district
-#             for district in districts:
-#                 tracking, created = WaterUploadDataTracking.objects.get_or_create(
-#                     pro_id=province_id,
-#                     dis_id=district.dis_id,
-#                     upload_month=month,
-#                     defaults={
-#                         'pro_name': province.pro_name,
-#                         'dis_name': district.dis_name,
-#                         'status': 'pending',
-#                         'user_upload': username
-#                     }
-#                 )
-                
-#                 if created:
-#                     created_count += 1
-#                     # Create initial log
-#                     WaterUploadLog.objects.create(
-#                         tracking=tracking,
-#                         log_level='INFO',
-#                         message=f'Tracking initialized for {province.pro_name} - {district.dis_name}'
-#                     )
-#                 else:
-#                     # Reset status if was failed or partial
-#                     if tracking.status in ['failed', 'partial']:
-#                         tracking.status = 'pending'
-#                         tracking.error_message = None
-#                         tracking.save()
-#                         updated_count += 1
-            
-#             return Response({
-#                 'message': f'Initialized tracking for {province.pro_name}',
-#                 'province': {
-#                     'pro_id': province_id,
-#                     'pro_name': province.pro_name
-#                 },
-#                 'month': month,
-#                 'total_districts': districts.count(),
-#                 'created_count': created_count,
-#                 'updated_count': updated_count
-#             }, status=status.HTTP_200_OK)
-            
-#         except Exception as e:
-#             logger.error(f"Initialization failed: {str(e)}")
-#             return Response({
-#                 'error': f'Initialization failed: {str(e)}'
-#             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-# class WaterUploadTrackingListAPIView(APIView):
-#     """List tracking records for specific province and month"""
-    
-#     def get(self, request):
-#         try:
-#             month = request.GET.get('month', timezone.now().strftime('%Y%m'))
-#             province_id = request.GET.get('province_id')
-            
-#             if not province_id:
-#                 return Response(
-#                     {"error": "province_id parameter is required"},
-#                     status=status.HTTP_400_BAD_REQUEST
-#                 )
-            
-#             # Validate month format
-#             try:
-#                 datetime.strptime(month, '%Y%m')
-#             except ValueError:
-#                 return Response(
-#                     {"error": "Invalid month format. Use YYYYMM (e.g., 202509)"},
-#                     status=status.HTTP_400_BAD_REQUEST
-#                 )
-            
-#             # Get tracking records for the specific province and month
-#             queryset = WaterUploadDataTracking.objects.filter(
-#                 upload_month=month,
-#                 pro_id=province_id
-#             ).order_by('dis_id')
-            
-#             # Serialize data
-#             serialized_data = []
-#             for item in queryset:
-#                 data = {
-#                     'id': item.id,
-#                     'pro_id': item.pro_id,
-#                     'pro_name': item.pro_name,
-#                     'dis_id': item.dis_id,
-#                     'dis_name': item.dis_name,
-#                     'upload_month': item.upload_month,
-#                     'status': item.status,
-#                     'total_records': item.total_records,
-#                     'payment_records': item.payment_records,
-#                     'customer_records': item.customer_records,
-#                     'data_size_mb': item.data_size_mb,
-#                     'upload_started': item.upload_started,
-#                     'upload_completed': item.upload_completed,
-#                     'processed_records': item.processed_records,
-#                     'failed_records': item.failed_records,
-#                     'user_upload': item.user_upload,
-#                     'error_message': item.error_message,
-#                     'success_rate_formatted': f"{item.success_rates:.1f}" if item.success_rates else "0.0",
-#                     'formatted_size': self.format_file_size(item.data_size_mb),
-#                     'upload_duration': self.format_duration(item.upload_duration) if item.upload_duration else None
-#                 }
-#                 serialized_data.append(data)
-            
-#             # Get statistics
-#             stats = self.get_statistics(month, province_id)
-            
-#             return Response({
-#                 'data': serialized_data,
-#                 'statistics': stats
-#             }, status=status.HTTP_200_OK)
-            
-#         except Exception as e:
-#             logger.error(f"Failed to fetch tracking data: {str(e)}")
-#             return Response(
-#                 {"error": "Failed to fetch tracking data"},
-#                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-#             )
-    
-#     def get_statistics(self, month, province_id):
-#         """Calculate statistics for the dashboard"""
-#         try:
-#             queryset = WaterUploadDataTracking.objects.filter(
-#                 upload_month=month,
-#                 pro_id=province_id
-#             )
-            
-#             total_count = queryset.count()
-#             if total_count == 0:
-#                 return {
-#                     'total_locations': 0,
-#                     'status_breakdown': {},
-#                     'total_data_size_mb': 0.0,
-#                     'average_records': 0,
-#                     'total_payment_records': 0,
-#                     'total_customer_records': 0
-#                 }
-            
-#             # Status breakdown
-#             status_data = queryset.values('status').annotate(count=Count('id'))
-#             status_counts = {item['status']: item['count'] for item in status_data}
-            
-#             # Aggregated data
-#             aggregated = queryset.aggregate(
-#                 total_size=Sum('data_size_mb'),
-#                 avg_records=Avg('total_records'),
-#                 total_payments=Sum('payment_records'),
-#                 total_customers=Sum('customer_records')
-#             )
-            
-#             return {
-#                 'total_locations': total_count,
-#                 'status_breakdown': status_counts,
-#                 'total_data_size_mb': round(float(aggregated['total_size'] or 0), 2),
-#                 'average_records': round(float(aggregated['avg_records'] or 0)),
-#                 'total_payment_records': int(aggregated['total_payments'] or 0),
-#                 'total_customer_records': int(aggregated['total_customers'] or 0)
-#             }
-            
-#         except Exception as e:
-#             logger.error(f"Error in get_statistics: {str(e)}")
-#             return {
-#                 'total_locations': 0,
-#                 'status_breakdown': {},
-#                 'total_data_size_mb': 0.0,
-#                 'average_records': 0,
-#                 'total_payment_records': 0,
-#                 'total_customer_records': 0
-#             }
-    
-#     def format_file_size(self, size_mb):
-#         """Format file size for display"""
-#         if not size_mb or size_mb < 1:
-#             return f"{(size_mb or 0) * 1024:.1f} KB"
-#         elif size_mb < 1024:
-#             return f"{size_mb:.1f} MB"
-#         else:
-#             return f"{size_mb / 1024:.1f} GB"
-    
-#     def format_duration(self, duration_seconds):
-#         """Format duration for display"""
-#         if not duration_seconds:
-#             return None
-        
-#         if duration_seconds < 60:
-#             return f"{duration_seconds:.0f}s"
-#         elif duration_seconds < 3600:
-#             minutes = duration_seconds / 60
-#             return f"{minutes:.1f}min"
-#         else:
-#             hours = duration_seconds / 3600
-#             return f"{hours:.1f}hr"
-
-
-# # CONTINUED IN PART 2...
-
-
-# class WaterUploadDataAPIView(APIView):
-#     """
-#     Upload water supply data for a specific district
-#     Fetches from external API and inserts into database
-#     """
-    
-#     def post(self, request):
-#         try:
-#             tracking_id = request.data.get('tracking_id')
-            
-#             if not tracking_id:
-#                 return Response(
-#                     {"error": "tracking_id is required"},
-#                     status=status.HTTP_400_BAD_REQUEST
-#                 )
-            
-#             # Get tracking record
-#             try:
-#                 tracking = WaterUploadDataTracking.objects.get(id=tracking_id)
-#             except WaterUploadDataTracking.DoesNotExist:
-#                 return Response(
-#                     {"error": "Tracking record not found"},
-#                     status=status.HTTP_404_NOT_FOUND
-#                 )
-            
-#             # Check if already completed
-#             if tracking.status == 'completed':
-#                 return Response({
-#                     'message': 'Data already uploaded for this location',
-#                     'tracking_id': tracking.id,
-#                     'status': 'completed'
-#                 }, status=status.HTTP_200_OK)
-            
-#             # Update status to in_progress
-#             tracking.status = 'in_progress'
-#             tracking.upload_started = timezone.now()
-#             tracking.error_message = None
-#             tracking.save()
-            
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO',
-#                 message=f'Starting data upload for {tracking.pro_name} - {tracking.dis_name}'
-#             )
-            
-#             # Fetch data from water supply API
-#             # Format month as MM-YYYY for API (e.g., 09-2025)
-#             month_formatted = f"{tracking.upload_month[4:]}-{tracking.upload_month[:4]}"
-            
-#             # Build API URL - Update this to match your water supply API
-#             api_url = getattr(
-#                 settings, 
-#                 'WATER_SUPPLY_API_URL',
-#                 'http://202.137.141.244:3000'
-#             )
-            
-#             params = {
-#                 'pro_id': tracking.pro_id,
-#                 'dis_id': tracking.dis_id,
-#                 'month': month_formatted
-#             }
-            
-#             # Fetch data
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO',
-#                 message=f'Fetching data from API: {api_url} with params {params}'
-#             )
-            
-#             try:
-#                 response = requests.get(api_url, params=params, timeout=60)
-#                 response.raise_for_status()
-#                 data = response.json()
-#             except requests.exceptions.RequestException as e:
-#                 tracking.status = 'failed'
-#                 tracking.error_message = f'API request failed: {str(e)}'
-#                 tracking.upload_completed = timezone.now()
-#                 tracking.save()
-                
-#                 WaterUploadLog.objects.create(
-#                     tracking=tracking,
-#                     log_level='ERROR',
-#                     message=f'Failed to fetch data from API: {str(e)}'
-#                 )
-                
-#                 return Response({
-#                     'error': f'Failed to fetch data: {str(e)}',
-#                     'tracking_id': tracking.id,
-#                     'status': 'failed'
-#                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
-#             # Parse response
-#             # Assuming API returns: { "payment_records": [...], "customer_records": [...] }
-#             payment_records = data.get('payment_records', [])
-#             customer_records = data.get('customer_records', [])
-            
-#             # Calculate data size
-#             data_size_bytes = len(json.dumps(data).encode('utf-8'))
-#             tracking.data_size_mb = data_size_bytes / (1024 * 1024)
-#             tracking.total_records = len(payment_records)
-#             tracking.save()
-            
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO',
-#                 message=f'Received {len(payment_records)} payment records and {len(customer_records)} customer records'
-#             )
-            
-#             # Insert payment records (Utility_Bill)
-#             payment_processed, payment_failed = self.insert_water_bill_data(
-#                 payment_records, 
-#                 tracking
-#             )
-            
-#             # Insert customer records (w_customer_info)
-#             customer_error = None
-#             try:
-#                 customer_processed, customer_failed = self.insert_customer_info_data(
-#                     customer_records,
-#                     tracking
-#                 )
-#             except Exception as e:
-#                 customer_processed = 0
-#                 customer_failed = len(customer_records)
-#                 customer_error = str(e)
-#                 WaterUploadLog.objects.create(
-#                     tracking=tracking,
-#                     log_level='ERROR',
-#                     message=f'Customer data insert failed: {str(e)}'
-#                 )
-            
-#             # Update tracking record
-#             tracking.payment_records = payment_processed
-#             tracking.customer_records = customer_processed if not customer_error else 0
-#             tracking.processed_records = payment_processed
-#             tracking.failed_records = payment_failed + customer_failed
-#             tracking.upload_completed = timezone.now()
-            
-#             # Calculate duration
-#             if tracking.upload_started:
-#                 duration = (tracking.upload_completed - tracking.upload_started).total_seconds()
-#                 tracking.upload_duration = duration
-            
-#             # Calculate success rate
-#             if tracking.total_records > 0:
-#                 tracking.success_rates = (payment_processed / tracking.total_records) * 100
-            
-#             # Determine final status
-#             if payment_processed == len(payment_records) and not customer_error:
-#                 tracking.status = 'completed'
-#                 final_status = 'completed'
-#                 message = 'Data upload completed successfully'
-#             elif payment_processed > 0:
-#                 tracking.status = 'partial'
-#                 final_status = 'partial'
-#                 message = 'Data upload partially completed with some errors'
-#             else:
-#                 tracking.status = 'failed'
-#                 final_status = 'failed'
-#                 message = 'Data upload failed'
-            
-#             tracking.save()
-            
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='SUCCESS' if final_status == 'completed' else 'WARNING',
-#                 message=message
-#             )
-            
-#             return Response({
-#                 'message': message + (' with warnings' if customer_error else ''),
-#                 'tracking_id': tracking.id,
-#                 'status': final_status,
-#                 'payment_records': {
-#                     'total': len(payment_records),
-#                     'processed': payment_processed,
-#                     'failed': payment_failed
-#                 },
-#                 'customer_records': {
-#                     'total': len(customer_records),
-#                     'processed': customer_processed if not customer_error else 0,
-#                     'failed': customer_failed,
-#                     'error': customer_error
-#                 },
-#                 'data_size_mb': tracking.data_size_mb,
-#                 'success_rate': tracking.success_rates,
-#                 'upload_duration': tracking.upload_duration
-#             }, status=status.HTTP_200_OK)
-            
-#         except Exception as e:
-#             logger.error(f"Upload failed: {str(e)}", exc_info=True)
-            
-#             try:
-#                 tracking.status = 'failed'
-#                 tracking.error_message = str(e)
-#                 tracking.upload_completed = timezone.now()
-#                 tracking.save()
-                
-#                 WaterUploadLog.objects.create(
-#                     tracking=tracking,
-#                     log_level='ERROR',
-#                     message=f'Upload failed: {str(e)}'
-#                 )
-#             except:
-#                 pass
-            
-#             return Response({
-#                 'error': f'Failed to process upload: {str(e)}',
-#                 'tracking_id': tracking_id if tracking_id else None,
-#                 'status': 'failed'
-#             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    
-#     def insert_water_bill_data(self, records, tracking):
-#         """Insert records into Utility_Bill table (water bills)"""
-#         processed_count = 0
-#         failed_count = 0
-#         batch_size = 1000
-        
-#         try:
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO',
-#                 message=f'Starting to insert {len(records)} records into Utility_Bill table'
-#             )
-            
-#             with transaction.atomic():
-#                 batch = []
-                
-#                 for i, item in enumerate(records):
-#                     try:
-#                         # Validate that item is a dictionary
-#                         if not isinstance(item, dict):
-#                             failed_count += 1
-#                             if failed_count <= 10:  # Log first 10 errors only
-#                                 WaterUploadLog.objects.create(
-#                                     tracking=tracking,
-#                                     log_level='ERROR',
-#                                     message=f'Record {i} is not a dictionary: {type(item)}'
-#                                 )
-#                             continue
-                        
-#                         # Helper function to safely get values
-#                         def safe_get(key, default=''):
-#                             value = item.get(key, default)
-#                             return value if value is not None else default
-                        
-#                         # Create Utility_Bill object - UPDATE FIELD MAPPING BASED ON YOUR API
-#                         bill = Utility_Bill(
-#                             Customer_ID=self.truncate(safe_get('CUSTOMER_ID', ''), 100),
-#                             BillID=self.truncate(safe_get('BILL_ID', ''), 100),
-#                             InvoiceNo=self.truncate(safe_get('INVOICE_NO', ''), 100),
-#                             TypeOfPro=self.truncate(safe_get('SUPPLY_TYPE', ''), 100),
-#                             Outstanding=self.safe_decimal(safe_get('OUTSTANDING', 0)),
-#                             Basic_Tax=self.safe_decimal(safe_get('BASIC_TAX', 0)),
-#                             Bill_Amount=self.safe_decimal(safe_get('BILL_AMOUNT', 0)),
-#                             Water_Consumption=self.safe_decimal(safe_get('WATER_CONSUMPTION', 0)),
-#                             Previous_Reading=self.safe_decimal(safe_get('PREVIOUS_READING', 0)),
-#                             Current_Reading=self.safe_decimal(safe_get('CURRENT_READING', 0)),
-#                             Payment_ID=safe_get('PAYMENT_ID', ''),
-#                             PaymentType=safe_get('PAYMENT_TYPE', ''),
-#                             Payment_Date=safe_get('PAYMENT_DATE', ''),
-#                             InvoiceMonth=self.truncate(safe_get('INVOICE_MONTH', ''), 50),
-#                             InvoiceDate=self.truncate(safe_get('INVOICE_DATE', ''), 100),
-#                             DisID=self.truncate(safe_get('DIS_ID', ''), 100),
-#                             ProID=self.truncate(safe_get('PRO_ID', ''), 100),
-#                             UserID=tracking.user_upload
-#                         )
-                        
-#                         batch.append(bill)
-                        
-#                         # Bulk insert when batch is full
-#                         if len(batch) >= batch_size:
-#                             Utility_Bill.objects.bulk_create(batch, ignore_conflicts=True)
-#                             processed_count += len(batch)
-#                             batch = []
-                            
-#                             # Log progress every 1000 records
-#                             WaterUploadLog.objects.create(
-#                                 tracking=tracking,
-#                                 log_level='INFO',
-#                                 message=f'Payment records progress: {processed_count}/{len(records)} processed'
-#                             )
-                    
-#                     except Exception as e:
-#                         failed_count += 1
-#                         if failed_count <= 10:  # Log first 10 errors only
-#                             WaterUploadLog.objects.create(
-#                                 tracking=tracking,
-#                                 log_level='ERROR',
-#                                 message=f'Failed to process payment record {i}: {str(e)}'
-#                             )
-#                         continue
-                
-#                 # Insert remaining batch
-#                 if batch:
-#                     Utility_Bill.objects.bulk_create(batch, ignore_conflicts=True)
-#                     processed_count += len(batch)
-            
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO',
-#                 message=f'Payment data insertion completed. Processed: {processed_count}, Failed: {failed_count}'
-#             )
-            
-#             return processed_count, failed_count
-            
-#         except Exception as e:
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='ERROR',
-#                 message=f'Bulk insert failed: {str(e)}'
-#             )
-#             raise e
-    
-    
-#     def insert_customer_info_data(self, records, tracking):
-#         """Insert customer records - Skip if already exists (OPTIMIZED)"""
-#         processed_count = 0
-#         failed_count = 0
-#         skipped_count = 0
-        
-#         try:
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO',
-#                 message=f'Starting to process {len(records)} customer records'
-#             )
-            
-#             # OPTIMIZATION: Get all existing customer IDs in one query
-#             existing_customer_ids = set(
-#                 w_customer_info.objects.values_list('Customer_ID', flat=True)
-#             )
-            
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO',
-#                 message=f'Found {len(existing_customer_ids)} existing customers in database'
-#             )
-            
-#             # Prepare batch insert list
-#             customers_to_insert = []
-#             batch_size = 500
-            
-#             for i, item in enumerate(records):
-#                 try:
-#                     if not isinstance(item, dict):
-#                         failed_count += 1
-#                         continue
-                    
-#                     def safe_get(key, default=''):
-#                         value = item.get(key, default)
-#                         return value if value is not None else default
-                    
-#                     customer_id = self.truncate(safe_get('CUSTOMER_ID', ''), 100)
-                    
-#                     if not customer_id:  # Skip if no customer ID
-#                         failed_count += 1
-#                         continue
-                    
-#                     # Skip if customer already exists
-#                     if customer_id in existing_customer_ids:
-#                         skipped_count += 1
-#                         continue
-                    
-#                     # Prepare object for bulk insert - UPDATE FIELD MAPPING
-#                     customer = w_customer_info(
-#                         Customer_ID=customer_id,
-#                         No=self.truncate(safe_get('INDEX_NO', ''), 100),
-#                         Company_name=self.truncate(safe_get('COMPANY_NAME', ''), 100),
-#                         Name=self.truncate(safe_get('GIVEN_NAME', ''), 100),
-#                         Surname=self.truncate(safe_get('FAMILY_NAME', ''), 100),
-#                         National_ID=self.truncate(safe_get('ID_NO', ''), 100),
-#                         Passport=self.truncate(safe_get('PASSPORT_NO', ''), 100),
-#                         Address=self.truncate(safe_get('ADDRESS', ''), 100),
-#                         Dustrict_ID=self.truncate(safe_get('DIS_ID', ''), 100),
-#                         Province_ID=self.truncate(safe_get('PRO_ID', ''), 100),
-#                         Tel=self.truncate(safe_get('TEL_NO', ''), 100),
-#                         Email=self.truncate(safe_get('EMAIL', ''), 100),
-#                         Cus_type=self.truncate(safe_get('SUPPLY_TYPE', ''), 100),
-#                         Regis_date=self.truncate(safe_get('REGIT_DATE', ''), 100)
-#                     )
-                    
-#                     customers_to_insert.append(customer)
-                    
-#                     # Bulk insert when batch is full
-#                     if len(customers_to_insert) >= batch_size:
-#                         w_customer_info.objects.bulk_create(
-#                             customers_to_insert,
-#                             ignore_conflicts=True
-#                         )
-#                         processed_count += len(customers_to_insert)
-#                         customers_to_insert = []
-                        
-#                         # Log progress
-#                         WaterUploadLog.objects.create(
-#                             tracking=tracking,
-#                             log_level='INFO',
-#                             message=f'Customer records progress: {i+1}/{len(records)} processed, {processed_count} new, {skipped_count} skipped'
-#                         )
-                
-#                 except Exception as e:
-#                     failed_count += 1
-#                     if failed_count <= 10:  # Log only first 10 errors
-#                         WaterUploadLog.objects.create(
-#                             tracking=tracking,
-#                             log_level='ERROR',
-#                             message=f'Failed to process customer record {i}: {str(e)}'
-#                         )
-#                     continue
-            
-#             # Insert remaining customers
-#             if customers_to_insert:
-#                 w_customer_info.objects.bulk_create(
-#                     customers_to_insert,
-#                     ignore_conflicts=True
-#                 )
-#                 processed_count += len(customers_to_insert)
-            
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='INFO',
-#                 message=f'Customer data processing completed. New: {processed_count}, Skipped: {skipped_count}, Failed: {failed_count}'
-#             )
-            
-#             return processed_count, failed_count
-            
-#         except Exception as e:
-#             WaterUploadLog.objects.create(
-#                 tracking=tracking,
-#                 log_level='ERROR',
-#                 message=f'Customer data insert failed: {str(e)}'
-#             )
-#             raise e
-    
-    
-#     def truncate(self, value, max_length):
-#         """Safely truncate string to max length"""
-#         if value is None:
-#             return ''
-#         return str(value)[:max_length]
-    
-    
-#     def safe_decimal(self, value):
-#         """Safely convert to decimal"""
-#         try:
-#             return float(value or 0)
-#         except (ValueError, TypeError):
-#             return 0.0
-
-
-# class WaterUploadTrackingDetailAPIView(APIView):
-#     """Get detailed tracking information with logs"""
-    
-#     def get(self, request, tracking_id):
-#         try:
-#             tracking = WaterUploadDataTracking.objects.get(id=tracking_id)
-            
-#             # Get logs
-#             logs = WaterUploadLog.objects.filter(tracking=tracking).order_by('-timestamp')
-            
-#             # Serialize
-#             data = {
-#                 'id': tracking.id,
-#                 'pro_id': tracking.pro_id,
-#                 'pro_name': tracking.pro_name,
-#                 'dis_id': tracking.dis_id,
-#                 'dis_name': tracking.dis_name,
-#                 'upload_month': tracking.upload_month,
-#                 'status': tracking.status,
-#                 'total_records': tracking.total_records,
-#                 'payment_records': tracking.payment_records,
-#                 'customer_records': tracking.customer_records,
-#                 'data_size_mb': tracking.data_size_mb,
-#                 'upload_started': tracking.upload_started,
-#                 'upload_completed': tracking.upload_completed,
-#                 'upload_duration': tracking.upload_duration,
-#                 'processed_records': tracking.processed_records,
-#                 'failed_records': tracking.failed_records,
-#                 'success_rates': tracking.success_rates,
-#                 'user_upload': tracking.user_upload,
-#                 'error_message': tracking.error_message,
-#                 'logs': [
-#                     {
-#                         'log_level': log.log_level,
-#                         'message': log.message,
-#                         'timestamp': log.timestamp
-#                     }
-#                     for log in logs
-#                 ]
-#             }
-            
-#             return Response(data, status=status.HTTP_200_OK)
-            
-#         except WaterUploadDataTracking.DoesNotExist:
-#             return Response(
-#                 {'error': 'Tracking record not found'},
-#                 status=status.HTTP_404_NOT_FOUND
-#             )
-
-#tik
+# update 
+import requests
+import logging
+from django.db import transaction
+from django.db.models import Count, Sum, Q
+from django.utils import timezone
+from rest_framework import status, generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
-from .models import Login
-from .serializers import UserSerializer
+from rest_framework.permissions import IsAuthenticated
 
-class UserListAPIView(APIView):
-    authentication_classes = []
-    permission_classes = []
-
-    def get(self, request, *args, **kwargs):
-        try:
-            # ✅ เริ่มด้วยการใช้ values() แทน only() เพื่อให้ query เร็วขึ้นมาก
-            queryset = Login.objects.values(
-                'UID',
-                'bnk_code',
-                'username',
-                'nameL',
-                'nameE',
-                'surnameL',
-                'surnameE',
-                'last_login',
-                'is_active',
-                'branch_id', 'GID' ,'is_active','is_staff','MID','profile_image'
-            )
-
-            # ✅ เพิ่ม filter ถ้ามีเงื่อนไขใน query params
-            bnk_code = request.GET.get('bnk_code')
-            if bnk_code:
-                queryset = queryset.filter(bnk_code=bnk_code)
-
-            username = request.GET.get('username')
-            if username:
-                queryset = queryset.filter(username__icontains=username)
-
-            # ✅ เพิ่มการ sort ตาม field ล่าสุด
-            queryset = queryset.order_by('-UID')
-
-            # ✅ ไม่ตัดผลลัพธ์ (ไม่มี [:200]) เพื่อให้ได้ครบทุกแถว
-            # แต่ถ้าช้ามาก สามารถใส่ limit ได้ภายหลัง เช่น [:1000]
-
-            # ✅ แปลง queryset เป็น list เพื่อให้ JSONResponse เร็วขึ้น
-            data = list(queryset)
-             # 🔹 แก้ profile_image ให้เป็น URL เต็ม
-            for user in data:
-                if user.get('profile_image'):
-                    user['profile_image'] = request.build_absolute_uri(
-                        settings.MEDIA_URL + user['profile_image']
-                    )
-
-            return Response({
-                'status': True,
-                'count': len(data),
-                'results': data
-            })
-
-        except Exception as e:
-            return Response({
-                'status': False,
-                'error': str(e)
-            })
-
-    def post(self, request):
-        serializer = UserSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response({
-                "message": "User added successfully",
-                "user": serializer.data
-            }, status=status.HTTP_201_CREATED)
-        return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-
-
-class UserDetailAPIView(APIView):
-    """GET / PUT / DELETE for single user"""
-    def get_object(self, uid):
-        try:
-            return Login.objects.get(UID=uid)
-        except Login.DoesNotExist:
-            return None
-
-    def get(self, request, uid):
-        user = self.get_object(uid)
-        if not user:
-            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
-        serializer = UserSerializer(user)
-        return Response(serializer.data)
-
-    def put(self, request, uid):
-        user = self.get_object(uid)
-        if not user:
-            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
-        serializer = UserSerializer(user, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response({"message": "User updated successfully", "user": serializer.data}, status=status.HTTP_200_OK)
-        return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-
-    def delete(self, request, uid):
-        user = self.get_object(uid)
-        if not user:
-            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
-        user.delete()
-        return Response({"message": "User deleted successfully"}, status=status.HTTP_200_OK)
-    
-    
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from .models import User_Group
-from .serializers import UserGroupSerializer
-
-class UserGroupList(APIView):
-    authentication_classes = []
-    permission_classes = []
-
-    def get(self, request):
-        groups = User_Group.objects.all().order_by('nameL')
-        serializer = UserGroupSerializer(groups, many=True)
-        return Response(serializer.data)
-    
-    
-# views.py
-from django.db.models import Q
-from rest_framework import generics
-from .models import memberInfo, memberType, villageInfo, districtInfo, provInfo
-from .serializers import (
-    MemberInfoSerializers, MemberTypeSerializers, VillageInfoSerializers,
-    DistrictInfoSerializers, ProvInfoSerializers
+from utility.models import (
+    WaterUploadDataTracking,
+    WaterUploadLog,
+    w_customer_info,
+    w_province_code,
+    w_district_code,
+    Utility_Bill  # Assuming this model exists
 )
-from rest_framework.parsers import MultiPartParser, FormParser
+from .serializers import (
+    WaterUploadTrackingSerializer,
+    WaterUploadTrackingListSerializer,
+    InitializeTrackingSerializer,
+    WaterUploadSerializer,
+    DistrictStatisticsSerializer,
+    UploadSummarySerializer,
+    WaterUploadLogSerializer
+)
 
-class MemberListView(generics.ListCreateAPIView):
-    serializer_class = MemberInfoSerializers
-    queryset = memberInfo.objects.select_related(
-        'memberType', 'provInfo', 'districtInfo', 'villageInfo'
-    ).all().order_by('-id')
-    parser_classes = [MultiPartParser, FormParser]
+logger = logging.getLogger(__name__)
 
+
+class WaterAPIClient:
+    """Client for interacting with Water Supply API"""
+    
+    BASE_URL = "http://202.137.141.244:3000/v3/api/loans"
+    TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbiI6IlUyRnNkR1ZrWDErdE9ja29vVDV0NXdqWlBqTzhVc0V1ZnR2QytPUXp3Z2ljWkFPdkhNUkNqdzh0NUhOSENBRVZsVXVNWHBrc1RudUFxaUE3R0VtVExRSTZMaWNTVUlaN1BMb0xGOVczMWtjWnFoQmxFUThHVUFwSFpNS0NDVjN1RURhWDJSSjFwZDNqaFRGc2lmdUF3Zz09IiwiaWF0IjoxNzA5MDEwNjU0fQ.mhmfUuasPQnAtxTQmwIyofClMuOAKVKZloNskpG9fHo"
+    
+    def __init__(self):
+        self.headers = {
+            'Auth': f'{self.TOKEN}',
+            'Content-Type': 'application/json'
+        }
+    
+    def fetch_new_connections(self, month):
+        """
+        Fetch new customer connections for a given month
+        Args:
+            month (str): Format MMYYYY (e.g., 012025)
+        Returns:
+            dict: Response data with customer information
+        """
+        url = f"{self.BASE_URL}/newconnection/{month}"
+        try:
+            response = requests.get(url, headers=self.headers, timeout=300)
+            response.raise_for_status()
+            return {
+                'success': True,
+                'data': response.json(),
+                'status_code': response.status_code
+            }
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching new connections: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'status_code': getattr(e.response, 'status_code', None) if hasattr(e, 'response') else None
+            }
+    
+    def fetch_all_bills(self, month):
+        """
+        Fetch all bills for a given month
+        Args:
+            month (str): Format MMYYYY (e.g., 012025)
+        Returns:
+            dict: Response data with bill information
+        """
+        url = f"{self.BASE_URL}/allbillmonth/{month}"
+        try:
+            response = requests.get(url, headers=self.headers, timeout=300)
+            response.raise_for_status()
+            return {
+                'success': True,
+                'data': response.json(),
+                'status_code': response.status_code
+            }
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching bills: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'status_code': getattr(e.response, 'status_code', None) if hasattr(e, 'response') else None
+            }
+
+
+class InitializeWaterTrackingAPIView(APIView):
+    """
+    Step 1: Initialize tracking record for a month
+    POST /api/water-supply/initialize/
+    Body: {
+        "upload_month": "012025",
+        "pro_id": "01",  # Optional
+        "dis_id": "0101",  # Optional
+        "user_upload": "admin"
+    }
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        serializer = InitializeTrackingSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {'error': serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        upload_month = serializer.validated_data['upload_month']
+        pro_id = serializer.validated_data.get('pro_id', '00')
+        dis_id = serializer.validated_data.get('dis_id', '00')
+        user_upload = serializer.validated_data.get('user_upload', request.user.username)
+        
+        # Get province and district names
+        pro_name = "All Provinces"
+        dis_name = "All Districts"
+        
+        if pro_id != '00':
+            try:
+                province = w_province_code.objects.get(pro_id=pro_id)
+                pro_name = province.pro_name
+            except w_province_code.DoesNotExist:
+                pass
+        
+        if dis_id != '00':
+            try:
+                district = w_district_code.objects.get(dis_id=dis_id)
+                dis_name = district.dis_name
+            except w_district_code.DoesNotExist:
+                pass
+        
+        # Create or update tracking record
+        tracking, created = WaterUploadDataTracking.objects.get_or_create(
+            pro_id=pro_id,
+            dis_id=dis_id,
+            upload_month=upload_month,
+            defaults={
+                'pro_name': pro_name,
+                'dis_name': dis_name,
+                'status': 'pending',
+                'user_upload': user_upload
+            }
+        )
+        
+        if not created:
+            tracking.status = 'pending'
+            tracking.user_upload = user_upload
+            tracking.save()
+        
+        # Create log entry
+        WaterUploadLog.objects.create(
+            tracking=tracking,
+            log_level='INFO',
+            message=f'Tracking initialized for month {upload_month}'
+        )
+        
+        return Response({
+            'message': 'Tracking initialized successfully',
+            'tracking_id': tracking.id,
+            'created': created
+        }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+class WaterUploadDataAPIView(APIView):
+    """
+    Step 2: Upload water supply data (Fetch from API and insert into database)
+    POST /api/water-supply/upload/
+    Body: {
+        "upload_month": "012025",
+        "pro_id": "01",  # Optional
+        "dis_id": "0101",  # Optional
+        "user_upload": "admin",
+        "force_reupload": false
+    }
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        serializer = WaterUploadSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {'error': serializer.errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        upload_month = serializer.validated_data['upload_month']
+        pro_id = serializer.validated_data.get('pro_id', '00')
+        dis_id = serializer.validated_data.get('dis_id', '00')
+        user_upload = serializer.validated_data.get('user_upload', request.user.username)
+        force_reupload = serializer.validated_data.get('force_reupload', False)
+        
+       
+        try:
+            tracking = WaterUploadDataTracking.objects.get(
+                pro_id=pro_id,
+                dis_id=dis_id,
+                upload_month=upload_month
+            )
+            
+            if tracking.status == 'completed' and not force_reupload:
+                return Response({
+                    'error': 'Upload already completed for this month. Use force_reupload=true to override.',
+                    'tracking_id': tracking.id
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except WaterUploadDataTracking.DoesNotExist:
+            # Auto-initialize if not exists
+            pro_name = "All Provinces"
+            dis_name = "All Districts"
+            
+            if pro_id != '00':
+                try:
+                    province = w_province_code.objects.get(pro_id=pro_id)
+                    pro_name = province.pro_name
+                except w_province_code.DoesNotExist:
+                    pass
+            
+            if dis_id != '00':
+                try:
+                    district = w_district_code.objects.get(dis_id=dis_id)
+                    dis_name = district.dis_name
+                except w_district_code.DoesNotExist:
+                    pass
+            
+            tracking = WaterUploadDataTracking.objects.create(
+                pro_id=pro_id,
+                dis_id=dis_id,
+                upload_month=upload_month,
+                pro_name=pro_name,
+                dis_name=dis_name,
+                status='pending',
+                user_upload=user_upload
+            )
+        
+        # Update status to in_progress
+        tracking.status = 'in_progress'
+        tracking.upload_started = timezone.now()
+        tracking.user_upload = user_upload
+        tracking.save()
+        
+        # Log start
+        WaterUploadLog.objects.create(
+            tracking=tracking,
+            log_level='INFO',
+            message=f'Starting data upload for month {upload_month}'
+        )
+        
+        # Initialize API client
+        api_client = WaterAPIClient()
+        
+        # Process upload
+        try:
+            self._process_upload(tracking, api_client, upload_month)
+            
+            # Calculate final statistics
+            tracking.calculate_duration()
+            tracking.calculate_success_rate()
+            tracking.upload_completed = timezone.now()
+            
+            if tracking.failed_records > 0:
+                tracking.status = 'partial'
+            else:
+                tracking.status = 'completed'
+            
+            tracking.save()
+            
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='SUCCESS',
+                message=f'Upload completed. Processed: {tracking.processed_records}, Failed: {tracking.failed_records}'
+            )
+            
+            return Response({
+                'message': 'Upload completed successfully',
+                'tracking_id': tracking.id,
+                'status': tracking.status,
+                'processed_records': tracking.processed_records,
+                'payment_records': tracking.payment_records,
+                'customer_records': tracking.customer_records,
+                'failed_records': tracking.failed_records
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            tracking.status = 'failed'
+            tracking.error_message = str(e)
+            tracking.upload_completed = timezone.now()
+            tracking.calculate_duration()
+            tracking.save()
+            
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='ERROR',
+                message=f'Upload failed: {str(e)}'
+            )
+            
+            return Response({
+                'error': str(e),
+                'tracking_id': tracking.id
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _process_upload(self, tracking, api_client, upload_month):
+        """Process the upload by fetching and inserting data"""
+        
+        # Step 1: Fetch and insert new customer connections
+        WaterUploadLog.objects.create(
+            tracking=tracking,
+            log_level='INFO',
+            message='Fetching new customer connections...'
+        )
+        
+        customers_result = api_client.fetch_new_connections(upload_month)
+        
+        if not customers_result['success']:
+            raise Exception(f"Failed to fetch customers: {customers_result.get('error')}")
+        
+        tracking.api_response_code = customers_result['status_code']
+        tracking.save()
+        
+        customer_data = customers_result['data']
+        customer_records = self._insert_customers(tracking, customer_data, upload_month)
+        
+        WaterUploadLog.objects.create(
+            tracking=tracking,
+            log_level='SUCCESS',
+            message=f'Inserted {customer_records} customer records'
+        )
+        
+        # Step 2: Fetch and insert bills
+        WaterUploadLog.objects.create(
+            tracking=tracking,
+            log_level='INFO',
+            message='Fetching bill data...'
+        )
+        
+        bills_result = api_client.fetch_all_bills(upload_month)
+        
+        if not bills_result['success']:
+            raise Exception(f"Failed to fetch bills: {bills_result.get('error')}")
+        
+        bill_data = bills_result['data']
+        payment_records = self._insert_bills(tracking, bill_data, upload_month)
+        
+        WaterUploadLog.objects.create(
+            tracking=tracking,
+            log_level='SUCCESS',
+            message=f'Inserted {payment_records} payment records'
+        )
+        
+        # Update tracking record
+        tracking.customer_records = customer_records
+        tracking.payment_records = payment_records
+        tracking.total_records = customer_records + payment_records
+        tracking.processed_records = customer_records + payment_records
+        tracking.save()
+    
+
+        return IndividualBankIbk.objects.filter(query)
+
+
+
+    
+
+    def _insert_customers(self, tracking, data, upload_month):
+        """Insert customer data into w_customer_info table"""
+        inserted_count = 0
+        failed_count = 0
+        
+        def safe_get(item, *keys):
+            for key in keys:
+                val = item.get(key)
+                if val:
+                    return str(val)
+            return ''
+        
+        # ✅ FIX: API returns data in 'message' field
+        customer_list = data.get('message', []) if isinstance(data, dict) else data
+        
+        for customer in customer_list:
+            try:
+                with transaction.atomic():
+                    customer_id = safe_get(customer, 'CUSTOMER_ID')
+                    
+                    if not customer_id:
+                        failed_count += 1
+                        continue
+                    
+                    w_customer_info.objects.update_or_create(
+                        Customer_ID=customer_id,
+                        defaults={
+                            'No': safe_get(customer, 'NO')[:100],
+                            'Company_name': safe_get(customer, 'COMPANY_NAME')[:100],
+                            'Name': safe_get(customer, 'NAME')[:100],
+                            'Surname': safe_get(customer, 'SURNAME')[:100],
+                            'National_ID': safe_get(customer, 'NATIONAL_ID')[:100],
+                            'Passport': safe_get(customer, 'PASSPORT')[:100],
+                            'Address': safe_get(customer, 'ADDRESS')[:100],
+                            'Dustrict_ID': safe_get(customer, 'DISTRICT_ID')[:100],
+                            'Province_ID': safe_get(customer, 'PROVINCE_ID')[:100],
+                            'Tel': safe_get(customer, 'TEL')[:100],
+                            'Email': safe_get(customer, 'EMAIL')[:100],
+                            'Cus_type': safe_get(customer, 'CONSUMER_TYPE')[:100],  # ✅ FIX: CONSUMER_TYPE
+                            'Regis_date': safe_get(customer, 'REGISTER_DATE')[:100]  # ✅ FIX: REGISTER_DATE
+                        }
+                    )
+                    inserted_count += 1
+                    
+            except Exception as e:
+                logger.error(f"Error inserting customer {customer_id}: {str(e)}")
+                failed_count += 1
+        
+        tracking.failed_records += failed_count
+        tracking.save()
+        return inserted_count
+
+    def _insert_bills(self, tracking, data, upload_month):
+        """Insert bill data into Utility_Bill table"""
+        inserted_count = 0
+        failed_count = 0
+        
+        def safe_get(item, key, default=''):
+            val = item.get(key, default)
+            return val if val is not None else default
+        
+        def safe_decimal(value):
+            try:
+                return float(value) if value else 0.0
+            except:
+                return 0.0
+        
+        def truncate(value, max_length):
+            if value is None:
+                return ''
+            return str(value)[:max_length]
+        
+        bill_list = data.get('message', []) if isinstance(data, dict) else data
+        
+        for bill in bill_list:
+            try:
+                with transaction.atomic():
+                    customer_id = safe_get(bill, 'CUSTOMER_ID')
+                    invoice_no = safe_get(bill, 'NO')
+                    
+                    if not invoice_no or not customer_id:
+                        failed_count += 1
+                        continue
+                    
+                    # Create unique identifier
+                    unique_id = f"{invoice_no}_{customer_id}_{upload_month}"
+                    
+                    Utility_Bill.objects.update_or_create(
+                        InvoiceNo=truncate(unique_id, 255),
+                        defaults={
+                            'Customer_ID': truncate(customer_id, 255),
+                            'TypeOfPro': truncate(safe_get(bill, 'SUPPLY_TYPE'), 100),
+                            'Outstanding': safe_decimal(safe_get(bill, 'OUTSTANDING', 0)),
+                            'Basic_Tax': safe_decimal(safe_get(bill, 'BASIC+TAX', 0)),
+                            'Bill_Amount': safe_decimal(safe_get(bill, 'BILL_AMOUNT', 0)),
+                            'Debt_Amount': 0.0,
+                            'Payment_ID': truncate(safe_get(bill, 'PAYMENT_ID'), 255),
+                            'PaymentType': truncate(safe_get(bill, 'PAY_TYPE'), 255),
+                            'Payment_Date': truncate(safe_get(bill, 'PAYMENT_DATE'), 255),
+                            'InvoiceMonth': truncate(safe_get(bill, 'BILL_OF_MONTH'), 50),
+                            'InvoiceDate': truncate(safe_get(bill, 'DATE_OF_ISSUE'), 100),
+                            'DisID': truncate(safe_get(bill, 'DIS_ID'), 100),
+                            'ProID': truncate(safe_get(bill, 'PRO_ID'), 100),
+                            'UserID': tracking.user_upload
+                        }
+                    )
+                    inserted_count += 1
+                    
+            except Exception as e:
+                logger.error(f"Error inserting bill: {str(e)}")
+                failed_count += 1
+                if failed_count <= 5:  # Log first 5 errors only
+                    WaterUploadLog.objects.create(
+                        tracking=tracking,
+                        log_level='WARNING',
+                        message=f'Bill insert failed: {str(e)[:200]}'
+                    )
+        
+        tracking.failed_records += failed_count
+        tracking.save()
+        return inserted_count
+
+
+class WaterUploadTrackingListAPIView(generics.ListAPIView):
+    """
+    Step 3: Get list of upload tracking records
+    GET /api/water-supply/tracking/
+    Query params:
+        - upload_month: Filter by month (MMYYYY)
+        - status: Filter by status
+        - pro_id: Filter by province
+        - dis_id: Filter by district
+    """
+    queryset = WaterUploadDataTracking.objects.all()
+    serializer_class = WaterUploadTrackingListSerializer
+    permission_classes = [IsAuthenticated]
+    
     def get_queryset(self):
         queryset = super().get_queryset()
-        search = self.request.query_params.get('search', None)
-        if search:
-            queryset = queryset.filter(
-                Q(bnk_code__exact=search) |
-                Q(code__icontains=search) |
-                Q(nameL__icontains=search) |
-                Q(nameE__icontains=search)
-            )
-        member_type = self.request.query_params.get('member_type', None)
-        if member_type:
-            queryset = queryset.filter(memberType_id=member_type)
-        return queryset.distinct().order_by('bnk_code')
+        
+        upload_month = self.request.query_params.get('upload_month')
+        status_filter = self.request.query_params.get('status')
+        pro_id = self.request.query_params.get('pro_id')
+        dis_id = self.request.query_params.get('dis_id')
+        
+        if upload_month:
+            queryset = queryset.filter(upload_month=upload_month)
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        if pro_id:
+            queryset = queryset.filter(pro_id=pro_id)
+        if dis_id:
+            queryset = queryset.filter(dis_id=dis_id)
+        
+        return queryset.order_by('-created_at')
 
-    def get_serializer_context(self):
-        # 🔹 เพื่อให้ get_mImage สามารถสร้าง absolute URL
-        context = super().get_serializer_context()
-        context.update({"request": self.request})
-        return context
 
-class MemberDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = memberInfo.objects.select_related(
-        'memberType', 'provInfo', 'districtInfo', 'villageInfo'
-    ).all()
-    serializer_class = MemberInfoSerializers
-    parser_classes = [MultiPartParser, FormParser]  # 🔹 รองรับ upload รูป
+class WaterUploadTrackingDetailAPIView(generics.RetrieveAPIView):
+    """
+    Step 4: Get detailed tracking information including logs
+    GET /api/water-supply/tracking/{id}/
+    """
+    queryset = WaterUploadDataTracking.objects.all()
+    serializer_class = WaterUploadTrackingSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_field = 'id'
+    lookup_url_kwarg = 'tracking_id'
 
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context.update({"request": self.request})
-        return context
-
-class MemberTypeListView(generics.ListAPIView):
-    queryset = memberType.objects.all()
-    serializer_class = MemberTypeSerializers
-
-class ProvInfoListView(generics.ListAPIView):
-    """ดึง Province ทั้งหมด"""
-    queryset = provInfo.objects.all().order_by('id')
-    serializer_class = ProvInfoSerializers
-
-class DistrictInfoListView(generics.ListAPIView):
-    """ดึง District โดยสามารถค้นหาได้"""
-    serializer_class = DistrictInfoSerializers
+class WaterDistrictStatisticsAPIView(APIView):
+    """Get district statistics with actual bill and customer counts"""
+    permission_classes = [IsAuthenticated]
     
-    def get_queryset(self):
-        queryset = districtInfo.objects.all().order_by('id')
-        # ค้นหา District ตามคำที่พิมพ์
-        search = self.request.query_params.get('search', None)
-        if search:
-            queryset = queryset.filter(
-                Q(nameL__icontains=search) | Q(nameE__icontains=search)
-            )
-        return queryset
+    def get(self, request):
+        from django.db.models import Count
+        
+        upload_month = request.query_params.get('upload_month')
+        
+        if not upload_month:
+            return Response({'error': 'upload_month is required'}, status=400)
+        
+        # Get bill counts per district
+        bill_stats = Utility_Bill.objects.filter(
+            InvoiceMonth__contains=upload_month[2:]  # Extract year from 082025
+        ).values('ProID', 'DisID').annotate(
+            total_bills=Count('InvoiceNo')
+        )
+        
+        # Get customer counts per district
+        customer_stats = w_customer_info.objects.values(
+            'Province_ID', 'Dustrict_ID'
+        ).annotate(
+            total_customers=Count('Customer_ID')
+        )
+        
+        # Create lookup dicts
+        customer_lookup = {
+            f"{c['Province_ID']}_{c['Dustrict_ID']}": c['total_customers']
+            for c in customer_stats
+        }
+        
+        # Build response with proper names
+        result = []
+        for stat in bill_stats:
+            pro_id = stat['ProID']
+            dis_id = stat['DisID']
+            
+            # Get province name
+            try:
+                province = w_province_code.objects.get(pro_id=pro_id)
+                pro_name = province.pro_name
+            except:
+                pro_name = f"Province {pro_id}"
+            
+            # Get district name
+            try:
+                district = w_district_code.objects.get(pro_id=pro_id, dis_id=dis_id)
+                dis_name = district.dis_name
+            except:
+                dis_name = f"District {dis_id}"
+            
+            # Get customer count
+            customer_count = customer_lookup.get(f"{pro_id}_{dis_id}", 0)
+            
+            result.append({
+                'pro_id': pro_id,
+                'pro_name': pro_name,
+                'dis_id': dis_id,
+                'dis_name': dis_name,
+                'upload_month': upload_month,
+                'total_bills': stat['total_bills'],
+                'total_customers': customer_count,
+                'status': 'completed',
+                'last_updated': timezone.now()
+            })
+        
+        return Response(result, status=200)
 
-class VillageInfoListView(generics.ListAPIView):
-    """ดึง Village โดยสามารถค้นหาได้"""
-    serializer_class = VillageInfoSerializers
+
+class WaterUploadSummaryAPIView(APIView):
+    """
+    Step 6: Get upload summary across all periods
+    GET /api/water-supply/statistics/summary/
+    Query params:
+        - start_month: Start month (optional)
+        - end_month: End month (optional)
+    """
+    permission_classes = [IsAuthenticated]
     
-    def get_queryset(self):
-        queryset = villageInfo.objects.all().order_by('id')
-        # ค้นหา Village ตามคำที่พิมพ์
-        search = self.request.query_params.get('search', None)
-        if search:
-            queryset = queryset.filter(
-                Q(nameL__icontains=search) | Q(nameE__icontains=search)
-            )
-        return queryset
+    def get(self, request):
+        start_month = request.query_params.get('start_month')
+        end_month = request.query_params.get('end_month')
+        
+        queryset = WaterUploadDataTracking.objects.all()
+        
+        if start_month:
+            queryset = queryset.filter(upload_month__gte=start_month)
+        if end_month:
+            queryset = queryset.filter(upload_month__lte=end_month)
+        
+        # Group by month and aggregate statistics
+        summary = queryset.values('upload_month').annotate(
+            total_provinces=Count('pro_id', distinct=True),
+            total_districts=Count('dis_id', distinct=True),
+            total_bills=Sum('payment_records'),
+            total_customers=Sum('customer_records'),
+            completed_uploads=Count('id', filter=Q(status='completed')),
+            pending_uploads=Count('id', filter=Q(status='pending')),
+            failed_uploads=Count('id', filter=Q(status='failed'))
+        ).order_by('-upload_month')
+        
+        serializer = UploadSummarySerializer(summary, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.db.models import Q
+from .models import IndividualBankIbk
+
+class SearchIndividualBankView(APIView):
+    def get(self, request):
+        customerid = request.query_params.get('customerid')
+        lcic_id = request.query_params.get('lcic_id')
+        bnk_code = request.query_params.get('bnk_code')  
+
+       
+        if not any([customerid, lcic_id]):
+            return Response({
+                "results": [],
+                "message": "ກະລຸນາປ້ອນ customerid ຫຼື lcic_id"
+            }, status=200)
+
+        query = Q()
+
+       
+        if customerid:
+            query &= Q(customerid=customerid)
+
+            
+            if bnk_code:
+                query &= Q(bnk_code=bnk_code)
+            else:
+               
+                valid_bnk_codes = IndividualBankIbk.objects.filter(
+                    customerid=customerid
+                ).values_list('bnk_code', flat=True).distinct()
+
+                if not valid_bnk_codes:
+                    return Response({
+                        "results": [],
+                        "message": "ບໍ່ພົບ customerid ນີ້"
+                    }, status=200)
+
+                query &= Q(bnk_code__in=valid_bnk_codes)
+
+            
+            if lcic_id:
+                query &= Q(lcic_id=lcic_id)
+
+        
+        elif lcic_id:
+            query &= Q(lcic_id=lcic_id)
+            
+
+       
+        results = IndividualBankIbk.objects.filter(query).values(
+            'customerid', 'lcic_id', 'bnk_code',
+            'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname','bnk_code'
+        )
+
+        return Response({
+            "count": len(results),
+            "results": list(results)
+        })

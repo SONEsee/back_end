@@ -1818,26 +1818,118 @@ class Collateral(models.Model):
 
 
 
+# class Role(models.Model):
+#     name = models.CharField(max_length=100)
+#     name_lao = models.CharField(max_length=100, blank=True, null=True)
+#     can_access_all_paths = models.BooleanField(default=False)
+#     name_la = models.CharField(max_length=100, blank=True, null=True)
+
+#     def __str__(self):
+#         return self.name
+    
+# class SidebarItem(models.Model):
+#     name = models.CharField(max_length=100)
+#     url = models.CharField(max_length=255)
+#     icon = models.CharField(max_length=100, blank=True, null=True)
+#     roles = models.ManyToManyField(Role, related_name="sidebar_items")
+#     order = models.IntegerField(default=0, help_text="Sequence for layout (lower numbers first)")
+
+#     class Meta:
+#         ordering = ['order']  # Default ordering for querysets
+
+#     def __str__(self):
+#         return self.name
+
+# class SidebarSubItem(models.Model):
+#     name = models.CharField(max_length=100)
+#     url = models.CharField(max_length=255)
+#     parent = models.ForeignKey(SidebarItem, on_delete=models.CASCADE, related_name="sub_items")
+#     roles = models.ManyToManyField(Role, related_name="sidebar_sub_items")
+#     order = models.IntegerField(default=0, help_text="Sequence for layout under parent (lower numbers first)")
+
+#     class Meta:
+#         ordering = ['order']  # Default ordering for querysets
+
+#     def __str__(self):
+#         return f"{self.name} ({self.parent.name})"
+
+from django.db import models
+from django.core.validators import MinValueValidator
+
+
 class Role(models.Model):
-    name = models.CharField(max_length=100)
-    name_lao = models.CharField(max_length=100, blank=True, null=True)
-    can_access_all_paths = models.BooleanField(default=False)
-    name_la = models.CharField(max_length=100, blank=True, null=True)
+    """User role for permission management"""
+    
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        # db_table = 'roles'
 
     def __str__(self):
         return self.name
-    
+
+
 class SidebarItem(models.Model):
-    name = models.CharField(max_length=100)
-    url = models.CharField(max_length=255)
-    icon = models.CharField(max_length=100, blank=True, null=True)
-    roles = models.ManyToManyField(Role, related_name="sidebar_items")
+    """Main sidebar menu item"""
+    
+    title = models.CharField(max_length=100)
+    icon = models.CharField(max_length=50, blank=True, null=True)
+    route = models.CharField(max_length=200, blank=True, null=True)
+    order = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        db_index=True
+    )
+    roles = models.ManyToManyField(Role, related_name='sidebar_items', blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order', 'id']
+        # db_table = 'sidebar_items'
+        indexes = [
+            models.Index(fields=['order', 'id']),
+        ]
+
+    def __str__(self):
+        return f"{self.order} - {self.title}"
+
 
 class SidebarSubItem(models.Model):
-    name = models.CharField(max_length=100)
-    url = models.CharField(max_length=255)
-    parent = models.ForeignKey(SidebarItem, on_delete=models.CASCADE, related_name="sub_items")
-    roles = models.ManyToManyField(Role, related_name="sidebar_sub_items")
+    """Nested sub-menu items under main sidebar items"""
+    
+    parent = models.ForeignKey(
+        SidebarItem,
+        on_delete=models.CASCADE,
+        related_name='sub_items'
+    )
+    title = models.CharField(max_length=100)
+    icon = models.CharField(max_length=50, blank=True, null=True)
+    route = models.CharField(max_length=200)
+    order = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        db_index=True
+    )
+    roles = models.ManyToManyField(Role, related_name='sidebar_sub_items', blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['parent__order', 'order', 'id']
+        # db_table = 'sidebar_sub_items'
+        indexes = [
+            models.Index(fields=['parent', 'order', 'id']),
+        ]
+
+    def __str__(self):
+        return f"{self.parent.title} > {self.order} - {self.title}"
 
 # from django.conf import settings
 # from django.db import models
@@ -2115,3 +2207,68 @@ class LCICSystemUser(models.Model):
 
     def __str__(self):
         return self.username
+    
+    
+class IndividualBankIbk(models.Model):
+    ind_sys_id = models.AutoField(primary_key=True)
+    lcic_id = models.CharField(max_length=150, blank=True, null=True)
+    segment = models.CharField(max_length=150, blank=True, null=True)
+    mm_ind_sys_id = models.CharField(max_length=150, blank=True, null=True)
+    bnk_code = models.CharField(max_length=150, blank=True, null=True)
+    branchcode = models.CharField(max_length=150, blank=True, null=True)
+    customerid = models.CharField(max_length=150, blank=True, null=True)
+    ind_national_id = models.CharField(max_length=150, blank=True, null=True)
+    ind_national_id_date = models.DateField(blank=True, null=True)
+    ind_passport = models.CharField(max_length=150, blank=True, null=True)
+    ind_passport_date = models.DateField(blank=True, null=True)
+    ind_familybook = models.CharField(max_length=150, blank=True, null=True)
+    ind_familybook_prov_code = models.CharField(max_length=150, blank=True, null=True)
+    ind_familybook_date = models.DateField(blank=True, null=True)
+    ind_birth_date = models.DateField(blank=True, null=True)
+    ind_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_second_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_surname = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_surname = models.CharField(max_length=150, blank=True, null=True)
+    ind_old_surname = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_old_surname = models.CharField(max_length=150, blank=True, null=True)
+    ind_nationality = models.CharField(max_length=150, blank=True, null=True)
+    ind_gender = models.CharField(max_length=10, blank=True, null=True)
+    ind_civil_status = models.CharField(max_length=150, blank=True, null=True)
+    ind_insert_date = models.DateTimeField(blank=True, null=True)
+    ind_update_date = models.DateTimeField(blank=True, null=True)
+    mm_action_date = models.DateTimeField(blank=True, null=True)
+    mm_log = models.TextField(blank=True, null=True)
+    mm_comment = models.TextField(blank=True, null=True)
+    mm_by = models.CharField(max_length=150, blank=True, null=True)
+    blk_sys_id = models.CharField(max_length=150, blank=True, null=True)
+    mm_status = models.CharField(max_length=150, blank=True, null=True)
+    is_manual = models.BooleanField(blank=True, null=True)
+    ind_lao_name_code = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_surname_code = models.CharField(max_length=150, blank=True, null=True)
+
+    class Meta:
+       
+        db_table = 'individual_bank_ibk'
+
+
+class IndividualBankIbkInfo(models.Model):
+    ind_sys_id = models.AutoField(primary_key=True)
+    mm_ind_sys_id = models.CharField(max_length=150, blank=True, null=True)
+    lcic_id = models.CharField(max_length=150, blank=True, null=True)
+    ind_national_id = models.CharField(max_length=150, blank=True, null=True)
+    ind_national_id_date = models.DateField(blank=True, null=True)
+    ind_passport = models.CharField(max_length=150, blank=True, null=True)
+    ind_passport_date = models.DateField(blank=True, null=True)
+    ind_familybook = models.CharField(max_length=150, blank=True, null=True)
+    ind_familybook_prov_code = models.CharField(max_length=150, blank=True, null=True)
+    ind_familybook_date = models.DateField(blank=True, null=True)
+    ind_birth_date = models.DateField(blank=True, null=True)
+    ind_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_surname = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_surname = models.CharField(max_length=150, blank=True, null=True)
+
+    class Meta:
+        
+        db_table = 'individual_bank_ibk_info'
