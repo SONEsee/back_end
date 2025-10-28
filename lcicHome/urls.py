@@ -57,7 +57,7 @@ from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView,Charg
 from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView
 from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, UpdateUserView, InsertSearchLogView, EnterpriseInfoMatch, searchlog_reportView,charge_reportView, SearchLogChartView,ChargeChartView,SearchLogChart_MonthView, SearchLogChartByBankCodeView, SearchLogChartByDateView,ChargeChartByDateView, ChargeChartMonthView, ChargeChartByBankView, CatalogCatListView,MemberCountView,BankTypeCountView,TotalSearchLogByBankTypeView,SumTotalByBankType,SumTotalChgAmountByBankType,LocationView,filter_villages, SumTotalByBankTypeMonth, SumTotalByBankTypeYear, ReportCatalogView,memberinfolistView,SumTotalByBankTypeEveryMonth, SearchLogChargePerDayView,ChargeCountByHourView, ChargeReportSummary,SearchlogReportDetailView, SidebarCreateView, update_searchlog_status,get_all_upload_files,BankUsersView,LoanCountByDate,CountSearchLogbyDate,CountFeebyDate
 from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddLCICSystemUser, SysUserTokenRefresh,LCICSystemUserDetailView, LCICSystemUserListView, BankListCreateView,BankDetailView, EDLProvinceDetailAPIView, FileElectricListAPIView, ElectricReportAPIView, UserGroupViewSet,UploadTrackingListAPIView,UploadDataAPIView,UploadTrackingDetailAPIView,InitializeTrackingAPIView, DebugAPIView,InitializeTestDataAPIView, TestRealUploadAPIView, InitializeDistrictsAPIView, ChargeReportMainView, ChargeReportDetailView,confirm_dispute_upload,edl_customer_search,water_customer_search,SearchLogReportMainView,SearchLogReportDetailView,ChargeReportSummaryView,WaterUploadDataAPIView
-# from .views import UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView
+from .views import UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView
 from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddLCICSystemUser, SysUserTokenRefresh,LCICSystemUserDetailView, LCICSystemUserListView, BankListCreateView,BankDetailView, EDLProvinceDetailAPIView, FileElectricListAPIView, ElectricReportAPIView, UserGroupViewSet,UploadTrackingListAPIView,UploadDataAPIView,UploadTrackingDetailAPIView,InitializeTrackingAPIView, DebugAPIView,InitializeTestDataAPIView, TestRealUploadAPIView, InitializeDistrictsAPIView, ChargeReportMainView, ChargeReportDetailView,confirm_dispute_upload,edl_customer_search,water_customer_search,SearchLogReportMainView,SearchLogReportDetailView,ChargeReportSummaryView,WaterUploadDataAPIView, ReorderSidebarView,SearchIndividualBankView
 
 
@@ -255,15 +255,15 @@ urlpatterns = [
   #  path('upload_files/', upload_files, name='upload_files'),
    
       #tik
-    # path('user/', UserListAPIView.as_view(), name='user-list'),
-    # path('user/<int:uid>/', UserDetailAPIView.as_view(), name='user-detail'),
-    # path('usergroup_list/', UserGroupList.as_view(), name='usergroup-list'),
-    # path('member_list/', MemberListView.as_view(),name='memberinfo'),
-    # path('member_list/<int:pk>/', MemberDetailView.as_view(), name='member_detail'),
-    # path('membertypes/', MemberTypeListView.as_view(), name='membertype-list'),
-    # path('villageinfos/', VillageInfoListView.as_view(), name='villageinfo-list'),
-    # path('districtinfos/', DistrictInfoListView.as_view(), name='districtinfo-list'),
-    # path('provinfos/', ProvInfoListView.as_view(), name='provinfo-list'),
+    path('user/', UserListAPIView.as_view(), name='user-list'),
+    path('user/<int:uid>/', UserDetailAPIView.as_view(), name='user-detail'),
+    path('usergroup_list/', UserGroupList.as_view(), name='usergroup-list'),
+    path('member_list/', MemberListView.as_view(),name='memberinfo'),
+    path('member_list/<int:pk>/', MemberDetailView.as_view(), name='member_detail'),
+    path('membertypes/', MemberTypeListView.as_view(), name='membertype-list'),
+    path('villageinfos/', VillageInfoListView.as_view(), name='villageinfo-list'),
+    path('districtinfos/', DistrictInfoListView.as_view(), name='districtinfo-list'),
+    path('provinfos/', ProvInfoListView.as_view(), name='provinfo-list'),
   
 #    path('api/upload_files1', FileUploadView.as_view(), name='file-upload'),
     path('api/search-results/bulk-update-status/', 
