@@ -99,7 +99,7 @@ water_supply_patterns = [
     # Debug and Testing endpoints
     # path('debug/', views.WaterDebugAPIView.as_view(), name='water-debug'),
     # path('test-upload/', views.WaterTestUploadAPIView.as_view(), name='water-test-upload'),
-    
+]
 
 # Water Supply Summary URL patterns
 water_summary_patterns = [
