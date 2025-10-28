@@ -1580,3 +1580,106 @@ class CustomerInfoSerializer(serializers.ModelSerializer):
     class Meta:
         model = w_customer_info
         fields = '__all__'
+        
+
+#tik 
+from rest_framework import serializers
+from .models import Login
+
+class UserSerializer(serializers.ModelSerializer):
+    profile_image = serializers.ImageField(use_url=True,required=False,allow_null=True)
+    class Meta:
+        model = Login
+        fields = '__all__'
+    def get_profile_image(self, obj):
+        if obj.profile_image:
+            request = self.context.get('request')
+            return request.build_absolute_uri(obj.profile_image.url)
+        return None
+        
+from rest_framework import serializers
+from .models import User_Group
+
+class UserGroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User_Group
+        fields = ['GID', 'nameL', 'nameE']
+        
+from rest_framework import serializers
+from .models import memberInfo, memberType, villageInfo, districtInfo, provInfo
+
+class MemberTypeSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = memberType
+        fields = '__all__'
+
+class VillageInfoSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = villageInfo
+        fields = '__all__'
+
+class DistrictInfoSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = districtInfo
+        fields = '__all__'
+
+class ProvInfoSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = provInfo
+        fields = '__all__'
+
+class MemberInfoSerializers(serializers.ModelSerializer):
+    memberType = serializers.PrimaryKeyRelatedField(
+        queryset=memberType.objects.all(),
+        required=False,
+        allow_null=True
+    )
+    villageInfo = serializers.PrimaryKeyRelatedField(
+        queryset=villageInfo.objects.all(),
+        required=False,
+        allow_null=True
+    )
+    districtInfo = serializers.PrimaryKeyRelatedField(
+        queryset=districtInfo.objects.all(),
+        required=False,
+        allow_null=True
+    )
+    provInfo = serializers.PrimaryKeyRelatedField(
+        queryset=provInfo.objects.all(),
+        required=False,
+        allow_null=True
+    )
+    
+    mImage_url = serializers.SerializerMethodField(read_only=True)
+    class Meta:
+        model = memberInfo
+        fields = '__all__'
+        read_only_fields = ['insertDate', 'updateDate']
+        
+    def get_mImage_url(self, obj):
+        """ส่ง URL เต็มของรูปภาพสำหรับการแสดงผล"""
+        if obj.mImage:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.mImage.url)
+            return obj.mImage.url
+        return None
+    
+    def to_representation(self, instance):
+        """แปลง ForeignKey เป็น nested objects"""
+        representation = super().to_representation(instance)
+        
+        if instance.memberType:
+            representation['memberType'] = MemberTypeSerializers(instance.memberType).data
+        
+        if instance.villageInfo:
+            representation['villageInfo'] = VillageInfoSerializers(instance.villageInfo).data
+        
+        if instance.districtInfo:
+            representation['districtInfo'] = DistrictInfoSerializers(instance.districtInfo).data
+        
+        if instance.provInfo:
+            representation['provInfo'] = ProvInfoSerializers(instance.provInfo).data
+        
+        return representation
+        
