@@ -100,25 +100,6 @@ water_supply_patterns = [
     # path('debug/', views.WaterDebugAPIView.as_view(), name='water-debug'),
     # path('test-upload/', views.WaterTestUploadAPIView.as_view(), name='water-test-upload'),
     
-    
-    # #Step 1: Load Provinces
-    # path('provinces/', views.WaterProvinceListAPIView.as_view(), name='water-province-list'),
-    
-    # # Step 2: Load Districts for Selected Province  
-    # path('districts/', views.WaterDistrictListAPIView.as_view(), name='water-district-list'),
-    
-    # # Step 3: Initialize Districts Tracking for Province + Month
-    # path('initialize-districts/', views.WaterInitializeDistrictsAPIView.as_view(), name='water-initialize-districts'),
-    
-    # # Step 4: Upload Data for Individual District (Fetches from API → Inserts into Utility_Bill)
-    # path('upload-data/', views.WaterUploadDataAPIView.as_view(), name='water-upload-data'),
-    
-    # # Step 5: Monitor Progress - Get Tracking Status for Province
-    # path('upload-tracking/', views.WaterUploadTrackingListAPIView.as_view(), name='water-upload-tracking-list'),
-    
-    # # Step 6: Monitor Progress - Get Detailed Logs  
-    # path('upload-tracking/<int:tracking_id>/', views.WaterUploadTrackingDetailAPIView.as_view(), name='water-upload-tracking-detail'),
-]
 
 # Water Supply Summary URL patterns
 water_summary_patterns = [
