@@ -18,7 +18,7 @@ CHANNEL_LAYERS = {
         },
     },
 }
-ASGI_APPLICATION = 'lcicHome.asgi.application'
+ASGI_APPLICATION = 'lcicMain.asgi.application'
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -144,14 +144,14 @@ DATABASES = {
        
     },
     'ned_sql': {
-        'ENGINE': 'sql_server.pyodbc',
+        'ENGINE': 'mssql',
         'NAME': 'LCIC_Fingers_old',
         'USER': 'sa',
         'PASSWORD': 'Lcic@12345',
         'HOST': '192.168.45.245\EXPRESS',
         'PORT': '57004',
         'OPTIONS': {
-            'driver': 'ODBC Driver 18 for SQL Server',
+            'driver': 'ODBC Driver 17 for SQL Server',
         },
     },
 }

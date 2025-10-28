@@ -27538,3 +27538,212 @@ class ChargeReportDetailView(APIView):
 #                 {'error': 'Tracking record not found'},
 #                 status=status.HTTP_404_NOT_FOUND
 #             )
+
+#tik
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import Login
+from .serializers import UserSerializer
+
+class UserListAPIView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, *args, **kwargs):
+        try:
+            # ✅ เริ่มด้วยการใช้ values() แทน only() เพื่อให้ query เร็วขึ้นมาก
+            queryset = Login.objects.values(
+                'UID',
+                'bnk_code',
+                'username',
+                'nameL',
+                'nameE',
+                'surnameL',
+                'surnameE',
+                'last_login',
+                'is_active',
+                'branch_id', 'GID' ,'is_active','is_staff','MID','profile_image'
+            )
+
+            # ✅ เพิ่ม filter ถ้ามีเงื่อนไขใน query params
+            bnk_code = request.GET.get('bnk_code')
+            if bnk_code:
+                queryset = queryset.filter(bnk_code=bnk_code)
+
+            username = request.GET.get('username')
+            if username:
+                queryset = queryset.filter(username__icontains=username)
+
+            # ✅ เพิ่มการ sort ตาม field ล่าสุด
+            queryset = queryset.order_by('-UID')
+
+            # ✅ ไม่ตัดผลลัพธ์ (ไม่มี [:200]) เพื่อให้ได้ครบทุกแถว
+            # แต่ถ้าช้ามาก สามารถใส่ limit ได้ภายหลัง เช่น [:1000]
+
+            # ✅ แปลง queryset เป็น list เพื่อให้ JSONResponse เร็วขึ้น
+            data = list(queryset)
+             # 🔹 แก้ profile_image ให้เป็น URL เต็ม
+            for user in data:
+                if user.get('profile_image'):
+                    user['profile_image'] = request.build_absolute_uri(
+                        settings.MEDIA_URL + user['profile_image']
+                    )
+
+            return Response({
+                'status': True,
+                'count': len(data),
+                'results': data
+            })
+
+        except Exception as e:
+            return Response({
+                'status': False,
+                'error': str(e)
+            })
+
+    def post(self, request):
+        serializer = UserSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "message": "User added successfully",
+                "user": serializer.data
+            }, status=status.HTTP_201_CREATED)
+        return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserDetailAPIView(APIView):
+    """GET / PUT / DELETE for single user"""
+    def get_object(self, uid):
+        try:
+            return Login.objects.get(UID=uid)
+        except Login.DoesNotExist:
+            return None
+
+    def get(self, request, uid):
+        user = self.get_object(uid)
+        if not user:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+        serializer = UserSerializer(user)
+        return Response(serializer.data)
+
+    def put(self, request, uid):
+        user = self.get_object(uid)
+        if not user:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+        serializer = UserSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "User updated successfully", "user": serializer.data}, status=status.HTTP_200_OK)
+        return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, uid):
+        user = self.get_object(uid)
+        if not user:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+        user.delete()
+        return Response({"message": "User deleted successfully"}, status=status.HTTP_200_OK)
+    
+    
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from .models import User_Group
+from .serializers import UserGroupSerializer
+
+class UserGroupList(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        groups = User_Group.objects.all().order_by('nameL')
+        serializer = UserGroupSerializer(groups, many=True)
+        return Response(serializer.data)
+    
+    
+# views.py
+from django.db.models import Q
+from rest_framework import generics
+from .models import memberInfo, memberType, villageInfo, districtInfo, provInfo
+from .serializers import (
+    MemberInfoSerializers, MemberTypeSerializers, VillageInfoSerializers,
+    DistrictInfoSerializers, ProvInfoSerializers
+)
+from rest_framework.parsers import MultiPartParser, FormParser
+
+class MemberListView(generics.ListCreateAPIView):
+    serializer_class = MemberInfoSerializers
+    queryset = memberInfo.objects.select_related(
+        'memberType', 'provInfo', 'districtInfo', 'villageInfo'
+    ).all().order_by('-id')
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        search = self.request.query_params.get('search', None)
+        if search:
+            queryset = queryset.filter(
+                Q(bnk_code__exact=search) |
+                Q(code__icontains=search) |
+                Q(nameL__icontains=search) |
+                Q(nameE__icontains=search)
+            )
+        member_type = self.request.query_params.get('member_type', None)
+        if member_type:
+            queryset = queryset.filter(memberType_id=member_type)
+        return queryset.distinct().order_by('bnk_code')
+
+    def get_serializer_context(self):
+        # 🔹 เพื่อให้ get_mImage สามารถสร้าง absolute URL
+        context = super().get_serializer_context()
+        context.update({"request": self.request})
+        return context
+
+class MemberDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = memberInfo.objects.select_related(
+        'memberType', 'provInfo', 'districtInfo', 'villageInfo'
+    ).all()
+    serializer_class = MemberInfoSerializers
+    parser_classes = [MultiPartParser, FormParser]  # 🔹 รองรับ upload รูป
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context.update({"request": self.request})
+        return context
+
+class MemberTypeListView(generics.ListAPIView):
+    queryset = memberType.objects.all()
+    serializer_class = MemberTypeSerializers
+
+class ProvInfoListView(generics.ListAPIView):
+    """ดึง Province ทั้งหมด"""
+    queryset = provInfo.objects.all().order_by('id')
+    serializer_class = ProvInfoSerializers
+
+class DistrictInfoListView(generics.ListAPIView):
+    """ดึง District โดยสามารถค้นหาได้"""
+    serializer_class = DistrictInfoSerializers
+    
+    def get_queryset(self):
+        queryset = districtInfo.objects.all().order_by('id')
+        # ค้นหา District ตามคำที่พิมพ์
+        search = self.request.query_params.get('search', None)
+        if search:
+            queryset = queryset.filter(
+                Q(nameL__icontains=search) | Q(nameE__icontains=search)
+            )
+        return queryset
+
+class VillageInfoListView(generics.ListAPIView):
+    """ดึง Village โดยสามารถค้นหาได้"""
+    serializer_class = VillageInfoSerializers
+    
+    def get_queryset(self):
+        queryset = villageInfo.objects.all().order_by('id')
+        # ค้นหา Village ตามคำที่พิมพ์
+        search = self.request.query_params.get('search', None)
+        if search:
+            queryset = queryset.filter(
+                Q(nameL__icontains=search) | Q(nameE__icontains=search)
+            )
+        return queryset
