@@ -2272,3 +2272,36 @@ class IndividualBankIbkInfo(models.Model):
     class Meta:
         
         db_table = 'individual_bank_ibk_info'
+
+from django.db import models
+
+class CompanyInfoMapping(models.Model):
+    com_sys_id = models.IntegerField(primary_key=True)  # unique system id
+    segment = models.CharField(max_length=5, null=True, blank=True)
+    mm_com_sys_id = models.IntegerField(null=True, blank=True)
+    bnk_code = models.CharField(max_length=10, null=True, blank=True)
+    branchcode = models.CharField(max_length=30, null=True, blank=True)
+    customerid = models.CharField(max_length=30, null=True, blank=True)
+    com_enterprise_code = models.CharField(max_length=30, null=True, blank=True)
+    com_registration_date = models.CharField(max_length=30, null=True, blank=True)
+    com_registration_place_issue = models.TextField(null=True, blank=True)
+    com_name = models.CharField(max_length=100, null=True, blank=True)
+    com_lao_name = models.TextField(null=True, blank=True)
+    com_tax_no = models.CharField(max_length=25, null=True, blank=True)
+    com_category = models.CharField(max_length=50, null=True, blank=True)
+    com_regulatory_capital = models.CharField(max_length=50, null=True, blank=True)
+    com_regulatory_capital_unit = models.CharField(max_length=10, null=True, blank=True)
+    com_insert_date = models.CharField(max_length=30, null=True, blank=True)
+    com_update_date = models.CharField(max_length=30, null=True, blank=True)
+    mm_action_date = models.CharField(max_length=30, null=True, blank=True)
+    mm_log = models.CharField(max_length=50, null=True, blank=True)
+    mm_comment = models.TextField(null=True, blank=True)
+    mm_by = models.CharField(max_length=50, null=True, blank=True)
+    blk_sys_id = models.IntegerField(null=True, blank=True)
+    mm_status = models.CharField(max_length=1, null=True, blank=True)
+    is_manual = models.CharField(max_length=1, null=True, blank=True)
+    com_lao_name_code = models.CharField(max_length=255, null=True, blank=True)
+    LCIC_code = models.CharField(max_length=255, null=True, blank=True)
+    enterprise_code = models.CharField(max_length=255, null=True, blank=True)
+    status = models.CharField(max_length=255, null=True, blank=True)
+

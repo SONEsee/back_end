@@ -145,7 +145,7 @@ DATABASES = {
        
     },
     'ned_sql': {
-        'ENGINE': 'mssql',
+        'ENGINE': 'sql_server.pyodbc',
         'NAME': 'LCIC_Fingers_old',
         'USER': 'sa',
         'PASSWORD': 'Lcic@12345',
