@@ -149,6 +149,8 @@ class w_customer_info(models.Model):
     Email = models.CharField(max_length=100)
     Cus_type = models.CharField(max_length=100)
     Regis_date = models.CharField(max_length=100)
+    insert_date = models.DateTimeField(auto_now_add=True)
+    update_date = models.DateTimeField(auto_now=True)
     class Meta:
         managed = False
         indexes = [
@@ -258,6 +260,7 @@ class w_province_code(models.Model):
     id = models.BigAutoField(auto_created=True, primary_key=True)
     pro_id = models.CharField(max_length=50)
     pro_name = models.CharField(max_length=100)
+    
     
 class w_district_code(models.Model):
     id = models.BigAutoField(auto_created=True, primary_key=True)
