@@ -1691,4 +1691,3 @@ class MemberInfoSerializers(serializers.ModelSerializer):
             representation['provInfo'] = ProvInfoSerializers(instance.provInfo).data
         
         return representation
-        
