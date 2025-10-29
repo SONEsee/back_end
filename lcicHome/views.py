@@ -25788,9 +25788,9 @@ class SearchIndividualBankView(APIView):
     def get(self, request):
         customerid = request.query_params.get('customerid')
         lcic_id = request.query_params.get('lcic_id')
-        bnk_code = request.query_params.get('bnk_code')  
+        bnk_code = request.query_params.get('bnk_code')  # bnk_code ຂອງຜູ້ໃຊ້
 
-       
+        # ຕ້ອງມີ customerid ຫຼື lcic_id
         if not any([customerid, lcic_id]):
             return Response({
                 "results": [],
@@ -25799,15 +25799,20 @@ class SearchIndividualBankView(APIView):
 
         query = Q()
 
-       
+        # === ກໍລະນີ 1: ມີ customerid ===
         if customerid:
             query &= Q(customerid=customerid)
 
-            
+            # ຖ້າມີ bnk_code → ກວດສອບເງື່ອນໄຂພິເສດ
             if bnk_code:
-                query &= Q(bnk_code=bnk_code)
+                if bnk_code == '01':
+                    # bnk_code = 01 → ເຫັນທຸກ bnk_code
+                    pass  # ບໍ່ເພີ່ມເງື່ອນໄຂ bnk_code
+                else:
+                    # bnk_code ≠ 01 → ເຫັນພຽງ bnk_code ຂອງຕົນເອງ
+                    query &= Q(bnk_code=bnk_code)
             else:
-               
+                # ຖ້າບໍ່ມີ bnk_code → ໃຊ້ logic ເກົ່າ (valid bnk_code ທີ່ເຄີຍມີ)
                 valid_bnk_codes = IndividualBankIbk.objects.filter(
                     customerid=customerid
                 ).values_list('bnk_code', flat=True).distinct()
@@ -25820,28 +25825,30 @@ class SearchIndividualBankView(APIView):
 
                 query &= Q(bnk_code__in=valid_bnk_codes)
 
-            
+            # ຖ້າມີ lcic_id → ເພີ່ມເງື່ອນໄຂ
             if lcic_id:
                 query &= Q(lcic_id=lcic_id)
 
-        
+        # === ກໍລະນີ 2: ມີແຕ່ lcic_id ===
         elif lcic_id:
             query &= Q(lcic_id=lcic_id)
-            
 
-      
+            # ຖ້າມີ bnk_code → ກວດສອບເງື່ອນໄຂພິເສດ
+            if bnk_code:
+                if bnk_code != '01':
+                    # ຖ້າບໍ່ແມ່ນ 01 → ຈຳກັດ bnk_code ຂອງຕົນເອງ
+                    query &= Q(bnk_code=bnk_code)
+
+        # === ດຶງຂໍ້ມູນ ===
         results = IndividualBankIbk.objects.filter(query).values(
             'customerid', 'lcic_id', 'bnk_code',
-            'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname','bnk_code'
+            'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname','branchcode'
         )
 
         return Response({
             "count": len(results),
             "results": list(results)
         })
-
-
-
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Q
@@ -25892,7 +25899,7 @@ class UserListAPIView(APIView):
 
     def get(self, request, *args, **kwargs):
         try:
-            # ✅ เริ่มด้วยการใช้ values() แทน only() เพื่อให้ query เร็วขึ้นมาก
+           
             queryset = Login.objects.values(
                 'UID',
                 'bnk_code',
