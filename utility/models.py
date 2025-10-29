@@ -149,10 +149,9 @@ class w_customer_info(models.Model):
     Email = models.CharField(max_length=100)
     Cus_type = models.CharField(max_length=100)
     Regis_date = models.CharField(max_length=100)
-    insert_date = models.DateTimeField(auto_now_add=True)
-    update_date = models.DateTimeField(auto_now=True)
+    InsertDate = models.CharField(max_length=150, null=True, blank=True)
+    UpdateDate = models.CharField(max_length=150, null=True, blank=True)
     class Meta:
-        managed = False
         indexes = [
             models.Index(fields=['Name', 'Province_ID'], name='water_name_prov_idx'),
             models.Index(fields=['Surname', 'Province_ID'], name='water_surname_prov_idx'),
@@ -192,6 +191,8 @@ class edl_customer_info(models.Model):
     Email = models.CharField(max_length=100)
     Cus_type = models.CharField(max_length=100)
     Regis_date = models.CharField(max_length=100)
+    InsertDate = models.CharField(max_length=50, null=True, blank=True)
+    UpdateDate = models.CharField(max_length=50, null=True, blank=True)
     
     class Meta:
         # Composite indexes for faster searches

@@ -25256,7 +25256,7 @@ class WaterDataProcessor:
         return str(value)[:max_length]
     
     @classmethod
-    def process_customers_bulk(cls, tracking, data, upload_month):
+    def process_customers_bulk(cls, tracking, data, month):
         """Process customer data in bulk with progress tracking"""
         customer_list = data.get('message', []) if isinstance(data, dict) else data
         total_customers = len(customer_list)
@@ -25317,6 +25317,7 @@ class WaterDataProcessor:
                             existing_obj.Email = cls.truncate(cls.safe_get(customer, 'EMAIL'), 100)
                             existing_obj.Cus_type = cls.truncate(cls.safe_get(customer, 'CONSUMER_TYPE'), 100)
                             existing_obj.Regis_date = cls.truncate(cls.safe_get(customer, 'REGISTER_DATE'), 100)
+                            existing_obj.UpdateDate = month  # Set UpdateDate to upload_month
                             customers_to_update.append(existing_obj)
                         else:
                             # CREATE: New customer object
@@ -25334,7 +25335,8 @@ class WaterDataProcessor:
                                 Tel=cls.truncate(cls.safe_get(customer, 'TEL'), 100),
                                 Email=cls.truncate(cls.safe_get(customer, 'EMAIL'), 100),
                                 Cus_type=cls.truncate(cls.safe_get(customer, 'CONSUMER_TYPE'), 100),
-                                Regis_date=cls.truncate(cls.safe_get(customer, 'REGISTER_DATE'), 100)
+                                Regis_date=cls.truncate(cls.safe_get(customer, 'REGISTER_DATE'), 100),
+                                InsertDate=month  # Set InsertDate to upload_month
                             )
                             customers_to_create.append(customer_obj)
                     
@@ -25354,7 +25356,8 @@ class WaterDataProcessor:
                                 'No', 'Company_name', 'Name', 'Surname', 
                                 'National_ID', 'Passport', 'Address',
                                 'Dustrict_ID', 'Province_ID', 'Tel', 
-                                'Email', 'Cus_type', 'Regis_date'
+                                'Email', 'Cus_type', 'Regis_date',
+                                'UpdateDate'  # Added UpdateDate to fields list
                             ]
                         )
                         updated_count += len(customers_to_update)
@@ -25442,7 +25445,9 @@ class WaterDataProcessor:
                             failed_count += 1
                             continue
                         
-                        unique_id = f"{invoice_no}_{customer_id}_{upload_month}"
+                        # unique_id = f"{invoice_no}_{customer_id}_{upload_month}"
+                        unique_id = f"{invoice_no}"
+                        
                         
                         # Check if bill exists
                         if unique_id in existing_bills_dict:
@@ -25864,22 +25869,93 @@ class WaterDistrictStatisticsAPIView(APIView):
     """Get district statistics"""
     permission_classes = [IsAuthenticated]
     
+    # def get(self, request):
+    #     upload_month = request.query_params.get('upload_month')
+        
+    #     if not upload_month:
+    #         return Response({'error': 'upload_month is required'}, status=400)
+        
+    #     # Get bill counts per district
+    #     bill_stats = Utility_Bill.objects.filter(
+    #         InvoiceMonth__contains=upload_month[2:]
+    #     ).values('ProID', 'DisID').annotate(
+    #         total_bills=Count('InvoiceNo')
+    #     )
+        
+    #     print("----------> Invoice MOnth:",bill_stats)
+    #     # Get customer counts per district
+    #     customer_stats = w_customer_info.objects.values(
+    #         'Province_ID', 'Dustrict_ID'
+    #     ).annotate(
+    #         total_customers=Count('Customer_ID')
+    #     )
+        
+    #     # Create lookup dict
+    #     customer_lookup = {
+    #         f"{c['Province_ID']}_{c['Dustrict_ID']}": c['total_customers']
+    #         for c in customer_stats
+    #     }
+        
+    #     # Build response
+    #     result = []
+    #     for stat in bill_stats:
+    #         pro_id = stat['ProID']
+    #         dis_id = stat['DisID']
+            
+    #         # Get names
+    #         try:
+    #             province = w_province_code.objects.get(pro_id=pro_id)
+    #             pro_name = province.pro_name
+    #         except:
+    #             pro_name = f"Province {pro_id}"
+            
+    #         try:
+    #             district = w_district_code.objects.get(pro_id=pro_id, dis_id=dis_id)
+    #             dis_name = district.dis_name
+    #         except:
+    #             dis_name = f"District {dis_id}"
+            
+    #         customer_count = customer_lookup.get(f"{pro_id}_{dis_id}", 0)
+            
+    #         result.append({
+    #             'pro_id': pro_id,
+    #             'pro_name': pro_name,
+    #             'dis_id': dis_id,
+    #             'dis_name': dis_name,
+    #             'upload_month': upload_month,
+    #             'total_bills': stat['total_bills'],
+    #             'total_customers': customer_count,
+    #             'status': 'completed',
+    #             'last_updated': timezone.now()
+    #         })
+        
+    #     return Response(result, status=200)
     def get(self, request):
         upload_month = request.query_params.get('upload_month')
         
         if not upload_month:
             return Response({'error': 'upload_month is required'}, status=400)
         
-        # Get bill counts per district
+        # Validate and format: Assume input is MMYYYY (6 chars); adjust if needed
+        if len(upload_month) != 6 or not upload_month.isdigit():
+            return Response({'error': 'upload_month must be MMYYYY format (e.g., 112025)'}, status=400)
+        
+        month_part = upload_month[:2]  # '11'
+        year_part = upload_month[2:]   # '2025'
+        target_month = f"{month_part}-{year_part}"  # '11-2025'
+        
+        # Get bill counts per district for EXACT month
         bill_stats = Utility_Bill.objects.filter(
-            InvoiceMonth__contains=upload_month[2:]
+            InvoiceMonth=target_month  # Exact match: = '11-2025'
         ).values('ProID', 'DisID').annotate(
             total_bills=Count('InvoiceNo')
         )
         
-        print("----------> Invoice MOnth:",bill_stats)
-        # Get customer counts per district
-        customer_stats = w_customer_info.objects.values(
+        print(f"----------> Target Month: {target_month}, Stats: {bill_stats}")
+        
+        customer_stats = w_customer_info.objects.filter(
+            InsertDate=target_month
+            ).values(
             'Province_ID', 'Dustrict_ID'
         ).annotate(
             total_customers=Count('Customer_ID')
