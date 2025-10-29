@@ -7622,7 +7622,87 @@ class IndividualFileUploadView(generics.CreateAPIView):
             'message': 'All files uploaded successfully',
             'uploaded': upload_success
         }, status=status.HTTP_201_CREATED)
+# views.py
+from rest_framework import generics
+from rest_framework.response import Response
+from rest_framework import status
+from django.db.models import Q
+from .models import Upload_File_Individual
+from .serializers import IndividualFileSerializer  
+import logging
 
+logger = logging.getLogger(__name__)
+
+class IndividualFileListView(generics.ListAPIView):
+    serializer_class = IndividualFileSerializer
+
+    def get_queryset(self):
+        # ດຶງ user_id ຂອງຄົນທີ່ login
+        current_user_id = self.request.query_params.get('user_id')
+        
+        # ດຶງ filter parameters
+        user_id_filter = self.request.query_params.get('user_id_filter')
+        period = self.request.query_params.get('period')
+        statussubmit = self.request.query_params.get('statussubmit')
+        file_type = self.request.query_params.get('FileType')
+
+        queryset = Upload_File_Individual.objects.all()
+
+        
+        if current_user_id == '01':  # Admin
+          
+            if user_id_filter:
+                queryset = queryset.filter(user_id=user_id_filter)
+           
+        else:
+           
+            queryset = queryset.filter(user_id=current_user_id)
+        
+        # Filter ອື່ນໆ
+        if period:
+            queryset = queryset.filter(period=period)
+        if statussubmit:
+            queryset = queryset.filter(statussubmit=statussubmit)
+        if file_type:
+            queryset = queryset.filter(FileType=file_type)
+
+        return queryset.order_by('-insertDate')
+
+    def list(self, request, *args, **kwargs):
+        try:
+            queryset = self.filter_queryset(self.get_queryset())
+            
+            # Pagination
+            page = int(request.query_params.get('page', 1))
+            limit = int(request.query_params.get('limit', 20))
+            
+            offset = (page - 1) * limit
+            total_count = queryset.count()
+            paginated_queryset = queryset[offset:offset + limit]
+            
+            serializer = self.get_serializer(paginated_queryset, many=True)
+
+            return Response({
+                'count': total_count,
+                'page': page,
+                'limit': limit,
+                'total_pages': (total_count + limit - 1) // limit,
+                'results': serializer.data,
+                'filters_applied': {
+                    'user_id': request.query_params.get('user_id'),
+                    'user_id_filter': request.query_params.get('user_id_filter'),
+                    'period': request.query_params.get('period'),
+                    'statussubmit': request.query_params.get('statussubmit'),
+                    'FileType': request.query_params.get('FileType')
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"IndividualFileListView Error: {str(e)}", exc_info=True)
+            return Response({
+                'error': 'Internal server error',
+                'details': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 import json
