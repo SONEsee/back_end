@@ -16553,7 +16553,7 @@ class IndividualInfoSearchView(APIView):
                 # ສ້າງ searchLog — ໃຊ້ inquiry_date ເທົ່ານັ້ນ
                 search_log = searchLog.objects.create(
                     enterprise_ID='',
-                    LCIC_code=lcic_id,
+                    LCIC_ID=lcic_id,
                     bnk_code=bank_info.bnk_code,
                     bnk_type=bank_info.bnk_type,
                     branch=branch_code,
@@ -26431,3 +26431,60 @@ class VillageInfoListView(generics.ListAPIView):
                 Q(nameL__icontains=search) | Q(nameE__icontains=search)
             )
         return queryset
+    
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import ChargeMatrix
+from .serializers import ChargeMatrixSerializer
+
+class ChargeMatrixListCreateAPIView(APIView):
+    """
+    ✅ ใช้สำหรับ GET (ดึงข้อมูลทั้งหมด) และ POST (เพิ่มข้อมูลใหม่)
+    """
+    def get(self, request):
+        charges = ChargeMatrix.objects.all().order_by('chg_sys_id')
+        serializer = ChargeMatrixSerializer(charges, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = ChargeMatrixSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ChargeMatrixDetailAPIView(APIView):
+    """
+    ✅ ใช้สำหรับ GET (ดึงข้อมูลทีละรายการ), PUT (อัปเดต), DELETE (ลบ)
+    """
+    def get_object(self, pk):
+        try:
+            return ChargeMatrix.objects.get(pk=pk)
+        except ChargeMatrix.DoesNotExist:
+            return None
+
+    def get(self, request, pk):
+        charge = self.get_object(pk)
+        if not charge:
+            return Response({'error': 'Charge not found'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = ChargeMatrixSerializer(charge)
+        return Response(serializer.data)
+
+    def put(self, request, pk):
+        charge = self.get_object(pk)
+        if not charge:
+            return Response({'error': 'Charge not found'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = ChargeMatrixSerializer(charge, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        charge = self.get_object(pk)
+        if not charge:
+            return Response({'error': 'Charge not found'}, status=status.HTTP_404_NOT_FOUND)
+        charge.delete()
+        return Response({'message': 'Deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
