@@ -179,12 +179,12 @@ class w_customer_info(models.Model):
 class edl_customer_info(models.Model):
     No = models.CharField(max_length=100)
     Customer_ID = models.CharField(max_length=100, db_index=True)  # Add index
-    Company_name = models.CharField(max_length=100, db_index=True)  # Add index
-    Name = models.CharField(max_length=100, db_index=True)  # Add index
-    Surname = models.CharField(max_length=100, db_index=True)  # Add index
+    Company_name = models.CharField(max_length=500, db_index=True)  # Add index
+    Name = models.CharField(max_length=500, db_index=True)  # Add index
+    Surname = models.CharField(max_length=500, db_index=True)  # Add index
     National_ID = models.CharField(max_length=100)
     Passport = models.CharField(max_length=100)
-    Address = models.CharField(max_length=100)
+    Address = models.TextField()
     Dustrict_ID = models.CharField(max_length=100, db_index=True)  # Add index
     Province_ID = models.CharField(max_length=100, db_index=True)  # Add index
     Tel = models.CharField(max_length=100)
