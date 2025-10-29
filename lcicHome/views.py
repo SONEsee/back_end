@@ -16553,7 +16553,7 @@ class IndividualInfoSearchView(APIView):
                 # ສ້າງ searchLog — ໃຊ້ inquiry_date ເທົ່ານັ້ນ
                 search_log = searchLog.objects.create(
                     enterprise_ID='',
-                    LCIC_code=lcic_id,
+                    LCIC_ID=lcic_id,
                     bnk_code=bank_info.bnk_code,
                     bnk_type=bank_info.bnk_type,
                     branch=branch_code,
