@@ -25883,30 +25883,26 @@ class SearchIndividualBankInfoView(APIView):
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Login
+from django.conf import settings
+from django.db import transaction
+
+from .models import Login, searchLog, request_charge, ChargeMatrix
 from .serializers import UserSerializer
+
 
 class UserListAPIView(APIView):
     authentication_classes = []
     permission_classes = []
 
+    # GET: แสดงรายชื่อผู้ใช้
     def get(self, request, *args, **kwargs):
         try:
-            # ✅ เริ่มด้วยการใช้ values() แทน only() เพื่อให้ query เร็วขึ้นมาก
             queryset = Login.objects.values(
-                'UID',
-                'bnk_code',
-                'username',
-                'nameL',
-                'nameE',
-                'surnameL',
-                'surnameE',
-                'last_login',
-                'is_active',
-                'branch_id', 'GID' ,'is_active','is_staff','MID','profile_image'
+                'UID', 'bnk_code', 'username', 'nameL', 'nameE',
+                'surnameL', 'surnameE', 'last_login', 'is_active',
+                'branch_id', 'GID', 'is_staff', 'MID', 'profile_image'
             )
 
-            # ✅ เพิ่ม filter ถ้ามีเงื่อนไขใน query params
             bnk_code = request.GET.get('bnk_code')
             if bnk_code:
                 queryset = queryset.filter(bnk_code=bnk_code)
@@ -25915,46 +25911,82 @@ class UserListAPIView(APIView):
             if username:
                 queryset = queryset.filter(username__icontains=username)
 
-            # ✅ เพิ่มการ sort ตาม field ล่าสุด
             queryset = queryset.order_by('-UID')
-
-            # ✅ ไม่ตัดผลลัพธ์ (ไม่มี [:200]) เพื่อให้ได้ครบทุกแถว
-            # แต่ถ้าช้ามาก สามารถใส่ limit ได้ภายหลัง เช่น [:1000]
-
-            # ✅ แปลง queryset เป็น list เพื่อให้ JSONResponse เร็วขึ้น
             data = list(queryset)
-             # 🔹 แก้ profile_image ให้เป็น URL เต็ม
+
             for user in data:
                 if user.get('profile_image'):
                     user['profile_image'] = request.build_absolute_uri(
                         settings.MEDIA_URL + user['profile_image']
                     )
 
-            return Response({
-                'status': True,
-                'count': len(data),
-                'results': data
-            })
-
+            return Response({'status': True, 'count': len(data), 'results': data})
         except Exception as e:
-            return Response({
-                'status': False,
-                'error': str(e)
-            })
+            return Response({'status': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    # POST: เพิ่มผู้ใช้ + hash password
+    @transaction.atomic
     def post(self, request):
         serializer = UserSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
-            return Response({
-                "message": "User added successfully",
-                "user": serializer.data
-            }, status=status.HTTP_201_CREATED)
-        return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                new_user = serializer.save()
+
+                # hash password ถ้ามี
+                if 'password' in request.data and request.data['password']:
+                    new_user.set_password(request.data['password'])
+                    new_user.save()
+
+                sys_usr_uid = request.data.get('creator_UID', 0)
+                branch = request.data.get('branch_id', None)
+
+                # ✅ ดึงข้อมูล charge จาก ChargeMatrix (chg_sys_id = 12 สำหรับ ADD)
+                try:
+                    charge_info = ChargeMatrix.objects.get(chg_sys_id=12)
+                except ChargeMatrix.DoesNotExist:
+                    return Response({
+                        "status": False,
+                        "message": "Charge configuration not found (chg_sys_id=12)"
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+                # Insert searchLog
+                search_log = searchLog.objects.create(
+                    bnk_code=new_user.bnk_code,
+                    credit_type=charge_info.chg_code,
+                    branch=branch,
+                    sys_usr=sys_usr_uid
+                )
+
+                # Insert request_charge ใช้ข้อมูลจาก ChargeMatrix
+                request_charge.objects.create(
+                    bnk_code=new_user.bnk_code,
+                    chg_code=charge_info.chg_code,
+                    chg_amount=charge_info.chg_amount,
+                    chg_unit=charge_info.chg_unit,
+                    status='pending',
+                    search_log=search_log
+                )
+
+                return Response({
+                    "status": True,
+                    "message": "User added successfully",
+                    "user": serializer.data
+                }, status=status.HTTP_201_CREATED)
+
+            except Exception as e:
+                transaction.set_rollback(True)
+                return Response({
+                    "status": False,
+                    "message": "Error while creating related records",
+                    "error": str(e)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({"status": False, "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserDetailAPIView(APIView):
     """GET / PUT / DELETE for single user"""
+
     def get_object(self, uid):
         try:
             return Login.objects.get(UID=uid)
@@ -25968,15 +26000,79 @@ class UserDetailAPIView(APIView):
         serializer = UserSerializer(user)
         return Response(serializer.data)
 
+    @transaction.atomic
     def put(self, request, uid):
         user = self.get_object(uid)
         if not user:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+    
+        # เก็บ status เดิม
+        old_status = user.is_active
+    
         serializer = UserSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
-            return Response({"message": "User updated successfully", "user": serializer.data}, status=status.HTTP_200_OK)
-        return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            updated_user = serializer.save()
+        
+            # ✅ hash password ถ้ามี
+            if 'password' in request.data and request.data['password']:
+                updated_user.set_password(request.data['password'])
+                updated_user.save()
+        
+            # ✅ แปลง is_active เป็น boolean (รองรับทั้ง string และ boolean)
+            new_status = request.data.get('is_active')
+            if isinstance(new_status, str):
+                new_status = new_status.lower() in ('true', '1', 'yes')
+            else:
+                new_status = bool(new_status)
+        
+            # ✅ เช็คว่า status เปลี่ยนจาก False → True หรือไม่
+            status_changed = (old_status is False and new_status is True)
+        
+            if status_changed:
+                sys_usr_uid = request.data.get('creator_UID', 0)
+                branch = request.data.get('branch_id', None)
+            
+                # ตรวจสอบว่ามี creator_UID หรือไม่
+                if not sys_usr_uid or sys_usr_uid == '0':
+                    return Response({
+                        "status": False,
+                        "message": "creator_UID is required when activating user"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # ✅ ดึงข้อมูล charge จาก ChargeMatrix (chg_sys_id = 14 สำหรับ EDIT)
+                try:
+                    charge_info = ChargeMatrix.objects.get(chg_sys_id=14)
+                except ChargeMatrix.DoesNotExist:
+                    return Response({
+                        "status": False,
+                        "message": "Charge configuration not found (chg_sys_id=14)"
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+                # Insert searchLog
+                search_log = searchLog.objects.create(
+                    bnk_code=updated_user.bnk_code,
+                    credit_type=charge_info.chg_code,
+                    branch=branch,
+                    sys_usr=sys_usr_uid
+                )
+            
+                # Insert request_charge ใช้ข้อมูลจาก ChargeMatrix
+                request_charge.objects.create(
+                    bnk_code=updated_user.bnk_code,
+                    chg_code=charge_info.chg_code,
+                    chg_amount=charge_info.chg_amount,
+                    chg_unit=charge_info.chg_unit,
+                    status='pending',
+                    search_log=search_log
+                )
+        
+            return Response({
+                "status": True,
+                "message": "User updated successfully",
+                "user": serializer.data
+            }, status=status.HTTP_200_OK)
+    
+        return Response({"status": False, "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, uid):
         user = self.get_object(uid)
@@ -25984,6 +26080,7 @@ class UserDetailAPIView(APIView):
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
         user.delete()
         return Response({"message": "User deleted successfully"}, status=status.HTTP_200_OK)
+
     
     
 from rest_framework.views import APIView
