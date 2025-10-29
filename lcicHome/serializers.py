@@ -123,7 +123,16 @@ class B1_MonthlySerializer(serializers.ModelSerializer):
 #         model = UploadedFile
 #         fields = '__all__'
 
+from rest_framework import serializers
+from .models import IndividualBankIbkInfo
 
+class IndividualBankIbkInfoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IndividualBankIbkInfo
+        fields = [
+            'lcic_id', 'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname',
+            'ind_national_id', 'ind_birth_date', 'ind_passport', 'ind_familybook'
+        ]
 
 from rest_framework import serializers
 from .models import Upload_File

@@ -2564,29 +2564,29 @@ class EnterpriseInfoSearch(APIView):
                             unique_enterprises.append(enterprise)
                             seen_combinations.add(unique_key)
             
-            # Alternative approach using dictionary for cleaner deduplication
+            
             enterprise_dict = {}
             for enterprise in all_enterprise_info:
                 key = f"{enterprise.EnterpriseID}_{enterprise.LCIC_code}"
                 
-                # If we haven't seen this combination before, or if current record has better LCICID
+                
                 if (key not in enterprise_dict or 
                     (enterprise.LCICID and enterprise.LCICID > 0 and 
                      (not enterprise_dict[key].LCICID or enterprise_dict[key].LCICID == 0))):
                     enterprise_dict[key] = enterprise
             
-            # Use the cleaner approach
+           
             unique_enterprises = list(enterprise_dict.values())
             
             print(f"Found {all_enterprise_info.count()} total records, {len(unique_enterprises)} unique enterprises")
             
-            # Get unique enterprise IDs from deduplicated results
+            
             enterprise_ids = [enterprise.EnterpriseID for enterprise in unique_enterprises]
             
-            # Get investor information for these enterprises
+           
             investor_info = InvestorInfo.objects.filter(EnterpriseID__in=enterprise_ids)
             
-            # Process investor information and remove duplicates
+            
             investor_names = []
             seen_names = set()
             for investor in investor_info:
@@ -2655,6 +2655,8 @@ class EnterpriseInfoSearch(APIView):
                 {'error': 'Internal server error'}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
 class EnterpriseByLCICView(APIView):
     """
     ດືງຂໍ້ມູນ Enterprise ID ຈາກ LCIC code
@@ -16468,7 +16470,155 @@ class InsertSearchLogView(APIView):
         else:
             return Response({'error': 'EnterpriseID and LCIC_code are required'}, status=status.HTTP_400_BAD_REQUEST)
        
-        
+# views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db.models import Q
+from django.utils import timezone
+from django.db import transaction
+import traceback
+
+from .models import (
+    IndividualBankIbkInfo, IndividualBankIbk,
+    searchLog, request_charge, memberInfo, ChargeMatrix
+)
+from .serializers import IndividualBankIbkInfoSerializer
+
+class IndividualInfoSearchView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        try:
+            user = request.user
+            UID = getattr(user, 'UID', '')
+            bank = getattr(user, 'MID', None)
+            if not bank or not hasattr(bank, 'bnk_code'):
+                return Response({'error': 'Invalid bank info'}, status=status.HTTP_400_BAD_REQUEST)
+
+            bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
+
+            # === 1. ດຶງຂໍ້ມູນ ===
+            lcic_id = request.data.get('lcic_id', '').strip()
+            loan_purpose = request.data.get('CatalogID', '')
+
+            if not lcic_id:
+                return Response({'error': 'lcic_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # === 2. ຄົ້ນຫາ ===
+            all_individual_info = IndividualBankIbkInfo.objects.filter(
+                lcic_id=lcic_id
+            ).order_by('mm_ind_sys_id')
+
+            if not all_individual_info.exists():
+                return Response({'error': 'Individual info not found'}, status=status.HTTP_404_NOT_FOUND)
+
+            # === 3. Deduplication ===
+            unique_individuals = []
+            seen_mm_ids = set()
+            for info in all_individual_info:
+                if info.mm_ind_sys_id and info.mm_ind_sys_id not in seen_mm_ids:
+                    unique_individuals.append(info)
+                    seen_mm_ids.add(info.mm_ind_sys_id)
+
+            # === 4. ດຶງ customerid ===
+            mm_ids = [info.mm_ind_sys_id for info in unique_individuals if info.mm_ind_sys_id]
+            bank_records = {}
+            if mm_ids:
+                bank_records = {
+                    rec.ind_sys_id: rec
+                    for rec in IndividualBankIbk.objects.filter(ind_sys_id__in=mm_ids)
+                }
+
+            # === 5. ກຳນົດຄ່າທຳນຽມ ===
+            charge_sys_id = 2 if bank_info.bnk_type == 1 else 5
+            try:
+                chargeType = ChargeMatrix.objects.get(chg_sys_id=charge_sys_id)
+            except ChargeMatrix.DoesNotExist:
+                return Response({'error': 'Charge type not found'}, status=status.HTTP_404_NOT_FOUND)
+
+            # === 6. ສ້າງ log + charge ===
+            now = timezone.now()
+            inquiry_month_charge = now.strftime('%d%m%Y')
+            sys_usr = f"{UID}-{bank.bnk_code}"
+
+            created_logs = []
+
+            for info in unique_individuals:
+                bank_record = bank_records.get(info.mm_ind_sys_id)
+                customerid = bank_record.customerid if bank_record else ''
+                branch_code = bank_record.branchcode if bank_record else ''
+
+                # ສ້າງ searchLog — ໃຊ້ inquiry_date ເທົ່ານັ້ນ
+                search_log = searchLog.objects.create(
+                    enterprise_ID='',
+                    LCIC_ID=lcic_id,
+                    bnk_code=bank_info.bnk_code,
+                    bnk_type=bank_info.bnk_type,
+                    branch=branch_code,
+                    cus_ID=customerid,
+                    cusType='individual',
+                    credit_type=chargeType.chg_code,
+                    inquiry_month=now.strftime('%Y-%m'),  # ຄຳນວນໃນ view
+                    com_tel='',
+                    com_location='',
+                    rec_loan_amount=0.0,
+                    rec_loan_amount_currency='LAK',
+                    rec_loan_purpose=loan_purpose or '',
+                    rec_enquiry_type='1',
+                    sys_usr=sys_usr
+                )
+
+                # ສ້າງ charge
+                charge = request_charge.objects.create(
+                    bnk_code=bank_info.bnk_code,
+                    bnk_type=bank_info.bnk_type,
+                    chg_amount=chargeType.chg_amount,
+                    chg_code=chargeType.chg_code,
+                    status='pending',
+                    rtp_code='1',
+                    lon_purpose=loan_purpose or '',
+                    chg_unit=chargeType.chg_unit,
+                    user_sys_id=sys_usr,
+                    LCIC_code=lcic_id,
+                    cusType='individual',
+                    user_session_id='',
+                    rec_reference_code='',
+                    search_log=search_log
+                )
+                charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
+                charge.save()
+
+                created_logs.append({
+                    'search_log_id': search_log.search_ID,   # ໃຊ້ .search_ID ແທນ .id
+                    'charge_id': charge.rec_charge_ID,
+                    'customerid': customerid
+                })
+
+            # === 7. Serialize ===
+            serializer = IndividualBankIbkInfoSerializer(unique_individuals, many=True)
+
+            # === 8. Response ===
+            return Response({
+                'individual_info': serializer.data,
+                'total_found': len(unique_individuals),
+                'log_created': len(created_logs),
+                'created_logs': created_logs,
+                'debug_info': {
+                    'total_raw_records': all_individual_info.count(),
+                    'unique_records': len(unique_individuals),
+                    'search_criteria': {'lcic_id': lcic_id}
+                }
+            }, status=status.HTTP_200_OK)
+
+        except memberInfo.DoesNotExist:
+            return Response({'error': 'Bank not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({
+                'error': 'Internal server error',
+                'details': traceback.format_exc()
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 # from rest_framework.views import APIView
 # from rest_framework.response import Response
@@ -25679,7 +25829,7 @@ class SearchIndividualBankView(APIView):
             query &= Q(lcic_id=lcic_id)
             
 
-       
+      
         results = IndividualBankIbk.objects.filter(query).values(
             'customerid', 'lcic_id', 'bnk_code',
             'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname','bnk_code'
@@ -25692,8 +25842,43 @@ class SearchIndividualBankView(APIView):
 
 
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from django.db.models import Q
+from .models import IndividualBankIbkInfo
 
+class SearchIndividualBankInfoView(APIView):
+    def get(self, request):
+        lcic_id = request.query_params.get('lcic_id')
 
+       
+        if not lcic_id:
+            return Response({
+                "results": [],
+                "message": "ກະລຸນາປ້ອນ lcic_id"
+            }, status=200)
+
+        
+        query = Q(lcic_id=lcic_id)
+
+       
+        results = IndividualBankIbkInfo.objects.filter(query).values(
+            'lcic_id',
+            'ind_name', 'ind_surname',
+            'ind_lao_name', 'ind_lao_surname',
+            'ind_national_id', 'ind_birth_date',
+            'ind_passport', 'ind_familybook',
+            'ind_familybook', 'ind_familybook',
+            'ind_familybook_prov_code', 'ind_familybook_prov_code',
+            'ind_familybook_date', 'ind_familybook_date',
+            'ind_birth_date', 'ind_birth_date',
+            'mm_ind_sys_id', 'mm_ind_sys_id',
+        )
+
+        return Response({
+            "count": len(results),
+            "results": list(results)
+        })
 #tik
 from rest_framework.views import APIView
 from rest_framework.response import Response
