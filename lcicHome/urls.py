@@ -79,7 +79,8 @@ router.register(r'user-groups', UserGroupViewSet, basename='usergroup')
 def get_csrf_token(request):
     return JsonResponse({'csrfToken': request.META.get('CSRF_COOKIE')})
 
-
+ 
+# Water Supply Upload URL patterns
 water_supply_patterns = [
     # Step 1: Initialize Month Tracking
     path('initialize/', views.InitializeWaterTrackingAPIView.as_view(), name='water-initialize'),
