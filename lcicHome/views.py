@@ -7464,7 +7464,164 @@ class FileUploadView3(generics.CreateAPIView):
 
         return JsonResponse({'status': 'success', 'message': 'File uploaded successfully'})
 
+# views.py
+from rest_framework import generics, status
+from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
+from django.db import transaction
+from django.urls import reverse
+from .models import Upload_File_Individual, B1, memberInfo
+import json
+import logging
 
+logger = logging.getLogger(__name__)
+
+@method_decorator(ensure_csrf_cookie, name='dispatch')
+class IndividualFileUploadView(generics.CreateAPIView):
+    parser_classes = (MultiPartParser, FormParser)
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({
+                'status': 'error',
+                'message': 'User ID is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        files = request.FILES.getlist('file')
+        if not files:
+            return Response({
+                'status': 'error',
+                'message': 'No files uploaded'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        upload_errors = []
+        upload_success = []
+
+        for file in files:
+            if not file.name.endswith('.json'):
+                upload_errors.append(f"{file.name}: Must be .json")
+                continue
+
+            try:
+                # === 1. ອ່ານ JSON ===
+                file_content = file.read().decode('utf-8')
+                file.seek(0)  # reset pointer
+                file_data = json.loads(file_content)
+                if isinstance(file_data, list):
+                    file_data = file_data[0]
+
+                bnk_code = file_data.get('bnk_code')
+                if not bnk_code:
+                    upload_errors.append(f"{file.name}: bnk_code not found")
+                    continue
+                if str(user_id) != str(bnk_code):
+                    upload_errors.append(f"{file.name}: User ID does not match bnk_code")
+                    continue
+
+                # === 2. ກວດ file ຊື່ຊ້ຳ ===
+                if Upload_File_Individual.objects.filter(fileName=file.name, user_id=user_id).exists():
+                    upload_errors.append(f"{file.name}: Already exists")
+                    continue
+
+                # === 3. ວິເຄາະ period ຈາກ file name ===
+                parts = file.name.split('_')
+                if len(parts) < 4:
+                    upload_errors.append(f"{file.name}: Invalid name format")
+                    continue
+
+                period_str = parts[3]
+                try:
+                    period_month = int(period_str[1:3])
+                    period_year = int(period_str[3:])
+                    if not (1 <= period_month <= 12):
+                        raise ValueError
+                    period_value = f"{period_year:04d}{period_month:02d}"
+                except (ValueError, IndexError):
+                    upload_errors.append(f"{file.name}: Invalid period format")
+                    continue
+
+                # === 4. ກວດ period ກັບ B1 ===
+                max_b1_period = B1.objects.filter(bnk_code=bnk_code).aggregate(
+                    max_p=models.Max('period')
+                )['max_p']
+
+                if max_b1_period:
+                    b1_str = str(max_b1_period)
+                    if len(b1_str) != 6:
+                        upload_errors.append(f"{file.name}: Invalid B1 period format")
+                        continue
+                    b1_year = int(b1_str[:4])
+                    b1_month = int(b1_str[4:])
+                    b1_period = int(f"{b1_year}{b1_month:02d}")
+                    file_period_int = int(period_value)
+                    if file_period_int < b1_period:
+                        upload_errors.append(f"{file.name}: Cannot upload previous period")
+                        continue
+
+                # === 5. ດຶງ memberInfo (MID) ===
+                try:
+                    member = memberInfo.objects.get(bnk_code=bnk_code)
+                except memberInfo.DoesNotExist:
+                    upload_errors.append(f"{file.name}: Bank not found")
+                    continue
+
+                # === 6. ບັນທຶກໃສ່ Upload_File_Individual ===
+                upload_file = Upload_File_Individual(
+                    MID=member,
+                    user_id=user_id,
+                    file_id='',  # ຫຼື generate ເອງ
+                    fileName=file.name,
+                    fileUpload=file,
+                    fileSize=str(file.size),
+                    path=f"uploadFilesIdividual/{file.name}",
+                    period=period_value,
+                    status='uploaded',
+                    statussubmit='0',
+                    status_upload='pending',
+                    FileType='json',
+                    percentage=0.0,
+                    progress_percentage=0
+                )
+                upload_file.save()
+
+                upload_success.append({
+                    'file_name': file.name,
+                    'file_id': upload_file.FID,
+                    'period': period_value,
+                    'status': 'uploaded'
+                })
+
+            except json.JSONDecodeError:
+                upload_errors.append(f"{file.name}: Invalid JSON")
+            except Exception as e:
+                logger.error(f"Upload error {file.name}: {str(e)}", exc_info=True)
+                upload_errors.append(f"{file.name}: Processing error")
+
+        # === ຕອບກັບຜົນ ===
+        if upload_errors and not upload_success:
+            return Response({
+                'status': 'error',
+                'message': 'All files failed',
+                'errors': upload_errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if upload_errors:
+            return Response({
+                'status': 'partial',
+                'message': 'Some files uploaded, some failed',
+                'success': upload_success,
+                'errors': upload_errors
+            }, status=status.HTTP_207_MULTI_STATUS)
+
+        return Response({
+            'status': 'success',
+            'message': 'All files uploaded successfully',
+            'uploaded': upload_success
+        }, status=status.HTTP_201_CREATED)
 
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
@@ -11502,7 +11659,7 @@ class LoginView1(APIView):
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Count, Q  # ✅ import ຢູ່ເທິງສຸດ
+from django.db.models import Count, Q 
 import logging
 
 logger = logging.getLogger(__name__)
@@ -11520,13 +11677,13 @@ class UploadFileList(generics.ListAPIView):
         
         queryset = Upload_File.objects.all()
         
-        # Permission logic
+        
         if request_user_id and request_user_id != "01":
             queryset = queryset.filter(user_id=request_user_id)
         elif request_user_id == "01" and user_id:
             queryset = queryset.filter(user_id=user_id)
         
-        # Apply filters
+       
         if period:
             queryset = queryset.filter(period=period)
         if file_type:
@@ -25131,11 +25288,9 @@ class ChargeReportDetailView(APIView):
         return "{:,.0f}".format(float(amount))
     
 # ----------------------------------------------- UPDATE HERE -----------------------------------------------
- 
-
-# update 
 import requests
 import logging
+from decimal import Decimal
 from django.db import transaction
 from django.db.models import Count, Sum, Q
 from django.utils import timezone
@@ -25150,7 +25305,7 @@ from utility.models import (
     w_customer_info,
     w_province_code,
     w_district_code,
-    Utility_Bill  # Assuming this model exists
+    Utility_Bill
 )
 from .serializers import (
     WaterUploadTrackingSerializer,
@@ -25165,6 +25320,17 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+BATCH_SIZE = 1000  # Process records in chunks of 1000
+API_TIMEOUT = 300  # 5 minutes timeout for API calls
+ROLLBACK_ON_ERROR = False  # Set True to rollback everything on any error
+
+
+# ============================================================================
+# API CLIENT
+# ============================================================================
 class WaterAPIClient:
     """Client for interacting with Water Supply API"""
     
@@ -25178,16 +25344,10 @@ class WaterAPIClient:
         }
     
     def fetch_new_connections(self, month):
-        """
-        Fetch new customer connections for a given month
-        Args:
-            month (str): Format MMYYYY (e.g., 012025)
-        Returns:
-            dict: Response data with customer information
-        """
+        """Fetch new customer connections"""
         url = f"{self.BASE_URL}/newconnection/{month}"
         try:
-            response = requests.get(url, headers=self.headers, timeout=300)
+            response = requests.get(url, headers=self.headers, timeout=API_TIMEOUT)
             response.raise_for_status()
             return {
                 'success': True,
@@ -25203,16 +25363,10 @@ class WaterAPIClient:
             }
     
     def fetch_all_bills(self, month):
-        """
-        Fetch all bills for a given month
-        Args:
-            month (str): Format MMYYYY (e.g., 012025)
-        Returns:
-            dict: Response data with bill information
-        """
+        """Fetch all bills"""
         url = f"{self.BASE_URL}/allbillmonth/{month}"
         try:
-            response = requests.get(url, headers=self.headers, timeout=300)
+            response = requests.get(url, headers=self.headers, timeout=API_TIMEOUT)
             response.raise_for_status()
             return {
                 'success': True,
@@ -25228,17 +25382,332 @@ class WaterAPIClient:
             }
 
 
+# ============================================================================
+# DATA PROCESSOR (FIXED)
+# ============================================================================
+class WaterDataProcessor:
+    """Handles bulk data processing with progress tracking"""
+    
+    @staticmethod
+    def safe_get(item, *keys):
+        """Safely get value from dict with fallback keys"""
+        for key in keys:
+            val = item.get(key)
+            if val:
+                return str(val)
+        return ''
+    
+    @staticmethod
+    def safe_decimal(value):
+        """Convert to decimal safely"""
+        try:
+            return Decimal(str(value)) if value else Decimal('0.0')
+        except:
+            return Decimal('0.0')
+    
+    @staticmethod
+    def truncate(value, max_length):
+        """Truncate string to max length"""
+        if value is None:
+            return ''
+        return str(value)[:max_length]
+    
+    @classmethod
+    def process_customers_bulk(cls, tracking, data, month):
+        """Process customer data in bulk with progress tracking"""
+        customer_list = data.get('message', []) if isinstance(data, dict) else data
+        total_customers = len(customer_list)
+        
+        if total_customers == 0:
+            return {'inserted': 0, 'updated': 0, 'failed': 0}
+        
+        inserted_count = 0
+        updated_count = 0
+        failed_count = 0
+        
+        # Process in batches
+        for batch_num, i in enumerate(range(0, total_customers, BATCH_SIZE), 1):
+            batch = customer_list[i:i + BATCH_SIZE]
+            batch_size = len(batch)
+            
+            try:
+                with transaction.atomic():
+                    # Collect customer IDs for this batch
+                    customer_ids = []
+                    for customer in batch:
+                        customer_id = cls.safe_get(customer, 'CUSTOMER_ID')
+                        if customer_id:
+                            customer_ids.append(customer_id)
+                    
+                    # Fetch existing customers WITH their PKs
+                    existing_customers_dict = {
+                        c.Customer_ID: c 
+                        for c in w_customer_info.objects.filter(Customer_ID__in=customer_ids)
+                    }
+                    
+                    # Prepare data for bulk operations
+                    customers_to_create = []
+                    customers_to_update = []
+                    
+                    # Process each customer
+                    for customer in batch:
+                        customer_id = cls.safe_get(customer, 'CUSTOMER_ID')
+                        
+                        if not customer_id:
+                            failed_count += 1
+                            continue
+                        
+                        # Check if customer exists
+                        if customer_id in existing_customers_dict:
+                            # UPDATE: Modify the existing object (which has pk set)
+                            existing_obj = existing_customers_dict[customer_id]
+                            existing_obj.No = cls.truncate(cls.safe_get(customer, 'NO'), 100)
+                            existing_obj.Company_name = cls.truncate(cls.safe_get(customer, 'COMPANY_NAME'), 100)
+                            existing_obj.Name = cls.truncate(cls.safe_get(customer, 'NAME'), 100)
+                            existing_obj.Surname = cls.truncate(cls.safe_get(customer, 'SURNAME'), 100)
+                            existing_obj.National_ID = cls.truncate(cls.safe_get(customer, 'NATIONAL_ID'), 100)
+                            existing_obj.Passport = cls.truncate(cls.safe_get(customer, 'PASSPORT'), 100)
+                            existing_obj.Address = cls.truncate(cls.safe_get(customer, 'ADDRESS'), 100)
+                            existing_obj.Dustrict_ID = cls.truncate(cls.safe_get(customer, 'DISTRICT_ID'), 100)
+                            existing_obj.Province_ID = cls.truncate(cls.safe_get(customer, 'PROVINCE_ID'), 100)
+                            existing_obj.Tel = cls.truncate(cls.safe_get(customer, 'TEL'), 100)
+                            existing_obj.Email = cls.truncate(cls.safe_get(customer, 'EMAIL'), 100)
+                            existing_obj.Cus_type = cls.truncate(cls.safe_get(customer, 'CONSUMER_TYPE'), 100)
+                            existing_obj.Regis_date = cls.truncate(cls.safe_get(customer, 'REGISTER_DATE'), 100)
+                            existing_obj.UpdateDate = month  # Set UpdateDate to upload_month
+                            customers_to_update.append(existing_obj)
+                        else:
+                            # CREATE: New customer object
+                            customer_obj = w_customer_info(
+                                Customer_ID=customer_id,
+                                No=cls.truncate(cls.safe_get(customer, 'NO'), 100),
+                                Company_name=cls.truncate(cls.safe_get(customer, 'COMPANY_NAME'), 100),
+                                Name=cls.truncate(cls.safe_get(customer, 'NAME'), 100),
+                                Surname=cls.truncate(cls.safe_get(customer, 'SURNAME'), 100),
+                                National_ID=cls.truncate(cls.safe_get(customer, 'NATIONAL_ID'), 100),
+                                Passport=cls.truncate(cls.safe_get(customer, 'PASSPORT'), 100),
+                                Address=cls.truncate(cls.safe_get(customer, 'ADDRESS'), 100),
+                                Dustrict_ID=cls.truncate(cls.safe_get(customer, 'DISTRICT_ID'), 100),
+                                Province_ID=cls.truncate(cls.safe_get(customer, 'PROVINCE_ID'), 100),
+                                Tel=cls.truncate(cls.safe_get(customer, 'TEL'), 100),
+                                Email=cls.truncate(cls.safe_get(customer, 'EMAIL'), 100),
+                                Cus_type=cls.truncate(cls.safe_get(customer, 'CONSUMER_TYPE'), 100),
+                                Regis_date=cls.truncate(cls.safe_get(customer, 'REGISTER_DATE'), 100),
+                                InsertDate=month  # Set InsertDate to upload_month
+                            )
+                            customers_to_create.append(customer_obj)
+                    
+                    # Bulk create new customers
+                    if customers_to_create:
+                        w_customer_info.objects.bulk_create(
+                            customers_to_create,
+                            ignore_conflicts=True
+                        )
+                        inserted_count += len(customers_to_create)
+                    
+                    # Bulk update existing customers
+                    if customers_to_update:
+                        w_customer_info.objects.bulk_update(
+                            customers_to_update,
+                            fields=[
+                                'No', 'Company_name', 'Name', 'Surname', 
+                                'National_ID', 'Passport', 'Address',
+                                'Dustrict_ID', 'Province_ID', 'Tel', 
+                                'Email', 'Cus_type', 'Regis_date',
+                                'UpdateDate'  # Added UpdateDate to fields list
+                            ]
+                        )
+                        updated_count += len(customers_to_update)
+                    
+                    # Update progress
+                    processed_so_far = min(i + batch_size, total_customers)
+                    progress_pct = (processed_so_far / total_customers) * 100
+                    
+                    tracking.customer_records = inserted_count + updated_count
+                    tracking.processed_records = tracking.customer_records + tracking.payment_records
+                    tracking.save(update_fields=['customer_records', 'processed_records'])
+                    
+                    # Log progress every batch
+                    WaterUploadLog.objects.create(
+                        tracking=tracking,
+                        log_level='INFO',
+                        message=f'Customers: Batch {batch_num} - Processed {processed_so_far}/{total_customers} ({progress_pct:.1f}%)'
+                    )
+                    
+            except Exception as e:
+                logger.error(f"Error in customer batch {batch_num}: {str(e)}")
+                failed_count += batch_size
+                
+                WaterUploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='ERROR',
+                    message=f'Customer batch {batch_num} failed: {str(e)[:200]}'
+                )
+                
+                if ROLLBACK_ON_ERROR:
+                    raise
+        
+        return {
+            'inserted': inserted_count,
+            'updated': updated_count,
+            'failed': failed_count
+        }
+    
+    @classmethod
+    def process_bills_bulk(cls, tracking, data, upload_month):
+        """Process bill data in bulk with progress tracking"""
+        bill_list = data.get('message', []) if isinstance(data, dict) else data
+        total_bills = len(bill_list)
+        
+        if total_bills == 0:
+            return {'inserted': 0, 'updated': 0, 'failed': 0}
+        
+        inserted_count = 0
+        updated_count = 0
+        failed_count = 0
+        
+        # Process in batches
+        for batch_num, i in enumerate(range(0, total_bills, BATCH_SIZE), 1):
+            batch = bill_list[i:i + BATCH_SIZE]
+            batch_size = len(batch)
+            
+            try:
+                with transaction.atomic():
+                    # Collect bill IDs for this batch
+                    bill_ids = []
+                    for bill in batch:
+                        customer_id = cls.safe_get(bill, 'CUSTOMER_ID')
+                        invoice_no = cls.safe_get(bill, 'NO')
+                        
+                        if invoice_no and customer_id:
+                            unique_id = f"{invoice_no}_{customer_id}_{upload_month}"
+                            bill_ids.append(unique_id)
+                    
+                    # Fetch existing bills WITH their primary keys
+                    existing_bills_dict = {
+                        b.InvoiceNo: b
+                        for b in Utility_Bill.objects.filter(InvoiceNo__in=bill_ids)
+                    }
+                    
+                    # Prepare data for bulk operations
+                    bills_to_create = []
+                    bills_to_update = []
+                    
+                    # Process each bill
+                    for bill in batch:
+                        customer_id = cls.safe_get(bill, 'CUSTOMER_ID')
+                        invoice_no = cls.safe_get(bill, 'NO')
+                        
+                        if not invoice_no or not customer_id:
+                            failed_count += 1
+                            continue
+                        
+                        # unique_id = f"{invoice_no}_{customer_id}_{upload_month}"
+                        unique_id = f"{invoice_no}"
+                        
+                        
+                        # Check if bill exists
+                        if unique_id in existing_bills_dict:
+                            # UPDATE: Modify the existing object (which has pk set)
+                            existing_obj = existing_bills_dict[unique_id]
+                            existing_obj.Customer_ID = cls.truncate(customer_id, 255)
+                            existing_obj.TypeOfPro = cls.truncate(cls.safe_get(bill, 'SUPPLY_TYPE'), 100)
+                            existing_obj.Outstanding = cls.safe_decimal(cls.safe_get(bill, 'OUTSTANDING', 0))
+                            existing_obj.Basic_Tax = cls.safe_decimal(cls.safe_get(bill, 'BASIC+TAX', 0))
+                            existing_obj.Bill_Amount = cls.safe_decimal(cls.safe_get(bill, 'BILL_AMOUNT', 0))
+                            existing_obj.Debt_Amount = Decimal('0.0')
+                            existing_obj.Payment_ID = cls.truncate(cls.safe_get(bill, 'PAYMENT_ID'), 255)
+                            existing_obj.PaymentType = cls.truncate(cls.safe_get(bill, 'PAY_TYPE'), 255)
+                            existing_obj.Payment_Date = cls.truncate(cls.safe_get(bill, 'PAYMENT_DATE'), 255)
+                            existing_obj.InvoiceMonth = cls.truncate(cls.safe_get(bill, 'BILL_OF_MONTH'), 50)
+                            existing_obj.InvoiceDate = cls.truncate(cls.safe_get(bill, 'DATE_OF_ISSUE'), 100)
+                            existing_obj.DisID = cls.truncate(cls.safe_get(bill, 'DIS_ID'), 100)
+                            existing_obj.ProID = cls.truncate(cls.safe_get(bill, 'PRO_ID'), 100)
+                            existing_obj.UserID = tracking.user_upload
+                            bills_to_update.append(existing_obj)
+                        else:
+                            # CREATE: New bill object
+                            bill_obj = Utility_Bill(
+                                InvoiceNo=cls.truncate(unique_id, 255),
+                                Customer_ID=cls.truncate(customer_id, 255),
+                                TypeOfPro=cls.truncate(cls.safe_get(bill, 'SUPPLY_TYPE'), 100),
+                                Outstanding=cls.safe_decimal(cls.safe_get(bill, 'OUTSTANDING', 0)),
+                                Basic_Tax=cls.safe_decimal(cls.safe_get(bill, 'BASIC+TAX', 0)),
+                                Bill_Amount=cls.safe_decimal(cls.safe_get(bill, 'BILL_AMOUNT', 0)),
+                                Debt_Amount=Decimal('0.0'),
+                                Payment_ID=cls.truncate(cls.safe_get(bill, 'PAYMENT_ID'), 255),
+                                PaymentType=cls.truncate(cls.safe_get(bill, 'PAY_TYPE'), 255),
+                                Payment_Date=cls.truncate(cls.safe_get(bill, 'PAYMENT_DATE'), 255),
+                                InvoiceMonth=cls.truncate(cls.safe_get(bill, 'BILL_OF_MONTH'), 50),
+                                InvoiceDate=cls.truncate(cls.safe_get(bill, 'DATE_OF_ISSUE'), 100),
+                                DisID=cls.truncate(cls.safe_get(bill, 'DIS_ID'), 100),
+                                ProID=cls.truncate(cls.safe_get(bill, 'PRO_ID'), 100),
+                                UserID=tracking.user_upload
+                            )
+                            bills_to_create.append(bill_obj)
+                    
+                    # Bulk create new bills
+                    if bills_to_create:
+                        Utility_Bill.objects.bulk_create(
+                            bills_to_create,
+                            ignore_conflicts=True
+                        )
+                        inserted_count += len(bills_to_create)
+                    
+                    # Bulk update existing bills
+                    if bills_to_update:
+                        Utility_Bill.objects.bulk_update(
+                            bills_to_update,
+                            fields=[
+                                'Customer_ID', 'TypeOfPro', 'Outstanding',
+                                'Basic_Tax', 'Bill_Amount', 'Debt_Amount',
+                                'Payment_ID', 'PaymentType', 'Payment_Date',
+                                'InvoiceMonth', 'InvoiceDate', 'DisID',
+                                'ProID', 'UserID'
+                            ]
+                        )
+                        updated_count += len(bills_to_update)
+                    
+                    # Update progress
+                    processed_so_far = min(i + batch_size, total_bills)
+                    progress_pct = (processed_so_far / total_bills) * 100
+                    
+                    tracking.payment_records = inserted_count + updated_count
+                    tracking.processed_records = tracking.customer_records + tracking.payment_records
+                    tracking.save(update_fields=['payment_records', 'processed_records'])
+                    
+                    # Log progress every batch
+                    WaterUploadLog.objects.create(
+                        tracking=tracking,
+                        log_level='INFO',
+                        message=f'Bills: Batch {batch_num} - Processed {processed_so_far}/{total_bills} ({progress_pct:.1f}%)'
+                    )
+                    
+            except Exception as e:
+                logger.error(f"Error in bill batch {batch_num}: {str(e)}")
+                failed_count += batch_size
+                
+                WaterUploadLog.objects.create(
+                    tracking=tracking,
+                    log_level='ERROR',
+                    message=f'Bill batch {batch_num} failed: {str(e)[:200]}'
+                )
+                
+                if ROLLBACK_ON_ERROR:
+                    raise
+        
+        return {
+            'inserted': inserted_count,
+            'updated': updated_count,
+            'failed': failed_count
+        }
+
+
+# ============================================================================
+# API VIEWS
+# ============================================================================
 class InitializeWaterTrackingAPIView(APIView):
-    """
-    Step 1: Initialize tracking record for a month
-    POST /api/water-supply/initialize/
-    Body: {
-        "upload_month": "012025",
-        "pro_id": "01",  # Optional
-        "dis_id": "0101",  # Optional
-        "user_upload": "admin"
-    }
-    """
+    """Initialize tracking record for a month"""
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
@@ -25290,7 +25759,6 @@ class InitializeWaterTrackingAPIView(APIView):
             tracking.user_upload = user_upload
             tracking.save()
         
-        # Create log entry
         WaterUploadLog.objects.create(
             tracking=tracking,
             log_level='INFO',
@@ -25305,17 +25773,7 @@ class InitializeWaterTrackingAPIView(APIView):
 
 
 class WaterUploadDataAPIView(APIView):
-    """
-    Step 2: Upload water supply data (Fetch from API and insert into database)
-    POST /api/water-supply/upload/
-    Body: {
-        "upload_month": "012025",
-        "pro_id": "01",  # Optional
-        "dis_id": "0101",  # Optional
-        "user_upload": "admin",
-        "force_reupload": false
-    }
-    """
+    """Upload water supply data with optimized bulk processing (FIXED STATUS UPDATE)"""
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
@@ -25332,7 +25790,7 @@ class WaterUploadDataAPIView(APIView):
         user_upload = serializer.validated_data.get('user_upload', request.user.username)
         force_reupload = serializer.validated_data.get('force_reupload', False)
         
-       
+        # Get or create tracking record
         try:
             tracking = WaterUploadDataTracking.objects.get(
                 pro_id=pro_id,
@@ -25342,12 +25800,12 @@ class WaterUploadDataAPIView(APIView):
             
             if tracking.status == 'completed' and not force_reupload:
                 return Response({
-                    'error': 'Upload already completed for this month. Use force_reupload=true to override.',
+                    'error': 'Upload already completed. Use force_reupload=true to override.',
                     'tracking_id': tracking.id
                 }, status=status.HTTP_400_BAD_REQUEST)
             
         except WaterUploadDataTracking.DoesNotExist:
-            # Auto-initialize if not exists
+            # Auto-initialize
             pro_name = "All Provinces"
             dis_name = "All Districts"
             
@@ -25379,56 +25837,141 @@ class WaterUploadDataAPIView(APIView):
         tracking.status = 'in_progress'
         tracking.upload_started = timezone.now()
         tracking.user_upload = user_upload
+        tracking.processed_records = 0
+        tracking.customer_records = 0
+        tracking.payment_records = 0
+        tracking.failed_records = 0
         tracking.save()
         
-        # Log start
         WaterUploadLog.objects.create(
             tracking=tracking,
             log_level='INFO',
-            message=f'Starting data upload for month {upload_month}'
+            message=f'Starting optimized bulk upload for month {upload_month}'
         )
         
         # Initialize API client
         api_client = WaterAPIClient()
+        processor = WaterDataProcessor()
         
         # Process upload
         try:
-            self._process_upload(tracking, api_client, upload_month)
+            # Step 1: Fetch and process customers
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message='Fetching customer data from API...'
+            )
             
-            # Calculate final statistics
-            tracking.calculate_duration()
-            tracking.calculate_success_rate()
-            tracking.upload_completed = timezone.now()
+            customers_result = api_client.fetch_new_connections(upload_month)
             
-            if tracking.failed_records > 0:
-                tracking.status = 'partial'
-            else:
-                tracking.status = 'completed'
+            if not customers_result['success']:
+                raise Exception(f"Failed to fetch customers: {customers_result.get('error')}")
             
-            tracking.save()
+            tracking.api_response_code = customers_result['status_code']
+            tracking.save(update_fields=['api_response_code'])
+            
+            # Process customers in bulk
+            customer_stats = processor.process_customers_bulk(
+                tracking, 
+                customers_result['data'], 
+                upload_month
+            )
             
             WaterUploadLog.objects.create(
                 tracking=tracking,
                 log_level='SUCCESS',
-                message=f'Upload completed. Processed: {tracking.processed_records}, Failed: {tracking.failed_records}'
+                message=f'Customers completed: {customer_stats["inserted"]} new, {customer_stats["updated"]} updated, {customer_stats["failed"]} failed'
             )
+            
+            # Step 2: Fetch and process bills
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='INFO',
+                message='Fetching bill data from API...'
+            )
+            
+            bills_result = api_client.fetch_all_bills(upload_month)
+            
+            if not bills_result['success']:
+                raise Exception(f"Failed to fetch bills: {bills_result.get('error')}")
+            
+            # Process bills in bulk
+            bill_stats = processor.process_bills_bulk(
+                tracking,
+                bills_result['data'],
+                upload_month
+            )
+            
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='SUCCESS',
+                message=f'Bills completed: {bill_stats["inserted"]} new, {bill_stats["updated"]} updated, {bill_stats["failed"]} failed'
+            )
+            
+            # ⚠️ FIX: Update all fields in a separate transaction to ensure they're saved
+            with transaction.atomic():
+                # Refresh from DB to get latest values
+                tracking.refresh_from_db()
+                
+                # Update final statistics
+                tracking.total_records = tracking.customer_records + tracking.payment_records
+                tracking.failed_records = customer_stats['failed'] + bill_stats['failed']
+                tracking.upload_completed = timezone.now()
+                
+                # Calculate duration and success rate
+                tracking.calculate_duration()
+                tracking.calculate_success_rate()
+                
+                # ⚠️ FIX: Set status LAST and save immediately
+                if tracking.failed_records > 0:
+                    tracking.status = 'partial'
+                else:
+                    tracking.status = 'completed'
+                
+                # Save all fields at once
+                tracking.save()
+            
+            # Log success AFTER saving status
+            WaterUploadLog.objects.create(
+                tracking=tracking,
+                log_level='SUCCESS',
+                message=f'Upload completed successfully. Total: {tracking.processed_records} records'
+            )
+            
+            # Refresh again to ensure we have the latest saved values
+            tracking.refresh_from_db()
             
             return Response({
                 'message': 'Upload completed successfully',
                 'tracking_id': tracking.id,
                 'status': tracking.status,
-                'processed_records': tracking.processed_records,
-                'payment_records': tracking.payment_records,
-                'customer_records': tracking.customer_records,
-                'failed_records': tracking.failed_records
+                'statistics': {
+                    'customers': {
+                        'total': tracking.customer_records,
+                        'new': customer_stats['inserted'],
+                        'updated': customer_stats['updated'],
+                        'failed': customer_stats['failed']
+                    },
+                    'bills': {
+                        'total': tracking.payment_records,
+                        'new': bill_stats['inserted'],
+                        'updated': bill_stats['updated'],
+                        'failed': bill_stats['failed']
+                    },
+                    'duration': tracking.upload_duration,
+                    'success_rate': tracking.success_rates
+                }
             }, status=status.HTTP_200_OK)
             
         except Exception as e:
-            tracking.status = 'failed'
-            tracking.error_message = str(e)
-            tracking.upload_completed = timezone.now()
-            tracking.calculate_duration()
-            tracking.save()
+            # ⚠️ FIX: Ensure status is updated even on error
+            with transaction.atomic():
+                tracking.refresh_from_db()
+                tracking.status = 'failed'
+                tracking.error_message = str(e)
+                tracking.upload_completed = timezone.now()
+                tracking.calculate_duration()
+                tracking.save()
             
             WaterUploadLog.objects.create(
                 tracking=tracking,
@@ -25436,206 +25979,16 @@ class WaterUploadDataAPIView(APIView):
                 message=f'Upload failed: {str(e)}'
             )
             
+            logger.exception("Water upload failed")
+            
             return Response({
                 'error': str(e),
                 'tracking_id': tracking.id
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def _process_upload(self, tracking, api_client, upload_month):
-        """Process the upload by fetching and inserting data"""
-        
-        # Step 1: Fetch and insert new customer connections
-        WaterUploadLog.objects.create(
-            tracking=tracking,
-            log_level='INFO',
-            message='Fetching new customer connections...'
-        )
-        
-        customers_result = api_client.fetch_new_connections(upload_month)
-        
-        if not customers_result['success']:
-            raise Exception(f"Failed to fetch customers: {customers_result.get('error')}")
-        
-        tracking.api_response_code = customers_result['status_code']
-        tracking.save()
-        
-        customer_data = customers_result['data']
-        customer_records = self._insert_customers(tracking, customer_data, upload_month)
-        
-        WaterUploadLog.objects.create(
-            tracking=tracking,
-            log_level='SUCCESS',
-            message=f'Inserted {customer_records} customer records'
-        )
-        
-        # Step 2: Fetch and insert bills
-        WaterUploadLog.objects.create(
-            tracking=tracking,
-            log_level='INFO',
-            message='Fetching bill data...'
-        )
-        
-        bills_result = api_client.fetch_all_bills(upload_month)
-        
-        if not bills_result['success']:
-            raise Exception(f"Failed to fetch bills: {bills_result.get('error')}")
-        
-        bill_data = bills_result['data']
-        payment_records = self._insert_bills(tracking, bill_data, upload_month)
-        
-        WaterUploadLog.objects.create(
-            tracking=tracking,
-            log_level='SUCCESS',
-            message=f'Inserted {payment_records} payment records'
-        )
-        
-        # Update tracking record
-        tracking.customer_records = customer_records
-        tracking.payment_records = payment_records
-        tracking.total_records = customer_records + payment_records
-        tracking.processed_records = customer_records + payment_records
-        tracking.save()
-    
-
-        return IndividualBankIbk.objects.filter(query)
-
-
-
-    
-
-    def _insert_customers(self, tracking, data, upload_month):
-        """Insert customer data into w_customer_info table"""
-        inserted_count = 0
-        failed_count = 0
-        
-        def safe_get(item, *keys):
-            for key in keys:
-                val = item.get(key)
-                if val:
-                    return str(val)
-            return ''
-        
-        # ✅ FIX: API returns data in 'message' field
-        customer_list = data.get('message', []) if isinstance(data, dict) else data
-        
-        for customer in customer_list:
-            try:
-                with transaction.atomic():
-                    customer_id = safe_get(customer, 'CUSTOMER_ID')
-                    
-                    if not customer_id:
-                        failed_count += 1
-                        continue
-                    
-                    w_customer_info.objects.update_or_create(
-                        Customer_ID=customer_id,
-                        defaults={
-                            'No': safe_get(customer, 'NO')[:100],
-                            'Company_name': safe_get(customer, 'COMPANY_NAME')[:100],
-                            'Name': safe_get(customer, 'NAME')[:100],
-                            'Surname': safe_get(customer, 'SURNAME')[:100],
-                            'National_ID': safe_get(customer, 'NATIONAL_ID')[:100],
-                            'Passport': safe_get(customer, 'PASSPORT')[:100],
-                            'Address': safe_get(customer, 'ADDRESS')[:100],
-                            'Dustrict_ID': safe_get(customer, 'DISTRICT_ID')[:100],
-                            'Province_ID': safe_get(customer, 'PROVINCE_ID')[:100],
-                            'Tel': safe_get(customer, 'TEL')[:100],
-                            'Email': safe_get(customer, 'EMAIL')[:100],
-                            'Cus_type': safe_get(customer, 'CONSUMER_TYPE')[:100],  # ✅ FIX: CONSUMER_TYPE
-                            'Regis_date': safe_get(customer, 'REGISTER_DATE')[:100]  # ✅ FIX: REGISTER_DATE
-                        }
-                    )
-                    inserted_count += 1
-                    
-            except Exception as e:
-                logger.error(f"Error inserting customer {customer_id}: {str(e)}")
-                failed_count += 1
-        
-        tracking.failed_records += failed_count
-        tracking.save()
-        return inserted_count
-
-    def _insert_bills(self, tracking, data, upload_month):
-        """Insert bill data into Utility_Bill table"""
-        inserted_count = 0
-        failed_count = 0
-        
-        def safe_get(item, key, default=''):
-            val = item.get(key, default)
-            return val if val is not None else default
-        
-        def safe_decimal(value):
-            try:
-                return float(value) if value else 0.0
-            except:
-                return 0.0
-        
-        def truncate(value, max_length):
-            if value is None:
-                return ''
-            return str(value)[:max_length]
-        
-        bill_list = data.get('message', []) if isinstance(data, dict) else data
-        
-        for bill in bill_list:
-            try:
-                with transaction.atomic():
-                    customer_id = safe_get(bill, 'CUSTOMER_ID')
-                    invoice_no = safe_get(bill, 'NO')
-                    
-                    if not invoice_no or not customer_id:
-                        failed_count += 1
-                        continue
-                    
-                    # Create unique identifier
-                    unique_id = f"{invoice_no}_{customer_id}_{upload_month}"
-                    
-                    Utility_Bill.objects.update_or_create(
-                        InvoiceNo=truncate(unique_id, 255),
-                        defaults={
-                            'Customer_ID': truncate(customer_id, 255),
-                            'TypeOfPro': truncate(safe_get(bill, 'SUPPLY_TYPE'), 100),
-                            'Outstanding': safe_decimal(safe_get(bill, 'OUTSTANDING', 0)),
-                            'Basic_Tax': safe_decimal(safe_get(bill, 'BASIC+TAX', 0)),
-                            'Bill_Amount': safe_decimal(safe_get(bill, 'BILL_AMOUNT', 0)),
-                            'Debt_Amount': 0.0,
-                            'Payment_ID': truncate(safe_get(bill, 'PAYMENT_ID'), 255),
-                            'PaymentType': truncate(safe_get(bill, 'PAY_TYPE'), 255),
-                            'Payment_Date': truncate(safe_get(bill, 'PAYMENT_DATE'), 255),
-                            'InvoiceMonth': truncate(safe_get(bill, 'BILL_OF_MONTH'), 50),
-                            'InvoiceDate': truncate(safe_get(bill, 'DATE_OF_ISSUE'), 100),
-                            'DisID': truncate(safe_get(bill, 'DIS_ID'), 100),
-                            'ProID': truncate(safe_get(bill, 'PRO_ID'), 100),
-                            'UserID': tracking.user_upload
-                        }
-                    )
-                    inserted_count += 1
-                    
-            except Exception as e:
-                logger.error(f"Error inserting bill: {str(e)}")
-                failed_count += 1
-                if failed_count <= 5:  # Log first 5 errors only
-                    WaterUploadLog.objects.create(
-                        tracking=tracking,
-                        log_level='WARNING',
-                        message=f'Bill insert failed: {str(e)[:200]}'
-                    )
-        
-        tracking.failed_records += failed_count
-        tracking.save()
-        return inserted_count
 
 
 class WaterUploadTrackingListAPIView(generics.ListAPIView):
-    """
-    Step 3: Get list of upload tracking records
-    GET /api/water-supply/tracking/
-    Query params:
-        - upload_month: Filter by month (MMYYYY)
-        - status: Filter by status
-        - pro_id: Filter by province
-        - dis_id: Filter by district
-    """
+    """Get list of upload tracking records"""
     queryset = WaterUploadDataTracking.objects.all()
     serializer_class = WaterUploadTrackingListSerializer
     permission_classes = [IsAuthenticated]
@@ -25661,23 +26014,160 @@ class WaterUploadTrackingListAPIView(generics.ListAPIView):
 
 
 class WaterUploadTrackingDetailAPIView(generics.RetrieveAPIView):
-    """
-    Step 4: Get detailed tracking information including logs
-    GET /api/water-supply/tracking/{id}/
-    """
+    """Get detailed tracking information with logs"""
     queryset = WaterUploadDataTracking.objects.all()
     serializer_class = WaterUploadTrackingSerializer
     permission_classes = [IsAuthenticated]
     lookup_field = 'id'
     lookup_url_kwarg = 'tracking_id'
 
+
 class WaterDistrictStatisticsAPIView(APIView):
-    """Get district statistics with actual bill and customer counts"""
+    """Get district statistics"""
+    permission_classes = [IsAuthenticated]
+    
+    # def get(self, request):
+    #     upload_month = request.query_params.get('upload_month')
+        
+    #     if not upload_month:
+    #         return Response({'error': 'upload_month is required'}, status=400)
+        
+    #     # Get bill counts per district
+    #     bill_stats = Utility_Bill.objects.filter(
+    #         InvoiceMonth__contains=upload_month[2:]
+    #     ).values('ProID', 'DisID').annotate(
+    #         total_bills=Count('InvoiceNo')
+    #     )
+        
+    #     print("----------> Invoice MOnth:",bill_stats)
+    #     # Get customer counts per district
+    #     customer_stats = w_customer_info.objects.values(
+    #         'Province_ID', 'Dustrict_ID'
+    #     ).annotate(
+    #         total_customers=Count('Customer_ID')
+    #     )
+        
+    #     # Create lookup dict
+    #     customer_lookup = {
+    #         f"{c['Province_ID']}_{c['Dustrict_ID']}": c['total_customers']
+    #         for c in customer_stats
+    #     }
+        
+    #     # Build response
+    #     result = []
+    #     for stat in bill_stats:
+    #         pro_id = stat['ProID']
+    #         dis_id = stat['DisID']
+            
+    #         # Get names
+    #         try:
+    #             province = w_province_code.objects.get(pro_id=pro_id)
+    #             pro_name = province.pro_name
+    #         except:
+    #             pro_name = f"Province {pro_id}"
+            
+    #         try:
+    #             district = w_district_code.objects.get(pro_id=pro_id, dis_id=dis_id)
+    #             dis_name = district.dis_name
+    #         except:
+    #             dis_name = f"District {dis_id}"
+            
+    #         customer_count = customer_lookup.get(f"{pro_id}_{dis_id}", 0)
+            
+    #         result.append({
+    #             'pro_id': pro_id,
+    #             'pro_name': pro_name,
+    #             'dis_id': dis_id,
+    #             'dis_name': dis_name,
+    #             'upload_month': upload_month,
+    #             'total_bills': stat['total_bills'],
+    #             'total_customers': customer_count,
+    #             'status': 'completed',
+    #             'last_updated': timezone.now()
+    #         })
+        
+    #     return Response(result, status=200)
+    def get(self, request):
+        upload_month = request.query_params.get('upload_month')
+        
+        if not upload_month:
+            return Response({'error': 'upload_month is required'}, status=400)
+        
+        # Validate and format: Assume input is MMYYYY (6 chars); adjust if needed
+        if len(upload_month) != 6 or not upload_month.isdigit():
+            return Response({'error': 'upload_month must be MMYYYY format (e.g., 112025)'}, status=400)
+        
+        month_part = upload_month[:2]  # '11'
+        year_part = upload_month[2:]   # '2025'
+        target_month = f"{month_part}-{year_part}"  # '11-2025'
+        
+        # Get bill counts per district for EXACT month
+        bill_stats = Utility_Bill.objects.filter(
+            InvoiceMonth=target_month  # Exact match: = '11-2025'
+        ).values('ProID', 'DisID').annotate(
+            total_bills=Count('InvoiceNo')
+        )
+        
+        print(f"----------> Target Month: {target_month}, Stats: {bill_stats}")
+        
+        customer_stats = w_customer_info.objects.filter(
+            InsertDate=target_month
+            ).values(
+            'Province_ID', 'Dustrict_ID'
+        ).annotate(
+            total_customers=Count('Customer_ID')
+        )
+        
+        # Create lookup dict
+        customer_lookup = {
+            f"{c['Province_ID']}_{c['Dustrict_ID']}": c['total_customers']
+            for c in customer_stats
+        }
+        
+        # Build response
+        result = []
+        for stat in bill_stats:
+            pro_id = stat['ProID']
+            dis_id = stat['DisID']
+            
+            # Get names
+            try:
+                province = w_province_code.objects.get(pro_id=pro_id)
+                pro_name = province.pro_name
+            except:
+                pro_name = f"Province {pro_id}"
+            
+            try:
+                district = w_district_code.objects.get(pro_id=pro_id, dis_id=dis_id)
+                dis_name = district.dis_name
+            except:
+                dis_name = f"District {dis_id}"
+            
+            customer_count = customer_lookup.get(f"{pro_id}_{dis_id}", 0)
+            
+            result.append({
+                'pro_id': pro_id,
+                'pro_name': pro_name,
+                'dis_id': dis_id,
+                'dis_name': dis_name,
+                'upload_month': upload_month,
+                'total_bills': stat['total_bills'],
+                'total_customers': customer_count,
+                'status': 'completed',
+                'last_updated': timezone.now()
+            })
+        
+        return Response(result, status=200)
+
+
+class WaterUploadSummaryAPIView(APIView):
+    """
+    Get upload summary grouped by province/district (FOR FRONTEND)
+    Returns hierarchical data: Province -> Districts
+    """
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        from django.db.models import Count
-        
         upload_month = request.query_params.get('upload_month')
         
         if not upload_month:
@@ -25685,7 +26175,7 @@ class WaterDistrictStatisticsAPIView(APIView):
         
         # Get bill counts per district
         bill_stats = Utility_Bill.objects.filter(
-            InvoiceMonth__contains=upload_month[2:]  # Extract year from 082025
+            InvoiceMonth__contains=upload_month[2:]
         ).values('ProID', 'DisID').annotate(
             total_bills=Count('InvoiceNo')
         )
@@ -25703,8 +26193,9 @@ class WaterDistrictStatisticsAPIView(APIView):
             for c in customer_stats
         }
         
-        # Build response with proper names
-        result = []
+        # Group by province
+        provinces_dict = {}
+        
         for stat in bill_stats:
             pro_id = stat['ProID']
             dis_id = stat['DisID']
@@ -25723,61 +26214,71 @@ class WaterDistrictStatisticsAPIView(APIView):
             except:
                 dis_name = f"District {dis_id}"
             
+            # Initialize province if not exists
+            if pro_id not in provinces_dict:
+                provinces_dict[pro_id] = {
+                    'pro_id': pro_id,
+                    'pro_name': pro_name,
+                    'total_bills': 0,
+                    'total_customers': 0,
+                    'districts': []
+                }
+            
             # Get customer count
             customer_count = customer_lookup.get(f"{pro_id}_{dis_id}", 0)
             
-            result.append({
-                'pro_id': pro_id,
-                'pro_name': pro_name,
+            # Add district
+            provinces_dict[pro_id]['districts'].append({
                 'dis_id': dis_id,
                 'dis_name': dis_name,
-                'upload_month': upload_month,
                 'total_bills': stat['total_bills'],
                 'total_customers': customer_count,
-                'status': 'completed',
-                'last_updated': timezone.now()
+                'status': 'completed'
             })
+            
+            # Update province totals
+            provinces_dict[pro_id]['total_bills'] += stat['total_bills']
+            provinces_dict[pro_id]['total_customers'] += customer_count
+        
+        # Convert to list and sort
+        result = sorted(provinces_dict.values(), key=lambda x: x['pro_id'])
         
         return Response(result, status=200)
 
-
-
-
-
-class WaterUploadSummaryAPIView(APIView):
-    """
-    Step 6: Get upload summary across all periods
-    GET /api/water-supply/statistics/summary/
-    Query params:
-        - start_month: Start month (optional)
-        - end_month: End month (optional)
-    """
-    permission_classes = [IsAuthenticated]
+# class WaterUploadSummaryAPIView(APIView):
+#     """
+#     Step 6: Get upload summary across all periods
+#     GET /api/water-supply/statistics/summary/
+#     Query params:
+#         - start_month: Start month (optional)
+#         - end_month: End month (optional)
+#     """
+#     permission_classes = [IsAuthenticated]
     
-    def get(self, request):
-        start_month = request.query_params.get('start_month')
-        end_month = request.query_params.get('end_month')
+#     def get(self, request):
+#         start_month = request.query_params.get('start_month')
+#         end_month = request.query_params.get('end_month')
         
-        queryset = WaterUploadDataTracking.objects.all()
+#         queryset = WaterUploadDataTracking.objects.all()
         
-        if start_month:
-            queryset = queryset.filter(upload_month__gte=start_month)
-        if end_month:
-            queryset = queryset.filter(upload_month__lte=end_month)
+#         if start_month:
+#             queryset = queryset.filter(upload_month__gte=start_month)
+#         if end_month:
+#             queryset = queryset.filter(upload_month__lte=end_month)
         
-        # Group by month and aggregate statistics
-        summary = queryset.values('upload_month').annotate(
-            total_provinces=Count('pro_id', distinct=True),
-            total_districts=Count('dis_id', distinct=True),
-            total_bills=Sum('payment_records'),
-            total_customers=Sum('customer_records'),
-            completed_uploads=Count('id', filter=Q(status='completed')),
-            pending_uploads=Count('id', filter=Q(status='pending')),
-            failed_uploads=Count('id', filter=Q(status='failed'))
-        ).order_by('-upload_month')
+#         # Group by month and aggregate statistics
+#         summary = queryset.values('upload_month').annotate(
+#             total_provinces=Count('pro_id', distinct=True),
+#             total_districts=Count('dis_id', distinct=True),
+#             total_bills=Sum('payment_records'),
+#             total_customers=Sum('customer_records'),
+#             completed_uploads=Count('id', filter=Q(status='completed')),
+#             pending_uploads=Count('id', filter=Q(status='pending')),
+#             failed_uploads=Count('id', filter=Q(status='failed'))
+#         ).order_by('-upload_month')
         
-        serializer = UploadSummarySerializer(summary, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+#         serializer = UploadSummarySerializer(summary, many=True)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -25788,9 +26289,9 @@ class SearchIndividualBankView(APIView):
     def get(self, request):
         customerid = request.query_params.get('customerid')
         lcic_id = request.query_params.get('lcic_id')
-        bnk_code = request.query_params.get('bnk_code')  
+        bnk_code = request.query_params.get('bnk_code')  # bnk_code ຂອງຜູ້ໃຊ້
 
-       
+        # ຕ້ອງມີ customerid ຫຼື lcic_id
         if not any([customerid, lcic_id]):
             return Response({
                 "results": [],
@@ -25799,15 +26300,20 @@ class SearchIndividualBankView(APIView):
 
         query = Q()
 
-       
+        # === ກໍລະນີ 1: ມີ customerid ===
         if customerid:
             query &= Q(customerid=customerid)
 
-            
+            # ຖ້າມີ bnk_code → ກວດສອບເງື່ອນໄຂພິເສດ
             if bnk_code:
-                query &= Q(bnk_code=bnk_code)
+                if bnk_code == '01':
+                    # bnk_code = 01 → ເຫັນທຸກ bnk_code
+                    pass  # ບໍ່ເພີ່ມເງື່ອນໄຂ bnk_code
+                else:
+                    # bnk_code ≠ 01 → ເຫັນພຽງ bnk_code ຂອງຕົນເອງ
+                    query &= Q(bnk_code=bnk_code)
             else:
-               
+                # ຖ້າບໍ່ມີ bnk_code → ໃຊ້ logic ເກົ່າ (valid bnk_code ທີ່ເຄີຍມີ)
                 valid_bnk_codes = IndividualBankIbk.objects.filter(
                     customerid=customerid
                 ).values_list('bnk_code', flat=True).distinct()
@@ -25820,28 +26326,30 @@ class SearchIndividualBankView(APIView):
 
                 query &= Q(bnk_code__in=valid_bnk_codes)
 
-            
+            # ຖ້າມີ lcic_id → ເພີ່ມເງື່ອນໄຂ
             if lcic_id:
                 query &= Q(lcic_id=lcic_id)
 
-        
+        # === ກໍລະນີ 2: ມີແຕ່ lcic_id ===
         elif lcic_id:
             query &= Q(lcic_id=lcic_id)
-            
 
-      
+            # ຖ້າມີ bnk_code → ກວດສອບເງື່ອນໄຂພິເສດ
+            if bnk_code:
+                if bnk_code != '01':
+                    # ຖ້າບໍ່ແມ່ນ 01 → ຈຳກັດ bnk_code ຂອງຕົນເອງ
+                    query &= Q(bnk_code=bnk_code)
+
+        # === ດຶງຂໍ້ມູນ ===
         results = IndividualBankIbk.objects.filter(query).values(
             'customerid', 'lcic_id', 'bnk_code',
-            'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname','bnk_code'
+            'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname','branchcode'
         )
 
         return Response({
             "count": len(results),
             "results": list(results)
         })
-
-
-
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Q
@@ -25897,6 +26405,7 @@ class UserListAPIView(APIView):
     # GET: แสดงรายชื่อผู้ใช้
     def get(self, request, *args, **kwargs):
         try:
+           
             queryset = Login.objects.values(
                 'UID', 'bnk_code', 'username', 'nameL', 'nameE',
                 'surnameL', 'surnameE', 'last_login', 'is_active',
