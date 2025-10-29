@@ -545,6 +545,32 @@ class Upload_File(models.Model):
     def __str__(self):
         return self.title    
     
+class Upload_File_Individual(models.Model):
+    FID = models.AutoField(primary_key=True)
+    MID = models.ForeignKey(memberInfo, null=True, blank=True, on_delete=models.CASCADE)
+    GID = models.ForeignKey(User_Group, null=True, blank=True, on_delete=models.CASCADE)
+    SType = models.ForeignKey(SType, null=True, blank=True, on_delete=models.CASCADE)
+    UType = models.ForeignKey(Upload_Type, null=True, blank=True, on_delete=models.CASCADE)
+    user_id = models.CharField(max_length=255)  
+    file_id = models.CharField(max_length=255)
+    fileName = models.CharField(max_length=255)
+    fileUpload = models.FileField(upload_to="uploadFilesIdividual/")
+    progress_percentage = models.IntegerField(default=0)
+    fileSize = models.CharField(max_length=255)
+    path = models.CharField(max_length=255)
+    insertDate = models.DateTimeField(auto_now_add=True, blank=True)
+    updateDate = models.DateTimeField(auto_now_add=True, blank=True)
+    period = models.CharField(max_length=150)
+    status = models.CharField(max_length=150)
+    statussubmit = models.CharField(max_length=150)
+    status_upload = models.CharField(max_length=150)
+    FileType = models.CharField(max_length=10)
+    percentage = models.FloatField(default=0.0)
+    dispuste = models.CharField(max_length=255, null=True, blank=True)
+
+    def __str__(self):
+        return self.title    
+    
 class Upload_File_C(models.Model):
     # ID field is automatically handled by Django when 'primary_key=True' is used.
     CID = models.AutoField(primary_key=True)

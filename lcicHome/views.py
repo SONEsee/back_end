@@ -7464,7 +7464,164 @@ class FileUploadView3(generics.CreateAPIView):
 
         return JsonResponse({'status': 'success', 'message': 'File uploaded successfully'})
 
+# views.py
+from rest_framework import generics, status
+from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
+from django.db import transaction
+from django.urls import reverse
+from .models import Upload_File_Individual, B1, memberInfo
+import json
+import logging
 
+logger = logging.getLogger(__name__)
+
+@method_decorator(ensure_csrf_cookie, name='dispatch')
+class IndividualFileUploadView(generics.CreateAPIView):
+    parser_classes = (MultiPartParser, FormParser)
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({
+                'status': 'error',
+                'message': 'User ID is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        files = request.FILES.getlist('file')
+        if not files:
+            return Response({
+                'status': 'error',
+                'message': 'No files uploaded'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        upload_errors = []
+        upload_success = []
+
+        for file in files:
+            if not file.name.endswith('.json'):
+                upload_errors.append(f"{file.name}: Must be .json")
+                continue
+
+            try:
+                # === 1. ອ່ານ JSON ===
+                file_content = file.read().decode('utf-8')
+                file.seek(0)  # reset pointer
+                file_data = json.loads(file_content)
+                if isinstance(file_data, list):
+                    file_data = file_data[0]
+
+                bnk_code = file_data.get('bnk_code')
+                if not bnk_code:
+                    upload_errors.append(f"{file.name}: bnk_code not found")
+                    continue
+                if str(user_id) != str(bnk_code):
+                    upload_errors.append(f"{file.name}: User ID does not match bnk_code")
+                    continue
+
+                # === 2. ກວດ file ຊື່ຊ້ຳ ===
+                if Upload_File_Individual.objects.filter(fileName=file.name, user_id=user_id).exists():
+                    upload_errors.append(f"{file.name}: Already exists")
+                    continue
+
+                # === 3. ວິເຄາະ period ຈາກ file name ===
+                parts = file.name.split('_')
+                if len(parts) < 4:
+                    upload_errors.append(f"{file.name}: Invalid name format")
+                    continue
+
+                period_str = parts[3]
+                try:
+                    period_month = int(period_str[1:3])
+                    period_year = int(period_str[3:])
+                    if not (1 <= period_month <= 12):
+                        raise ValueError
+                    period_value = f"{period_year:04d}{period_month:02d}"
+                except (ValueError, IndexError):
+                    upload_errors.append(f"{file.name}: Invalid period format")
+                    continue
+
+                # === 4. ກວດ period ກັບ B1 ===
+                max_b1_period = B1.objects.filter(bnk_code=bnk_code).aggregate(
+                    max_p=models.Max('period')
+                )['max_p']
+
+                if max_b1_period:
+                    b1_str = str(max_b1_period)
+                    if len(b1_str) != 6:
+                        upload_errors.append(f"{file.name}: Invalid B1 period format")
+                        continue
+                    b1_year = int(b1_str[:4])
+                    b1_month = int(b1_str[4:])
+                    b1_period = int(f"{b1_year}{b1_month:02d}")
+                    file_period_int = int(period_value)
+                    if file_period_int < b1_period:
+                        upload_errors.append(f"{file.name}: Cannot upload previous period")
+                        continue
+
+                # === 5. ດຶງ memberInfo (MID) ===
+                try:
+                    member = memberInfo.objects.get(bnk_code=bnk_code)
+                except memberInfo.DoesNotExist:
+                    upload_errors.append(f"{file.name}: Bank not found")
+                    continue
+
+                # === 6. ບັນທຶກໃສ່ Upload_File_Individual ===
+                upload_file = Upload_File_Individual(
+                    MID=member,
+                    user_id=user_id,
+                    file_id='',  # ຫຼື generate ເອງ
+                    fileName=file.name,
+                    fileUpload=file,
+                    fileSize=str(file.size),
+                    path=f"uploadFilesIdividual/{file.name}",
+                    period=period_value,
+                    status='uploaded',
+                    statussubmit='0',
+                    status_upload='pending',
+                    FileType='json',
+                    percentage=0.0,
+                    progress_percentage=0
+                )
+                upload_file.save()
+
+                upload_success.append({
+                    'file_name': file.name,
+                    'file_id': upload_file.FID,
+                    'period': period_value,
+                    'status': 'uploaded'
+                })
+
+            except json.JSONDecodeError:
+                upload_errors.append(f"{file.name}: Invalid JSON")
+            except Exception as e:
+                logger.error(f"Upload error {file.name}: {str(e)}", exc_info=True)
+                upload_errors.append(f"{file.name}: Processing error")
+
+        # === ຕອບກັບຜົນ ===
+        if upload_errors and not upload_success:
+            return Response({
+                'status': 'error',
+                'message': 'All files failed',
+                'errors': upload_errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if upload_errors:
+            return Response({
+                'status': 'partial',
+                'message': 'Some files uploaded, some failed',
+                'success': upload_success,
+                'errors': upload_errors
+            }, status=status.HTTP_207_MULTI_STATUS)
+
+        return Response({
+            'status': 'success',
+            'message': 'All files uploaded successfully',
+            'uploaded': upload_success
+        }, status=status.HTTP_201_CREATED)
 
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
@@ -11502,7 +11659,7 @@ class LoginView1(APIView):
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Count, Q  # ✅ import ຢູ່ເທິງສຸດ
+from django.db.models import Count, Q 
 import logging
 
 logger = logging.getLogger(__name__)
@@ -11520,13 +11677,13 @@ class UploadFileList(generics.ListAPIView):
         
         queryset = Upload_File.objects.all()
         
-        # Permission logic
+        
         if request_user_id and request_user_id != "01":
             queryset = queryset.filter(user_id=request_user_id)
         elif request_user_id == "01" and user_id:
             queryset = queryset.filter(user_id=user_id)
         
-        # Apply filters
+       
         if period:
             queryset = queryset.filter(period=period)
         if file_type:
