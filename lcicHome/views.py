@@ -7672,7 +7672,7 @@ class IndividualFileListView(generics.ListAPIView):
         try:
             queryset = self.filter_queryset(self.get_queryset())
             
-            # Pagination
+           
             page = int(request.query_params.get('page', 1))
             limit = int(request.query_params.get('limit', 20))
             
