@@ -26433,12 +26433,18 @@ class UserListAPIView(APIView):
         except Exception as e:
             return Response({'status': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    # POST: เพิ่มผู้ใช้ + hash password
+    # POST: เพิ่มผู้ใช้ + hash password + insert searchLog และ request_charge
     @transaction.atomic
     def post(self, request):
+        # ✅ ดึงข้อมูลจาก User ที่ล็อกอิน (ใช้ request.POST เพราะ MultiPartParser)
+        user_uid = request.data.get('creator_UID', None)
+        user_bnk_code = request.data.get('user_bnk_code', None)
+        
+        # Validate serializer
         serializer = UserSerializer(data=request.data)
         if serializer.is_valid():
             try:
+                # บันทึก user ใหม่
                 new_user = serializer.save()
 
                 # hash password ถ้ามี
@@ -26446,10 +26452,7 @@ class UserListAPIView(APIView):
                     new_user.set_password(request.data['password'])
                     new_user.save()
 
-                sys_usr_uid = request.data.get('creator_UID', 0)
-                branch = request.data.get('branch_id', None)
-
-                # ✅ ดึงข้อมูล charge จาก ChargeMatrix (chg_sys_id = 12 สำหรับ ADD)
+                # ✅ ดึงข้อมูล charge จาก ChargeMatrix (chg_sys_id = 12 สำหรับ ADD USER)
                 try:
                     charge_info = ChargeMatrix.objects.get(chg_sys_id=12)
                 except ChargeMatrix.DoesNotExist:
@@ -26458,17 +26461,19 @@ class UserListAPIView(APIView):
                         "message": "Charge configuration not found (chg_sys_id=12)"
                     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-                # Insert searchLog
+                # ✅ Insert searchLog ด้วย bnk_code จาก User UID (MID.id)
                 search_log = searchLog.objects.create(
-                    bnk_code=new_user.bnk_code,
+                    bnk_code=user_bnk_code,  # bnk_code = MID.id ของ User ที่ล็อกอิน
                     credit_type=charge_info.chg_code,
-                    branch=branch,
-                    sys_usr=sys_usr_uid
+                    branch=None,  # ไม่ใช้ branch
+                    sys_usr=user_uid
                 )
+                
+                search_log_pk = search_log.pk
 
-                # Insert request_charge ใช้ข้อมูลจาก ChargeMatrix
+                # ✅ Insert request_charge ด้วย bnk_code จาก User ใหม่
                 request_charge.objects.create(
-                    bnk_code=new_user.bnk_code,
+                    bnk_code=new_user.bnk_code,  # bnk_code จาก user ใหม่
                     chg_code=charge_info.chg_code,
                     chg_amount=charge_info.chg_amount,
                     chg_unit=charge_info.chg_unit,
@@ -26483,6 +26488,8 @@ class UserListAPIView(APIView):
                 }, status=status.HTTP_201_CREATED)
 
             except Exception as e:
+                import traceback
+                traceback.print_exc()
                 transaction.set_rollback(True)
                 return Response({
                     "status": False,
@@ -26490,7 +26497,10 @@ class UserListAPIView(APIView):
                     "error": str(e)
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        return Response({"status": False, "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            "status": False, 
+            "errors": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserDetailAPIView(APIView):
@@ -26539,7 +26549,7 @@ class UserDetailAPIView(APIView):
         
             if status_changed:
                 sys_usr_uid = request.data.get('creator_UID', 0)
-                branch = request.data.get('branch_id', None)
+                user_bnk_code = request.data.get('user_bnk_code', None)
             
                 # ตรวจสอบว่ามี creator_UID หรือไม่
                 if not sys_usr_uid or sys_usr_uid == '0':
@@ -26559,9 +26569,8 @@ class UserDetailAPIView(APIView):
             
                 # Insert searchLog
                 search_log = searchLog.objects.create(
-                    bnk_code=updated_user.bnk_code,
+                    bnk_code=user_bnk_code,
                     credit_type=charge_info.chg_code,
-                    branch=branch,
                     sys_usr=sys_usr_uid
                 )
             
@@ -26610,12 +26619,17 @@ class UserGroupList(APIView):
 # views.py
 from django.db.models import Q
 from rest_framework import generics
-from .models import memberInfo, memberType, villageInfo, districtInfo, provInfo
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+
+from .models import memberInfo, memberType, villageInfo, districtInfo, provInfo, ChargeMatrix, searchLog, request_charge
 from .serializers import (
     MemberInfoSerializers, MemberTypeSerializers, VillageInfoSerializers,
     DistrictInfoSerializers, ProvInfoSerializers
 )
-from rest_framework.parsers import MultiPartParser, FormParser
+
 
 class MemberListView(generics.ListCreateAPIView):
     serializer_class = MemberInfoSerializers
@@ -26623,7 +26637,7 @@ class MemberListView(generics.ListCreateAPIView):
         'memberType', 'provInfo', 'districtInfo', 'villageInfo'
     ).all().order_by('-id')
     parser_classes = [MultiPartParser, FormParser]
-
+    
     def get_queryset(self):
         queryset = super().get_queryset()
         search = self.request.query_params.get('search', None)
@@ -26638,20 +26652,95 @@ class MemberListView(generics.ListCreateAPIView):
         if member_type:
             queryset = queryset.filter(memberType_id=member_type)
         return queryset.distinct().order_by('bnk_code')
-
+    
     def get_serializer_context(self):
-        # 🔹 เพื่อให้ get_mImage สามารถสร้าง absolute URL
         context = super().get_serializer_context()
         context.update({"request": self.request})
         return context
+    
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        """Override create method เพื่อ insert searchLog และ request_charge"""
+        
+        # Validate และ save member
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # บันทึก member ใหม่
+        new_member = serializer.save()
+        
+        # ดึง memberType ID
+        member_type_id = new_member.memberType.id if new_member.memberType else None
+        
+        # กำหนด chg_sys_id ตาม memberType
+        chg_sys_id = None
+        if member_type_id == 1:
+            chg_sys_id = 15
+        elif member_type_id in [2, 3, 5]:
+            chg_sys_id = 16
+        elif member_type_id in [4, 6, 7]:
+            chg_sys_id = 17
+        
+        # ถ้ามี chg_sys_id ให้ insert searchLog และ request_charge
+        if chg_sys_id:
+            try:
+                # ดึงข้อมูล charge จาก ChargeMatrix
+                charge_info = ChargeMatrix.objects.get(chg_sys_id=chg_sys_id)
+                
+                # ✅ ดึงข้อมูลจาก User ที่ล็อกอิน (UID)
+                user_uid = request.data.get('creator_UID', None)
+                user_bnk_code = request.data.get('user_bnk_code', None)  # bnk_code ของ user
+                
+                # ✅ Insert searchLog ด้วย bnk_code และ branch จาก User UID
+                search_log = searchLog.objects.create(
+                    bnk_code=user_bnk_code,  # bnk_code จาก User ที่ล็อกอิน
+                    credit_type=charge_info.chg_code,
+                    sys_usr=user_uid
+                )
+                
+                search_log_pk = search_log.pk
+                
+                # ✅ Insert request_charge ด้วย bnk_code จาก Member ใหม่
+                request_charge.objects.create(
+                    bnk_code=new_member.bnk_code,  # bnk_code จาก member ใหม่
+                    chg_code=charge_info.chg_code,
+                    chg_amount=charge_info.chg_amount,
+                    chg_unit=charge_info.chg_unit,
+                    status='pending',
+                    search_log=search_log
+                )
+                
+            except ChargeMatrix.DoesNotExist:
+                return Response({
+                    "status": False,
+                    "message": f"Charge configuration not found (chg_sys_id={chg_sys_id})"
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                transaction.set_rollback(True)
+                return Response({
+                    "status": False,
+                    "message": "Error while creating charge records",
+                    "error": str(e)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        
+        headers = self.get_success_headers(serializer.data)
+        return Response({
+            "status": True,
+            "message": "Member added successfully",
+            "data": serializer.data
+        }, status=status.HTTP_201_CREATED, headers=headers)
+
 
 class MemberDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = memberInfo.objects.select_related(
         'memberType', 'provInfo', 'districtInfo', 'villageInfo'
     ).all()
     serializer_class = MemberInfoSerializers
-    parser_classes = [MultiPartParser, FormParser]  # 🔹 รองรับ upload รูป
-
+    parser_classes = [MultiPartParser, FormParser]
+    
     def get_serializer_context(self):
         context = super().get_serializer_context()
         context.update({"request": self.request})
