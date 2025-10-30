@@ -115,7 +115,40 @@ class B1_MonthlySerializer(serializers.ModelSerializer):
         
 
 
+# serializers.py
+from rest_framework import serializers
+from .models import Upload_File_Individual
 
+class IndividualFileSerializer(serializers.ModelSerializer):
+    file_url = serializers.SerializerMethodField()
+    file_size = serializers.CharField(source='fileSize')
+
+    class Meta:
+        model = Upload_File_Individual
+        fields = [
+            'FID',
+            'user_id',
+            'file_id',
+            'fileName',
+            'file_url',
+            'file_size',
+            'period',
+            'status',
+            'statussubmit',
+            'status_upload',
+            'FileType',
+            'percentage',
+            'progress_percentage',
+            'insertDate',
+            'updateDate'
+        ]
+
+    def get_file_url(self, obj):
+        if obj.fileUpload:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.fileUpload.url)
+        return None
 
 # from rest_framework import serializers
 # from .models import UploadedFile
