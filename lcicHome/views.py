@@ -26919,3 +26919,170 @@ class ChargeMatrixDetailAPIView(APIView):
             return Response({'error': 'Charge not found'}, status=status.HTTP_404_NOT_FOUND)
         charge.delete()
         return Response({'message': 'Deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+    
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.core.paginator import Paginator
+from django.db.models import Q
+from .models import request_charge
+from .serializers import RequestChargeSerializer
+
+
+class RequestChargeSummaryAPIView(APIView):
+    """API สำหรับนับจำนวนตาม chg_code แยกเป็น 3 กล่อง พร้อม Date Filter"""
+    
+    def get(self, request, *args, **kwargs):
+        # รับค่า parameters
+        bnk_code = request.GET.get('bnk_code', '01')
+        date_filter_type = request.GET.get('date_filter_type', 'day')
+        date_filter_value = request.GET.get('date_filter_value', '')
+        
+        # กลุ่ม chg_code
+        group1 = ['FCRFI', 'NLRFI', 'NLR', 'FCR']
+        group2 = ['SCR', 'SCRFI']
+        group3 = ['UTLT', 'UTLTFI']
+        
+        # Base query - filter ตาม bnk_code
+        if bnk_code == '01':
+            queryset = request_charge.objects.all()
+        else:
+            queryset = request_charge.objects.filter(bnk_code=bnk_code)
+        
+        # Apply date filter
+        if date_filter_value:
+            queryset = self._apply_date_filter(queryset, date_filter_type, date_filter_value)
+        
+        # นับจำนวนในแต่ละกลุ่ม
+        count_group1 = queryset.filter(chg_code__in=group1).count()
+        count_group2 = queryset.filter(chg_code__in=group2).count()
+        count_group3 = queryset.filter(chg_code__in=group3).count()
+        
+        data = {
+            "bnk_code": bnk_code,
+            "date_filter_type": date_filter_type,
+            "date_filter_value": date_filter_value,
+            "group1": count_group1,
+            "group2": count_group2,
+            "group3": count_group3,
+        }
+        
+        return Response(data, status=200)
+    
+    def _apply_date_filter(self, queryset, filter_type, filter_value):
+        """Apply date filter based on type (year, month, day)"""
+        if not filter_value:
+            return queryset
+        
+        try:
+            if filter_type == 'year':
+                # Filter by year: YYYY
+                # rec_insert_date เริ่มต้นด้วย "2025"
+                return queryset.filter(
+                    rec_insert_date__year=int(filter_value)
+                )
+            
+            elif filter_type == 'month':
+                # Filter by year-month: YYYY-MM
+                year, month = filter_value.split('-')
+                return queryset.filter(
+                    rec_insert_date__year=int(year),
+                    rec_insert_date__month=int(month)
+                )
+            
+            elif filter_type == 'day':
+                # Filter by full date: YYYY-MM-DD
+                year, month, day = filter_value.split('-')
+                return queryset.filter(
+                    rec_insert_date__year=int(year),
+                    rec_insert_date__month=int(month),
+                    rec_insert_date__day=int(day)
+                )
+        except (ValueError, AttributeError) as e:
+            print(f"Date filter error: {e}")
+            return queryset
+        
+        return queryset
+
+
+class RequestChargeDetailAPIView(APIView):
+    """API สำหรับดึงรายละเอียดของแต่ละกลุ่ม พร้อม Date Filter (get all fields)"""
+    
+    def get(self, request, *args, **kwargs):
+        # รับค่า parameters
+        bnk_code = request.GET.get('bnk_code', '01')
+        group_type = request.GET.get('group', 'group1')
+        date_filter_type = request.GET.get('date_filter_type', 'day')
+        date_filter_value = request.GET.get('date_filter_value', '')
+        
+        # กำหนด chg_code ตาม group
+        group_mapping = {
+            'group1': ['FCRFI', 'NLRFI', 'NLR', 'FCR'],
+            'group2': ['SCR', 'SCRFI'],
+            'group3': ['UTLT', 'UTLTFI']
+        }
+        chg_codes = group_mapping.get(group_type, [])
+        
+        # Base query - filter ตาม bnk_code และ chg_code
+        if bnk_code == '01':
+            queryset = request_charge.objects.filter(chg_code__in=chg_codes)
+        else:
+            queryset = request_charge.objects.filter(
+                bnk_code=bnk_code,
+                chg_code__in=chg_codes
+            )
+        
+        # Apply date filter โดยตรงกับ DateTimeField
+        if date_filter_value:
+            queryset = self._apply_date_filter(queryset, date_filter_type, date_filter_value)
+        
+        # เรียงลำดับตาม rec_insert_date ใหม่สุดก่อน
+        queryset = queryset.order_by('-rec_insert_date')
+        
+        # Serialize ทั้งหมด (get all fields)
+        serializer = RequestChargeSerializer(queryset, many=True)
+        
+        # สร้าง response
+        data = {
+            "bnk_code": bnk_code,
+            "group": group_type,
+            "chg_codes": chg_codes,
+            "date_filter_type": date_filter_type,
+            "date_filter_value": date_filter_value,
+            "total_count": queryset.count(),
+            "results": serializer.data
+        }
+        
+        return Response(data, status=200)
+    
+    def _apply_date_filter(self, queryset, filter_type, filter_value):
+        """Filter rec_insert_date ตาม year/month/day (ไม่ต้อง substring)"""
+        if not filter_value:
+            return queryset
+        
+        try:
+            if filter_type == 'year':
+                return queryset.filter(rec_insert_date__year=int(filter_value))
+            
+            elif filter_type == 'month':
+                year, month = filter_value.split('-')
+                return queryset.filter(
+                    rec_insert_date__year=int(year),
+                    rec_insert_date__month=int(month)
+                )
+            
+            elif filter_type == 'day':
+                year, month, day = filter_value.split('-')
+                return queryset.filter(
+                    rec_insert_date__year=int(year),
+                    rec_insert_date__month=int(month),
+                    rec_insert_date__day=int(day)
+                )
+        except (ValueError, AttributeError) as e:
+            print(f"Date filter error: {e}")
+            return queryset
+        
+        return queryset
+
+
+
