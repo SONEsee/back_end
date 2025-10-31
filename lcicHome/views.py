@@ -7480,14 +7480,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# === Constants ===
+
 STATUS_UPLOADED = 'uploaded'
 STATUS_PENDING = 'pending'
 STATUS_PROCESSED = '1'
 STATUSSUBMIT_INITIAL = '0'
 DISPUTE_INITIAL = '0'
 
-# === ຟັງຊັນຊ່ວຍ ===
+
 def human_readable_size(size):
     for unit in ['B', 'KB', 'MB', 'GB']:
         if size < 1024.0:
@@ -7519,7 +7519,7 @@ def parse_datetime(dt_str):
         except: continue
     return None
 
-# === ຟັງຊັນສ້າງ record ===
+
 def create_damaged_record(item, error_code, fid, period):
     return B_Data_is_damaged(
         id_file=fid, lcicID=item.get('lcicID', ''), period=period,
@@ -7577,7 +7577,7 @@ def create_good_record(item, fid, period):
         LCIC_code=item.get('LCIC_code', '')
     )
 
-# === ຟັງຊັນຫຼັກ: ປະມວນຜົນໄຟລ໌ (ໄວທີ່ສຸດ) ===
+
 def process_individual_file(
     file: UploadedFile, user_id: str, member, period_value: str,
     lcic_customer_pairs, valid_lcic_ids, valid_customer_ids
@@ -7587,11 +7587,11 @@ def process_individual_file(
     print(f"{'='*80}")
     
     try:
-        # === STEP 1: ກວດໄຟລ໌ວ່າງ ===
+        
         if file.size == 0:
             return {'file_name': file.name, 'error_code': 'EMPTY_FILE', 'message': 'ໄຟລ໌ວ່າງ'}
 
-        # === STEP 2: ອ່ານ JSON ===
+        
         file_content = file.read().decode('utf-8')
         file.seek(0)
         try:
@@ -7602,7 +7602,7 @@ def process_individual_file(
         except json.JSONDecodeError as e:
             return {'file_name': file.name, 'error_code': 'INVALID_JSON', 'message': f'JSON ຜິດ: {str(e)}'}
 
-        # === STEP 3: ສ້າງ Upload_File_Individual ===
+        
         upload_file = Upload_File_Individual(
             MID=member, user_id=user_id, file_id='', fileName=file.name, fileUpload=file,
             fileSize=human_readable_size(file.size), path=f"uploadFilesIdividual/{file.name}",
@@ -7613,12 +7613,12 @@ def process_individual_file(
         FID = str(upload_file.FID)
         FID_with_prefix = f"n-{FID}"
 
-        # === STEP 4: ກຽມ Batch ===
+       
         damaged_batch, dispute_batch, good_batch = [], [], []
         total_records = len(data_list)
         progress_interval = max(1, total_records // 10)
 
-        # === STEP 5: Loop ວິເຄາະ ===
+        
         for idx, item in enumerate(data_list, 1):
             if idx % progress_interval == 0 or idx == total_records:
                 percentage = (idx / total_records) * 100
@@ -7628,12 +7628,12 @@ def process_individual_file(
             lcic_code = item.get('LCIC_code', '')
             customer_id = item.get('customer_id', '')
 
-            # CHECK A: bnk_code
+         
             if not bnk_code:
                 damaged_batch.append(create_damaged_record(item, '99', FID_with_prefix, period_value))
                 continue
 
-            # CHECK B: ຂໍ້ມູນຫວ່າງ
+          
             if not lcic_code and not customer_id:
                 damaged_batch.append(create_damaged_record(item, '11', FID_with_prefix, period_value))
             elif lcic_code and not customer_id:
@@ -7641,7 +7641,7 @@ def process_individual_file(
             elif not lcic_code and customer_id:
                 damaged_batch.append(create_damaged_record(item, '10', FID_with_prefix, period_value))
             else:
-                # CHECK C: ຄູ່ກົງກັນ (ໄວທີ່ສຸດ)
+            
                 if (lcic_code, customer_id) in lcic_customer_pairs:
                     good_batch.append(create_good_record(item, FID_with_prefix, period_value))
                 else:
@@ -7652,7 +7652,7 @@ def process_individual_file(
                     else:
                         dispute_batch.append(create_dispute_record(item, 'MISMATCH_ID', FID_with_prefix, period_value))
 
-        # === STEP 6: ບັນທຶກ Batch ===
+       
         BATCH_SIZE = 1000
         for name, batch, model in [
             ("damaged", damaged_batch, B_Data_is_damaged),
@@ -7663,7 +7663,7 @@ def process_individual_file(
                 for i in range(0, len(batch), BATCH_SIZE):
                     model.objects.bulk_create(batch[i:i + BATCH_SIZE])
 
-        # === STEP 7: ຄຳນວນສະຖິຕິ ===
+       
         total_items = len(data_list)
         damaged_count = len(damaged_batch)
         dispute_count = len(dispute_batch)
@@ -7692,7 +7692,133 @@ def process_individual_file(
         return {'file_name': file.name, 'error_code': 'UNEXPECTED_ERROR', 'message': f'ຜິດພາດ: {str(e)}'}
 
 
-# === API View ===
+
+# class IndividualFileUploadView(generics.CreateAPIView):
+#     parser_classes = (MultiPartParser, FormParser)
+
+#     def post(self, request, *args, **kwargs):
+#         user_id = request.data.get('user_id')
+#         if not user_id:
+#             return Response({'status': 'error', 'error_code': 'MISSING_USER_ID', 'message': 'ກະລຸນາປ້ອນ User ID'}, status=400)
+
+#         files = request.FILES.getlist('file')
+#         if not files:
+#             return Response({'status': 'error', 'error_code': 'NO_FILES', 'message': 'ກະລຸນາເລືອກໄຟລ໌'}, status=400)
+
+#         upload_errors = []
+#         upload_success = []
+
+#         for file in files:
+#             try:
+#                 with transaction.atomic():
+#                     result = self._process_single_file(file, user_id)
+#                     if 'error_code' in result:
+#                         upload_errors.append(result)
+#                     else:
+#                         upload_success.append(result)
+#             except Exception as e:
+#                 logger.error(f"Error: {str(e)}", exc_info=True)
+#                 upload_errors.append({'file_name': file.name, 'error_code': 'UNEXPECTED_ERROR', 'message': f'ຜິດພາດ: {str(e)}'})
+
+#         return self._create_response(upload_success, upload_errors)
+
+    
+#     def _process_single_file(self, file, user_id):
+#         if not file.name.endswith('.json'):
+#             return {'file_name': file.name, 'error_code': 'INVALID_FILE_TYPE', 'message': 'ຕ້ອງເປັນ .json'}
+
+    
+#         file_content = file.read().decode('utf-8')
+#         file.seek(0)
+#         try:
+#             file_data = json.loads(file_content)
+#             if isinstance(file_data, list) and len(file_data) > 0:
+#                 file_data = file_data[0]
+#             elif not isinstance(file_data, dict):
+#                 return {'file_name': file.name, 'error_code': 'INVALID_JSON', 'message': 'JSON ບໍ່ຖືກຕ້ອງ'}
+#         except:
+#             return {'file_name': file.name, 'error_code': 'INVALID_JSON', 'message': 'JSON ບໍ່ຖືກຕ້ອງ'}
+
+#         bnk_code = file_data.get('bnk_code')
+#         if not bnk_code:
+#             return {'file_name': file.name, 'error_code': 'MISSING_BNK_CODE', 'message': 'ບໍ່ພົບ bnk_code'}
+
+#         # ດຶງ segmentType ຈາກ JSON
+#         segment_type = file_data.get('segmentType')
+#         if not segment_type:
+#             return {'file_name': file.name, 'error_code': 'MISSING_SEGMENT_TYPE', 'message': 'ບໍ່ພົບ segmentType'}
+
+#         if str(user_id) != str(bnk_code):
+#             return {'file_name': file.name, 'error_code': 'MISMATCH_BNK_CODE', 'message': f'user_id ບໍ່ກົງກັບ bnk_code'}
+
+#         if Upload_File_Individual.objects.filter(fileName=file.name, user_id=user_id).exists():
+#             return {'file_name': file.name, 'error_code': 'FILE_EXISTS', 'message': 'ໄຟລ໌ມີແລ້ວ'}
+
+        
+#         parts = file.name.split('_')
+#         if len(parts) < 4:
+#             return {'file_name': file.name, 'error_code': 'INVALID_FILE_NAME', 'message': 'ຊື່ໄຟລ໌ບໍ່ຖືກຕ້ອງ'}
+#         period_str = parts[3].replace('.json', '').replace('M', '').replace('m', '')
+#         try:
+#             period_month = int(period_str[:2])
+#             period_year = int(period_str[2:])
+#             if not (1 <= period_month <= 12 and 2000 <= period_year <= 2100):
+#                 raise ValueError
+#             period_value = f"{period_year:04d}{period_month:02d}"
+#         except:
+#             return {'file_name': file.name, 'error_code': 'INVALID_PERIOD_FORMAT', 'message': 'Period ບໍ່ຖືກຕ້ອງ'}
+
+    
+#         # ກວດສອບ period ຕາມ bnk_code ແລະ segmentType
+#         max_b1_period = B1.objects.filter(
+#             bnk_code=bnk_code,
+#             segmentType=segment_type
+#         ).aggregate(max_p=Max('period'))['max_p']
+        
+#         if max_b1_period and int(period_value) < int(str(max_b1_period)):
+#             return {
+#                 'file_name': file.name, 
+#                 'error_code': 'PERIOD_TOO_OLD', 
+#                 'message': f'Period {period_value} ນ້ອຍກວ່າ period ຫຼ້າສຸດ {max_b1_period} ຂອງ segmentType {segment_type}'
+#             }
+
+    
+#         try:
+#             member = memberInfo.objects.get(bnk_code=bnk_code)
+#         except memberInfo.DoesNotExist:
+#             return {'file_name': file.name, 'error_code': 'BANK_NOT_FOUND', 'message': f'ບໍ່ພົບທະນາຄານ {bnk_code}'}
+
+    
+#         print(f"\n[CACHE] ດຶງຂໍ້ມູນຈາກ IndividualBankIbk ສຳລັບ bnk_code: {bnk_code}...")
+#         bank_data = list(
+#             IndividualBankIbk.objects.filter(bnk_code=bnk_code)
+#                                     .values('lcic_id', 'customerid')
+#                                     .iterator()
+#         )
+#         print(f"  ດຶງມາແລ້ວ: {len(bank_data):,} records")
+
+#         lcic_customer_pairs = {(d['lcic_id'], d['customerid']) for d in bank_data}
+#         valid_lcic_ids = {d['lcic_id'] for d in bank_data}
+#         valid_customer_ids = {d['customerid'] for d in bank_data}
+
+#         print(f"  ຄູ່ LCIC+Customer: {len(lcic_customer_pairs):,}")
+#         print(f"  LCIC IDs: {len(valid_lcic_ids):,}")
+#         print(f"  Customer IDs: {len(valid_customer_ids):,}")
+
+        
+#         file.seek(0)
+#         return process_individual_file(
+#             file, user_id, member, period_value,
+#             lcic_customer_pairs, valid_lcic_ids, valid_customer_ids
+#         )
+#         def _create_response(self, success, errors):
+#             if errors and not success:
+#                 return Response({'status': 'error', 'message': 'ລົ້ມເຫຼວທັງໝົດ', 'errors': errors}, status=400)
+#             elif errors:
+#                 return Response({'status': 'partial', 'message': f'ສຳເລັດ {len(success)}, ລົ້ມເຫຼວ {len(errors)}', 'success': success, 'errors': errors}, status=207)
+#             else:
+#                 return Response({'status': 'success', 'message': f'ອັບໂຫຼດສຳເລັດ {len(success)} ໄຟລ໌', 'uploaded': success}, status=201)
+    
 class IndividualFileUploadView(generics.CreateAPIView):
     parser_classes = (MultiPartParser, FormParser)
 
@@ -7726,7 +7852,6 @@ class IndividualFileUploadView(generics.CreateAPIView):
         if not file.name.endswith('.json'):
             return {'file_name': file.name, 'error_code': 'INVALID_FILE_TYPE', 'message': 'ຕ້ອງເປັນ .json'}
 
-        # === ອ່ານ JSON ເພື່ອກວດ bnk_code ===
         file_content = file.read().decode('utf-8')
         file.seek(0)
         try:
@@ -7742,13 +7867,17 @@ class IndividualFileUploadView(generics.CreateAPIView):
         if not bnk_code:
             return {'file_name': file.name, 'error_code': 'MISSING_BNK_CODE', 'message': 'ບໍ່ພົບ bnk_code'}
 
+        # ດຶງ segmentType ຈາກ JSON
+        segment_type = file_data.get('segmentType')
+        if not segment_type:
+            return {'file_name': file.name, 'error_code': 'MISSING_SEGMENT_TYPE', 'message': 'ບໍ່ພົບ segmentType'}
+
         if str(user_id) != str(bnk_code):
             return {'file_name': file.name, 'error_code': 'MISMATCH_BNK_CODE', 'message': f'user_id ບໍ່ກົງກັບ bnk_code'}
 
         if Upload_File_Individual.objects.filter(fileName=file.name, user_id=user_id).exists():
             return {'file_name': file.name, 'error_code': 'FILE_EXISTS', 'message': 'ໄຟລ໌ມີແລ້ວ'}
 
-        # === ແຍກ period ===
         parts = file.name.split('_')
         if len(parts) < 4:
             return {'file_name': file.name, 'error_code': 'INVALID_FILE_NAME', 'message': 'ຊື່ໄຟລ໌ບໍ່ຖືກຕ້ອງ'}
@@ -7762,18 +7891,24 @@ class IndividualFileUploadView(generics.CreateAPIView):
         except:
             return {'file_name': file.name, 'error_code': 'INVALID_PERIOD_FORMAT', 'message': 'Period ບໍ່ຖືກຕ້ອງ'}
 
-        # === ກວດ B1 ===
-        max_b1_period = B1.objects.filter(bnk_code=bnk_code).aggregate(max_p=Max('period'))['max_p']
+        # ກວດສອບ period ຕາມ bnk_code ແລະ segmentType
+        max_b1_period = B1.objects.filter(
+            bnk_code=bnk_code,
+            segmentType=segment_type
+        ).aggregate(max_p=Max('period'))['max_p']
+        
         if max_b1_period and int(period_value) < int(str(max_b1_period)):
-            return {'file_name': file.name, 'error_code': 'PERIOD_TOO_OLD', 'message': 'Period ເກົ່າເກີນໄປ'}
+            return {
+                'file_name': file.name, 
+                'error_code': 'PERIOD_TOO_OLD', 
+                'message': f'Period {period_value} ນ້ອຍກວ່າ period ຫຼ້າສຸດ {max_b1_period} ຂອງ segmentType {segment_type}'
+            }
 
-        # === ກວດ memberInfo ===
         try:
             member = memberInfo.objects.get(bnk_code=bnk_code)
         except memberInfo.DoesNotExist:
             return {'file_name': file.name, 'error_code': 'BANK_NOT_FOUND', 'message': f'ບໍ່ພົບທະນາຄານ {bnk_code}'}
 
-        # === ດຶງ cache ຈາກ IndividualBankIbk ພຽງ 1 ຄັ້ງ! ===
         print(f"\n[CACHE] ດຶງຂໍ້ມູນຈາກ IndividualBankIbk ສຳລັບ bnk_code: {bnk_code}...")
         bank_data = list(
             IndividualBankIbk.objects.filter(bnk_code=bnk_code)
@@ -7790,7 +7925,6 @@ class IndividualFileUploadView(generics.CreateAPIView):
         print(f"  LCIC IDs: {len(valid_lcic_ids):,}")
         print(f"  Customer IDs: {len(valid_customer_ids):,}")
 
-        # === ປະມວນຜົນໄຟລ໌ ===
         file.seek(0)
         return process_individual_file(
             file, user_id, member, period_value,
@@ -7803,7 +7937,84 @@ class IndividualFileUploadView(generics.CreateAPIView):
         elif errors:
             return Response({'status': 'partial', 'message': f'ສຳເລັດ {len(success)}, ລົ້ມເຫຼວ {len(errors)}', 'success': success, 'errors': errors}, status=207)
         else:
-            return Response({'status': 'success', 'message': f'ອັບໂຫຼດສຳເລັດ {len(success)} ໄຟລ໌', 'uploaded': success}, status=201)
+            return Response({'status': 'success', 'message': f'ອັບໂຫຼດສຳເລັດ {len(success)} ໄຟລ໌', 'uploaded': success}, status=201)    
+    # def _process_single_file(self, file, user_id):
+    #     if not file.name.endswith('.json'):
+    #         return {'file_name': file.name, 'error_code': 'INVALID_FILE_TYPE', 'message': 'ຕ້ອງເປັນ .json'}
+
+       
+    #     file_content = file.read().decode('utf-8')
+    #     file.seek(0)
+    #     try:
+    #         file_data = json.loads(file_content)
+    #         if isinstance(file_data, list) and len(file_data) > 0:
+    #             file_data = file_data[0]
+    #         elif not isinstance(file_data, dict):
+    #             return {'file_name': file.name, 'error_code': 'INVALID_JSON', 'message': 'JSON ບໍ່ຖືກຕ້ອງ'}
+    #     except:
+    #         return {'file_name': file.name, 'error_code': 'INVALID_JSON', 'message': 'JSON ບໍ່ຖືກຕ້ອງ'}
+
+    #     bnk_code = file_data.get('bnk_code')
+    #     if not bnk_code:
+    #         return {'file_name': file.name, 'error_code': 'MISSING_BNK_CODE', 'message': 'ບໍ່ພົບ bnk_code'}
+
+    #     if str(user_id) != str(bnk_code):
+    #         return {'file_name': file.name, 'error_code': 'MISMATCH_BNK_CODE', 'message': f'user_id ບໍ່ກົງກັບ bnk_code'}
+
+    #     if Upload_File_Individual.objects.filter(fileName=file.name, user_id=user_id).exists():
+    #         return {'file_name': file.name, 'error_code': 'FILE_EXISTS', 'message': 'ໄຟລ໌ມີແລ້ວ'}
+
+        
+    #     parts = file.name.split('_')
+    #     if len(parts) < 4:
+    #         return {'file_name': file.name, 'error_code': 'INVALID_FILE_NAME', 'message': 'ຊື່ໄຟລ໌ບໍ່ຖືກຕ້ອງ'}
+    #     period_str = parts[3].replace('.json', '').replace('M', '').replace('m', '')
+    #     try:
+    #         period_month = int(period_str[:2])
+    #         period_year = int(period_str[2:])
+    #         if not (1 <= period_month <= 12 and 2000 <= period_year <= 2100):
+    #             raise ValueError
+    #         period_value = f"{period_year:04d}{period_month:02d}"
+    #     except:
+    #         return {'file_name': file.name, 'error_code': 'INVALID_PERIOD_FORMAT', 'message': 'Period ບໍ່ຖືກຕ້ອງ'}
+
+       
+    #     max_b1_period = B1.objects.filter(bnk_code=bnk_code).aggregate(max_p=Max('period'))['max_p']
+    #     if max_b1_period and int(period_value) < int(str(max_b1_period)):
+    #         return {'file_name': file.name, 'error_code': 'PERIOD_TOO_OLD', 'message': 'Period ເກົ່າເກີນໄປ'}
+
+      
+    #     try:
+    #         member = memberInfo.objects.get(bnk_code=bnk_code)
+    #     except memberInfo.DoesNotExist:
+    #         return {'file_name': file.name, 'error_code': 'BANK_NOT_FOUND', 'message': f'ບໍ່ພົບທະນາຄານ {bnk_code}'}
+
+       
+    #     print(f"\n[CACHE] ດຶງຂໍ້ມູນຈາກ IndividualBankIbk ສຳລັບ bnk_code: {bnk_code}...")
+    #     bank_data = list(
+    #         IndividualBankIbk.objects.filter(bnk_code=bnk_code)
+    #                                  .values('lcic_id', 'customerid')
+    #                                  .iterator()
+    #     )
+    #     print(f"  ດຶງມາແລ້ວ: {len(bank_data):,} records")
+
+    #     lcic_customer_pairs = {(d['lcic_id'], d['customerid']) for d in bank_data}
+    #     valid_lcic_ids = {d['lcic_id'] for d in bank_data}
+    #     valid_customer_ids = {d['customerid'] for d in bank_data}
+
+    #     print(f"  ຄູ່ LCIC+Customer: {len(lcic_customer_pairs):,}")
+    #     print(f"  LCIC IDs: {len(valid_lcic_ids):,}")
+    #     print(f"  Customer IDs: {len(valid_customer_ids):,}")
+
+        
+    #     file.seek(0)
+    #     return process_individual_file(
+    #         file, user_id, member, period_value,
+    #         lcic_customer_pairs, valid_lcic_ids, valid_customer_ids
+    #     )
+    
+
+
 # from rest_framework import generics, status
 # from rest_framework.parsers import MultiPartParser, FormParser
 # from rest_framework.response import Response
@@ -9195,10 +9406,10 @@ class IndividualFileListView(generics.ListAPIView):
     serializer_class = IndividualFileSerializer
 
     def get_queryset(self):
-        # ດຶງ user_id ຂອງຄົນທີ່ login
+      
         current_user_id = self.request.query_params.get('user_id')
         
-        # ດຶງ filter parameters
+        
         user_id_filter = self.request.query_params.get('user_id_filter')
         period = self.request.query_params.get('period')
         statussubmit = self.request.query_params.get('statussubmit')
@@ -9207,7 +9418,7 @@ class IndividualFileListView(generics.ListAPIView):
         queryset = Upload_File_Individual.objects.all()
 
         
-        if current_user_id == '01':  # Admin
+        if current_user_id == '01': 
           
             if user_id_filter:
                 queryset = queryset.filter(user_id=user_id_filter)
@@ -9216,7 +9427,7 @@ class IndividualFileListView(generics.ListAPIView):
            
             queryset = queryset.filter(user_id=current_user_id)
         
-        # Filter ອື່ນໆ
+       
         if period:
             queryset = queryset.filter(period=period)
         if statussubmit:
@@ -9262,7 +9473,49 @@ class IndividualFileListView(generics.ListAPIView):
                 'details': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-
+class IndividualFilePeriodListView(generics.ListAPIView):
+ 
+    
+    def list(self, request, *args, **kwargs):
+        try:
+            # ດຶງ user_id ຂອງຄົນທີ່ login
+            current_user_id = request.query_params.get('user_id')
+            
+            if not current_user_id:
+                return Response({
+                    'status': 'error',
+                    'message': 'ກະລຸນາປ້ອນ user_id'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # ສ້າງ queryset ຕາມສິດທິ
+            if current_user_id == '01':  # Admin
+                # Admin ເບິ່ງໄດ້ທຸກ period ຂອງທຸກຄົນ
+                queryset = Upload_File_Individual.objects.all()
+            else:
+                # User ທຳມະດາເບິ່ງໄດ້ແຕ່ period ຂອງຕົວເອງ
+                queryset = Upload_File_Individual.objects.filter(user_id=current_user_id)
+            
+            # ດຶງ period ທີ່ບໍ່ຊ້ຳກັນ ແລະລຽງຈາກໃຫຍ່ໄປນ້ອຍ
+            periods = queryset.values('period').distinct().order_by('-period')
+            
+            # ແປງເປັນ list
+            period_list = [item['period'] for item in periods if item['period']]
+            
+            return Response({
+                'status': 'success',
+                'user_id': current_user_id,
+                'is_admin': current_user_id == '01',
+                'count': len(period_list),
+                'periods': period_list
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"IndividualFilePeriodListView Error: {str(e)}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'message': 'ເກີດຂໍ້ຜິດພາດ',
+                'details': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.db import transaction
