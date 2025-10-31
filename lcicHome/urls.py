@@ -63,7 +63,7 @@ from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtility
 
 #tik
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
-                    ,RequestChargeSummaryAPIView)
+                    ,RequestChargeSummaryAPIView,RequestChargeReportAllAPIView)
 
 from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView,process_dispute_notification, process_multiple_disputes,process_multiple_disputescollateral
 from .views import upload_json,MemberInfoViewSet
@@ -275,6 +275,7 @@ urlpatterns = [
     path('charge-matrix/<int:pk>/', ChargeMatrixDetailAPIView.as_view(), name='charge-detail'),
     path('request-charge-summary/', RequestChargeSummaryAPIView.as_view(), name='request_charge_summary'),
     path('request-charge-detail/', RequestChargeDetailAPIView.as_view(), name='request-charge-detail'),
+    path('request-charge-report-all/', RequestChargeReportAllAPIView.as_view(), name='request-charge-report-all'),
     
     path('api/individual-files/', IndividualFileListView.as_view(), name='individual-file-list'),
   
