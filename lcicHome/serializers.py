@@ -140,7 +140,8 @@ class IndividualFileSerializer(serializers.ModelSerializer):
             'percentage',
             'progress_percentage',
             'insertDate',
-            'updateDate'
+            'updateDate',
+            'dispuste'
         ]
 
     def get_file_url(self, obj):

@@ -343,3 +343,47 @@ def batch_process_electric_bills(records, tracking, username, batch_size=1000):
             'statistics': stats.get_summary(),
             'error': str(e)
         }
+    
+
+from datetime import datetime
+
+# === Helper functions ===
+def safe_float(value, default=0.0):
+    if value in (None, '', 'null'):
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+def safe_int(value, default=0):
+    if value in (None, '', 'null'):
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+def parse_date(date_str):
+    if not date_str or date_str in (None, "null", ""):
+        return None
+    if isinstance(date_str, datetime):
+        return date_str.date()
+    try:
+        return datetime.strptime(str(date_str).split('T')[0].split()[0], "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        return None
+
+def parse_datetime(dt_str):
+    if not dt_str or dt_str in (None, "null", ""):
+        return None
+    if isinstance(dt_str, datetime):
+        return dt_str
+    try:
+        dt = str(dt_str).split('.')[0] 
+        if ' ' in dt:
+            return datetime.strptime(dt, "%Y-%m-%d %H:%M:%S")
+        else:
+            return datetime.strptime(dt.split('T')[0], "%Y-%m-%d")
+    except (ValueError, TypeError):
+        return None
