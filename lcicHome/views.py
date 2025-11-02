@@ -7555,7 +7555,7 @@ def create_dispute_record(item, action, fid, period):
         lon_status=item.get('lon_status', ''), lon_insert_date=parse_datetime(item.get('lon_insert_date')),
         lon_update_date=parse_datetime(item.get('lon_update_date')), lon_applied_date=parse_datetime(item.get('lon_applied_date')),
         user_id=item.get('user_id', ''), is_disputed=safe_int(item.get('is_disputed')),
-        LCIC_code=item.get('LCIC_code', ''), status=STATUS_PENDING, action_dispust=action
+        LCIC_code=item.get('LCIC_code', ''), status='1', action_dispust=action
     )
 
 def create_good_record(item, fid, period):
@@ -7611,12 +7611,10 @@ def process_individual_file(
         FID = str(upload_file.FID)
         FID_with_prefix = f"n-{FID}"
 
-        # ດຶງຂໍ້ມູນທັງໝົດຈາກ B1 ມາກຽມໄວ້ກ່ອນ (ເອົາທຸກ bnk_code ແລະ segmentType)
+        
         print("  Loading B1 reference data...")
         b1_records = B1.objects.values('LCIC_code', 'customer_id', 'bnk_code', 'branch_id', 'segmentType')
         
-        # ສ້າງ dictionary ສຳລັບການຄົ້ນຫາທີ່ໄວ
-        # Key: (bnk_code, segmentType, LCIC_code, customer_id) -> branch_id
         b1_branch_lookup = {}
         for record in b1_records:
             key = (
@@ -7653,49 +7651,47 @@ def process_individual_file(
 
           
             if not lcic_code and not customer_id:
-                damaged_batch.append(create_damaged_record(item, '11', FID_with_prefix, period_value))
-            elif lcic_code and not customer_id:
-                damaged_batch.append(create_damaged_record(item, '01', FID_with_prefix, period_value))
-            elif not lcic_code and customer_id:
-                damaged_batch.append(create_damaged_record(item, '10', FID_with_prefix, period_value))
+                damaged_batch.append(create_damaged_record(item, '33', FID_with_prefix, period_value))
+            # elif lcic_code and not customer_id:
+            #     damaged_batch.append(create_damaged_record(item, '10', FID_with_prefix, period_value))
+            # elif not lcic_code and customer_id:
+            #     damaged_batch.append(create_damaged_record(item, '01', FID_with_prefix, period_value))
             else:
-                # ມີທັງ lcic_code ແລະ customer_id
-                
-                # ກວດສອບວ່າຄູ່ນີ້ຖືກຕ້ອງບໍ່
+               
                 if (lcic_code, customer_id) in lcic_customer_pairs:
-                    # ກວດສອບເພີ່ມເຕີມກັບ B1 ວ່າ branch_id ຖືກບໍ່
+                    
                     b1_key = (bnk_code, segment_type, lcic_code, customer_id)
                     
                     if b1_key in b1_branch_lookup:
                         correct_branch_id = b1_branch_lookup[b1_key]
                         
-                        # ກໍລະນີ 01: LCIC_code, customer_id, bnk_code ຄືກັນ ແຕ່ branch_id ຜິດ
+                        
                         if branch_id != correct_branch_id:
                             dispute_batch.append(create_dispute_record(item, '01', FID_with_prefix, period_value))
                         else:
-                            # ທຸກຢ່າງຖືກຕ້ອງ
+                           
                             good_batch.append(create_good_record(item, FID_with_prefix, period_value))
                     else:
-                        # ບໍ່ພົບໃນ B1 ແຕ່ຄູ່ (lcic, customer) ຖືກຕ້ອງຕາມ lcic_customer_pairs
+                      
                         good_batch.append(create_good_record(item, FID_with_prefix, period_value))
                 else:
-                    # ຄູ່ (lcic_code, customer_id) ບໍ່ຖືກຕ້ອງ
+                   
                     lcic_ok = lcic_code in valid_lcic_ids
                     customer_ok = customer_id in valid_customer_ids
                     
                     if not lcic_ok and not customer_ok:
-                        # ທັງສອງລະຫັດຜິດ → Damaged
+                       
                         damaged_batch.append(create_damaged_record(item, '33', FID_with_prefix, period_value))
                     else:
-                        # ກຳນົດ action_dispust ຕາມເງື່ອນໄຂ
+                        
                         if lcic_ok and not customer_ok:
-                            # ກໍລະນີ 03: LCIC_code ຖືກ ແຕ່ customer_id ຜິດ
+                          
                             action_code = '03'
                         elif not lcic_ok and customer_ok:
-                            # ກໍລະນີ 04: customer_id ຖືກ ແຕ່ LCIC_code ຜິດ
+                            
                             action_code = '04'
                         else:
-                            # ກໍລະນີ 02: ຄູ່ (LCIC_code, customer_id) ບໍ່ມີຢູ່ໃນລາຍການທີ່ຖືກຕ້ອງ (ມີທັງສອງແຕ່ຈັບຄູ່ຜິດ)
+                            
                             action_code = '02'
                         
                         dispute_batch.append(create_dispute_record(item, action_code, FID_with_prefix, period_value))
@@ -7721,7 +7717,7 @@ def process_individual_file(
 
         final_status = '2' if error_percentage > 15 else STATUS_PROCESSED
         final_statussubmit = '2' if error_percentage > 15 else '1'
-        upload_file.percentage = round(error_percentage, 2)
+        upload_file.percentage = round(error_percentage, 4)
         upload_file.dispuste = str(dispute_count)
         upload_file.status = final_status
         upload_file.statussubmit = final_statussubmit
@@ -7903,7 +7899,7 @@ class IndividualFileUploadView(generics.CreateAPIView):
         if not bnk_code:
             return {'file_name': file.name, 'error_code': 'MISSING_BNK_CODE', 'message': 'ບໍ່ພົບ bnk_code'}
 
-        # ດຶງ segmentType ຈາກ JSON
+       
         segment_type = file_data.get('segmentType')
         if not segment_type:
             return {'file_name': file.name, 'error_code': 'MISSING_SEGMENT_TYPE', 'message': 'ບໍ່ພົບ segmentType'}
@@ -7927,7 +7923,7 @@ class IndividualFileUploadView(generics.CreateAPIView):
         except:
             return {'file_name': file.name, 'error_code': 'INVALID_PERIOD_FORMAT', 'message': 'Period ບໍ່ຖືກຕ້ອງ'}
 
-        # ກວດສອບ period ຕາມ bnk_code ແລະ segmentType
+       
         max_b1_period = B1.objects.filter(
             bnk_code=bnk_code,
             segmentType=segment_type
