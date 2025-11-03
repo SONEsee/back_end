@@ -297,6 +297,7 @@ urlpatterns = [
     path('api/productinfoc3/', get_data4, name='get_data_by_id_file_and_period'),
     path('api/productinfo4/', get_data_by_id_file, name='get_data_by_id_file'),
     path('confirm_upload/', views.confirm_upload, name='confirm_upload'),
+    path('confirm_upload_individual/', views.confirm_upload_individual, name='confirm_upload_individual'),
     path('confirm_uploadc/', views.confirm_uploadc, name='confirm_uploadc'),
     path('unload_uploadc/', views.unload_data, name='unload_data'),
     # path('check-upload-status/<str:FID>/', views.check_upload_status, name='check_upload_status'),

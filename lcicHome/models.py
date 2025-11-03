@@ -737,6 +737,7 @@ class B1_Monthly(models.Model):
         class Meta:
          indexes = [
             models.Index(fields=['bnk_code', 'branch_id', 'customer_id', 'loan_id', 'period']),
+            
             models.Index(fields=['bnk_code']),
             models.Index(fields=['period']),
             models.Index(fields=['id_file']),
@@ -842,6 +843,15 @@ class data_edit(models.Model):
             raise ValidationError("is_disputed must be an integer")
             
         super().save(*args, **kwargs)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['id_file'], name='idx_data_edit_file'),
+            models.Index(
+                fields=['bnk_code', 'branch_id', 'customer_id', 'loan_id', 'period'],
+                name='idx_data_edit_composite'
+            ),
+        ]
 
 class B1(models.Model):
     id = models.AutoField(primary_key=True)
