@@ -430,10 +430,10 @@ def reject_individual_loan(id_file):
                 'details': {'fid': fid_to_update}
             }
 
-        current_status = file_obj.status
+        current_status = file_obj.statussubmit
 
         # === 4. ອັບເດດ status → 7 (ໄດ້ທຸກຄ່າ) ===
-        file_obj.status = '7'
+        file_obj.statussubmit = '7'
         file_obj.updateDate = timezone.now()
         file_obj.save()
         update_status_success = True
@@ -445,7 +445,7 @@ def reject_individual_loan(id_file):
         else:
             msg.append('ບໍ່ມີຂໍ້ມູນຖືກລົບ')
 
-        msg.append(f'ປະຕິເສດສຳເລັດ (FID: {fid_to_update}) → status {current_status} → 7')
+        msg.append(f'ປະຕິເສດສຳເລັດ (FID: {fid_to_update}) → statussubmit {current_status} → 7')
 
         return {
             'success': True,
