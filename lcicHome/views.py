@@ -11429,6 +11429,30 @@ def process_multiple_disputescollateral(request):
 #         logger.error(f"Fatal error: {str(e)}")
 #         Upload_File.objects.filter(FID=FID).update(statussubmit='2')
 #         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+# utils.py
+from django.db import transaction
+from .models import data_edit, B_Data_is_damaged, disputes, Upload_File_Individual
+import re
+
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.db import transaction
+from .utils import reject_individual_loan
+
+@csrf_exempt  
+@transaction.atomic
+def reject_individual_loan_view(request, id_file):
+    if request.method == 'POST':
+        result = reject_individual_loan(id_file)
+        status_code = 200 if result['success'] else 400
+        return JsonResponse(result, status=status_code)
+    else:
+        return JsonResponse({
+            'success': False,
+            'message': 'Method not allowed. Use POST.'
+        }, status=405)
+
 from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
@@ -11702,6 +11726,8 @@ from .models import Upload_File, data_edit, B1, B1_Monthly
 #         except:
 #             pass
 #         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
 from django.db import connection, transaction
 
 @csrf_exempt

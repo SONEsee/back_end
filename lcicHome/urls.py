@@ -301,6 +301,7 @@ urlpatterns = [
     path('confirm_upload_individual/', views.confirm_upload_individual, name='confirm_upload_individual'),
     path('confirm_uploadc/', views.confirm_uploadc, name='confirm_uploadc'),
     path('unload_uploadc/', views.unload_data, name='unload_data'),
+    path('api/reject_individual_loan/<str:id_file>/', views.reject_individual_loan_view, name='reject_individual_loan'),
     # path('check-upload-status/<str:FID>/', views.check_upload_status, name='check_upload_status'),
 
     # path('upload333/', FileUploadView3.as_view(), name='file-upload'),
