@@ -28211,128 +28211,227 @@ class ChargeMatrixDetailAPIView(APIView):
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.core.paginator import Paginator
 from django.db.models import Q
 from .models import request_charge
 from .serializers import RequestChargeSerializer
 
 
 class RequestChargeSummaryAPIView(APIView):
-    """API สำหรับนับจำนวนตาม chg_code แยกเป็น 3 กล่อง พร้อม Date Filter"""
+    """API สำหรับนับจำนวนตาม chg_code แยกเป็น 3 กล่อง พร้อม Date Filter
     
+    Logic:
+    - ถ้า bnk_code == "01" → ดูข้อมูลทั้งหมด (ไม่ filter)
+    - ถ้า bnk_code != "01" → filter เฉพาะ bnk_code นั้น
+    """
+
     def get(self, request, *args, **kwargs):
-        # รับค่า parameters
-        bnk_code = request.GET.get('bnk_code', '01')
+        # ✅ รับค่าจาก frontend
+        bnk_code = request.GET.get('bnk_code', '').strip()
         date_filter_type = request.GET.get('date_filter_type', 'day')
         date_filter_value = request.GET.get('date_filter_value', '')
-        
-        # กลุ่ม chg_code
+
+        # ✅ กลุ่ม chg_code
         group1 = ['FCRFI', 'NLRFI', 'NLR', 'FCR']
         group2 = ['SCR', 'SCRFI']
         group3 = ['UTLT', 'UTLTFI']
-        
-        # Base query - filter ตาม bnk_code
-        if bnk_code == '01':
-            queryset = request_charge.objects.all()
-        else:
-            queryset = request_charge.objects.filter(bnk_code=bnk_code)
-        
-        # Apply date filter
+
+        # ✅ base queryset (เริ่มจากทั้งหมด)
+        queryset = request_charge.objects.all()
+
+        # ✅ Logic แยกตาม bnk_code
+        if bnk_code == "01":
+            # ถ้า bnk_code == "01" → ดูทั้งหมด (ไม่ filter)
+            pass  # ไม่ต้องทำอะไร
+        elif bnk_code:
+            # ถ้า bnk_code != "01" และมีค่า → filter เฉพาะธนาคารนั้น
+            queryset = queryset.filter(bnk_code=bnk_code)
+
+        # ✅ Apply date filter
         if date_filter_value:
             queryset = self._apply_date_filter(queryset, date_filter_type, date_filter_value)
-        
-        # นับจำนวนในแต่ละกลุ่ม
+
+        # ✅ นับจำนวนในแต่ละกลุ่ม
         count_group1 = queryset.filter(chg_code__in=group1).count()
         count_group2 = queryset.filter(chg_code__in=group2).count()
         count_group3 = queryset.filter(chg_code__in=group3).count()
-        
+
         data = {
             "bnk_code": bnk_code,
+            "is_admin": bnk_code == "01",  # ✅ บอกว่าเป็น admin หรือไม่
             "date_filter_type": date_filter_type,
             "date_filter_value": date_filter_value,
             "group1": count_group1,
             "group2": count_group2,
             "group3": count_group3,
         }
-        
+
         return Response(data, status=200)
-    
+
     def _apply_date_filter(self, queryset, filter_type, filter_value):
         """Apply date filter based on type (year, month, day)"""
-        if not filter_value:
-            return queryset
-        
         try:
             if filter_type == 'year':
-                # Filter by year: YYYY
-                # rec_insert_date เริ่มต้นด้วย "2025"
-                return queryset.filter(
-                    rec_insert_date__year=int(filter_value)
-                )
-            
+                return queryset.filter(rec_insert_date__year=int(filter_value))
             elif filter_type == 'month':
-                # Filter by year-month: YYYY-MM
                 year, month = filter_value.split('-')
                 return queryset.filter(
                     rec_insert_date__year=int(year),
                     rec_insert_date__month=int(month)
                 )
-            
             elif filter_type == 'day':
-                # Filter by full date: YYYY-MM-DD
                 year, month, day = filter_value.split('-')
                 return queryset.filter(
                     rec_insert_date__year=int(year),
                     rec_insert_date__month=int(month),
                     rec_insert_date__day=int(day)
                 )
-        except (ValueError, AttributeError) as e:
+        except Exception as e:
             print(f"Date filter error: {e}")
-            return queryset
-        
         return queryset
 
 
-class RequestChargeDetailAPIView(APIView):
-    """API สำหรับดึงรายละเอียดของแต่ละกลุ่ม พร้อม Date Filter (get all fields)"""
-    
+class RequestChargeReportAllAPIView(APIView):
+    """
+    API สำหรับแสดงจำนวน request ของแต่ละธนาคาร (สำหรับ admin เท่านั้น)
+    แสดงตาราง: NO, bnk_code, ชื่อธนาคาร, จำนวน
+    """
+
     def get(self, request, *args, **kwargs):
-        # รับค่า parameters
-        bnk_code = request.GET.get('bnk_code', '01')
+        # ✅ รับค่า parameters
+        bnk_code = request.GET.get('bnk_code', '').strip()
         group_type = request.GET.get('group', 'group1')
         date_filter_type = request.GET.get('date_filter_type', 'day')
         date_filter_value = request.GET.get('date_filter_value', '')
-        
-        # กำหนด chg_code ตาม group
+
+        # ✅ ตรวจสอบว่าเป็น admin (bnk_code = "01") หรือไม่
+        if bnk_code != "01":
+            return Response({
+                "error": "Access denied. Only admin (bnk_code=01) can access this endpoint."
+            }, status=403)
+
+        # ✅ mapping group
         group_mapping = {
             'group1': ['FCRFI', 'NLRFI', 'NLR', 'FCR'],
             'group2': ['SCR', 'SCRFI'],
             'group3': ['UTLT', 'UTLTFI']
         }
         chg_codes = group_mapping.get(group_type, [])
-        
-        # Base query - filter ตาม bnk_code และ chg_code
-        if bnk_code == '01':
-            queryset = request_charge.objects.filter(chg_code__in=chg_codes)
-        else:
-            queryset = request_charge.objects.filter(
-                bnk_code=bnk_code,
-                chg_code__in=chg_codes
-            )
-        
-        # Apply date filter โดยตรงกับ DateTimeField
+
+        # ✅ base queryset
+        queryset = request_charge.objects.filter(chg_code__in=chg_codes)
+
+        # ✅ Apply date filter
         if date_filter_value:
             queryset = self._apply_date_filter(queryset, date_filter_type, date_filter_value)
-        
-        # เรียงลำดับตาม rec_insert_date ใหม่สุดก่อน
-        queryset = queryset.order_by('-rec_insert_date')
-        
-        # Serialize ทั้งหมด (get all fields)
-        serializer = RequestChargeSerializer(queryset, many=True)
-        
-        # สร้าง response
+
+        # ✅ Group by bnk_code และนับจำนวน
+        bank_summary = queryset.values('bnk_code').annotate(
+            total=Count('rec_charge_ID')
+        ).order_by('bnk_code')
+
+        # ✅ แปลงเป็น list
+        results = list(bank_summary)
+
         data = {
             "bnk_code": bnk_code,
+            "is_admin": True,
+            "group": group_type,
+            "chg_codes": chg_codes,
+            "date_filter_type": date_filter_type,
+            "date_filter_value": date_filter_value,
+            "total_banks": len(results),
+            "results": results
+        }
+
+        return Response(data, status=200)
+
+    def _apply_date_filter(self, queryset, filter_type, filter_value):
+        """Filter rec_insert_date ตาม year/month/day"""
+        try:
+            if filter_type == 'year':
+                return queryset.filter(rec_insert_date__year=int(filter_value))
+            elif filter_type == 'month':
+                year, month = filter_value.split('-')
+                return queryset.filter(
+                    rec_insert_date__year=int(year),
+                    rec_insert_date__month=int(month)
+                )
+            elif filter_type == 'day':
+                year, month, day = filter_value.split('-')
+                return queryset.filter(
+                    rec_insert_date__year=int(year),
+                    rec_insert_date__month=int(month),
+                    rec_insert_date__day=int(day)
+                )
+        except Exception as e:
+            print(f"Date filter error: {e}")
+        return queryset
+
+
+class RequestChargeDetailAPIView(APIView):
+    """
+    API สำหรับดึงรายละเอียดของแต่ละกลุ่ม พร้อม Date Filter
+    
+    Logic:
+    - ถ้า bnk_code == "01" (Admin):
+      → ต้องมี detail_bnk_code (มาจากตาราง report_all)
+      → ดูรายละเอียดของธนาคารที่เลือก
+    - ถ้า bnk_code != "01" (User ธรรมดา):
+      → ดูเฉพาะธนาคารของตัวเอง
+      → ไม่สนใจ detail_bnk_code
+    """
+
+    def get(self, request, *args, **kwargs):
+        # ✅ รับค่า parameters
+        bnk_code = request.GET.get('bnk_code', '').strip()
+        detail_bnk_code = request.GET.get('detail_bnk_code', '').strip()
+        group_type = request.GET.get('group', 'group1')
+        date_filter_type = request.GET.get('date_filter_type', 'day')
+        date_filter_value = request.GET.get('date_filter_value', '')
+
+        # ✅ mapping group
+        group_mapping = {
+            'group1': ['FCRFI', 'NLRFI', 'NLR', 'FCR'],
+            'group2': ['SCR', 'SCRFI'],
+            'group3': ['UTLT', 'UTLTFI']
+        }
+        chg_codes = group_mapping.get(group_type, [])
+
+        # ✅ base queryset
+        queryset = request_charge.objects.filter(chg_code__in=chg_codes)
+
+        # ✅ Logic แยกตาม bnk_code
+        if bnk_code == "01":
+            # Admin: ต้องใช้ detail_bnk_code (มาจาก report_all)
+            if detail_bnk_code:
+                queryset = queryset.filter(bnk_code=detail_bnk_code)
+                actual_bnk_code = detail_bnk_code
+            else:
+                # ถ้าไม่มี detail_bnk_code = error (admin ต้องเลือกธนาคารจากตาราง)
+                return Response({
+                    "error": "Admin must select a bank from report_all table. Missing detail_bnk_code."
+                }, status=400)
+        else:
+            # User ธรรมดา: ดูเฉพาะของตัวเอง (ไม่สนใจ detail_bnk_code)
+            queryset = queryset.filter(bnk_code=bnk_code)
+            actual_bnk_code = bnk_code
+
+        # ✅ date filter
+        if date_filter_value:
+            queryset = self._apply_date_filter(queryset, date_filter_type, date_filter_value)
+
+        # ✅ เรียงข้อมูลใหม่สุดก่อน
+        queryset = queryset.order_by('-rec_insert_date')
+
+        # ✅ serialize
+        from .serializers import RequestChargeSerializer
+        serializer = RequestChargeSerializer(queryset, many=True)
+
+        data = {
+            "bnk_code": bnk_code,  # bnk_code ของ user ที่ login
+            "detail_bnk_code": detail_bnk_code,  # ธนาคารที่เลือกจากตาราง (สำหรับ admin)
+            "actual_bnk_code": actual_bnk_code,  # ธนาคารที่แสดงผลจริง
+            "is_admin": bnk_code == "01",
             "group": group_type,
             "chg_codes": chg_codes,
             "date_filter_type": date_filter_type,
@@ -28340,25 +28439,20 @@ class RequestChargeDetailAPIView(APIView):
             "total_count": queryset.count(),
             "results": serializer.data
         }
-        
+
         return Response(data, status=200)
-    
+
     def _apply_date_filter(self, queryset, filter_type, filter_value):
-        """Filter rec_insert_date ตาม year/month/day (ไม่ต้อง substring)"""
-        if not filter_value:
-            return queryset
-        
+        """Filter rec_insert_date ตาม year/month/day"""
         try:
             if filter_type == 'year':
                 return queryset.filter(rec_insert_date__year=int(filter_value))
-            
             elif filter_type == 'month':
                 year, month = filter_value.split('-')
                 return queryset.filter(
                     rec_insert_date__year=int(year),
                     rec_insert_date__month=int(month)
                 )
-            
             elif filter_type == 'day':
                 year, month, day = filter_value.split('-')
                 return queryset.filter(
@@ -28366,10 +28460,8 @@ class RequestChargeDetailAPIView(APIView):
                     rec_insert_date__month=int(month),
                     rec_insert_date__day=int(day)
                 )
-        except (ValueError, AttributeError) as e:
+        except Exception as e:
             print(f"Date filter error: {e}")
-            return queryset
-        
         return queryset
 
 
