@@ -20421,59 +20421,245 @@ def fix_problematic_dates():
 #             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
       
+# from utility.models import edl_customer_info, Electric_Bill, searchlog_utility, request_charge_utility
+# from .serializers import EDLCustomerSerializer, ElectricBillSerializer, SearchLogUtilitySerializer
+# import uuid
+# from django.db.models import Func, F, Value
+
+# class ElectricReportAPIView(APIView):
+#     permission_classes = [IsAuthenticated]
+
+#     def get(self, request):
+#         try:
+#             customer_id = request.query_params.get('edl')
+#             if not customer_id:
+#                 return Response({"error": "water parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+#             user = request.user
+#             bank = user.MID
+#             sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
+
+#             bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
+#             charge_bank_type = bank_info.bnk_type
+#             if charge_bank_type == 1:
+#                 chargeType = ChargeMatrix.objects.get(chg_sys_id=9)
+#             else:
+#                 chargeType = ChargeMatrix.objects.get(chg_sys_id=10)
+#             charge_amount_com = chargeType.chg_amount
+
+#             customer = edl_customer_info.objects.get(Customer_ID=customer_id)
+
+#             # edl = edl_customer_info.objects.get(Customer_ID=customer_id)
+#             # Custom function to convert MM-YYYY to YYYY-MM for sorting (PostgreSQL)
+#             class ReorderMonthYear(Func):
+#                 function = "TO_CHAR"
+#                 template = "SUBSTRING(%(expressions)s FROM 4 FOR 4) || '-' || SUBSTRING(%(expressions)s FROM 1 FOR 2)"
+
+#             # Sort bills by InvoiceMonth in descending order
+#             bills = Electric_Bill.objects.filter(Customer_ID=customer_id).annotate(
+#                 year_month=ReorderMonthYear(F('InvoiceMonth'))
+#             ).order_by('-year_month')
+
+#             # edl_bill = Electric_Bill.objects.filter(Customer_ID=customer_id_2).annotate(
+#             #     year_month=ReorderMonthYear(F('InvoiceMonth'))
+#             # ).order_by('-year_month')
+            
+#             # Log the search
+#             search_log = searchlog_utility.objects.create(
+#                 bnk_code=bank.bnk_code,
+#                 sys_usr=sys_usr,
+#                 wt_cusid=customer_id,
+#                 edl_cusid='',
+#                 tel_cusid='',
+#                 proID_edl='',
+#                 proID_wt='',
+#                 proID_tel='',
+#                 credittype='edl',
+#                 inquiry_date=timezone.now(),
+#                 inquiry_time=timezone.now()
+#             )
+
+#             # Get current timestamp for rec_insert_date
+#             rec_insert_date = timezone.now()
+#             date_str = rec_insert_date.strftime('%d%m%Y')
+#             report_date = rec_insert_date.strftime('%d-%m-%Y')
+#             rec_reference_code = f"{chargeType.chg_code}-0-{bank.bnk_code}-{date_str}-{search_log.search_id}"
+#             rec_reference_code = rec_reference_code[:100]
+
+#             # Log the charge request
+#             request_charge_utility.objects.create(
+#                 usr_session_id=str(uuid.uuid4()),
+#                 search_id=search_log,
+#                 bnk_code=bank.bnk_code,
+#                 chg_code=chargeType.chg_code,
+#                 chg_amount=charge_amount_com,
+#                 chg_unit='LAK',
+#                 sys_usr=sys_usr,
+#                 credit_type='edl',
+#                 wt_cusid=customer_id,
+#                 edl_cusid='',
+#                 tel_cusid='',
+#                 proID_edl='',
+#                 proID_wt='',
+#                 proID_tel='',
+#                 rec_reference_code=rec_reference_code
+#             )
+
+#             customer_serializer = EDLCustomerSerializer(customer)
+#             bill_serializer = ElectricBillSerializer(bills, many=True)
+#             search_log_serializer = SearchLogUtilitySerializer(search_log)
+
+#             # Construct reference_data as a tuple
+#             reference_data = (
+#                 rec_reference_code,
+#                 customer_id,
+#                 report_date,
+#                 search_log_serializer.data,  # Serialized search_log
+#                 rec_insert_date.isoformat()  # Convert datetime to ISO string
+#             )
+
+#             # Return response with reference_data as a list (JSON-compatible)
+#             return Response({
+#                 "reference_data": reference_data,
+#                 "customer": [customer_serializer.data],
+#                 "bill": bill_serializer.data
+#             }, status=status.HTTP_200_OK)
+
+#         except w_customer_info.DoesNotExist:
+#             return Response({"error": "Customer not found"}, status=status.HTTP_404_NOT_FOUND)
+#         except memberInfo.DoesNotExist:
+#             return Response({"error": "Bank information not found"}, status=status.HTTP_400_BAD_REQUEST)
+#         except ChargeMatrix.DoesNotExist:
+#             return Response({"error": "Charge configuration not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+#         except Exception as e:
+#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from django.utils import timezone
+from django.db.models import Func, F, Q
+
 from utility.models import edl_customer_info, Electric_Bill, searchlog_utility, request_charge_utility
 from .serializers import EDLCustomerSerializer, ElectricBillSerializer, SearchLogUtilitySerializer
+from member.models import memberInfo
+from charge.models import ChargeMatrix
 import uuid
-from django.db.models import Func, F, Value
+
 
 class ElectricReportAPIView(APIView):
+    """
+    API View for Electric Supply Report with Province and District filtering.
+    Handles duplicate customer IDs across different provinces/districts.
+    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         try:
+            # Get query parameters
             customer_id = request.query_params.get('edl')
-            if not customer_id:
-                return Response({"error": "water parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
+            province_id = request.query_params.get('province_id')
+            district_id = request.query_params.get('district_id')  # Optional
 
+            # Validate required parameters
+            if not customer_id:
+                return Response({
+                    "error": "edl parameter is required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if not province_id:
+                return Response({
+                    "error": "province_id parameter is required"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get user and bank information
             user = request.user
             bank = user.MID
             sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
 
+            # Get bank charge information
             bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
             charge_bank_type = bank_info.bnk_type
+            
             if charge_bank_type == 1:
                 chargeType = ChargeMatrix.objects.get(chg_sys_id=9)
             else:
                 chargeType = ChargeMatrix.objects.get(chg_sys_id=10)
+            
             charge_amount_com = chargeType.chg_amount
 
-            customer = edl_customer_info.objects.get(Customer_ID=customer_id)
+            # Build customer filter query
+            customer_filter = Q(Customer_ID=customer_id) & Q(province_id=province_id)
+            
+            # Add district filter if provided
+            if district_id:
+                customer_filter &= Q(district_id=district_id)
 
-            # edl = edl_customer_info.objects.get(Customer_ID=customer_id)
+            # Query customer with province and district filtering
+            try:
+                customers = edl_customer_info.objects.filter(customer_filter)
+                
+                if not customers.exists():
+                    return Response({
+                        "error": "Customer not found for the specified province and district",
+                        "details": {
+                            "customer_id": customer_id,
+                            "province_id": province_id,
+                            "district_id": district_id
+                        }
+                    }, status=status.HTTP_404_NOT_FOUND)
+                
+                # If multiple records found, take the first one or return error
+                if customers.count() > 1:
+                    if not district_id:
+                        return Response({
+                            "error": "Multiple customers found. Please provide district_id",
+                            "details": {
+                                "customer_id": customer_id,
+                                "province_id": province_id,
+                                "available_districts": list(customers.values_list('district_id', flat=True).distinct())
+                            }
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                    else:
+                        # Multiple records even with district - should not happen, but handle it
+                        customer = customers.first()
+                else:
+                    customer = customers.first()
+                    
+            except Exception as e:
+                return Response({
+                    "error": "Error querying customer",
+                    "details": str(e)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
             # Custom function to convert MM-YYYY to YYYY-MM for sorting (PostgreSQL)
             class ReorderMonthYear(Func):
                 function = "TO_CHAR"
                 template = "SUBSTRING(%(expressions)s FROM 4 FOR 4) || '-' || SUBSTRING(%(expressions)s FROM 1 FOR 2)"
 
+            # Build bill filter query with province and district
+            bill_filter = Q(Customer_ID=customer_id) & Q(province_id=province_id)
+            
+            if district_id:
+                bill_filter &= Q(district_id=district_id)
+
             # Sort bills by InvoiceMonth in descending order
-            bills = Electric_Bill.objects.filter(Customer_ID=customer_id).annotate(
+            bills = Electric_Bill.objects.filter(bill_filter).annotate(
                 year_month=ReorderMonthYear(F('InvoiceMonth'))
             ).order_by('-year_month')
 
-            # edl_bill = Electric_Bill.objects.filter(Customer_ID=customer_id_2).annotate(
-            #     year_month=ReorderMonthYear(F('InvoiceMonth'))
-            # ).order_by('-year_month')
-            
-            # Log the search
+            # Log the search with province and district information
             search_log = searchlog_utility.objects.create(
                 bnk_code=bank.bnk_code,
                 sys_usr=sys_usr,
-                wt_cusid=customer_id,
-                edl_cusid='',
+                wt_cusid='',
+                edl_cusid=customer_id,
                 tel_cusid='',
-                proID_edl='',
+                proID_edl=province_id,
                 proID_wt='',
                 proID_tel='',
+                district_id_edl=district_id if district_id else '',  # Add district to log
                 credittype='edl',
                 inquiry_date=timezone.now(),
                 inquiry_time=timezone.now()
@@ -20483,10 +20669,12 @@ class ElectricReportAPIView(APIView):
             rec_insert_date = timezone.now()
             date_str = rec_insert_date.strftime('%d%m%Y')
             report_date = rec_insert_date.strftime('%d-%m-%Y')
-            rec_reference_code = f"{chargeType.chg_code}-0-{bank.bnk_code}-{date_str}-{search_log.search_id}"
+            
+            # Include province and district in reference code for uniqueness
+            rec_reference_code = f"{chargeType.chg_code}-0-{bank.bnk_code}-{province_id}-{district_id or '00'}-{date_str}-{search_log.search_id}"
             rec_reference_code = rec_reference_code[:100]
 
-            # Log the charge request
+            # Log the charge request with province and district
             request_charge_utility.objects.create(
                 usr_session_id=str(uuid.uuid4()),
                 search_id=search_log,
@@ -20496,43 +20684,119 @@ class ElectricReportAPIView(APIView):
                 chg_unit='LAK',
                 sys_usr=sys_usr,
                 credit_type='edl',
-                wt_cusid=customer_id,
-                edl_cusid='',
+                wt_cusid='',
+                edl_cusid=customer_id,
                 tel_cusid='',
-                proID_edl='',
+                proID_edl=province_id,
                 proID_wt='',
                 proID_tel='',
+                district_id_edl=district_id if district_id else '',  # Add district
                 rec_reference_code=rec_reference_code
             )
 
+            # Serialize data
             customer_serializer = EDLCustomerSerializer(customer)
             bill_serializer = ElectricBillSerializer(bills, many=True)
             search_log_serializer = SearchLogUtilitySerializer(search_log)
 
-            # Construct reference_data as a tuple
+            # Construct reference_data with province and district info
             reference_data = (
                 rec_reference_code,
                 customer_id,
                 report_date,
-                search_log_serializer.data,  # Serialized search_log
-                rec_insert_date.isoformat()  # Convert datetime to ISO string
+                search_log_serializer.data,
+                rec_insert_date.isoformat(),
+                province_id,
+                district_id if district_id else ''
             )
 
-            # Return response with reference_data as a list (JSON-compatible)
+            # Return comprehensive response
             return Response({
                 "reference_data": reference_data,
                 "customer": [customer_serializer.data],
-                "bill": bill_serializer.data
+                "bill": bill_serializer.data,
+                "search_criteria": {
+                    "customer_id": customer_id,
+                    "province_id": province_id,
+                    "district_id": district_id,
+                    "province_name": customer.province_name if hasattr(customer, 'province_name') else '',
+                    "district_name": customer.district_name if hasattr(customer, 'district_name') else ''
+                }
             }, status=status.HTTP_200_OK)
 
-        except w_customer_info.DoesNotExist:
-            return Response({"error": "Customer not found"}, status=status.HTTP_404_NOT_FOUND)
+        except edl_customer_info.DoesNotExist:
+            return Response({
+                "error": "Customer not found",
+                "details": "No customer record found for the provided ID, province, and district"
+            }, status=status.HTTP_404_NOT_FOUND)
+            
         except memberInfo.DoesNotExist:
-            return Response({"error": "Bank information not found"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                "error": "Bank information not found"
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
         except ChargeMatrix.DoesNotExist:
-            return Response({"error": "Charge configuration not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({
+                "error": "Charge configuration not found"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({
+                "error": "An unexpected error occurred",
+                "details": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ElectricCustomerSearchAPIView(APIView):
+    """
+    API View for searching Electric customers with province filtering.
+    Used for autocomplete/quick search functionality.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            query = request.query_params.get('query', '').strip()
+            province_id = request.query_params.get('province_id')
+            limit = int(request.query_params.get('limit', 100))
+
+            if not query or len(query) < 2:
+                return Response({
+                    "error": "Query parameter must be at least 2 characters"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Build search query
+            search_filter = (
+                Q(Customer_ID__icontains=query) |
+                Q(Name__icontains=query) |
+                Q(Surname__icontains=query) |
+                Q(Company_name__icontains=query)
+            )
+
+            # Add province filter if provided
+            if province_id:
+                search_filter &= Q(province_id=province_id)
+
+            # Execute search with limit
+            customers = edl_customer_info.objects.filter(
+                search_filter
+            ).select_related().order_by('province_id', 'district_id', 'Customer_ID')[:limit]
+
+            # Serialize results
+            serializer = EDLCustomerSerializer(customers, many=True)
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except ValueError:
+            return Response({
+                "error": "Invalid limit parameter"
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            return Response({
+                "error": "Search failed",
+                "details": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     
 from .models import ChargeMatrix
