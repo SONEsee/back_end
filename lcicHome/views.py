@@ -11459,6 +11459,7 @@ from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
 from .models import Upload_File, data_edit, B1, B1_Monthly
 
+
 # @csrf_exempt
 # @require_POST
 # def confirm_upload_individual(request):
