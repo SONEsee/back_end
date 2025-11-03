@@ -292,6 +292,7 @@ urlpatterns = [
     path('api/dispute-loans/', views.get_dispute_loans, name='get_dispute_loans'),
     path('api/dispute-collateral/', views.get_dispute_collateral, name='get_dispute_collateral'),
     path('api/disputes/confirmc/', views.confirm_dispute_colatteral, name='confirm_dispute_colatteral'),
+    path('api/rollback_reconfirm/', views.rollback_and_reconfirm_individual, name='rollback_reconfirm'),
     # path('api/search-individual/', views.search_individual_bank_advanced, name='search_individual_bank_advanced'),
 
     path('api/productinfo3/', get_data3, name='get_data_by_id_file_and_period'),

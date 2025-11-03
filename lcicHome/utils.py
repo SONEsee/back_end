@@ -388,12 +388,12 @@ def parse_datetime(dt_str):
     except (ValueError, TypeError):
         return None
     
-# utils.py
+
 import re
 from django.utils import timezone
 from .models import data_edit, B_Data_is_damaged, disputes, Upload_File_Individual
 
-# utils.py (ປັບປຸງແລ້ວ)
+
 def reject_individual_loan(id_file):
     deleted_count = {
         'data_edit': 0,
@@ -405,7 +405,7 @@ def reject_individual_loan(id_file):
     current_status = None
 
     try:
-        # === 1. ຕັດ FID ===
+     
         match = re.match(r'n-(\d+)', id_file.strip())
         if not match:
             return {
@@ -415,13 +415,13 @@ def reject_individual_loan(id_file):
             }
         fid_to_update = int(match.group(1))
 
-        # === 2. ລົບຂໍ້ມູນ ===
+       
         deleted_count['data_edit'] = data_edit.objects.filter(id_file=id_file).delete()[0]
         deleted_count['B_Data_is_damaged'] = B_Data_is_damaged.objects.filter(id_file=id_file).delete()[0]
         deleted_count['disputes'] = disputes.objects.filter(id_file=id_file).delete()[0]
         total_deleted = sum(deleted_count.values())
 
-        # === 3. ກວດວ່າມີ FID ຢູ່ບໍ່ ===
+       
         file_obj = Upload_File_Individual.objects.filter(FID=fid_to_update).first()
         if not file_obj:
             return {
@@ -432,13 +432,13 @@ def reject_individual_loan(id_file):
 
         current_status = file_obj.statussubmit
 
-        # === 4. ອັບເດດ status → 7 (ໄດ້ທຸກຄ່າ) ===
+       
         file_obj.statussubmit = '7'
         file_obj.updateDate = timezone.now()
         file_obj.save()
         update_status_success = True
 
-        # === 5. ສ້າງຂໍ້ຄວາມ ===
+        
         msg = []
         if total_deleted:
             msg.append(f'ລົບ: {total_deleted} ລາຍການ')
