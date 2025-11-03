@@ -256,8 +256,8 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
-    "http://192.168.45.54:3000",
-    "http://192.168.45.54:3000",
+    "http://192.168.45.56:3000",
+    "http://192.168.45.56:3000",
     "http://localhost:3001",
 ]
 
@@ -269,10 +269,10 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
 
 AUTH_USER_MODEL = 'lcicHome.Login'
 
-CSRF_TRUSTED_ORIGINS = ['http://localhost:3000','http://192.168.45.54:3000']
+CSRF_TRUSTED_ORIGINS = ['http://localhost:3000','http://192.168.45.56:3000']
 
 CORS_ALLOWED_ORIGINS = [
-    "http://192.168.45.54:35729",
+    "http://192.168.45.56:35729",
     "http://localhost:3001",
     # origins ອື່ນໆທີ່ມີຢູ່ແລ້ວ...
 ]
@@ -287,9 +287,9 @@ CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 
 # Celery settings
-# CELERY_BROKER_URL = 'redis://localhost:8000/0'
-# CELERY_BROKER_URL = 'redis://localhost:6379/0'
-# CELERY_RESULT_BACKEND = 'redis://localhost:8000/0'
+CELERY_BROKER_URL = 'redis://localhost:8000/0'
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:8000/0'
 
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
@@ -297,7 +297,7 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Vientiane'  
 
 CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes max
+CELERY_TASK_TIME_LIMIT = 30 * 60  
 
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 

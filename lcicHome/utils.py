@@ -387,3 +387,87 @@ def parse_datetime(dt_str):
             return datetime.strptime(dt.split('T')[0], "%Y-%m-%d")
     except (ValueError, TypeError):
         return None
+    
+# utils.py
+import re
+from django.utils import timezone
+from .models import data_edit, B_Data_is_damaged, disputes, Upload_File_Individual
+
+# utils.py (ປັບປຸງແລ້ວ)
+def reject_individual_loan(id_file):
+    deleted_count = {
+        'data_edit': 0,
+        'B_Data_is_damaged': 0,
+        'disputes': 0
+    }
+    fid_to_update = None
+    update_status_success = False
+    current_status = None
+
+    try:
+        # === 1. ຕັດ FID ===
+        match = re.match(r'n-(\d+)', id_file.strip())
+        if not match:
+            return {
+                'success': False,
+                'message': f'id_file ບໍ່ຖືກຕ້ອງ: {id_file}',
+                'details': {}
+            }
+        fid_to_update = int(match.group(1))
+
+        # === 2. ລົບຂໍ້ມູນ ===
+        deleted_count['data_edit'] = data_edit.objects.filter(id_file=id_file).delete()[0]
+        deleted_count['B_Data_is_damaged'] = B_Data_is_damaged.objects.filter(id_file=id_file).delete()[0]
+        deleted_count['disputes'] = disputes.objects.filter(id_file=id_file).delete()[0]
+        total_deleted = sum(deleted_count.values())
+
+        # === 3. ກວດວ່າມີ FID ຢູ່ບໍ່ ===
+        file_obj = Upload_File_Individual.objects.filter(FID=fid_to_update).first()
+        if not file_obj:
+            return {
+                'success': False,
+                'message': f'ບໍ່ພົບຂໍ້ມູນໄຟລ໌ FID: {fid_to_update}',
+                'details': {'fid': fid_to_update}
+            }
+
+        current_status = file_obj.status
+
+        # === 4. ອັບເດດ status → 7 (ໄດ້ທຸກຄ່າ) ===
+        file_obj.status = '7'
+        file_obj.updateDate = timezone.now()
+        file_obj.save()
+        update_status_success = True
+
+        # === 5. ສ້າງຂໍ້ຄວາມ ===
+        msg = []
+        if total_deleted:
+            msg.append(f'ລົບ: {total_deleted} ລາຍການ')
+        else:
+            msg.append('ບໍ່ມີຂໍ້ມູນຖືກລົບ')
+
+        msg.append(f'ປະຕິເສດສຳເລັດ (FID: {fid_to_update}) → status {current_status} → 7')
+
+        return {
+            'success': True,
+            'message': ' | '.join(msg),
+            'details': {
+                'id_file': id_file,
+                'fid': fid_to_update,
+                'current_status': current_status,
+                'new_status': '7',
+                'deleted': deleted_count,
+                'status_updated': update_status_success
+            }
+        }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}',
+            'details': {
+                'id_file': id_file,
+                'fid_extracted': fid_to_update,
+                'current_status': current_status,
+                'deleted': deleted_count
+            }
+        }
