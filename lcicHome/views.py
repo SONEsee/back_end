@@ -12089,7 +12089,7 @@ def rollback_and_reconfirm_individual(request):
        
         period_dt = datetime.strptime(current_period, "%Y%m")
         prev_period = None
-        for _ in range(64):
+        for _ in range(300):
             period_dt -= relativedelta(months=1)
             search_str = period_dt.strftime("%Y%m")
 
@@ -18090,28 +18090,28 @@ def upload_json(request):
             
             today = date.today().strftime("%Y%m%d")
             
-            # ຄົ້ນຫາໄຟລ໌ທີ່ມີຊື່ຄ້າຍກັນໃນມື້ນີ້
+           
             today_files = Search_batfile.objects.filter(
                 fileName__startswith=f"{name_without_ext}-{today}-",
                 insertDate__date=date.today()
             ).count()
             
-            # ກຳນົດລຳດັບໃຫມ່
+         
             sequence = today_files + 1
-            sequence_str = f"{sequence:03d}"  # ແປງເປັນ 3 ໂຕເລກ 001, 002, 003...
+            sequence_str = f"{sequence:03d}"  
             
-            # ສ້າງຊື່ໄຟລ໌ໃຫມ່
+          
             new_filename = f"{name_without_ext}-{today}-{sequence_str}{extension}"
             return new_filename
 
-        # ສ້າງຊື່ໄຟລ໌ໃຫມ່
+      
         new_filename = generate_filename(file.name)
 
         search_batfile = Search_batfile(
-            fileName=new_filename,  # ໃຊ້ຊື່ໄຟລ໌ໃຫມ່
+            fileName=new_filename,
             fileUpload=file,
             fileSize=f"{file.size} bytes",
-            path=f"searchfile/{new_filename}",  # path ກໍໃຊ້ຊື່ໃຫມ່ເຊັ່ນກັນ
+            path=f"searchfile/{new_filename}", 
             status="Uploaded",
             FileType="json",
             user_id=user_id,
@@ -18146,31 +18146,31 @@ def upload_json(request):
 
             enterprise = None
             search_criteria = ""
-            final_lcic_id = lcic_id  # ເກັບຄ່າສຸດທ້າຍທີ່ຈະບັນທຶກ
-            final_com_code = com_code  # ເກັບຄ່າສຸດທ້າຍທີ່ຈະບັນທຶກ
+            final_lcic_id = lcic_id 
+            final_com_code = com_code 
 
             if lcic_id and com_code:
-                # ລອງຄົ້ນຫາດ້ວຍທັງສອງຄ່າກ່ອນ
+               
                 enterprise = EnterpriseInfo.objects.filter(
                     LCIC_code=lcic_id, 
                     EnterpriseID=com_code
                 ).first()
                 search_criteria = "both"
                 
-                # ຖ້າບໍ່ເຈົ້າ, ລອງຄົ້ນຫາແຍກ ແລະດຶງຄ່າທີ່ຂາດໄປ
+               
                 if not enterprise:
-                    # ລອງຄົ້ນຫາດ້ວຍ LCIC_code ກ່ອນ
+                    
                     enterprise_by_lcic = EnterpriseInfo.objects.filter(LCIC_code=lcic_id).first()
                     if enterprise_by_lcic:
                         enterprise = enterprise_by_lcic
-                        final_com_code = enterprise_by_lcic.EnterpriseID  # ດຶງ com_code ທີ່ຖືກຈາກ DB
+                        final_com_code = enterprise_by_lcic.EnterpriseID  
                         search_criteria = "found_by_lcic_updated_com_code"
                     else:
-                        # ຖ້າບໍ່ເຈົ້າດ້ວຍ LCIC, ລອງຄົ້ນຫາດ້ວຍ com_code
+                      
                         enterprise_by_com = EnterpriseInfo.objects.filter(EnterpriseID=com_code).first()
                         if enterprise_by_com:
                             enterprise = enterprise_by_com
-                            final_lcic_id = enterprise_by_com.LCIC_code  # ດຶງ LCIC_code ທີ່ຖືກຈາກ DB
+                            final_lcic_id = enterprise_by_com.LCIC_code  
                             search_criteria = "found_by_com_code_updated_lcic"
                         
             elif lcic_id:
@@ -18267,7 +18267,7 @@ from .models import SearchResult
 def update_multiple_search_results_status(request):
   
     try:
-        # ອ່ານ JSON data
+       
         data = json.loads(request.body)
         ids = data.get('ids', [])
         
@@ -18282,10 +18282,10 @@ def update_multiple_search_results_status(request):
         found_ids = list(search_results.values_list('id', flat=True))
         not_found_ids = [id for id in ids if id not in found_ids]
         
-        # ອັບເດດ status ເປັນ 'Found'
+        
         updated_count = search_results.update(status='Not Found')
         
-        # ດຶງຂໍ້ມູນທີ່ອັບເດດແລ້ວ
+       
         updated_results = list(search_results.values(
             'id', 'status', 'lcicID', 'LCIC_code', 
             'com_enterprise_code', 'enterpriseNameLao'
@@ -18332,10 +18332,9 @@ class InsertSearchLogView(APIView):
         charge_amount_com = chargeType.chg_amount
         EnterpriseID = request.data.get('EnterpriseID')
         LCIC_code = request.data.get('LCIC_code')
-        # search_loan = B1.objects.filter(LCIC_code=LCIC_code or EnterpriseID=EnterpriseID)
+   
         search_loan = B1.objects.filter(Q(LCIC_code=LCIC_code) | Q(com_enterprise_code=EnterpriseID))
-        print("LCIC_code: =-=============================>", LCIC_code)
-        print("EnterpriseID: =-=============================>", EnterpriseID)
+
         
         for loan_log in search_loan:
          sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
