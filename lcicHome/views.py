@@ -20543,8 +20543,6 @@ from django.db.models import Func, F, Q
 
 from utility.models import edl_customer_info, Electric_Bill, searchlog_utility, request_charge_utility
 from .serializers import EDLCustomerSerializer, ElectricBillSerializer, SearchLogUtilitySerializer
-from member.models import memberInfo
-from charge.models import ChargeMatrix
 import uuid
 
 
@@ -26201,30 +26199,27 @@ class SearchLogReportDetailView(APIView):
         if not enquiry_type:
             return ''
         return enquiry_type_map.get(enquiry_type.lower(), enquiry_type)
+    
+    
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Sum, Count, Q
-from django.db.models.functions import TruncMonth, TruncDate
+from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from datetime import datetime, date, timedelta
 import calendar
-from .models import request_charge, memberInfo, EnterpriseInfo, Main_catalog_cat
 
 
 class ChargeReportSummaryView(APIView):
-    """
-    Enhanced API endpoint for charge report summary statistics.
-    Provides monthly, daily, and top bank statistics.
-    """
+    """Enhanced API endpoint for charge report summary statistics"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
         try:
             user = request.user
             
-            # User validation
             if not hasattr(user, 'GID') or not user.GID:
                 return Response({
                     'error': 'ບໍ່ພົບບົດບາດຜູ້ໃຊ້ (GID)'
@@ -26237,31 +26232,28 @@ class ChargeReportSummaryView(APIView):
             
             is_admin = user_gid in [1, 2, 3, 4, 5]
             
-            # Get current date info
             today = timezone.now().date()
             current_month = today.month
             current_year = today.year
             
-            # Build base queryset
             base_queryset = request_charge.objects.filter(
                 status__isnull=False,
                 rec_insert_date__isnull=False
             )
             
-            # Apply role-based filtering
             if not is_admin and user_bank_code:
                 base_queryset = base_queryset.filter(bnk_code=user_bank_code)
             
-            # Apply optional filters from request
+            # ✅ Apply ALL filters including bank and chg_code
             filters = self._get_filters(request)
+            filtered_queryset = self._apply_all_filters(base_queryset, filters)
             
-            # Calculate summary statistics
             summary_data = {
                 'current_month_stats': self._get_monthly_stats(
-                    base_queryset, filters, current_year, current_month, today
+                    filtered_queryset, filters, current_year, current_month, today
                 ),
-                'today_stats': self._get_today_stats(base_queryset, today, user_bank_code, is_admin),
-                'top_banks': self._get_top_banks(base_queryset, filters, is_admin) if is_admin else None,
+                'today_stats': self._get_today_stats(filtered_queryset, today),
+                'top_banks': self._get_top_banks(filtered_queryset, filters, is_admin) if is_admin else None,
                 'filter_applied': filters,
                 'user_info': {
                     'role_id': user_gid,
@@ -26284,10 +26276,9 @@ class ChargeReportSummaryView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def _get_filters(self, request):
-        """Extract and validate filters from request"""
+        """Extract filters from request"""
         filters = {}
         
-        # Date range filter
         from_date = request.query_params.get('fromDate')
         to_date = request.query_params.get('toDate')
         if from_date:
@@ -26295,24 +26286,37 @@ class ChargeReportSummaryView(APIView):
         if to_date:
             filters['to_date'] = datetime.strptime(to_date, '%Y-%m-%d').date()
             
-        # Month/Year filter
         month = request.query_params.get('month')
         year = request.query_params.get('year')
         if month and month.isdigit():
             filters['month'] = int(month)
         if year and year.isdigit():
             filters['year'] = int(year)
-            
-        # Bank filter
+        
+        # ✅ Bank filter
         bank = request.query_params.get('bank')
         if bank and bank != 'all':
             filters['bank'] = bank
+        
+        # ✅ Charge code filter
+        chg_code = request.query_params.get('chg_code')
+        if chg_code and chg_code != 'all':
+            filters['chg_code'] = chg_code
             
         return filters
     
+    def _apply_all_filters(self, queryset, filters):
+        """Apply all filters to queryset"""
+        if filters.get('bank'):
+            queryset = queryset.filter(bnk_code=filters['bank'])
+        
+        if filters.get('chg_code'):
+            queryset = queryset.filter(chg_code=filters['chg_code'])
+        
+        return queryset
+    
     def _get_monthly_stats(self, queryset, filters, current_year, current_month, today):
-        """Calculate monthly statistics"""
-        # Apply filters or use current month
+        """Calculate monthly statistics with filters applied"""
         if filters.get('from_date') and filters.get('to_date'):
             month_queryset = queryset.filter(
                 rec_insert_date__date__gte=filters['from_date'],
@@ -26326,24 +26330,17 @@ class ChargeReportSummaryView(APIView):
             )
             month_label = f"{filters['month']:02d}-{filters['year']}"
         else:
-            # Default to current month
             month_queryset = queryset.filter(
                 rec_insert_date__year=current_year,
                 rec_insert_date__month=current_month
             )
             month_label = f"{current_month:02d}-{current_year}"
         
-        # Apply bank filter if specified
-        if filters.get('bank'):
-            month_queryset = month_queryset.filter(bnk_code=filters['bank'])
-        
-        # Calculate aggregates
         month_stats = month_queryset.aggregate(
             total_transactions=Count('rec_charge_ID'),
             total_amount=Sum('chg_amount')
         )
         
-        # Today's stats for the same filters - Fixed with __date lookup
         today_queryset = month_queryset.filter(rec_insert_date__date=today)
         today_stats = today_queryset.aggregate(
             today_transactions=Count('rec_charge_ID'),
@@ -26360,12 +26357,9 @@ class ChargeReportSummaryView(APIView):
             'formatted_today_amount': self._format_amount(today_stats['today_amount'] or 0)
         }
     
-    def _get_today_stats(self, queryset, today, user_bank_code, is_admin):
-        """Get today's statistics - Fixed with __date lookup"""
+    def _get_today_stats(self, queryset, today):
+        """Get today's statistics with filters applied"""
         today_queryset = queryset.filter(rec_insert_date__date=today)
-        
-        if not is_admin and user_bank_code:
-            today_queryset = today_queryset.filter(bnk_code=user_bank_code)
         
         stats = today_queryset.aggregate(
             transactions=Count('rec_charge_ID'),
@@ -26380,43 +26374,21 @@ class ChargeReportSummaryView(APIView):
         }
     
     def _get_top_banks(self, queryset, filters, is_admin):
-        """Get top performing banks (admin only)"""
+        """Get top performing banks with filters applied"""
         if not is_admin:
             return None
         
-        # Apply date filters
-        if filters.get('from_date') and filters.get('to_date'):
-            queryset = queryset.filter(
-                rec_insert_date__date__gte=filters['from_date'],
-                rec_insert_date__date__lte=filters['to_date']
-            )
-        elif filters.get('month') and filters.get('year'):
-            queryset = queryset.filter(
-                rec_insert_date__year=filters['year'],
-                rec_insert_date__month=filters['month']
-            )
-        else:
-            # Current month by default
-            today = timezone.now().date()
-            queryset = queryset.filter(
-                rec_insert_date__year=today.year,
-                rec_insert_date__month=today.month
-            )
+        today = timezone.now().date()
         
-        # Top bank by amount
         top_by_amount = queryset.values('bnk_code').annotate(
             total_amount=Sum('chg_amount'),
             total_transactions=Count('rec_charge_ID')
         ).order_by('-total_amount').first()
         
-        # Top bank by transactions
         top_by_transactions = queryset.values('bnk_code').annotate(
             total_transactions=Count('rec_charge_ID'),
             total_amount=Sum('chg_amount')
         ).order_by('-total_transactions').first()
-        
-        # Get today's stats for top banks - Fixed with __date lookup
-        today = timezone.now().date()
         
         result = {
             'by_amount': None,
@@ -26469,8 +26441,8 @@ class ChargeReportSummaryView(APIView):
     
     @staticmethod
     def _get_bank_info(bank_code):
-        """Get bank information"""
         try:
+            from .models import memberInfo
             bank = memberInfo.objects.filter(bnk_code=bank_code).first()
             if bank:
                 bank_name = getattr(bank, 'nameL', '') or getattr(bank, 'nameE', '')
@@ -26484,23 +26456,19 @@ class ChargeReportSummaryView(APIView):
     
     @staticmethod
     def _format_amount(amount):
-        """Format amount with thousand separators"""
         if amount is None:
             return "0"
         return "{:,.0f}".format(float(amount))
 
 
 class ChargeReportMainView(APIView):
-    """
-    Enhanced API endpoint for aggregated charge report with proper filtering.
-    """
+    """Enhanced API endpoint with grouping by year/month"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
         try:
             user = request.user
             
-            # User validation
             if not hasattr(user, 'GID') or not user.GID:
                 return Response({
                     'error': 'ບໍ່ພົບບົດບາດຜູ້ໃຊ້ (GID)'
@@ -26513,52 +26481,31 @@ class ChargeReportMainView(APIView):
             
             is_admin = user_gid in [1, 2, 3, 4, 5]
             
-            # Base queryset
             queryset = request_charge.objects.filter(
                 status__isnull=False,
                 rec_insert_date__isnull=False
             )
             
-            # Role-based filtering
             if not is_admin and user_bank_code:
                 queryset = queryset.filter(bnk_code=user_bank_code)
             
-            # Apply filters
             queryset, filter_info = self._apply_filters(request, queryset)
             
-            # Group by bank for aggregation
-            aggregated_data = queryset.values('bnk_code').annotate(
-                total_charge_amount=Sum('chg_amount'),
-                transaction_count=Count('rec_charge_ID')
-            ).order_by('bnk_code')
+            month = request.query_params.get('month', '')
+            year = request.query_params.get('year', '')
+            from_date = request.query_params.get('fromDate')
+            to_date = request.query_params.get('toDate')
             
-            # Format response data
-            dashboard_data = []
-            for item in aggregated_data:
-                bank_info = self._get_bank_info(item['bnk_code'])
-                
-                dashboard_data.append({
-                    'bank_code': item['bnk_code'],
-                    'bank_name': bank_info['name'],
-                    'bank_display': bank_info['display'],
-                    'total_charge_amount': round(float(item['total_charge_amount'] or 0), 2),
-                    'transaction_count': item['transaction_count'] or 0,
-                    'formatted_amount': self._format_amount(item['total_charge_amount'] or 0),
-                    'currency': 'ກີບ',
-                    'currency_code': 'LAK'
-                })
-            
-            # Calculate totals
-            total_summary = {
-                'total_transactions': sum(item['transaction_count'] for item in dashboard_data),
-                'total_amount': round(sum(item['total_charge_amount'] for item in dashboard_data), 2),
-                'unique_banks': len(dashboard_data),
-                'formatted_total_amount': self._format_amount(
-                    sum(item['total_charge_amount'] for item in dashboard_data)
-                ),
-                'currency': 'ກີບ',
-                'currency_code': 'LAK'
-            }
+            # ✅ Fixed grouping logic - only group if no date range
+            if not from_date and not to_date:
+                if (month == '' or month == 'all') and (year == '' or year == 'all'):
+                    data = self._group_by_year(queryset)
+                elif month == '' or month == 'all':
+                    data = self._group_by_month(queryset, year)
+                else:
+                    data = self._group_by_bank(queryset)
+            else:
+                data = self._group_by_bank(queryset)
             
             return Response({
                 'status': 'success',
@@ -26570,95 +26517,171 @@ class ChargeReportMainView(APIView):
                     'role_name': 'ຜູ້ເບິ່ງແຍງລະບົບ' if is_admin else 'ລູກຄ້າ'
                 },
                 'filter_info': filter_info,
-                'summary': total_summary,
-                'data': dashboard_data
+                'data': data
             }, status=status.HTTP_200_OK)
             
         except Exception as e:
+            import traceback
+            print(f"Error in ChargeReportMainView: {str(e)}")
+            print(traceback.format_exc())
             return Response({
                 'error': 'ຂໍ້ຜິດພາດພາຍໃນລະບົບ',
                 'detail': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def _apply_filters(self, request, queryset):
-        """Apply filters with proper validation"""
+        """Apply all filters"""
         filter_info = {}
         
-        # Date range filter (highest priority)
         from_date = request.query_params.get('fromDate')
         to_date = request.query_params.get('toDate')
         
+        # ✅ Fixed date range filter
         if from_date and to_date:
-            # Parse dates if they are strings
-            if isinstance(from_date, str):
-                from_date = datetime.strptime(from_date, '%Y-%m-%d').date()
-            if isinstance(to_date, str):
-                to_date = datetime.strptime(to_date, '%Y-%m-%d').date()
-            # Use __date__gte and __date__lte to handle DateTimeField properly
-            queryset = queryset.filter(
-                rec_insert_date__date__gte=from_date,
-                rec_insert_date__date__lte=to_date
-            )
-            filter_info['date_range'] = f"{from_date} to {to_date}"
-            filter_info['type'] = 'date_range'
+            try:
+                from_date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+                to_date_obj = datetime.strptime(to_date, '%Y-%m-%d').date()
+                queryset = queryset.filter(
+                    rec_insert_date__date__gte=from_date_obj,
+                    rec_insert_date__date__lte=to_date_obj
+                )
+                filter_info['date_range'] = f"{from_date} to {to_date}"
+                filter_info['type'] = 'date_range'
+            except ValueError as e:
+                print(f"Date parsing error: {e}")
         elif from_date:
-            if isinstance(from_date, str):
-                from_date = datetime.strptime(from_date, '%Y-%m-%d').date()
-            # For gte on date, use __date__gte lookup
-            queryset = queryset.filter(rec_insert_date__date__gte=from_date)
-            filter_info['from_date'] = from_date
-            filter_info['type'] = 'from_date'
+            try:
+                from_date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+                queryset = queryset.filter(rec_insert_date__date__gte=from_date_obj)
+                filter_info['from_date'] = from_date
+                filter_info['type'] = 'from_date'
+            except ValueError as e:
+                print(f"Date parsing error: {e}")
         elif to_date:
-            if isinstance(to_date, str):
-                to_date = datetime.strptime(to_date, '%Y-%m-%d').date()
-            # For lte on date, use __date__lte lookup
-            queryset = queryset.filter(rec_insert_date__date__lte=to_date)
-            filter_info['to_date'] = to_date
-            filter_info['type'] = 'to_date'
+            try:
+                to_date_obj = datetime.strptime(to_date, '%Y-%m-%d').date()
+                queryset = queryset.filter(rec_insert_date__date__lte=to_date_obj)
+                filter_info['to_date'] = to_date
+                filter_info['type'] = 'to_date'
+            except ValueError as e:
+                print(f"Date parsing error: {e}")
         else:
-            # Month/Year filter (if no date range)
-            month = request.query_params.get('month')
-            year = request.query_params.get('year')
+            month = request.query_params.get('month', '')
+            year = request.query_params.get('year', '')
             
-            if year:
-                if isinstance(year, str) and year.isdigit():
-                    year = int(year)
-                queryset = queryset.filter(rec_insert_date__year=year)
+            if year and year != 'all':
+                queryset = queryset.filter(rec_insert_date__year=int(year))
                 filter_info['year'] = year
                 
-                if month:
-                    if isinstance(month, str) and month.isdigit():
-                        month = int(month)
-                    queryset = queryset.filter(rec_insert_date__month=month)
+                if month and month != 'all':
+                    queryset = queryset.filter(rec_insert_date__month=int(month))
                     filter_info['month'] = month
                     filter_info['type'] = 'month_year'
                 else:
-                    filter_info['type'] = 'year'
-            elif month:
-                # Month without year - use current year
-                current_year = timezone.now().year
-                if isinstance(month, str) and month.isdigit():
-                    month = int(month)
-                queryset = queryset.filter(
-                    rec_insert_date__year=current_year,
-                    rec_insert_date__month=month
-                )
-                filter_info['month'] = month
-                filter_info['year'] = current_year
-                filter_info['type'] = 'month_current_year'
+                    filter_info['type'] = 'year_only'
         
-        # Bank filter (applies regardless)
+        # ✅ Bank filter
         bank = request.query_params.get('bank')
         if bank and bank != 'all':
             queryset = queryset.filter(bnk_code=bank)
             filter_info['bank'] = bank
         
+        # ✅ Charge code filter
+        chg_code = request.query_params.get('chg_code')
+        if chg_code and chg_code != 'all':
+            queryset = queryset.filter(chg_code=chg_code)
+            filter_info['chg_code'] = chg_code
+        
         return queryset, filter_info
+    
+    def _group_by_bank(self, queryset):
+        """Normal grouping by bank"""
+        aggregated_data = queryset.values('bnk_code').annotate(
+            total_charge_amount=Sum('chg_amount'),
+            transaction_count=Count('rec_charge_ID')
+        ).order_by('bnk_code')
+        
+        result = []
+        for item in aggregated_data:
+            bank_info = self._get_bank_info(item['bnk_code'])
+            result.append({
+                'bank_code': item['bnk_code'],
+                'bank_name': bank_info['name'],
+                'bank_display': bank_info['display'],
+                'total_charge_amount': round(float(item['total_charge_amount'] or 0), 2),
+                'transaction_count': item['transaction_count'] or 0,
+                'formatted_amount': self._format_amount(item['total_charge_amount'] or 0)
+            })
+        
+        return result
+    
+    def _group_by_month(self, queryset, year):
+        """Group by month within a specific year"""
+        aggregated_data = queryset.annotate(
+            month=TruncMonth('rec_insert_date')
+        ).values('month', 'bnk_code').annotate(
+            total_charge_amount=Sum('chg_amount'),
+            transaction_count=Count('rec_charge_ID')
+        ).order_by('month', 'bnk_code')
+        
+        grouped = {}
+        for item in aggregated_data:
+            month_key = item['month'].strftime('%m-%Y')
+            if month_key not in grouped:
+                grouped[month_key] = {
+                    'period': month_key,
+                    'period_type': 'month',
+                    'banks': []
+                }
+            
+            bank_info = self._get_bank_info(item['bnk_code'])
+            grouped[month_key]['banks'].append({
+                'bank_code': item['bnk_code'],
+                'bank_name': bank_info['name'],
+                'bank_display': bank_info['display'],
+                'total_charge_amount': round(float(item['total_charge_amount'] or 0), 2),
+                'transaction_count': item['transaction_count'] or 0,
+                'formatted_amount': self._format_amount(item['total_charge_amount'] or 0)
+            })
+        
+        return list(grouped.values())
+    
+    def _group_by_year(self, queryset):
+        """Group by year - Fixed aggregation"""
+        # ✅ Use values() with year extraction instead of TruncDate
+        aggregated_data = queryset.extra(
+            select={'year': "EXTRACT(year FROM rec_insert_date)"}
+        ).values('year', 'bnk_code').annotate(
+            total_charge_amount=Sum('chg_amount'),
+            transaction_count=Count('rec_charge_ID')
+        ).order_by('year', 'bnk_code')
+        
+        grouped = {}
+        for item in aggregated_data:
+            year_key = str(int(item['year']))
+            if year_key not in grouped:
+                grouped[year_key] = {
+                    'period': year_key,
+                    'period_type': 'year',
+                    'banks': []
+                }
+            
+            bank_info = self._get_bank_info(item['bnk_code'])
+            grouped[year_key]['banks'].append({
+                'bank_code': item['bnk_code'],
+                'bank_name': bank_info['name'],
+                'bank_display': bank_info['display'],
+                'total_charge_amount': round(float(item['total_charge_amount'] or 0), 2),
+                'transaction_count': item['transaction_count'] or 0,
+                'formatted_amount': self._format_amount(item['total_charge_amount'] or 0)
+            })
+        
+        return list(grouped.values())
     
     @staticmethod
     def _get_bank_info(bank_code):
-        """Get bank information"""
         try:
+            from .models import memberInfo
             bank = memberInfo.objects.filter(bnk_code=bank_code).first()
             if bank:
                 bank_name = getattr(bank, 'nameL', '') or getattr(bank, 'nameE', '')
@@ -26672,10 +26695,10 @@ class ChargeReportMainView(APIView):
     
     @staticmethod
     def _format_amount(amount):
-        """Format amount with thousand separators"""
         if amount is None:
             return "0"
         return "{:,.0f}".format(float(amount))
+
 
 
 # Keep the existing ChargeReportDetailView class as is, but fix filters
