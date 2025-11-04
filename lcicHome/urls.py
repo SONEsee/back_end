@@ -59,7 +59,7 @@ from .views import CustomerInfoINDView, Bank_InfoINDView, GetUserByUIDView, Upda
 from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddLCICSystemUser, SysUserTokenRefresh,LCICSystemUserDetailView, LCICSystemUserListView, BankListCreateView,BankDetailView, EDLProvinceDetailAPIView, FileElectricListAPIView, ElectricReportAPIView, UserGroupViewSet,UploadTrackingListAPIView,UploadDataAPIView,UploadTrackingDetailAPIView,InitializeTrackingAPIView, DebugAPIView,InitializeTestDataAPIView, TestRealUploadAPIView, InitializeDistrictsAPIView, ChargeReportMainView, ChargeReportDetailView,confirm_dispute_upload,edl_customer_search,water_customer_search,SearchLogReportMainView,SearchLogReportDetailView,ChargeReportSummaryView,WaterUploadDataAPIView
 from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddLCICSystemUser, SysUserTokenRefresh,LCICSystemUserDetailView, LCICSystemUserListView, BankListCreateView,BankDetailView, EDLProvinceDetailAPIView, FileElectricListAPIView, ElectricReportAPIView, UserGroupViewSet,UploadTrackingListAPIView,UploadDataAPIView,UploadTrackingDetailAPIView,InitializeTrackingAPIView, DebugAPIView,InitializeTestDataAPIView, TestRealUploadAPIView, InitializeDistrictsAPIView, ChargeReportMainView, ChargeReportDetailView,confirm_dispute_upload,edl_customer_search,water_customer_search,SearchLogReportMainView,SearchLogReportDetailView,ChargeReportSummaryView,WaterUploadDataAPIView, ReorderSidebarView,SearchIndividualBankView
 from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddLCICSystemUser, SysUserTokenRefresh,LCICSystemUserDetailView, LCICSystemUserListView, BankListCreateView,BankDetailView, EDLProvinceDetailAPIView, FileElectricListAPIView, ElectricReportAPIView, UserGroupViewSet,UploadTrackingListAPIView,UploadDataAPIView,UploadTrackingDetailAPIView,InitializeTrackingAPIView, DebugAPIView,InitializeTestDataAPIView, TestRealUploadAPIView, InitializeDistrictsAPIView, ChargeReportMainView, ChargeReportDetailView,confirm_dispute_upload,edl_customer_search,water_customer_search,SearchLogReportMainView,SearchLogReportDetailView,ChargeReportSummaryView,WaterUploadDataAPIView, ReorderSidebarView,SearchIndividualBankView,SearchIndividualBankInfoView,IndividualInfoSearchView
-from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddLCICSystemUser, SysUserTokenRefresh,LCICSystemUserDetailView, LCICSystemUserListView, BankListCreateView,BankDetailView, EDLProvinceDetailAPIView, FileElectricListAPIView, ElectricReportAPIView, UserGroupViewSet,UploadTrackingListAPIView,UploadDataAPIView,UploadTrackingDetailAPIView,InitializeTrackingAPIView, DebugAPIView,InitializeTestDataAPIView, TestRealUploadAPIView, InitializeDistrictsAPIView, ChargeReportMainView, ChargeReportDetailView,confirm_dispute_upload,edl_customer_search,water_customer_search,SearchLogReportMainView,SearchLogReportDetailView,ChargeReportSummaryView,WaterUploadDataAPIView, ReorderSidebarView,SearchIndividualBankView,SearchIndividualBankInfoView,IndividualInfoSearchView,IndividualFileUploadView,IndividualFileListView,IndividualFilePeriodListView, ElectricCustomerSearchAPIView
+from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtilityView,UploadUtilityView,CreateMemberView,AddMemberAPIView, DistinctBankCodeView, BankBranchListView, JsonFileUploadView,LoanStatsView,FileDeleteView,FileUploadView, FileDetailView, water_progress_view, FileElectricView, electric_progress_view,UtilityReportAPIView, ProvinceDistrictAPIView, EDLProvinceAPIView, SysUserLogin, AddLCICSystemUser, SysUserTokenRefresh,LCICSystemUserDetailView, LCICSystemUserListView, BankListCreateView,BankDetailView, EDLProvinceDetailAPIView, FileElectricListAPIView, ElectricReportAPIView, UserGroupViewSet,UploadTrackingListAPIView,UploadDataAPIView,UploadTrackingDetailAPIView,InitializeTrackingAPIView, DebugAPIView,InitializeTestDataAPIView, TestRealUploadAPIView, InitializeDistrictsAPIView, ChargeReportMainView, ChargeReportDetailView,confirm_dispute_upload,edl_customer_search,water_customer_search,SearchLogReportMainView,SearchLogReportDetailView,ChargeReportSummaryView,WaterUploadDataAPIView, ReorderSidebarView,SearchIndividualBankView,SearchIndividualBankInfoView,IndividualInfoSearchView,IndividualFileUploadView,IndividualFileListView,IndividualFilePeriodListView, ElectricCustomerSearchAPIView, FCR_reportIndividualView
 
 #tik
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
@@ -292,7 +292,6 @@ urlpatterns = [
     path('api/dispute-loans/', views.get_dispute_loans, name='get_dispute_loans'),
     path('api/dispute-collateral/', views.get_dispute_collateral, name='get_dispute_collateral'),
     path('api/disputes/confirmc/', views.confirm_dispute_colatteral, name='confirm_dispute_colatteral'),
-    path('api/rollback_reconfirm/', views.rollback_and_reconfirm_individual, name='rollback_reconfirm'),
     # path('api/search-individual/', views.search_individual_bank_advanced, name='search_individual_bank_advanced'),
 
     path('api/productinfo3/', get_data3, name='get_data_by_id_file_and_period'),
@@ -302,7 +301,6 @@ urlpatterns = [
     path('confirm_upload_individual/', views.confirm_upload_individual, name='confirm_upload_individual'),
     path('confirm_uploadc/', views.confirm_uploadc, name='confirm_uploadc'),
     path('unload_uploadc/', views.unload_data, name='unload_data'),
-    path('api/reject_individual_loan/<str:id_file>/', views.reject_individual_loan_view, name='reject_individual_loan'),
     # path('check-upload-status/<str:FID>/', views.check_upload_status, name='check_upload_status'),
 
     # path('upload333/', FileUploadView3.as_view(), name='file-upload'),
@@ -344,10 +342,10 @@ urlpatterns = [
     path("api/get-search-results/<int:id>/", views.get_search_results, name="get_search_results"),
     path('update_searchlog_status/', update_searchlog_status, name='update_searchlog_status'),
     path('upload-enterprise-info/', upload_enterprise_info, name='upload-enterprise-info'),
-     path('api/get-enterprise-info/', views.get_enterprise_info, name='get_enterprise_info'),
-     path('api/get-enterprise/<int:id_file>/', views.get_all_enterprise, name='get_enterprise'),
-      path('api/get-all-upload-files/', views.get_all_upload_files, name='get_all_upload_files'),
-      path('branches/', BankBranchListView.as_view(), name='branch-list'),
+    path('api/get-enterprise-info/', views.get_enterprise_info, name='get_enterprise_info'),
+    path('api/get-enterprise/<int:id_file>/', views.get_all_enterprise, name='get_enterprise'),
+    path('api/get-all-upload-files/', views.get_all_upload_files, name='get_all_upload_files'),
+    path('branches/', BankBranchListView.as_view(), name='branch-list'),
       
     path('distinct-bnk-codes/', DistinctBankCodeView.as_view(), name='distinct-bnk-codes'),
     path('add-member/', AddMemberAPIView.as_view(), name='add-member'),
@@ -434,6 +432,7 @@ urlpatterns = [
     path('charge_report_summary/', ChargeReportSummaryView.as_view(), name='charge-report-summary'),
     path('charge_report_main/', ChargeReportMainView.as_view(), name='charge-report-main'),
     path('charge_report_detail/', ChargeReportDetailView.as_view(), name='charge-report-detail'),
+    path('report_individual/', FCR_reportIndividualView.as_view(), name='fcr-report-individual'),
     # SearchLog Reports  
     path('searchlog_report_main/', SearchLogReportMainView.as_view(), name='searchlog-report-main'),
     path('searchlog_report_detail/', SearchLogReportDetailView.as_view(), name='searchlog-report-detail'),
