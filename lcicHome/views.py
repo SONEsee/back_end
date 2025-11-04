@@ -12089,7 +12089,7 @@ def rollback_and_reconfirm_individual(request):
         # 4. ຊອກ previous period (ໃຊ້ "segmentType")
         period_dt = datetime.strptime(current_period, "%Y%m")
         prev_period = None
-        for _ in range(12):
+        for _ in range(64):
             period_dt -= relativedelta(months=1)
             search_str = period_dt.strftime("%Y%m")
 
