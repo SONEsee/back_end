@@ -292,6 +292,7 @@ urlpatterns = [
     path('api/dispute-loans/', views.get_dispute_loans, name='get_dispute_loans'),
     path('api/dispute-collateral/', views.get_dispute_collateral, name='get_dispute_collateral'),
     path('api/disputes/confirmc/', views.confirm_dispute_colatteral, name='confirm_dispute_colatteral'),
+    path('api/rollback_reconfirm/', views.rollback_and_reconfirm_individual, name='rollback_reconfirm'),
     # path('api/search-individual/', views.search_individual_bank_advanced, name='search_individual_bank_advanced'),
 
     path('api/productinfo3/', get_data3, name='get_data_by_id_file_and_period'),
@@ -301,6 +302,7 @@ urlpatterns = [
     path('confirm_upload_individual/', views.confirm_upload_individual, name='confirm_upload_individual'),
     path('confirm_uploadc/', views.confirm_uploadc, name='confirm_uploadc'),
     path('unload_uploadc/', views.unload_data, name='unload_data'),
+    path('api/reject_individual_loan/<str:id_file>/', views.reject_individual_loan_view, name='reject_individual_loan'),
     # path('check-upload-status/<str:FID>/', views.check_upload_status, name='check_upload_status'),
 
     # path('upload333/', FileUploadView3.as_view(), name='file-upload'),
