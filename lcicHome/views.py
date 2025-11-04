@@ -12032,6 +12032,11 @@ def confirm_upload_individual(request):
         except:
             pass
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+
+
+
 from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -12041,6 +12046,7 @@ from dateutil.relativedelta import relativedelta
 from datetime import datetime
 import re
 import traceback
+
 @csrf_exempt
 @require_POST
 @transaction.atomic
@@ -12051,16 +12057,16 @@ def rollback_and_reconfirm_individual(request):
 
     try:
         print(f"\n{'='*80}")
-        print(f"🔄 Rollback & Reconfirm: FID = {FID_with_prefix}")
+        print(f"Rollback & Reconfirm: FID = {FID_with_prefix}")
         print(f"{'='*80}")
 
-      
+        # 1. ກວດ FID
         match = re.match(r'n-(\d+)', FID_with_prefix)
         if not match:
             return JsonResponse({'status': 'error', 'message': 'Invalid FID format'}, status=400)
         FID_number = int(match.group(1))
 
-        
+        # 2. ດຶງໄຟລ໌
         current_file = Upload_File_Individual.objects.filter(FID=FID_number).first()
         if not current_file:
             return JsonResponse({'status': 'error', 'message': 'File not found'}, status=404)
@@ -12069,34 +12075,77 @@ def rollback_and_reconfirm_individual(request):
         sample_data = data_edit.objects.filter(id_file=FID_with_prefix).first()
         if not sample_data:
             return JsonResponse({'status': 'error', 'message': 'No data in data_edit'}, status=404)
+
         bnk_code = sample_data.bnk_code
+        segment_type = (sample_data.segmentType or '').strip().upper()  # ຕັດ + uppercase
 
-        print(f"  period: {current_period}, bnk_code: {bnk_code}")
+        print(f"  ກວດ: period={current_period}, bnk_code={bnk_code}, segmentType='{segment_type}'")
 
-       
+        # 3. ລົບຂໍ້ມູນເກົ່າ
         deleted_b1 = B1.objects.filter(id_file=FID_with_prefix).delete()[0]
         deleted_b1m = B1_Monthly.objects.filter(id_file=FID_with_prefix).delete()[0]
         print(f"  ລົບ: B1={deleted_b1}, B1_Monthly={deleted_b1m}")
 
-        
+        # 4. ຊອກ previous period (ໃຊ້ "segmentType")
         period_dt = datetime.strptime(current_period, "%Y%m")
         prev_period = None
         for _ in range(12):
             period_dt -= relativedelta(months=1)
             search_str = period_dt.strftime("%Y%m")
-            if B1_Monthly.objects.filter(period=search_str, bnk_code=bnk_code).exists():
+
+            exists = B1_Monthly.objects.filter(
+                period=search_str,
+                bnk_code=bnk_code
+            ).extra(
+                where=['UPPER(TRIM("segmentType")) = %s'],
+                params=[segment_type]
+            ).exists()
+
+            if exists:
                 prev_period = search_str
+                print(f"  ✅ ພົບ previous period: {prev_period}")
                 break
+            else:
+                print(f"  ບໍ່ພົບໃນ {search_str}")
 
+        # 5. ອັບເດດ → ກຳລັງ Rollback
+        Upload_File_Individual.objects.filter(FID=FID_number).update(
+            statussubmit='4', dispuste='0', updateDate=timezone.now()
+        )
+        print("  ອັບເດດ statussubmit → '4' (ກຳລັງ Rollback)")
+
+        # === ກໍລະນີ 1: ບໍ່ພົບຂໍ້ມູນ ===
         if not prev_period:
-            Upload_File_Individual.objects.filter(FID=FID_number).update(statussubmit='2')
-            return JsonResponse({'status': 'error', 'message': 'No previous data'}, status=404)
+            print("  ບໍ່ພົບຂໍ້ມູນເດືອນກ່ອນ → ລົບ + ສຳເລັດ")
 
-        print(f"  ✅ ພົບ previous period: {prev_period}")
+            B1.objects.filter(id_file=FID_with_prefix).delete()
+            B1_Monthly.objects.filter(id_file=FID_with_prefix).delete()
 
-       
+            Upload_File_Individual.objects.filter(FID=FID_number).update(
+                statussubmit='5', dispuste='0', updateDate=timezone.now()
+            )
+            print("  ອັບເດດ statussubmit → '5' (Rollback ສຳເລັດ)")
+
+            print(f"{'='*80}")
+            print(f"Rollback ສຳເລັດ: ບໍ່ມີຂໍ້ມູນເດືອນກ່ອນ → ລົບຂໍ້ມູນເກົ່າ")
+            print(f"{'='*80}")
+
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Rollback ສຳເລັດ: ບໍ່ມີຂໍ້ມູນເດືອນກ່ອນ → ລົບຂໍ້ມູນເກົ່າ',
+                'previous_period': None,
+                'original_id_file': None,
+                'new_status': '5',
+                'action': 'deleted_no_previous_data'
+            })
+
+        # === ກໍລະນີ 2: ພົບຂໍ້ມູນ ===
         prev_data = list(B1_Monthly.objects.filter(
-            period=prev_period, bnk_code=bnk_code
+            period=prev_period,
+            bnk_code=bnk_code
+        ).extra(
+            where=['UPPER(TRIM("segmentType")) = %s'],
+            params=[segment_type]
         ).values(
             'bnk_code', 'branch_id', 'customer_id', 'loan_id', 'period',
             'segmentType', 'user_id', 'product_type', 'lon_sys_id',
@@ -12108,27 +12157,43 @@ def rollback_and_reconfirm_individual(request):
             'is_disputed', 'LCIC_code', 'lcicID', 'id_file'
         ))
 
-        original_id_file = prev_data[0]['id_file'] if prev_data else "N/A"
-        print(f"  ດຶງ: {len(prev_data)} ລາຍ ຈາກ {prev_period} (id_file={original_id_file})")
+        if not prev_data:
+            Upload_File_Individual.objects.filter(FID=FID_number).update(statussubmit='2')
+            return JsonResponse({'status': 'error', 'message': 'No data in previous period'}, status=404)
 
-       
-        mock_data_edits = [type('obj', (), {**item, 'id_file': item['id_file']}) for item in prev_data]
+        original_id_file = prev_data[0]['id_file']
+        print(f"  ດຶງ: {len(prev_data)} ລາຍການ ຈາກ {prev_period} (id_file={original_id_file})")
 
-        
+        # ສ້າງ mock object
+        mock_data_edits = []
+        for item in prev_data:
+            obj = type('obj', (), item)()
+            obj.segmentType = segment_type  # ຮັບປະກັນ
+            mock_data_edits.append(obj)
+
+        # ປະມວນຜົນໃໝ່
         success = _process_reconfirm_data(mock_data_edits, FID_with_prefix, FID_number)
         if not success:
             Upload_File_Individual.objects.filter(FID=FID_number).update(statussubmit='2')
             return JsonResponse({'status': 'error', 'message': 'Reconfirm failed'}, status=500)
 
+        # ສຳເລັດ
+        Upload_File_Individual.objects.filter(FID=FID_number).update(
+            statussubmit='5', dispuste='0', updateDate=timezone.now(), period=prev_period
+        )
+        print(f"  ອັບເດດ statussubmit → '5' (Rollback ສຳເລັດ)")
+        print(f"  ອັບເດດ period → {prev_period}")
+
         print(f"{'='*80}")
-        print(f"✅ ສຳເລັດ: ໃຊ້ {prev_period} (id_file={original_id_file})")
+        print(f"Rollback ສຳເລັດ: ໃຊ້ {prev_period} (id_file={original_id_file})")
         print(f"{'='*80}")
 
         return JsonResponse({
             'status': 'success',
-            'message': f'ໃຊ້ຂໍ້ມູນ {prev_period} (id_file={original_id_file})',
+            'message': f'Rollback ສຳເລັດ: ໃຊ້ຂໍ້ມູນ {prev_period} (id_file={original_id_file})',
             'previous_period': prev_period,
-            'original_id_file': original_id_file
+            'original_id_file': original_id_file,
+            'new_status': '5'
         })
 
     except Exception as e:
@@ -12140,39 +12205,40 @@ def rollback_and_reconfirm_individual(request):
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 
-
 def _process_reconfirm_data(data_edits, FID_with_prefix, FID_number):
-    """
-    ປະມວນຜົນໃໝ່ດ້ວຍຂໍ້ມູນເດືອນກ່ອນ
-    - ຮັກສາ id_file ແລະ period ເກົ່າ
-    - ໃຊ້ໂຄດຈາກ confirm_upload_individual 100%
-    """
     try:
         with transaction.atomic():
             print(f"  ເລີ່ມຕົ້ນການປະມວນຜົນໃໝ່: {len(data_edits)} ລາຍການ")
 
-            
-            bnk_codes = {item.bnk_code for item in data_edits}
-            segment_types = {item.segmentType for item in data_edits if item.segmentType}
+            for item in data_edits:
+                item.segmentType = (getattr(item, 'segmentType', '') or '').strip().upper()
 
-            
+            bnk_codes = {item.bnk_code for item in data_edits}
+            segment_types = {item.segmentType for item in data_edits}
+
+           
             existing_b1_monthly = {}
             for r in B1_Monthly.objects.filter(
-                bnk_code__in=bnk_codes, segmentType__in=segment_types
+                bnk_code__in=bnk_codes
+            ).extra(
+                where=['UPPER(TRIM("segmentType")) IN ({})'.format(','.join(['%s'] * len(segment_types)))],
+                params=list(segment_types)
             ).values('id', 'bnk_code', 'branch_id', 'customer_id', 'loan_id', 'period').iterator(chunk_size=5000):
                 key = (r['bnk_code'], r['branch_id'], r['customer_id'], r['loan_id'], r['period'])
                 existing_b1_monthly[key] = r['id']
 
             existing_b1 = {}
             for r in B1.objects.filter(
-                bnk_code__in=bnk_codes, segmentType__in=segment_types
+                bnk_code__in=bnk_codes
+            ).extra(
+                where=['UPPER(TRIM("segmentType")) IN ({})'.format(','.join(['%s'] * len(segment_types)))],
+                params=list(segment_types)
             ).values('id', 'bnk_code', 'branch_id', 'customer_id', 'loan_id').iterator(chunk_size=5000):
                 key = (r['bnk_code'], r['branch_id'], r['customer_id'], r['loan_id'])
                 existing_b1[key] = r['id']
 
             print(f"  B1_Monthly ມີຢູ່: {len(existing_b1_monthly)}, B1 ມີຢູ່: {len(existing_b1)}")
 
-            
             b1_monthly_update_items = []
             b1_monthly_create_items = []
             b1_update_items = []
@@ -12205,7 +12271,6 @@ def _process_reconfirm_data(data_edits, FID_with_prefix, FID_number):
             print(f"    B1 Update: {len(b1_update_items)}")
             print(f"    B1 Create: {len(b1_create_items)}")
 
-            # === 4. ລຶບຂໍ້ມູນເກົ່າ ===
             if b1_monthly_ids_to_delete:
                 print(f"  ກຳລັງລຶບ B1_Monthly ເກົ່າ...")
                 B1_Monthly.objects.filter(id__in=b1_monthly_ids_to_delete).delete()
@@ -12214,7 +12279,6 @@ def _process_reconfirm_data(data_edits, FID_with_prefix, FID_number):
                 print(f"  ກຳລັງລຶບ B1 ເກົ່າ...")
                 B1.objects.filter(id__in=b1_ids_to_delete).delete()
 
-           
             if b1_monthly_update_items:
                 print(f"  ກຳລັງ Update B1_Monthly...")
                 B1_Monthly.objects.bulk_create([
@@ -12232,7 +12296,7 @@ def _process_reconfirm_data(data_edits, FID_with_prefix, FID_number):
                         lon_class=item.lon_class, lon_type=item.lon_type, lon_term=item.lon_term,
                         lon_status=item.lon_status, lon_insert_date=item.lon_insert_date,
                         lon_update_date=item.lon_update_date, lon_applied_date=item.lon_applied_date,
-                        is_disputed=item.is_disputed, id_file=item.id_file,  # ຮັກສາ n-65
+                        is_disputed=item.is_disputed, id_file=item.id_file,
                         LCIC_code=item.LCIC_code, status_data='u'
                     ) for item in b1_monthly_update_items
                 ], ignore_conflicts=True)
@@ -12254,12 +12318,11 @@ def _process_reconfirm_data(data_edits, FID_with_prefix, FID_number):
                         lon_class=item.lon_class, lon_type=item.lon_type, lon_term=item.lon_term,
                         lon_status=item.lon_status, lon_insert_date=item.lon_insert_date,
                         lon_update_date=item.lon_update_date, lon_applied_date=item.lon_applied_date,
-                        is_disputed=item.is_disputed, id_file=item.id_file,  # ຮັກສາ n-65
+                        is_disputed=item.is_disputed, id_file=item.id_file,
                         LCIC_code=item.LCIC_code, status_data='i'
                     ) for item in b1_monthly_create_items
                 ], ignore_conflicts=True)
 
-            # === 6. ສ້າງ B1 (ເຊັ່ນກັນ) ===
             if b1_update_items:
                 print(f"  ກຳລັງ Update B1...")
                 B1.objects.bulk_create([
@@ -12277,7 +12340,7 @@ def _process_reconfirm_data(data_edits, FID_with_prefix, FID_number):
                         lon_class=item.lon_class, lon_type=item.lon_type, lon_term=item.lon_term,
                         lon_status=item.lon_status, lon_insert_date=item.lon_insert_date,
                         lon_update_date=item.lon_update_date, lon_applied_date=item.lon_applied_date,
-                        is_disputed=item.is_disputed, id_file=item.id_file,  # ຮັກສາ n-65
+                        is_disputed=item.is_disputed, id_file=item.id_file,
                         LCIC_code=item.LCIC_code, status_data='u'
                     ) for item in b1_update_items
                 ], ignore_conflicts=True)
@@ -12299,20 +12362,12 @@ def _process_reconfirm_data(data_edits, FID_with_prefix, FID_number):
                         lon_class=item.lon_class, lon_type=item.lon_type, lon_term=item.lon_term,
                         lon_status=item.lon_status, lon_insert_date=item.lon_insert_date,
                         lon_update_date=item.lon_update_date, lon_applied_date=item.lon_applied_date,
-                        is_disputed=item.is_disputed, id_file=item.id_file,  # ຮັກສາ n-65
+                        is_disputed=item.is_disputed, id_file=item.id_file,
                         LCIC_code=item.LCIC_code, status_data='i'
                     ) for item in b1_create_items
                 ], ignore_conflicts=True)
 
-            # === 7. ອັບເດດ Upload_File_Individual ===
-            Upload_File_Individual.objects.filter(FID=FID_number).update(
-                statussubmit='0',
-                dispuste='0',
-                updateDate=timezone.now(),
-                period=data_edits[0].period  # → 202410
-            )
-
-            print(f"  ອັບເດດ Upload_File_Individual: period = {data_edits[0].period}")
+            print(f"  ປະມວນຜົນໃໝ່ສຳເລັດ: {len(data_edits)} ລາຍການ")
             return True
 
     except Exception as e:
@@ -12320,6 +12375,37 @@ def _process_reconfirm_data(data_edits, FID_with_prefix, FID_number):
         traceback.print_exc()
         return False
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@csrf_exempt
 @require_POST
 def confirm_upload(request):
     try:
@@ -12647,7 +12733,7 @@ def confirm_upload(request):
         Upload_File.objects.filter(FID=FID).update(statussubmit='2')
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
-# @csrf_exempt
+# 
 # @require_POST
 # def confirm_upload(request):
 #     try:
