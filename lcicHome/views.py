@@ -12060,13 +12060,13 @@ def rollback_and_reconfirm_individual(request):
         print(f"Rollback & Reconfirm: FID = {FID_with_prefix}")
         print(f"{'='*80}")
 
-        # 1. ກວດ FID
+       
         match = re.match(r'n-(\d+)', FID_with_prefix)
         if not match:
             return JsonResponse({'status': 'error', 'message': 'Invalid FID format'}, status=400)
         FID_number = int(match.group(1))
 
-        # 2. ດຶງໄຟລ໌
+       
         current_file = Upload_File_Individual.objects.filter(FID=FID_number).first()
         if not current_file:
             return JsonResponse({'status': 'error', 'message': 'File not found'}, status=404)
@@ -12077,16 +12077,16 @@ def rollback_and_reconfirm_individual(request):
             return JsonResponse({'status': 'error', 'message': 'No data in data_edit'}, status=404)
 
         bnk_code = sample_data.bnk_code
-        segment_type = (sample_data.segmentType or '').strip().upper()  # ຕັດ + uppercase
+        segment_type = (sample_data.segmentType or '').strip().upper()  
 
         print(f"  ກວດ: period={current_period}, bnk_code={bnk_code}, segmentType='{segment_type}'")
 
-        # 3. ລົບຂໍ້ມູນເກົ່າ
+        
         deleted_b1 = B1.objects.filter(id_file=FID_with_prefix).delete()[0]
         deleted_b1m = B1_Monthly.objects.filter(id_file=FID_with_prefix).delete()[0]
         print(f"  ລົບ: B1={deleted_b1}, B1_Monthly={deleted_b1m}")
 
-        # 4. ຊອກ previous period (ໃຊ້ "segmentType")
+       
         period_dt = datetime.strptime(current_period, "%Y%m")
         prev_period = None
         for _ in range(64):
@@ -12108,13 +12108,13 @@ def rollback_and_reconfirm_individual(request):
             else:
                 print(f"  ບໍ່ພົບໃນ {search_str}")
 
-        # 5. ອັບເດດ → ກຳລັງ Rollback
+       
         Upload_File_Individual.objects.filter(FID=FID_number).update(
             statussubmit='4', dispuste='0', updateDate=timezone.now()
         )
         print("  ອັບເດດ statussubmit → '4' (ກຳລັງ Rollback)")
 
-        # === ກໍລະນີ 1: ບໍ່ພົບຂໍ້ມູນ ===
+       
         if not prev_period:
             print("  ບໍ່ພົບຂໍ້ມູນເດືອນກ່ອນ → ລົບ + ສຳເລັດ")
 
@@ -12139,7 +12139,7 @@ def rollback_and_reconfirm_individual(request):
                 'action': 'deleted_no_previous_data'
             })
 
-        # === ກໍລະນີ 2: ພົບຂໍ້ມູນ ===
+      
         prev_data = list(B1_Monthly.objects.filter(
             period=prev_period,
             bnk_code=bnk_code
@@ -12164,20 +12164,20 @@ def rollback_and_reconfirm_individual(request):
         original_id_file = prev_data[0]['id_file']
         print(f"  ດຶງ: {len(prev_data)} ລາຍການ ຈາກ {prev_period} (id_file={original_id_file})")
 
-        # ສ້າງ mock object
+       
         mock_data_edits = []
         for item in prev_data:
             obj = type('obj', (), item)()
-            obj.segmentType = segment_type  # ຮັບປະກັນ
+            obj.segmentType = segment_type  
             mock_data_edits.append(obj)
 
-        # ປະມວນຜົນໃໝ່
+      
         success = _process_reconfirm_data(mock_data_edits, FID_with_prefix, FID_number)
         if not success:
             Upload_File_Individual.objects.filter(FID=FID_number).update(statussubmit='2')
             return JsonResponse({'status': 'error', 'message': 'Reconfirm failed'}, status=500)
 
-        # ສຳເລັດ
+       
         Upload_File_Individual.objects.filter(FID=FID_number).update(
             statussubmit='5', dispuste='0', updateDate=timezone.now(), period=prev_period
         )
@@ -18392,7 +18392,7 @@ class InsertSearchLogView(APIView):
         else:
             return Response({'error': 'EnterpriseID and LCIC_code are required'}, status=status.HTTP_400_BAD_REQUEST)
        
-# views.py
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -18421,14 +18421,14 @@ class IndividualInfoSearchView(APIView):
 
             bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
 
-            # === 1. ດຶງຂໍ້ມູນ ===
+            
             lcic_id = request.data.get('lcic_id', '').strip()
             loan_purpose = request.data.get('CatalogID', '')
 
             if not lcic_id:
                 return Response({'error': 'lcic_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # === 2. ຄົ້ນຫາ ===
+           
             all_individual_info = IndividualBankIbkInfo.objects.filter(
                 lcic_id=lcic_id
             ).order_by('mm_ind_sys_id')
@@ -18436,7 +18436,7 @@ class IndividualInfoSearchView(APIView):
             if not all_individual_info.exists():
                 return Response({'error': 'Individual info not found'}, status=status.HTTP_404_NOT_FOUND)
 
-            # === 3. Deduplication ===
+            
             unique_individuals = []
             seen_mm_ids = set()
             for info in all_individual_info:
@@ -18444,7 +18444,7 @@ class IndividualInfoSearchView(APIView):
                     unique_individuals.append(info)
                     seen_mm_ids.add(info.mm_ind_sys_id)
 
-            # === 4. ດຶງ customerid ===
+           
             mm_ids = [info.mm_ind_sys_id for info in unique_individuals if info.mm_ind_sys_id]
             bank_records = {}
             if mm_ids:
@@ -18453,14 +18453,14 @@ class IndividualInfoSearchView(APIView):
                     for rec in IndividualBankIbk.objects.filter(ind_sys_id__in=mm_ids)
                 }
 
-            # === 5. ກຳນົດຄ່າທຳນຽມ ===
+           
             charge_sys_id = 2 if bank_info.bnk_type == 1 else 5
             try:
                 chargeType = ChargeMatrix.objects.get(chg_sys_id=charge_sys_id)
             except ChargeMatrix.DoesNotExist:
                 return Response({'error': 'Charge type not found'}, status=status.HTTP_404_NOT_FOUND)
 
-            # === 6. ສ້າງ log + charge ===
+           
             now = timezone.now()
             inquiry_month_charge = now.strftime('%d%m%Y')
             sys_usr = f"{UID}-{bank.bnk_code}"
@@ -18472,17 +18472,18 @@ class IndividualInfoSearchView(APIView):
                 customerid = bank_record.customerid if bank_record else ''
                 branch_code = bank_record.branchcode if bank_record else ''
 
-                # ສ້າງ searchLog — ໃຊ້ inquiry_date ເທົ່ານັ້ນ
+                
                 search_log = searchLog.objects.create(
                     enterprise_ID='',
                     LCIC_ID=lcic_id,
+                    LCIC_code=lcic_id,
                     bnk_code=bank_info.bnk_code,
                     bnk_type=bank_info.bnk_type,
                     branch=branch_code,
                     cus_ID=customerid,
-                    cusType='individual',
+                    cusType='A1',
                     credit_type=chargeType.chg_code,
-                    inquiry_month=now.strftime('%Y-%m'),  # ຄຳນວນໃນ view
+                    inquiry_month=now.strftime('%Y-%m'),  
                     com_tel='',
                     com_location='',
                     rec_loan_amount=0.0,
@@ -18492,7 +18493,7 @@ class IndividualInfoSearchView(APIView):
                     sys_usr=sys_usr
                 )
 
-                # ສ້າງ charge
+                
                 charge = request_charge.objects.create(
                     bnk_code=bank_info.bnk_code,
                     bnk_type=bank_info.bnk_type,
@@ -18504,7 +18505,7 @@ class IndividualInfoSearchView(APIView):
                     chg_unit=chargeType.chg_unit,
                     user_sys_id=sys_usr,
                     LCIC_code=lcic_id,
-                    cusType='individual',
+                    cusType='A1',
                     user_session_id='',
                     rec_reference_code='',
                     search_log=search_log
@@ -18513,15 +18514,15 @@ class IndividualInfoSearchView(APIView):
                 charge.save()
 
                 created_logs.append({
-                    'search_log_id': search_log.search_ID,   # ໃຊ້ .search_ID ແທນ .id
+                    'search_log_id': search_log.search_ID,   
                     'charge_id': charge.rec_charge_ID,
                     'customerid': customerid
                 })
 
-            # === 7. Serialize ===
+           
             serializer = IndividualBankIbkInfoSerializer(unique_individuals, many=True)
 
-            # === 8. Response ===
+          
             return Response({
                 'individual_info': serializer.data,
                 'total_found': len(unique_individuals),
@@ -18541,7 +18542,7 @@ class IndividualInfoSearchView(APIView):
                 'error': 'Internal server error',
                 'details': traceback.format_exc()
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
 # from rest_framework.views import APIView
 # from rest_framework.response import Response
 # from rest_framework import status
