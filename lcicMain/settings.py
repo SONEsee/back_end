@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'django_celery_beat',      # ✅ ADD
     'django_celery_results',   # ✅ ADD (optional, for task history)
+    'rest_framework_simplejwt.token_blacklist',
     
 ]
 
@@ -145,7 +146,7 @@ DATABASES = {
        
     },
     'ned_sql': {
-        'ENGINE': 'mssql',
+        'ENGINE': 'sql_server.pyodbc',
         'NAME': 'LCIC_Fingers_old',
         'USER': 'sa',
         'PASSWORD': 'Lcic@12345',
