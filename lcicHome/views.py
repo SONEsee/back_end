@@ -29159,5 +29159,205 @@ class RequestChargeDetailAPIView(APIView):
             print(f"Date filter error: {e}")
         return queryset
 
+# -------------------------- SEARCH INDIVIDUAL BANK IBK --------------------------
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import IndividualBankIbkInfo, B1_Yearly, InvestorInfo, B1_Monthly, C1, request_charge, Main_catalog_cat, B1  # Added B1 if not already imported
+from django.forms.models import model_to_dict
+from .serializers import IndividualBankIbkInfoSerializer, B1_YearlySerializer, InvestorInfoSerializer, B1Serializer, RequestChargeSerializer
+from datetime import date, timedelta
+from django.db.models import Q
 
+# Assuming these collateral models are imported elsewhere in your .models; add if missing
+# from .models import col_real_estates, col_money_mia, col_equipment_eqi, col_project_prj, col_vechicle_veh, col_guarantor_gua, col_goldsilver_gold
 
+class FCR_reportIndividualView(APIView):    
+    def get(self, request):  # Changed to GET
+        lcic_id = request.GET.get('lcic_id', '').strip()  # Changed to request.GET.get()
+        loan_purpose = request.GET.get('CatalogID', '')  # Changed to request.GET.get(); remove if unused
+
+        print("test lcic", lcic_id)
+        print("test print", loan_purpose)
+
+        status_inactive = "INACTIVE"
+        status_active = "ACTIVE"
+
+        # --- Get dynamic years from catalog ---
+        year_record = Main_catalog_cat.objects.filter(ct_type="FRY").first()
+        inactive_years = int(year_record.cat_value) if year_record else 3  # fallback 3 years
+        cutoff_date = date.today() - timedelta(days=inactive_years * 365)
+        
+        # --- Apply loan filters ---
+        loan_info = B1.objects.filter(
+            LCIC_code=lcic_id
+        ).exclude(
+            Q(lon_status="INACTIVE") & Q(lon_exp_date__lt=cutoff_date)
+        ).order_by('lon_status')
+        # -------------------------------------
+        
+        try:
+           
+            ind_info = IndividualBankIbkInfo.objects.filter(lcic_id=lcic_id)
+            print("Individual Info: ", ind_info)
+            loan_info = B1.objects.filter(  # Redundant but kept as-is
+                LCIC_code=lcic_id
+            ).exclude(
+                Q(lon_status="INACTIVE") & Q(lon_exp_date__lt=cutoff_date)
+            ).order_by('lon_status')
+            # inves_info = InvestorInfo.objects.filter(lcic_id=lcic_id)  # Uncomment/adjust if needed
+            search_history = request_charge.objects.filter(LCIC_code=lcic_id)
+            
+            
+            
+
+            # if not ind_info.exists():
+            #     return Response({"detail": "Individual information not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            loan_info_list_active = []   
+
+            
+            col_type_to_model = {
+                'C2.1': col_real_estates,
+                'C2.2': col_money_mia,
+                'C2.3': col_equipment_eqi,
+                'C2.4': col_project_prj,
+                'C2.5': col_vechicle_veh,
+                'C2.6': col_guarantor_gua,
+                'C2.7': col_goldsilver_gold,
+            }
+            
+            for loan in loan_info:
+                    lon_class_history = B1_Monthly.objects.filter(
+                        LCIC_code=lcic_id,
+                        bnk_code=loan.bnk_code,
+                        customer_id=loan.customer_id,
+                        branch_id=loan.branch_id,
+                        loan_id=loan.loan_id,
+                    ).order_by('-period')[:12]
+                    
+                  
+                    
+                    lon_class_history_list = list(lon_class_history.values())
+
+                    
+                    colleteral_list = C1.objects.filter(
+                        LCIC_code=lcic_id,
+                        bnk_code=loan.bnk_code,
+                        branch_id_code=loan.branch_id,
+                        bank_customer_ID=loan.customer_id,
+                        loan_id=loan.loan_id,
+                    )
+                    print("Colleteral ---------------> : ", colleteral_list)
+                    
+                    
+                    collateral_history_list = []
+                    for collateral in colleteral_list:
+                        col_id = collateral.col_id
+                        col_type = collateral.col_type
+
+                       
+                        
+
+                        # Get the related model based on col_type
+                        related_model = col_type_to_model.get(col_type)
+                        print("related_model: ======>", related_model)
+
+                        if related_model:
+                            # Query the related table using col_id
+                            related_record = related_model.objects.filter(col_id=col_id).first()
+                                
+                            print("get Related_Records : ====> ", related_record)
+
+                            if related_record:
+                                related_record_dict = model_to_dict(related_record)
+                                collateral_dict = model_to_dict(collateral)
+
+                               
+                                collateral_history_list.append({
+                                    "col_id": col_id,
+                                    "col_type": col_type,
+                                    "collateral_info": collateral_dict, #C1
+                                    "related_record": related_record_dict, #C2.n
+                                })
+                        else:
+                            print(f"Unrecognized col_type: {col_type} for collateral ID {col_id}")
+                    
+                    lon_purpose_detail = (
+                        Main_catalog_cat.objects.filter(ct_type="LPR", cat_value=loan.lon_purpose_code)
+                        .first()
+                    )
+
+                    lon_purpose_detail = lon_purpose_detail.cat_lao_name if lon_purpose_detail else None
+                        
+                    loan_data_active = {
+                        "id": loan.loan_id,
+                        "lon_update_date": loan.lon_update_date,
+                        "bank": loan.bnk_code,
+                        "lon_insert_date": loan.lon_insert_date,
+                        "lon_credit_line": loan.lon_credit_line,
+                        "lon_outstanding_balance": loan.lon_outstanding_balance,
+                        "lon_currency_code": loan.lon_currency_code,
+                        "lon_no_days_slow": loan.lon_no_days_slow,
+                        "lon_class": loan.lon_class,
+                        "period": loan.period,
+                        "lon_open_date": loan.lon_open_date,
+                        "lon_exp_date": loan.lon_exp_date,
+                        "lon_ext_date": loan.lon_ext_date,
+                        "lon_int_rate": loan.lon_int_rate,
+                        # "lon_purpose_code": loan.lon_purpose_code,
+                        "lon_purpose_code": lon_purpose_detail,
+                        "lon_account_no": loan.lon_account_no,
+                        "lon_status": loan.lon_status,
+                        "lon_type": loan.lon_type,
+                        "lon_term": loan.lon_term,
+                        "is_disputed": loan.is_disputed,
+                        "lon_applied_date": loan.lon_applied_date,
+                        "lon_class_history": lon_class_history_list,
+                        "collateral_history": collateral_history_list,
+                    }
+
+                    loan_info_list_active.append(loan_data_active)
+                    print("Loan Data For Active: -------> ", loan_info_list_active)
+                    
+            # Exclude bnk_code=01 directly in query
+            search_history = request_charge.objects.filter(
+                LCIC_code=lcic_id
+            ).exclude(bnk_code="01")
+
+            lon_search_history_list = []
+            for lon_search in search_history:
+                print(lon_search.lon_purpose)
+                lon_purpose_detail = Main_catalog_cat.objects.filter(cat_value=lon_search.lon_purpose)
+                
+                for lon_pur_code in lon_purpose_detail:
+                    print("Loan_purpose:-->", lon_pur_code.cat_lao_name)
+
+                search_data = {
+                    "id": lon_search.insert_date,
+                    "bnk_code": lon_search.bnk_code,
+                    "lon_purpose": lon_pur_code.cat_lao_name if lon_purpose_detail.exists() else None
+                }
+                lon_search_history_list.append(search_data)
+
+            ind_info_serializer = IndividualBankIbkInfoSerializer(ind_info, many=True)
+            loan_info_serializer = B1Serializer(loan_info, many=True)
+            # inves_info_serializer = InvestorInfoSerializer(inves_info, many=True)
+            request_charge_serializer = RequestChargeSerializer(search_history, many=True)
+            print("---> FCR Report View: ", request_charge_serializer)
+            
+            
+            response_data = {
+                'enterprise_info': ind_info_serializer.data,
+                'loan_info': loan_info_serializer.data,
+                # 'inves_info': inves_info_serializer.data,
+                'active_loans': loan_info_list_active,
+                # 'search_history': request_charge_serializer.data
+                'search_history':lon_search_history_list
+            }
+
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"Error occurred: {str(e)}")
+            return Response({"detail": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
