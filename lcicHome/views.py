@@ -15625,7 +15625,6 @@ class UserLoginView(APIView):
         username = request.data.get('username')
         password = request.data.get('password')
 
-        # ✅ เก็บ IP และ User-Agent
         ip_address = request.META.get('REMOTE_ADDR')
         user_agent = request.META.get('HTTP_USER_AGENT', '')
 
@@ -15634,43 +15633,45 @@ class UserLoginView(APIView):
             
             # ✅ ตรวจสอบรหัสผ่าน
             if not user.check_password(password):
-                # ✅ บันทึก log เมื่อรหัสผ่านผิด
+                # ❌ Password ผิด - บันทึก log พร้อม logout_time
                 UserAccessLog.objects.create(
                     user=user,
                     bnk_code=user.MID.bnk_code if user.MID else None,
                     login_time=now(),
+                    logout_time=now(),  # ✅ เพิ่ม logout_time ตอน fail
                     ip_address=ip_address,
                     user_agent=user_agent,
                     remarks="Login failed - Invalid password"
                 )
                 return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
+            # ✅ Login สำเร็จ
+            current_time = now()
+            
             # ✅ Update last login
-            user.last_login = now()
+            user.last_login = current_time
             user.save(update_fields=['last_login'])
 
             # ✅ Create JWT tokens
             refresh = RefreshToken.for_user(user)
             access_token = str(refresh.access_token)
-
-            # ✅ ดึง bnk_code จาก MID
             bnk_code = user.MID.bnk_code if user.MID else None
 
-            # ✅ Save access log สำหรับ login สำเร็จ
+            # ✅ บันทึก log เมื่อ login สำเร็จ
             UserAccessLog.objects.create(
                 user=user,
                 bnk_code=bnk_code,
                 access_token=access_token,
                 refresh_token=str(refresh),
-                login_time=now(),
+                login_time=current_time,
                 ip_address=ip_address,
                 user_agent=user_agent,
                 remarks="Login success"
             )
 
-            # ✅ Profile path
             profile_path = f"/{user.profile_image.name}" if user.profile_image else None
 
+            # ✅ Return response ทันที
             return Response({
                 'detail': 'Successfully logged in.',
                 'access': access_token,
@@ -15699,11 +15700,12 @@ class UserLoginView(APIView):
             }, status=status.HTTP_200_OK)
 
         except Login.DoesNotExist:
-            # ✅ บันทึก log เมื่อ username ไม่มีในระบบ
+            # ❌ Username ไม่มีในระบบ - บันทึก log พร้อม logout_time
             UserAccessLog.objects.create(
-                user=None,  # ไม่มี user
+                user=None,
                 bnk_code=None,
                 login_time=now(),
+                logout_time=now(),  # ✅ เพิ่ม logout_time ตอน fail
                 ip_address=ip_address,
                 user_agent=user_agent,
                 remarks=f"Login failed - Username not found: {username}"
@@ -15712,106 +15714,57 @@ class UserLoginView(APIView):
 
 
 class UserLogoutView(APIView):
-    """
-    ✅ Logout view - remarks เก็บแค่ base message
-    """
     permission_classes = [AllowAny]
-
+    
     def post(self, request):
         try:
-            # ✅ รับค่าจาก request
-            refresh_token = request.data.get("refresh_token")
-            logout_type = request.data.get("logout_type", "manual")
-            custom_remark = request.data.get("remark", None)
-
-            if not refresh_token:
-                return Response(
-                    {"error": "Missing refresh token"}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # ✅ หา user จาก refresh token
+            # ✅ พยายาม authenticate แต่ไม่บังคับ
+            jwt_auth = JWTAuthentication()
+            user = None
+            
             try:
-                token = RefreshToken(refresh_token)
-                user_id = token.payload.get('user_id')
-                user = Login.objects.get(pk=user_id)
+                auth_result = jwt_auth.authenticate(request)
+                if auth_result is not None:
+                    user, token = auth_result
             except Exception as e:
-                return Response(
-                    {"error": f"Invalid token: {str(e)}"}, 
-                    status=status.HTTP_401_UNAUTHORIZED
-                )
-
-            # ✅ เก็บข้อมูล IP และ User-Agent
-            ip_address = request.META.get('REMOTE_ADDR', 'Unknown')
-            user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown')
+                print(f"Token authentication failed: {e}")
             
-            # ✅ สร้าง remark แบบสั้น
-            if custom_remark:
-                base_remark = custom_remark
-            else:
-                remark_map = {
-                    "manual": "User logged out manually",
-                    "auto": "Auto logout - Inactivity timeout (30 minutes)",
-                    "beforeunload": "Browser/tab closed by user"
-                }
-                base_remark = remark_map.get(logout_type, "User logged out")
+            ip_address = request.META.get('REMOTE_ADDR')
+            user_agent = request.META.get('HTTP_USER_AGENT', '')
             
-            # ✅ Remarks เก็บแค่ base message
-            detailed_remark = f"{base_remark}"
-
-            # ✅ หา log ล่าสุดที่ยังไม่มี logout_time และ remarks = "Login success"
-            last_log = UserAccessLog.objects.filter(
-                user=user, 
-                logout_time__isnull=True,
-                remarks="Login success"  # ✅ เฉพาะ login success เท่านั้น
-            ).order_by('-login_time').first()
+            # ✅ รับ remarks จาก frontend
+            custom_remarks = request.data.get('remarks', 'Logout success')
             
-            if last_log:
-                # ✅ อัปเดต logout_time และ remarks เท่านั้น (ไม่แก้ IP/User-Agent)
-                last_log.logout_time = now()
-                last_log.remarks = detailed_remark
-                last_log.save(update_fields=['logout_time', 'remarks'])
-                logout_time_str = last_log.logout_time.strftime("%Y-%m-%d %H:%M:%S")
-                log_id = last_log.id
-            else:
-                # ✅ ถ้าไม่เจอ log ที่ login success ให้สร้างใหม่
-                new_log = UserAccessLog.objects.create(
+            # ✅ ถ้ามี user ให้บันทึก logout log
+            if user:
+                access_log = UserAccessLog.objects.filter(
                     user=user,
-                    bnk_code=user.MID.bnk_code if user.MID else None,
-                    refresh_token=refresh_token,
-                    login_time=now(),
-                    logout_time=now(),
-                    ip_address=ip_address,
-                    user_agent=user_agent,
-                    remarks=f"[No active session found] {detailed_remark}"
-                )
-                logout_time_str = new_log.logout_time.strftime("%Y-%m-%d %H:%M:%S")
-                log_id = new_log.id
-
-            # ✅ Blacklist token (เฉพาะ manual logout)
-            token_blacklisted = False
-            if logout_type == "manual":
+                    logout_time__isnull=True
+                ).order_by('-login_time').first()
+                
+                if access_log:
+                    access_log.logout_time = now()
+                    access_log.remarks = custom_remarks  # ✅ ใช้ remarks จาก frontend
+                    access_log.save()
+            
+            # ✅ Blacklist refresh token
+            refresh_token = request.data.get('refresh_token')
+            if refresh_token:
                 try:
+                    token = RefreshToken(refresh_token)
                     token.blacklist()
-                    token_blacklisted = True
                 except Exception as e:
-                    print(f"Token blacklist error: {e}")
-
+                    print(f"Token blacklist failed: {e}")
+            
             return Response({
-                "detail": "Logout successful",
-                "logout_time": logout_time_str,
-                "logout_type": logout_type,
-                "remark": detailed_remark,
-                "log_id": log_id,
-                "token_blacklisted": token_blacklisted
+                'detail': 'Successfully logged out.'
             }, status=status.HTTP_200_OK)
-
+            
         except Exception as e:
-            print(f"Logout error: {str(e)}")
-            return Response(
-                {"error": f"Logout failed: {str(e)}"}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            print(f"Logout error: {e}")
+            return Response({
+                'detail': 'Successfully logged out.'
+            }, status=status.HTTP_200_OK)
 
 # from django.db.models import IntegerField
 # from django.db.models.functions import Cast
