@@ -2365,6 +2365,23 @@ class CompanyInfoMapping(models.Model):
     LCIC_code = models.CharField(max_length=255, null=True, blank=True)
     enterprise_code = models.CharField(max_length=255, null=True, blank=True)
     status = models.CharField(max_length=255, null=True, blank=True)
+    
+    
+class UserAccessLog(models.Model):
+    id = models.AutoField(primary_key=True)
+    user = models.ForeignKey(Login, on_delete=models.CASCADE, related_name='access_logs', null=True, blank=True)
+    bnk_code = models.CharField(max_length=10, null=True, blank=True)
+    access_token = models.TextField(null=True, blank=True)
+    refresh_token = models.TextField(null=True, blank=True)
+    login_time = models.DateTimeField(default=timezone.now)
+    logout_time = models.DateTimeField(null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=500, null=True, blank=True)
+    remarks = models.TextField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.user.username} logged in at {self.login_time}"
+
 
 
 
