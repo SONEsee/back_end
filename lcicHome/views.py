@@ -12037,10 +12037,6 @@ def confirm_upload_individual(request):
 
 
 
-
-
-
-
 from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -12050,11 +12046,6 @@ from dateutil.relativedelta import relativedelta
 from datetime import datetime
 import re
 import traceback
-
-
-
-
-
 
 @csrf_exempt
 @require_POST
@@ -15548,76 +15539,13 @@ from datetime import timedelta
 #             return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
 
-# from datetime import datetime
-# from rest_framework.views import APIView
-# from rest_framework.response import Response
-# from rest_framework import status
-# from rest_framework.permissions import AllowAny
-# from rest_framework_simplejwt.tokens import RefreshToken
-# from .models import Login, UserAccessLog
-
-# class UserLoginView(APIView):
-#     permission_classes = [AllowAny]
-
-#     def post(self, request):
-#         username = request.data.get('username')
-#         password = request.data.get('password')
-
-#         try:
-#             user = Login.objects.get(username=username)
-#             if not user.check_password(password):
-#                 return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-
-#             # Update last_login
-#             user.last_login = datetime.now()
-#             user.save(update_fields=['last_login'])
-
-#             # Create tokens
-#             refresh = RefreshToken.for_user(user)
-
-#             # Return only the path under MEDIA_ROOT, e.g. "/profile_images/foo.png"
-#             profile_path = f"/{user.profile_image.name}" if user.profile_image else None
-
-#             return Response({
-#                 'detail': 'Successfully logged in.',
-#                 'access': str(refresh.access_token),
-#                 'refresh': str(refresh),
-#                 'user': {
-#                     'UID': user.UID,
-#                     'MID': {
-#                         'id': user.MID.bnk_code if user.MID else None,
-#                         'code': user.MID.code if user.MID else None,
-#                     },
-#                     'GID': {
-#                         'GID': user.GID.GID if user.GID else None,
-#                         'nameL': user.GID.nameL if user.GID else None,
-#                     },
-#                     'username': user.username,
-#                     'nameL': user.nameL,
-#                     'nameE': user.nameE,
-#                     'surnameL': user.surnameL,
-#                     'surnameE': user.surnameE,
-#                     'profile_image': profile_path,
-#                     'is_active': user.is_active,
-#                     'last_login': user.last_login,
-#                     'is_staff': user.is_staff,
-#                     'is_superuser': user.is_superuser,
-#                 }
-#             }, status=status.HTTP_200_OK)
-
-#         except Login.DoesNotExist:
-#             return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
-
 from datetime import datetime
-from django.utils.timezone import now
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import Login, UserAccessLog
-
-
+from .models import Login
 class UserLoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -15625,55 +15553,24 @@ class UserLoginView(APIView):
         username = request.data.get('username')
         password = request.data.get('password')
 
-        # ✅ เก็บ IP และ User-Agent
-        ip_address = request.META.get('REMOTE_ADDR')
-        user_agent = request.META.get('HTTP_USER_AGENT', '')
-
         try:
             user = Login.objects.get(username=username)
-            
-            # ✅ ตรวจสอบรหัสผ่าน
             if not user.check_password(password):
-                # ✅ บันทึก log เมื่อรหัสผ่านผิด
-                UserAccessLog.objects.create(
-                    user=user,
-                    bnk_code=user.MID.bnk_code if user.MID else None,
-                    login_time=now(),
-                    ip_address=ip_address,
-                    user_agent=user_agent,
-                    remarks="Login failed - Invalid password"
-                )
                 return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
-            # ✅ Update last login
-            user.last_login = now()
+            # Update last_login
+            user.last_login = datetime.now()
             user.save(update_fields=['last_login'])
 
-            # ✅ Create JWT tokens
+            # Create tokens
             refresh = RefreshToken.for_user(user)
-            access_token = str(refresh.access_token)
 
-            # ✅ ดึง bnk_code จาก MID
-            bnk_code = user.MID.bnk_code if user.MID else None
-
-            # ✅ Save access log สำหรับ login สำเร็จ
-            UserAccessLog.objects.create(
-                user=user,
-                bnk_code=bnk_code,
-                access_token=access_token,
-                refresh_token=str(refresh),
-                login_time=now(),
-                ip_address=ip_address,
-                user_agent=user_agent,
-                remarks="Login success"
-            )
-
-            # ✅ Profile path
+            # Return only the path under MEDIA_ROOT, e.g. "/profile_images/foo.png"
             profile_path = f"/{user.profile_image.name}" if user.profile_image else None
 
             return Response({
                 'detail': 'Successfully logged in.',
-                'access': access_token,
+                'access': str(refresh.access_token),
                 'refresh': str(refresh),
                 'user': {
                     'UID': user.UID,
@@ -15699,119 +15596,9 @@ class UserLoginView(APIView):
             }, status=status.HTTP_200_OK)
 
         except Login.DoesNotExist:
-            # ✅ บันทึก log เมื่อ username ไม่มีในระบบ
-            UserAccessLog.objects.create(
-                user=None,  # ไม่มี user
-                bnk_code=None,
-                login_time=now(),
-                ip_address=ip_address,
-                user_agent=user_agent,
-                remarks=f"Login failed - Username not found: {username}"
-            )
             return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
 
-class UserLogoutView(APIView):
-    """
-    ✅ Logout view - remarks เก็บแค่ base message
-    """
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        try:
-            # ✅ รับค่าจาก request
-            refresh_token = request.data.get("refresh_token")
-            logout_type = request.data.get("logout_type", "manual")
-            custom_remark = request.data.get("remark", None)
-
-            if not refresh_token:
-                return Response(
-                    {"error": "Missing refresh token"}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # ✅ หา user จาก refresh token
-            try:
-                token = RefreshToken(refresh_token)
-                user_id = token.payload.get('user_id')
-                user = Login.objects.get(pk=user_id)
-            except Exception as e:
-                return Response(
-                    {"error": f"Invalid token: {str(e)}"}, 
-                    status=status.HTTP_401_UNAUTHORIZED
-                )
-
-            # ✅ เก็บข้อมูล IP และ User-Agent
-            ip_address = request.META.get('REMOTE_ADDR', 'Unknown')
-            user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown')
-            
-            # ✅ สร้าง remark แบบสั้น
-            if custom_remark:
-                base_remark = custom_remark
-            else:
-                remark_map = {
-                    "manual": "User logged out manually",
-                    "auto": "Auto logout - Inactivity timeout (30 minutes)",
-                    "beforeunload": "Browser/tab closed by user"
-                }
-                base_remark = remark_map.get(logout_type, "User logged out")
-            
-            # ✅ Remarks เก็บแค่ base message
-            detailed_remark = f"{base_remark}"
-
-            # ✅ หา log ล่าสุดที่ยังไม่มี logout_time และ remarks = "Login success"
-            last_log = UserAccessLog.objects.filter(
-                user=user, 
-                logout_time__isnull=True,
-                remarks="Login success"  # ✅ เฉพาะ login success เท่านั้น
-            ).order_by('-login_time').first()
-            
-            if last_log:
-                # ✅ อัปเดต logout_time และ remarks เท่านั้น (ไม่แก้ IP/User-Agent)
-                last_log.logout_time = now()
-                last_log.remarks = detailed_remark
-                last_log.save(update_fields=['logout_time', 'remarks'])
-                logout_time_str = last_log.logout_time.strftime("%Y-%m-%d %H:%M:%S")
-                log_id = last_log.id
-            else:
-                # ✅ ถ้าไม่เจอ log ที่ login success ให้สร้างใหม่
-                new_log = UserAccessLog.objects.create(
-                    user=user,
-                    bnk_code=user.MID.bnk_code if user.MID else None,
-                    refresh_token=refresh_token,
-                    login_time=now(),
-                    logout_time=now(),
-                    ip_address=ip_address,
-                    user_agent=user_agent,
-                    remarks=f"[No active session found] {detailed_remark}"
-                )
-                logout_time_str = new_log.logout_time.strftime("%Y-%m-%d %H:%M:%S")
-                log_id = new_log.id
-
-            # ✅ Blacklist token (เฉพาะ manual logout)
-            token_blacklisted = False
-            if logout_type == "manual":
-                try:
-                    token.blacklist()
-                    token_blacklisted = True
-                except Exception as e:
-                    print(f"Token blacklist error: {e}")
-
-            return Response({
-                "detail": "Logout successful",
-                "logout_time": logout_time_str,
-                "logout_type": logout_type,
-                "remark": detailed_remark,
-                "log_id": log_id,
-                "token_blacklisted": token_blacklisted
-            }, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            print(f"Logout error: {str(e)}")
-            return Response(
-                {"error": f"Logout failed: {str(e)}"}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
 
 # from django.db.models import IntegerField
 # from django.db.models.functions import Cast
@@ -27563,7 +27350,7 @@ class ChargeReportDetailView(APIView):
             'success': 'ສຳເລັດ',
             'paid': 'ຈ່າຍແລ້ວ',
             'unpaid': 'ຍັງບໍ່ໄດ້ຈ່າຍ'
-        }
+        } 
         if not status:
             return 'ບໍ່ຮູ້ຈັກ'
         return status_map.get(status.lower(), status)
@@ -29130,10 +28917,9 @@ class ChargeMatrixDetailAPIView(APIView):
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Q, Count
+from django.db.models import Q
 from .models import request_charge
 from .serializers import RequestChargeSerializer
-from datetime import datetime
 
 
 class RequestChargeSummaryAPIView(APIView):
@@ -29149,29 +28935,25 @@ class RequestChargeSummaryAPIView(APIView):
         bnk_code = request.GET.get('bnk_code', '').strip()
         date_filter_type = request.GET.get('date_filter_type', 'day')
         date_filter_value = request.GET.get('date_filter_value', '')
-        
-        # ✅ รับค่า date range (ใหม่)
-        start_date = request.GET.get('start_date', '').strip()
-        end_date = request.GET.get('end_date', '').strip()
 
         # ✅ กลุ่ม chg_code
         group1 = ['FCRFI', 'NLRFI', 'NLR', 'FCR']
         group2 = ['SCR', 'SCRFI']
         group3 = ['UTLT', 'UTLTFI']
 
-        # ✅ base queryset
+        # ✅ base queryset (เริ่มจากทั้งหมด)
         queryset = request_charge.objects.all()
 
         # ✅ Logic แยกตาม bnk_code
         if bnk_code == "01":
-            pass  # Admin: ดูทั้งหมด
+            # ถ้า bnk_code == "01" → ดูทั้งหมด (ไม่ filter)
+            pass  # ไม่ต้องทำอะไร
         elif bnk_code:
+            # ถ้า bnk_code != "01" และมีค่า → filter เฉพาะธนาคารนั้น
             queryset = queryset.filter(bnk_code=bnk_code)
 
         # ✅ Apply date filter
-        if date_filter_type == 'range' and start_date and end_date:
-            queryset = self._apply_date_range_filter(queryset, start_date, end_date)
-        elif date_filter_value:
+        if date_filter_value:
             queryset = self._apply_date_filter(queryset, date_filter_type, date_filter_value)
 
         # ✅ นับจำนวนในแต่ละกลุ่ม
@@ -29181,11 +28963,9 @@ class RequestChargeSummaryAPIView(APIView):
 
         data = {
             "bnk_code": bnk_code,
-            "is_admin": bnk_code == "01",
+            "is_admin": bnk_code == "01",  # ✅ บอกว่าเป็น admin หรือไม่
             "date_filter_type": date_filter_type,
             "date_filter_value": date_filter_value,
-            "start_date": start_date,
-            "end_date": end_date,
             "group1": count_group1,
             "group2": count_group2,
             "group3": count_group3,
@@ -29215,20 +28995,11 @@ class RequestChargeSummaryAPIView(APIView):
             print(f"Date filter error: {e}")
         return queryset
 
-    def _apply_date_range_filter(self, queryset, start_date, end_date):
-        """Apply date range filter (start_date to end_date)"""
-        try:
-            start = datetime.strptime(start_date, '%Y-%m-%d').date()
-            end = datetime.strptime(end_date, '%Y-%m-%d').date()
-            return queryset.filter(rec_insert_date__date__range=[start, end])
-        except Exception as e:
-            print(f"Date range filter error: {e}")
-        return queryset
-
 
 class RequestChargeReportAllAPIView(APIView):
     """
     API สำหรับแสดงจำนวน request ของแต่ละธนาคาร (สำหรับ admin เท่านั้น)
+    แสดงตาราง: NO, bnk_code, ชื่อธนาคาร, จำนวน
     """
 
     def get(self, request, *args, **kwargs):
@@ -29237,12 +29008,8 @@ class RequestChargeReportAllAPIView(APIView):
         group_type = request.GET.get('group', 'group1')
         date_filter_type = request.GET.get('date_filter_type', 'day')
         date_filter_value = request.GET.get('date_filter_value', '')
-        
-        # ✅ รับค่า date range
-        start_date = request.GET.get('start_date', '').strip()
-        end_date = request.GET.get('end_date', '').strip()
 
-        # ✅ ตรวจสอบว่าเป็น admin
+        # ✅ ตรวจสอบว่าเป็น admin (bnk_code = "01") หรือไม่
         if bnk_code != "01":
             return Response({
                 "error": "Access denied. Only admin (bnk_code=01) can access this endpoint."
@@ -29260,16 +29027,15 @@ class RequestChargeReportAllAPIView(APIView):
         queryset = request_charge.objects.filter(chg_code__in=chg_codes)
 
         # ✅ Apply date filter
-        if date_filter_type == 'range' and start_date and end_date:
-            queryset = self._apply_date_range_filter(queryset, start_date, end_date)
-        elif date_filter_value:
+        if date_filter_value:
             queryset = self._apply_date_filter(queryset, date_filter_type, date_filter_value)
 
-        # ✅ Group by bnk_code
+        # ✅ Group by bnk_code และนับจำนวน
         bank_summary = queryset.values('bnk_code').annotate(
             total=Count('rec_charge_ID')
         ).order_by('bnk_code')
 
+        # ✅ แปลงเป็น list
         results = list(bank_summary)
 
         data = {
@@ -29279,8 +29045,6 @@ class RequestChargeReportAllAPIView(APIView):
             "chg_codes": chg_codes,
             "date_filter_type": date_filter_type,
             "date_filter_value": date_filter_value,
-            "start_date": start_date,
-            "end_date": end_date,
             "total_banks": len(results),
             "results": results
         }
@@ -29309,20 +29073,18 @@ class RequestChargeReportAllAPIView(APIView):
             print(f"Date filter error: {e}")
         return queryset
 
-    def _apply_date_range_filter(self, queryset, start_date, end_date):
-        """Apply date range filter"""
-        try:
-            start = datetime.strptime(start_date, '%Y-%m-%d').date()
-            end = datetime.strptime(end_date, '%Y-%m-%d').date()
-            return queryset.filter(rec_insert_date__date__range=[start, end])
-        except Exception as e:
-            print(f"Date range filter error: {e}")
-        return queryset
-
 
 class RequestChargeDetailAPIView(APIView):
     """
     API สำหรับดึงรายละเอียดของแต่ละกลุ่ม พร้อม Date Filter
+    
+    Logic:
+    - ถ้า bnk_code == "01" (Admin):
+      → ต้องมี detail_bnk_code (มาจากตาราง report_all)
+      → ดูรายละเอียดของธนาคารที่เลือก
+    - ถ้า bnk_code != "01" (User ธรรมดา):
+      → ดูเฉพาะธนาคารของตัวเอง
+      → ไม่สนใจ detail_bnk_code
     """
 
     def get(self, request, *args, **kwargs):
@@ -29332,10 +29094,6 @@ class RequestChargeDetailAPIView(APIView):
         group_type = request.GET.get('group', 'group1')
         date_filter_type = request.GET.get('date_filter_type', 'day')
         date_filter_value = request.GET.get('date_filter_value', '')
-        
-        # ✅ รับค่า date range
-        start_date = request.GET.get('start_date', '').strip()
-        end_date = request.GET.get('end_date', '').strip()
 
         # ✅ mapping group
         group_mapping = {
@@ -29350,40 +29108,40 @@ class RequestChargeDetailAPIView(APIView):
 
         # ✅ Logic แยกตาม bnk_code
         if bnk_code == "01":
+            # Admin: ต้องใช้ detail_bnk_code (มาจาก report_all)
             if detail_bnk_code:
                 queryset = queryset.filter(bnk_code=detail_bnk_code)
                 actual_bnk_code = detail_bnk_code
             else:
+                # ถ้าไม่มี detail_bnk_code = error (admin ต้องเลือกธนาคารจากตาราง)
                 return Response({
-                    "error": "Admin must select a bank. Missing detail_bnk_code."
+                    "error": "Admin must select a bank from report_all table. Missing detail_bnk_code."
                 }, status=400)
         else:
+            # User ธรรมดา: ดูเฉพาะของตัวเอง (ไม่สนใจ detail_bnk_code)
             queryset = queryset.filter(bnk_code=bnk_code)
             actual_bnk_code = bnk_code
 
-        # ✅ Apply date filter
-        if date_filter_type == 'range' and start_date and end_date:
-            queryset = self._apply_date_range_filter(queryset, start_date, end_date)
-        elif date_filter_value:
+        # ✅ date filter
+        if date_filter_value:
             queryset = self._apply_date_filter(queryset, date_filter_type, date_filter_value)
 
-        # ✅ เรียงข้อมูล
+        # ✅ เรียงข้อมูลใหม่สุดก่อน
         queryset = queryset.order_by('-rec_insert_date')
 
         # ✅ serialize
+        from .serializers import RequestChargeSerializer
         serializer = RequestChargeSerializer(queryset, many=True)
 
         data = {
-            "bnk_code": bnk_code,
-            "detail_bnk_code": detail_bnk_code,
-            "actual_bnk_code": actual_bnk_code,
+            "bnk_code": bnk_code,  # bnk_code ของ user ที่ login
+            "detail_bnk_code": detail_bnk_code,  # ธนาคารที่เลือกจากตาราง (สำหรับ admin)
+            "actual_bnk_code": actual_bnk_code,  # ธนาคารที่แสดงผลจริง
             "is_admin": bnk_code == "01",
             "group": group_type,
             "chg_codes": chg_codes,
             "date_filter_type": date_filter_type,
             "date_filter_value": date_filter_value,
-            "start_date": start_date,
-            "end_date": end_date,
             "total_count": queryset.count(),
             "results": serializer.data
         }
@@ -29412,31 +29170,6 @@ class RequestChargeDetailAPIView(APIView):
             print(f"Date filter error: {e}")
         return queryset
 
-    def _apply_date_range_filter(self, queryset, start_date, end_date):
-        """Apply date range filter"""
-        try:
-            start = datetime.strptime(start_date, '%Y-%m-%d').date()
-            end = datetime.strptime(end_date, '%Y-%m-%d').date()
-            return queryset.filter(rec_insert_date__date__range=[start, end])
-        except Exception as e:
-            print(f"Date range filter error: {e}")
-        return queryset
-
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from .models import UserAccessLog
-from .serializers import UserAccessLogSerializer
-
-
-class UserAccessLogListView(APIView):
-    permission_classes = []
-
-    def get(self, request):
-        logs = UserAccessLog.objects.select_related('user').order_by('-login_time')
-        serializer = UserAccessLogSerializer(logs, many=True)
-        return Response(serializer.data)
-    
-    
 # -------------------------- SEARCH INDIVIDUAL BANK IBK --------------------------
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -29449,7 +29182,7 @@ from django.db.models import Q
 
 # Assuming these collateral models are imported elsewhere in your .models; add if missing
 # from .models import col_real_estates, col_money_mia, col_equipment_eqi, col_project_prj, col_vechicle_veh, col_guarantor_gua, col_goldsilver_gold
-    
+
 class FCR_reportIndividualView(APIView):    
     def get(self, request):  # Changed to GET
         lcic_id = request.GET.get('lcic_id', '').strip()  # Changed to request.GET.get()
