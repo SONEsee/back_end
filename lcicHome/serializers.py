@@ -1727,3 +1727,27 @@ class MemberInfoSerializers(serializers.ModelSerializer):
             representation['provInfo'] = ProvInfoSerializers(instance.provInfo).data
         
         return representation
+    
+from rest_framework import serializers
+from .models import UserAccessLog, Login
+
+
+class LoginSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = Login
+        fields = [
+            'UID', 'branch_id', 'bnk_code', 'username',
+            'nameL', 'nameE', 'surnameL', 'surnameE', 'profile_image'
+        ]
+
+
+class UserAccessLogSerializer(serializers.ModelSerializer):
+    user = LoginSerializers(read_only=True)
+
+    class Meta:
+        model = UserAccessLog
+        fields = [
+            'id', 'user', 'bnk_code', 'login_time', 'logout_time',
+            'ip_address', 'user_agent', 'remarks'
+        ]
+

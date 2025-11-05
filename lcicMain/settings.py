@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'django_celery_beat',      # ✅ ADD
     'django_celery_results',   # ✅ ADD (optional, for task history)
+    'rest_framework_simplejwt.token_blacklist',
     
 ]
 

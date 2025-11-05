@@ -15169,13 +15169,76 @@ from datetime import timedelta
 #             return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
 
+# from datetime import datetime
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from rest_framework import status
+# from rest_framework.permissions import AllowAny
+# from rest_framework_simplejwt.tokens import RefreshToken
+# from .models import Login, UserAccessLog
+
+# class UserLoginView(APIView):
+#     permission_classes = [AllowAny]
+
+#     def post(self, request):
+#         username = request.data.get('username')
+#         password = request.data.get('password')
+
+#         try:
+#             user = Login.objects.get(username=username)
+#             if not user.check_password(password):
+#                 return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
+#             # Update last_login
+#             user.last_login = datetime.now()
+#             user.save(update_fields=['last_login'])
+
+#             # Create tokens
+#             refresh = RefreshToken.for_user(user)
+
+#             # Return only the path under MEDIA_ROOT, e.g. "/profile_images/foo.png"
+#             profile_path = f"/{user.profile_image.name}" if user.profile_image else None
+
+#             return Response({
+#                 'detail': 'Successfully logged in.',
+#                 'access': str(refresh.access_token),
+#                 'refresh': str(refresh),
+#                 'user': {
+#                     'UID': user.UID,
+#                     'MID': {
+#                         'id': user.MID.bnk_code if user.MID else None,
+#                         'code': user.MID.code if user.MID else None,
+#                     },
+#                     'GID': {
+#                         'GID': user.GID.GID if user.GID else None,
+#                         'nameL': user.GID.nameL if user.GID else None,
+#                     },
+#                     'username': user.username,
+#                     'nameL': user.nameL,
+#                     'nameE': user.nameE,
+#                     'surnameL': user.surnameL,
+#                     'surnameE': user.surnameE,
+#                     'profile_image': profile_path,
+#                     'is_active': user.is_active,
+#                     'last_login': user.last_login,
+#                     'is_staff': user.is_staff,
+#                     'is_superuser': user.is_superuser,
+#                 }
+#             }, status=status.HTTP_200_OK)
+
+#         except Login.DoesNotExist:
+#             return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
 from datetime import datetime
+from django.utils.timezone import now
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import Login
+from .models import Login, UserAccessLog
+
+
 class UserLoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -15183,24 +15246,55 @@ class UserLoginView(APIView):
         username = request.data.get('username')
         password = request.data.get('password')
 
+        # ✅ เก็บ IP และ User-Agent
+        ip_address = request.META.get('REMOTE_ADDR')
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+
         try:
             user = Login.objects.get(username=username)
+            
+            # ✅ ตรวจสอบรหัสผ่าน
             if not user.check_password(password):
+                # ✅ บันทึก log เมื่อรหัสผ่านผิด
+                UserAccessLog.objects.create(
+                    user=user,
+                    bnk_code=user.MID.bnk_code if user.MID else None,
+                    login_time=now(),
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    remarks="Login failed - Invalid password"
+                )
                 return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
-            # Update last_login
-            user.last_login = datetime.now()
+            # ✅ Update last login
+            user.last_login = now()
             user.save(update_fields=['last_login'])
 
-            # Create tokens
+            # ✅ Create JWT tokens
             refresh = RefreshToken.for_user(user)
+            access_token = str(refresh.access_token)
 
-            # Return only the path under MEDIA_ROOT, e.g. "/profile_images/foo.png"
+            # ✅ ดึง bnk_code จาก MID
+            bnk_code = user.MID.bnk_code if user.MID else None
+
+            # ✅ Save access log สำหรับ login สำเร็จ
+            UserAccessLog.objects.create(
+                user=user,
+                bnk_code=bnk_code,
+                access_token=access_token,
+                refresh_token=str(refresh),
+                login_time=now(),
+                ip_address=ip_address,
+                user_agent=user_agent,
+                remarks="Login success"
+            )
+
+            # ✅ Profile path
             profile_path = f"/{user.profile_image.name}" if user.profile_image else None
 
             return Response({
                 'detail': 'Successfully logged in.',
-                'access': str(refresh.access_token),
+                'access': access_token,
                 'refresh': str(refresh),
                 'user': {
                     'UID': user.UID,
@@ -15226,9 +15320,119 @@ class UserLoginView(APIView):
             }, status=status.HTTP_200_OK)
 
         except Login.DoesNotExist:
+            # ✅ บันทึก log เมื่อ username ไม่มีในระบบ
+            UserAccessLog.objects.create(
+                user=None,  # ไม่มี user
+                bnk_code=None,
+                login_time=now(),
+                ip_address=ip_address,
+                user_agent=user_agent,
+                remarks=f"Login failed - Username not found: {username}"
+            )
             return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
 
+class UserLogoutView(APIView):
+    """
+    ✅ Logout view - remarks เก็บแค่ base message
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        try:
+            # ✅ รับค่าจาก request
+            refresh_token = request.data.get("refresh_token")
+            logout_type = request.data.get("logout_type", "manual")
+            custom_remark = request.data.get("remark", None)
+
+            if not refresh_token:
+                return Response(
+                    {"error": "Missing refresh token"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # ✅ หา user จาก refresh token
+            try:
+                token = RefreshToken(refresh_token)
+                user_id = token.payload.get('user_id')
+                user = Login.objects.get(pk=user_id)
+            except Exception as e:
+                return Response(
+                    {"error": f"Invalid token: {str(e)}"}, 
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+            # ✅ เก็บข้อมูล IP และ User-Agent
+            ip_address = request.META.get('REMOTE_ADDR', 'Unknown')
+            user_agent = request.META.get('HTTP_USER_AGENT', 'Unknown')
+            
+            # ✅ สร้าง remark แบบสั้น
+            if custom_remark:
+                base_remark = custom_remark
+            else:
+                remark_map = {
+                    "manual": "User logged out manually",
+                    "auto": "Auto logout - Inactivity timeout (30 minutes)",
+                    "beforeunload": "Browser/tab closed by user"
+                }
+                base_remark = remark_map.get(logout_type, "User logged out")
+            
+            # ✅ Remarks เก็บแค่ base message
+            detailed_remark = f"{base_remark}"
+
+            # ✅ หา log ล่าสุดที่ยังไม่มี logout_time และ remarks = "Login success"
+            last_log = UserAccessLog.objects.filter(
+                user=user, 
+                logout_time__isnull=True,
+                remarks="Login success"  # ✅ เฉพาะ login success เท่านั้น
+            ).order_by('-login_time').first()
+            
+            if last_log:
+                # ✅ อัปเดต logout_time และ remarks เท่านั้น (ไม่แก้ IP/User-Agent)
+                last_log.logout_time = now()
+                last_log.remarks = detailed_remark
+                last_log.save(update_fields=['logout_time', 'remarks'])
+                logout_time_str = last_log.logout_time.strftime("%Y-%m-%d %H:%M:%S")
+                log_id = last_log.id
+            else:
+                # ✅ ถ้าไม่เจอ log ที่ login success ให้สร้างใหม่
+                new_log = UserAccessLog.objects.create(
+                    user=user,
+                    bnk_code=user.MID.bnk_code if user.MID else None,
+                    refresh_token=refresh_token,
+                    login_time=now(),
+                    logout_time=now(),
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    remarks=f"[No active session found] {detailed_remark}"
+                )
+                logout_time_str = new_log.logout_time.strftime("%Y-%m-%d %H:%M:%S")
+                log_id = new_log.id
+
+            # ✅ Blacklist token (เฉพาะ manual logout)
+            token_blacklisted = False
+            if logout_type == "manual":
+                try:
+                    token.blacklist()
+                    token_blacklisted = True
+                except Exception as e:
+                    print(f"Token blacklist error: {e}")
+
+            return Response({
+                "detail": "Logout successful",
+                "logout_time": logout_time_str,
+                "logout_type": logout_type,
+                "remark": detailed_remark,
+                "log_id": log_id,
+                "token_blacklisted": token_blacklisted
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"Logout error: {str(e)}")
+            return Response(
+                {"error": f"Logout failed: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 # from django.db.models import IntegerField
 # from django.db.models.functions import Cast
@@ -20570,8 +20774,8 @@ from django.db.models import Func, F, Q
 
 from utility.models import edl_customer_info, Electric_Bill, searchlog_utility, request_charge_utility
 from .serializers import EDLCustomerSerializer, ElectricBillSerializer, SearchLogUtilitySerializer
-from member.models import memberInfo
-from charge.models import ChargeMatrix
+# from member.models import memberInfo
+# from charge.models import ChargeMatrix
 import uuid
 
 
@@ -28793,3 +28997,17 @@ class RequestChargeDetailAPIView(APIView):
         except Exception as e:
             print(f"Date range filter error: {e}")
         return queryset
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from .models import UserAccessLog
+from .serializers import UserAccessLogSerializer
+
+
+class UserAccessLogListView(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        logs = UserAccessLog.objects.select_related('user').order_by('-login_time')
+        serializer = UserAccessLogSerializer(logs, many=True)
+        return Response(serializer.data)
