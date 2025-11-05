@@ -20949,11 +20949,8 @@ from django.db.models import Func, F, Q
 
 from utility.models import edl_customer_info, Electric_Bill, searchlog_utility, request_charge_utility
 from .serializers import EDLCustomerSerializer, ElectricBillSerializer, SearchLogUtilitySerializer
-<<<<<<< HEAD
 # from member.models import memberInfo
 # from charge.models import ChargeMatrix
-=======
->>>>>>> cc15f5b6bc5fd3a0d09fcedf93ebc9786fad45d7
 import uuid
 
 
