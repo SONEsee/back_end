@@ -27475,3 +27475,18 @@ class FCR_reportIndividualView(APIView):
         except Exception as e:
             print(f"Error occurred: {str(e)}")
             return Response({"detail": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+#tik
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from .models import UserAccessLog
+from .serializers import UserAccessLogSerializer
+
+
+class UserAccessLogListView(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        logs = UserAccessLog.objects.select_related('user').order_by('-login_time')
+        serializer = UserAccessLogSerializer(logs, many=True)
+        return Response(serializer.data)
