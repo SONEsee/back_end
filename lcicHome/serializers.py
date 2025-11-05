@@ -15,7 +15,7 @@ class CustomerInfoINDSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-# serializers.py
+
 from rest_framework import serializers
 from .models import SType
 
@@ -24,6 +24,14 @@ class STypeSerializer(serializers.ModelSerializer):
         model = SType
         fields = '__all__'
 
+from rest_framework import serializers
+from .models import Upload_File_Individual_Collateral
+
+class IndividualCollatteralFileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Upload_File_Individual_Collateral
+        fields = '__all__'  
+        
 
         
 from rest_framework import serializers
