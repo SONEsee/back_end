@@ -471,3 +471,5 @@ def reject_individual_loan(id_file):
                 'deleted': deleted_count
             }
         }
+    
+
