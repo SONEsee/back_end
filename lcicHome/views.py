@@ -15940,8 +15940,6 @@ class SidebarCreateView(APIView):
             
         except (SidebarItem.DoesNotExist, SidebarSubItem.DoesNotExist):
             return Response({"error": "Item not found."}, status=status.HTTP_404_NOT_FOUND)
-
-
 class AssignRoleView(APIView):
     """Assign roles to sidebar items and sub-items"""
     
@@ -15949,33 +15947,34 @@ class AssignRoleView(APIView):
         role_id = request.data.get('role_id')
         sidebar_item_ids = request.data.get('sidebar_items', [])
         sidebar_sub_item_ids = request.data.get('sidebar_sub_items', [])
-
+        
         try:
             role = Role.objects.get(id=role_id)
 
-            # Clear existing assignments if replace_existing is True
-            if request.data.get('replace_existing', False):
-                role.sidebar_items.clear()
-                SidebarSubItem.objects.filter(roles=role).update(roles=None)
+            # Always clear existing assignments first
+            role.sidebar_items.clear()
+            role.sidebar_sub_items.clear()
 
-            # Assign items
+            # Assign selected items
             if sidebar_item_ids:
                 sidebar_items = SidebarItem.objects.filter(id__in=sidebar_item_ids)
                 role.sidebar_items.add(*sidebar_items)
 
-            # Assign sub-items
+            # Assign selected sub-items
             if sidebar_sub_item_ids:
                 sidebar_sub_items = SidebarSubItem.objects.filter(id__in=sidebar_sub_item_ids)
-                for sub_item in sidebar_sub_items:
-                    sub_item.roles.add(role)
+                role.sidebar_sub_items.add(*sidebar_sub_items)
 
-            return Response({"detail": "Role assigned successfully"}, status=status.HTTP_200_OK)
+            return Response({
+                "detail": "Role assigned successfully",
+                "assigned_items": len(sidebar_item_ids),
+                "assigned_sub_items": len(sidebar_sub_item_ids)
+            }, status=status.HTTP_200_OK)
 
         except Role.DoesNotExist:
             return Response({"error": "Role not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
 
 class ReorderSidebarView(APIView):
     """Reorder sidebar items efficiently"""
@@ -20930,7 +20929,6 @@ def fix_problematic_dates():
 #             return Response({"error": "Charge configuration not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 #         except Exception as e:
 #             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -20947,8 +20945,11 @@ import uuid
 
 class ElectricReportAPIView(APIView):
     """
-    API View for Electric Supply Report with Province and District filtering.
-    Handles duplicate customer IDs across different provinces/districts.
+    API View for Electric Supply Report.
+    
+    IMPORTANT: Field names differ between tables:
+    - Customer table: Province_ID, Dustrict_ID
+    - Bill table: ProID, DisID
     """
     permission_classes = [IsAuthenticated]
 
@@ -20957,7 +20958,7 @@ class ElectricReportAPIView(APIView):
             # Get query parameters
             customer_id = request.query_params.get('edl')
             province_id = request.query_params.get('province_id')
-            district_id = request.query_params.get('district_id')  # Optional
+            district_id = request.query_params.get('district_id')
 
             # Validate required parameters
             if not customer_id:
@@ -20986,20 +20987,18 @@ class ElectricReportAPIView(APIView):
             
             charge_amount_com = chargeType.chg_amount
 
-            # Build customer filter query
-            customer_filter = Q(Customer_ID=customer_id) & Q(province_id=province_id)
+            # Query CUSTOMER using Customer table field names: Province_ID, Dustrict_ID
+            customer_filter = Q(Customer_ID=customer_id) & Q(Province_ID=province_id)
             
-            # Add district filter if provided
             if district_id:
-                customer_filter &= Q(district_id=district_id)
+                customer_filter &= Q(Dustrict_ID=district_id)
 
-            # Query customer with province and district filtering
             try:
                 customers = edl_customer_info.objects.filter(customer_filter)
                 
                 if not customers.exists():
                     return Response({
-                        "error": "Customer not found for the specified province and district",
+                        "error": "Customer not found for the specified province",
                         "details": {
                             "customer_id": customer_id,
                             "province_id": province_id,
@@ -21007,22 +21006,7 @@ class ElectricReportAPIView(APIView):
                         }
                     }, status=status.HTTP_404_NOT_FOUND)
                 
-                # If multiple records found, take the first one or return error
-                if customers.count() > 1:
-                    if not district_id:
-                        return Response({
-                            "error": "Multiple customers found. Please provide district_id",
-                            "details": {
-                                "customer_id": customer_id,
-                                "province_id": province_id,
-                                "available_districts": list(customers.values_list('district_id', flat=True).distinct())
-                            }
-                        }, status=status.HTTP_400_BAD_REQUEST)
-                    else:
-                        # Multiple records even with district - should not happen, but handle it
-                        customer = customers.first()
-                else:
-                    customer = customers.first()
+                customer = customers.first()
                     
             except Exception as e:
                 return Response({
@@ -21030,23 +21014,23 @@ class ElectricReportAPIView(APIView):
                     "details": str(e)
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # Custom function to convert MM-YYYY to YYYY-MM for sorting (PostgreSQL)
+            # Custom function to convert MM-YYYY to YYYY-MM for sorting
             class ReorderMonthYear(Func):
                 function = "TO_CHAR"
                 template = "SUBSTRING(%(expressions)s FROM 4 FOR 4) || '-' || SUBSTRING(%(expressions)s FROM 1 FOR 2)"
 
-            # Build bill filter query with province and district
-            bill_filter = Q(Customer_ID=customer_id) & Q(province_id=province_id)
+            # Query BILLS using Bill table field names: ProID, DisID (NOT Province_ID!)
+            bill_filter = Q(Customer_ID=customer_id) & Q(ProID=province_id)
             
             if district_id:
-                bill_filter &= Q(district_id=district_id)
+                bill_filter &= Q(DisID=district_id)
 
             # Sort bills by InvoiceMonth in descending order
             bills = Electric_Bill.objects.filter(bill_filter).annotate(
                 year_month=ReorderMonthYear(F('InvoiceMonth'))
             ).order_by('-year_month')
 
-            # Log the search with province and district information
+            # Log the search
             search_log = searchlog_utility.objects.create(
                 bnk_code=bank.bnk_code,
                 sys_usr=sys_usr,
@@ -21056,22 +21040,23 @@ class ElectricReportAPIView(APIView):
                 proID_edl=province_id,
                 proID_wt='',
                 proID_tel='',
-                district_id_edl=district_id if district_id else '',  # Add district to log
+
                 credittype='edl',
                 inquiry_date=timezone.now(),
                 inquiry_time=timezone.now()
             )
 
-            # Get current timestamp for rec_insert_date
+            # Get current timestamp
             rec_insert_date = timezone.now()
             date_str = rec_insert_date.strftime('%d%m%Y')
             report_date = rec_insert_date.strftime('%d-%m-%Y')
             
-            # Include province and district in reference code for uniqueness
-            rec_reference_code = f"{chargeType.chg_code}-0-{bank.bnk_code}-{province_id}-{district_id or '00'}-{date_str}-{search_log.search_id}"
+            # Reference code
+            district_code = district_id if district_id else '00'
+            rec_reference_code = f"{chargeType.chg_code}-0-{bank.bnk_code}-{province_id}-{district_code}-{date_str}-{search_log.search_id}"
             rec_reference_code = rec_reference_code[:100]
 
-            # Log the charge request with province and district
+            # Log charge request
             request_charge_utility.objects.create(
                 usr_session_id=str(uuid.uuid4()),
                 search_id=search_log,
@@ -21087,7 +21072,7 @@ class ElectricReportAPIView(APIView):
                 proID_edl=province_id,
                 proID_wt='',
                 proID_tel='',
-                district_id_edl=district_id if district_id else '',  # Add district
+
                 rec_reference_code=rec_reference_code
             )
 
@@ -21096,7 +21081,7 @@ class ElectricReportAPIView(APIView):
             bill_serializer = ElectricBillSerializer(bills, many=True)
             search_log_serializer = SearchLogUtilitySerializer(search_log)
 
-            # Construct reference_data with province and district info
+            # Construct reference_data
             reference_data = (
                 rec_reference_code,
                 customer_id,
@@ -21107,7 +21092,7 @@ class ElectricReportAPIView(APIView):
                 district_id if district_id else ''
             )
 
-            # Return comprehensive response
+            # Return response
             return Response({
                 "reference_data": reference_data,
                 "customer": [customer_serializer.data],
@@ -21116,15 +21101,14 @@ class ElectricReportAPIView(APIView):
                     "customer_id": customer_id,
                     "province_id": province_id,
                     "district_id": district_id,
-                    "province_name": customer.province_name if hasattr(customer, 'province_name') else '',
-                    "district_name": customer.district_name if hasattr(customer, 'district_name') else ''
+                    "province_name": getattr(customer, 'province_name', ''),
+                    "district_name": getattr(customer, 'district_name', '')
                 }
             }, status=status.HTTP_200_OK)
 
         except edl_customer_info.DoesNotExist:
             return Response({
-                "error": "Customer not found",
-                "details": "No customer record found for the provided ID, province, and district"
+                "error": "Customer not found"
             }, status=status.HTTP_404_NOT_FOUND)
             
         except memberInfo.DoesNotExist:
@@ -21146,15 +21130,13 @@ class ElectricReportAPIView(APIView):
 
 class ElectricCustomerSearchAPIView(APIView):
     """
-    API View for searching Electric customers with province filtering.
-    Used for autocomplete/quick search functionality.
+    API View for searching Electric customers across all provinces.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         try:
             query = request.query_params.get('query', '').strip()
-            province_id = request.query_params.get('province_id')
             limit = int(request.query_params.get('limit', 100))
 
             if not query or len(query) < 2:
@@ -21162,7 +21144,7 @@ class ElectricCustomerSearchAPIView(APIView):
                     "error": "Query parameter must be at least 2 characters"
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Build search query
+            # Search across all provinces
             search_filter = (
                 Q(Customer_ID__icontains=query) |
                 Q(Name__icontains=query) |
@@ -21170,18 +21152,12 @@ class ElectricCustomerSearchAPIView(APIView):
                 Q(Company_name__icontains=query)
             )
 
-            # Add province filter if provided
-            if province_id:
-                search_filter &= Q(province_id=province_id)
-
-            # Execute search with limit
+            # Use correct customer table field names
             customers = edl_customer_info.objects.filter(
                 search_filter
-            ).select_related().order_by('province_id', 'district_id', 'Customer_ID')[:limit]
+            ).order_by('Province_ID', 'Dustrict_ID', 'Customer_ID')[:limit]
 
-            # Serialize results
             serializer = EDLCustomerSerializer(customers, many=True)
-
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         except ValueError:
@@ -21194,7 +21170,6 @@ class ElectricCustomerSearchAPIView(APIView):
                 "error": "Search failed",
                 "details": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
     
 from .models import ChargeMatrix
 from .serializers import ChargeMatrixSerializer
@@ -27099,6 +27074,12 @@ class ChargeReportMainView(APIView):
         return "{:,.0f}".format(float(amount))
 
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from datetime import datetime
+
 
 class ChargeReportDetailView(APIView):
     """
@@ -27350,7 +27331,7 @@ class ChargeReportDetailView(APIView):
             'success': 'ສຳເລັດ',
             'paid': 'ຈ່າຍແລ້ວ',
             'unpaid': 'ຍັງບໍ່ໄດ້ຈ່າຍ'
-        } 
+        }
         if not status:
             return 'ບໍ່ຮູ້ຈັກ'
         return status_map.get(status.lower(), status)
