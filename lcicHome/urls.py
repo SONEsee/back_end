@@ -63,7 +63,7 @@ from .views import STypeView,UserListbyBank,UserByBankCodeView,DataSubmitUtility
 
 #tik
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
-                    ,RequestChargeSummaryAPIView,RequestChargeReportAllAPIView,UserLogoutView,UserAccessLogListView)
+                    ,RequestChargeSummaryAPIView,RequestChargeReportAllAPIView)
 
 from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView,process_dispute_notification, process_multiple_disputes,process_multiple_disputescollateral
 from .views import upload_json,MemberInfoViewSet
@@ -170,7 +170,6 @@ urlpatterns = [
    path('get-csrf-token/', get_csrf_token, name='get_csrf_token'),
   #  path('login/', LoginView.as_view(), name='login'),
    path('login/', UserLoginView.as_view(), name='login'),
-   path('logout_update/', UserLogoutView.as_view(), name='logout_new'),
    path('login1/', LoginView1.as_view(), name='login'),
    path('api2/login/', LoginView.as_view(), name='login'),
   #  paylay Pherm
@@ -277,7 +276,6 @@ urlpatterns = [
     path('request-charge-summary/', RequestChargeSummaryAPIView.as_view(), name='request_charge_summary'),
     path('request-charge-detail/', RequestChargeDetailAPIView.as_view(), name='request-charge-detail'),
     path('request-charge-report-all/', RequestChargeReportAllAPIView.as_view(), name='request-charge-report-all'),
-    path('access-logs/', UserAccessLogListView.as_view(), name='access-logs'),
     
     path('api/individual-files/', IndividualFileListView.as_view(), name='individual-file-list'),
   
@@ -353,6 +351,7 @@ urlpatterns = [
     path('api/get-enterprise/<int:id_file>/', views.get_all_enterprise, name='get_enterprise'),
     path('api/get-all-upload-files/', views.get_all_upload_files, name='get_all_upload_files'),
     path('branches/', BankBranchListView.as_view(), name='branch-list'),
+    
       
     path('distinct-bnk-codes/', DistinctBankCodeView.as_view(), name='distinct-bnk-codes'),
     path('add-member/', AddMemberAPIView.as_view(), name='add-member'),
