@@ -897,12 +897,82 @@ class UtilityBillSerializer(serializers.ModelSerializer):
                  'DisID', 'ProID', 'InsertDate', 'UpdateDate', 'UserID']
 
 from utility.models import edl_customer_info
+# class EDLCustomerSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = edl_customer_info
+#         fields = ['Customer_ID', 'Company_name', 'Name', 'Surname', 'National_ID', 
+#                  'Passport', 'Address', 'Dustrict_ID', 'Province_ID', 'Tel', 
+#                  'Email', 'Cus_type', 'Regis_date']
+
+
 class EDLCustomerSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Electric Customer.
+    Maps database field names to API response names:
+    - Province_ID (DB) -> province_id (API)
+    - Dustrict_ID (DB) -> district_id (API)
+    """
+    # Map database fields to lowercase API field names
+    province_id = serializers.CharField(source='Province_ID')
+    district_id = serializers.CharField(source='Dustrict_ID')
+    
+    # If you have related fields for names, include them
+    # Otherwise, you may need to add SerializerMethodField
+    province_name = serializers.SerializerMethodField()
+    district_name = serializers.SerializerMethodField()
+    
     class Meta:
         model = edl_customer_info
-        fields = ['Customer_ID', 'Company_name', 'Name', 'Surname', 'National_ID', 
-                 'Passport', 'Address', 'Dustrict_ID', 'Province_ID', 'Tel', 
-                 'Email', 'Cus_type', 'Regis_date']
+        fields = [
+            'Customer_ID',
+            'Name',
+            'Surname',
+            'Company_name',
+            'Address',
+            'Tel',
+            'Email',
+            'National_ID',
+            'Passport',
+            'Cus_type',
+            'province_id',      # Mapped from Province_ID
+            'district_id',      # Mapped from Dustrict_ID
+            'province_name',
+            'district_name',
+            'Regis_date',
+            'InsertDate',
+            'UpdateDate',
+        ]
+    
+    def get_province_name(self, obj):
+        """Get province name from Province_ID"""
+        # You may have a province mapping or related model
+        # For now, return the ID or map manually
+        province_map = {
+            '1': 'ນະຄອນຫຼວງວຽງຈັນ',
+            '2': 'ຜົ້ງສາລີ',
+            '3': 'ຫຼວງນໍ້າທາ',
+            '4': 'ອຸດົມໄຊ',
+            '5': 'ບໍ່ແກ້ວ',
+            '6': 'ຫຼວງພະບາງ',
+            '7': 'ຫົວພັນ',
+            '8': 'ໄຊຍະບູລີ',
+            '9': 'ຊຽງຂວາງ',
+            '10': 'ວຽງຈັນ',
+            '11': 'ບໍລິຄໍາໄຊ',
+            '12': 'ຄໍາມ່ວນ',
+            '13': 'ສະຫວັນນະເຂດ',
+            '14': 'ສາລະວັນ',
+            '15': 'ເຊກອງ',
+            '16': 'ຈໍາປາສັກ',
+            '17': 'ອັດຕະປື',
+            '18': 'ໄຊສົມບູນ',
+        }
+        return province_map.get(str(obj.Province_ID), '')
+    
+    def get_district_name(self, obj):
+        """Get district name - you may need to add proper mapping"""
+        # Return empty for now or add district mapping
+        return ''
 from utility.models import Electric_Bill       
 class ElectricBillSerializer(serializers.ModelSerializer):
     class Meta:
