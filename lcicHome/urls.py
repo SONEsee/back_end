@@ -351,6 +351,7 @@ urlpatterns = [
     path('api/get-enterprise/<int:id_file>/', views.get_all_enterprise, name='get_enterprise'),
     path('api/get-all-upload-files/', views.get_all_upload_files, name='get_all_upload_files'),
     path('branches/', BankBranchListView.as_view(), name='branch-list'),
+    
       
     path('distinct-bnk-codes/', DistinctBankCodeView.as_view(), name='distinct-bnk-codes'),
     path('add-member/', AddMemberAPIView.as_view(), name='add-member'),
