@@ -27100,7 +27100,6 @@ class ChargeReportMainView(APIView):
 
 
 
-# Keep the existing ChargeReportDetailView class as is, but fix filters
 class ChargeReportDetailView(APIView):
     """
     API endpoint for detailed charge report transactions.
@@ -27162,6 +27161,7 @@ class ChargeReportDetailView(APIView):
                     "chg_amount": float(charge_field.chg_amount) if charge_field.chg_amount else 0,
                     "formatted_amount": self._format_amount(charge_field.chg_amount or 0),
                     "chg_code": charge_field.chg_code or "",
+                    "chg_lao_desc": self._get_charge_description(charge_field.chg_code),
                     "status": charge_field.status or "",
                     "status_lao": self._get_status_lao(charge_field.status),
                     "insert_date": charge_field.insert_date,
@@ -27203,19 +27203,25 @@ class ChargeReportDetailView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def _apply_filters(self, request, queryset):
-        """Apply filters - Fixed date filters for DateTimeField compatibility"""
+        """Apply filters - Fixed to include chg_code filter"""
         bank = request.query_params.get('bank')
         year = request.query_params.get('year')
         month = request.query_params.get('month')
         from_date = request.query_params.get('fromDate')
         to_date = request.query_params.get('toDate')
         status_filter = request.query_params.get('status')
+        chg_code = request.query_params.get('chg_code')  # ✅ ADD THIS
         
+        # Bank filter
         if bank and bank != 'all':
             queryset = queryset.filter(bnk_code=bank)
         
+        # Charge code filter - ✅ ADD THIS BLOCK
+        if chg_code:
+            queryset = queryset.filter(chg_code=chg_code)
+        
+        # Date filters
         if from_date and to_date:
-            # Parse if strings
             if isinstance(from_date, str):
                 from_date = datetime.strptime(from_date, '%Y-%m-%d').date()
             if isinstance(to_date, str):
@@ -27241,6 +27247,7 @@ class ChargeReportDetailView(APIView):
                     month = int(month)
                 queryset = queryset.filter(rec_insert_date__month=month)
         
+        # Status filter
         if status_filter:
             queryset = queryset.filter(status=status_filter)
         
@@ -27299,6 +27306,20 @@ class ChargeReportDetailView(APIView):
             return {'name': bank_code, 'display': bank_code}
     
     @staticmethod
+    def _get_charge_description(chg_code):
+        """Get charge description from charge code"""
+        if not chg_code:
+            return ""
+        
+        try:
+            charge = Main_charge_inf.objects.filter(chg_code=chg_code).first()
+            if charge:
+                return getattr(charge, 'chg_lao_type', '') or getattr(charge, 'chg_eng_type', '')
+            return chg_code
+        except Exception:
+            return chg_code
+    
+    @staticmethod
     def _convert_currency(currency_code):
         """Convert currency code to Lao name"""
         currency_map = {
@@ -27340,7 +27361,6 @@ class ChargeReportDetailView(APIView):
         if amount is None:
             return "0"
         return "{:,.0f}".format(float(amount))
-    
 # ----------------------------------------------- UPDATE HERE -----------------------------------------------
 import requests
 import logging
