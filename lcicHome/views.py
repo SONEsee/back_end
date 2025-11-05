@@ -11788,7 +11788,7 @@ def confirm_upload_individual(request):
 
         first_item = data_edits.first()
 
-        # ກວດ period
+        
         print(f"  ກຳລັງກວດ period ກັບ B1 ຫຼ້າສຸດ...")
         print(f"    bnk_code: {first_item.bnk_code}")
         print(f"    segmentType: {first_item.segmentType}")
@@ -11813,11 +11813,11 @@ def confirm_upload_individual(request):
         else:
             print(f"  ℹ️  ບໍ່ພົບ B1 ຫຼ້າສຸດ → ອະນຸຍາດ")
 
-        # ດຶງ bnk_code ແລະ segmentType
+        
         bnk_codes = {item.bnk_code for item in data_edits}
         segment_types = {item.segmentType for item in data_edits if item.segmentType}
 
-        # ໂຫຼດ B1_Monthly ແລະ B1 ທີ່ມີຢູ່ແລ້ວ (ດຶງ ID ມາດ້ວຍ!)
+       
         print("  ກຳລັງໂຫຼດຂໍ້ມູນທີ່ມີຢູ່ແລ້ວ...")
         existing_b1_monthly = {}
         for r in B1_Monthly.objects.filter(
@@ -11835,7 +11835,7 @@ def confirm_upload_individual(request):
 
         print(f"  B1_Monthly ມີຢູ່: {len(existing_b1_monthly)}, B1 ມີຢູ່: {len(existing_b1)}")
 
-        # ແບ່ງ update / create ແລະ ເກັບ ID ທີ່ຈະລຶບ
+        
         b1_monthly_update_items = []
         b1_monthly_create_items = []
         b1_update_items = []
@@ -11869,9 +11869,9 @@ def confirm_upload_individual(request):
         print(f"    B1 Update: {len(b1_update_items)} (ລຶບ {len(b1_ids_to_delete)} ແຖວ)")
         print(f"    B1 Create: {len(b1_create_items)}")
 
-        # Transaction
+       
         with transaction.atomic():
-            # ລຶບ B1_Monthly ເກົ່າແບບ Batch
+           
             if b1_monthly_ids_to_delete:
                 print(f"  ກຳລັງລຶບ B1_Monthly ເກົ່າ ({len(b1_monthly_ids_to_delete)} ແຖວ)...")
                 ids_list = list(b1_monthly_ids_to_delete)
@@ -11884,7 +11884,7 @@ def confirm_upload_individual(request):
                     total_deleted += deleted_count
                     print(f"    ລຶບແລ້ວ: {total_deleted}/{len(ids_list)} ແຖວ")
 
-            # ລຶບ B1 ເກົ່າແບບ Batch
+            
             if b1_ids_to_delete:
                 print(f"  ກຳລັງລຶບ B1 ເກົ່າ ({len(b1_ids_to_delete)} ແຖວ)...")
                 ids_list = list(b1_ids_to_delete)
@@ -11897,7 +11897,7 @@ def confirm_upload_individual(request):
                     total_deleted += deleted_count
                     print(f"    ລຶບແລ້ວ: {total_deleted}/{len(ids_list)} ແຖວ")
 
-            # B1_Monthly Update (ສ້າງໃໝ່)
+            
             if b1_monthly_update_items:
                 print(f"  ກຳລັງສ້າງ B1_Monthly ໃໝ່ ({len(b1_monthly_update_items)} ແຖວ)...")
                 total_created = 0
@@ -11925,7 +11925,7 @@ def confirm_upload_individual(request):
                     total_created += len(batch)
                     print(f"    ສ້າງແລ້ວ: {total_created}/{len(b1_monthly_update_items)} ແຖວ")
 
-            # B1_Monthly Create
+            
             if b1_monthly_create_items:
                 print(f"  ກຳລັງສ້າງ B1_Monthly ໃໝ່ ({len(b1_monthly_create_items)} ແຖວ)...")
                 total_created = 0
@@ -11953,7 +11953,7 @@ def confirm_upload_individual(request):
                     total_created += len(batch)
                     print(f"    ສ້າງແລ້ວ: {total_created}/{len(b1_monthly_create_items)} ແຖວ")
 
-            # B1 Update (ສ້າງໃໝ່)
+            
             if b1_update_items:
                 print(f"  ກຳລັງສ້າງ B1 ໃໝ່ ({len(b1_update_items)} ແຖວ)...")
                 total_created = 0
@@ -11981,7 +11981,7 @@ def confirm_upload_individual(request):
                     total_created += len(batch)
                     print(f"    ສ້າງແລ້ວ: {total_created}/{len(b1_update_items)} ແຖວ")
 
-            # B1 Create
+           
             if b1_create_items:
                 print(f"  ກຳລັງສ້າງ B1 ໃໝ່ ({len(b1_create_items)} ແຖວ)...")
                 total_created = 0
@@ -12009,7 +12009,7 @@ def confirm_upload_individual(request):
                     total_created += len(batch)
                     print(f"    ສ້າງແລ້ວ: {total_created}/{len(b1_create_items)} ແຖວ")
 
-            # ອັບເດດສະຖານະ
+            
             print("  ອັບເດດສະຖານະ...")
             Upload_File_Individual.objects.filter(FID=FID_number).update(statussubmit='0', dispuste='0')
 
@@ -12036,6 +12036,376 @@ def confirm_upload_individual(request):
 
 
 
+
+from django.db import transaction
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from django.utils import timezone
+from dateutil.relativedelta import relativedelta
+from datetime import datetime
+import re
+import traceback
+
+@csrf_exempt
+@require_POST
+@transaction.atomic
+def rollback_and_reconfirm_individual(request):
+    FID_with_prefix = request.POST.get('FID')
+    if not FID_with_prefix:
+        return JsonResponse({'status': 'error', 'message': 'File ID is required'}, status=400)
+
+    try:
+        print(f"\n{'='*80}")
+        print(f"Rollback & Reconfirm: FID = {FID_with_prefix}")
+        print(f"{'='*80}")
+
+       
+        match = re.match(r'n-(\d+)', FID_with_prefix)
+        if not match:
+            return JsonResponse({'status': 'error', 'message': 'Invalid FID format'}, status=400)
+        FID_number = int(match.group(1))
+
+       
+        current_file = Upload_File_Individual.objects.filter(FID=FID_number).first()
+        if not current_file:
+            return JsonResponse({'status': 'error', 'message': 'File not found'}, status=404)
+
+        current_period = current_file.period
+        sample_data = data_edit.objects.filter(id_file=FID_with_prefix).first()
+        if not sample_data:
+            return JsonResponse({'status': 'error', 'message': 'No data in data_edit'}, status=404)
+
+        bnk_code = sample_data.bnk_code
+        segment_type = (sample_data.segmentType or '').strip().upper()  
+
+        print(f"  ກວດ: period={current_period}, bnk_code={bnk_code}, segmentType='{segment_type}'")
+
+        
+        deleted_b1 = B1.objects.filter(id_file=FID_with_prefix).delete()[0]
+        deleted_b1m = B1_Monthly.objects.filter(id_file=FID_with_prefix).delete()[0]
+        print(f"  ລົບ: B1={deleted_b1}, B1_Monthly={deleted_b1m}")
+
+       
+        period_dt = datetime.strptime(current_period, "%Y%m")
+        prev_period = None
+        for _ in range(300):
+            period_dt -= relativedelta(months=1)
+            search_str = period_dt.strftime("%Y%m")
+
+            exists = B1_Monthly.objects.filter(
+                period=search_str,
+                bnk_code=bnk_code
+            ).extra(
+                where=['UPPER(TRIM("segmentType")) = %s'],
+                params=[segment_type]
+            ).exists()
+
+            if exists:
+                prev_period = search_str
+                print(f"  ✅ ພົບ previous period: {prev_period}")
+                break
+            else:
+                print(f"  ບໍ່ພົບໃນ {search_str}")
+
+       
+        Upload_File_Individual.objects.filter(FID=FID_number).update(
+            statussubmit='4', dispuste='0', updateDate=timezone.now()
+        )
+        print("  ອັບເດດ statussubmit → '4' (ກຳລັງ Rollback)")
+
+       
+        if not prev_period:
+            print("  ບໍ່ພົບຂໍ້ມູນເດືອນກ່ອນ → ລົບ + ສຳເລັດ")
+
+            B1.objects.filter(id_file=FID_with_prefix).delete()
+            B1_Monthly.objects.filter(id_file=FID_with_prefix).delete()
+
+            Upload_File_Individual.objects.filter(FID=FID_number).update(
+                statussubmit='5', dispuste='0', updateDate=timezone.now()
+            )
+            print("  ອັບເດດ statussubmit → '5' (Rollback ສຳເລັດ)")
+
+            print(f"{'='*80}")
+            print(f"Rollback ສຳເລັດ: ບໍ່ມີຂໍ້ມູນເດືອນກ່ອນ → ລົບຂໍ້ມູນເກົ່າ")
+            print(f"{'='*80}")
+
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Rollback ສຳເລັດ: ບໍ່ມີຂໍ້ມູນເດືອນກ່ອນ → ລົບຂໍ້ມູນເກົ່າ',
+                'previous_period': None,
+                'original_id_file': None,
+                'new_status': '5',
+                'action': 'deleted_no_previous_data'
+            })
+
+      
+        prev_data = list(B1_Monthly.objects.filter(
+            period=prev_period,
+            bnk_code=bnk_code
+        ).extra(
+            where=['UPPER(TRIM("segmentType")) = %s'],
+            params=[segment_type]
+        ).values(
+            'bnk_code', 'branch_id', 'customer_id', 'loan_id', 'period',
+            'segmentType', 'user_id', 'product_type', 'lon_sys_id',
+            'lon_open_date', 'lon_exp_date', 'lon_ext_date', 'lon_int_rate',
+            'lon_purpose_code', 'lon_credit_line', 'lon_currency_code',
+            'lon_outstanding_balance', 'lon_account_no', 'lon_no_days_slow',
+            'lon_class', 'lon_type', 'lon_term', 'lon_status',
+            'lon_insert_date', 'lon_update_date', 'lon_applied_date',
+            'is_disputed', 'LCIC_code', 'lcicID', 'id_file'
+        ))
+
+        if not prev_data:
+            Upload_File_Individual.objects.filter(FID=FID_number).update(statussubmit='2')
+            return JsonResponse({'status': 'error', 'message': 'No data in previous period'}, status=404)
+
+        original_id_file = prev_data[0]['id_file']
+        print(f"  ດຶງ: {len(prev_data)} ລາຍການ ຈາກ {prev_period} (id_file={original_id_file})")
+
+       
+        mock_data_edits = []
+        for item in prev_data:
+            obj = type('obj', (), item)()
+            obj.segmentType = segment_type  
+            mock_data_edits.append(obj)
+
+      
+        success = _process_reconfirm_data(mock_data_edits, FID_with_prefix, FID_number)
+        if not success:
+            Upload_File_Individual.objects.filter(FID=FID_number).update(statussubmit='2')
+            return JsonResponse({'status': 'error', 'message': 'Reconfirm failed'}, status=500)
+
+       
+        Upload_File_Individual.objects.filter(FID=FID_number).update(
+            statussubmit='5', dispuste='0', updateDate=timezone.now(), period=prev_period
+        )
+        print(f"  ອັບເດດ statussubmit → '5' (Rollback ສຳເລັດ)")
+        print(f"  ອັບເດດ period → {prev_period}")
+
+        print(f"{'='*80}")
+        print(f"Rollback ສຳເລັດ: ໃຊ້ {prev_period} (id_file={original_id_file})")
+        print(f"{'='*80}")
+
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Rollback ສຳເລັດ: ໃຊ້ຂໍ້ມູນ {prev_period} (id_file={original_id_file})',
+            'previous_period': prev_period,
+            'original_id_file': original_id_file,
+            'new_status': '5'
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        try:
+            Upload_File_Individual.objects.filter(FID=FID_number).update(statussubmit='2')
+        except:
+            pass
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+def _process_reconfirm_data(data_edits, FID_with_prefix, FID_number):
+    try:
+        with transaction.atomic():
+            print(f"  ເລີ່ມຕົ້ນການປະມວນຜົນໃໝ່: {len(data_edits)} ລາຍການ")
+
+            for item in data_edits:
+                item.segmentType = (getattr(item, 'segmentType', '') or '').strip().upper()
+
+            bnk_codes = {item.bnk_code for item in data_edits}
+            segment_types = {item.segmentType for item in data_edits}
+
+           
+            existing_b1_monthly = {}
+            for r in B1_Monthly.objects.filter(
+                bnk_code__in=bnk_codes
+            ).extra(
+                where=['UPPER(TRIM("segmentType")) IN ({})'.format(','.join(['%s'] * len(segment_types)))],
+                params=list(segment_types)
+            ).values('id', 'bnk_code', 'branch_id', 'customer_id', 'loan_id', 'period').iterator(chunk_size=5000):
+                key = (r['bnk_code'], r['branch_id'], r['customer_id'], r['loan_id'], r['period'])
+                existing_b1_monthly[key] = r['id']
+
+            existing_b1 = {}
+            for r in B1.objects.filter(
+                bnk_code__in=bnk_codes
+            ).extra(
+                where=['UPPER(TRIM("segmentType")) IN ({})'.format(','.join(['%s'] * len(segment_types)))],
+                params=list(segment_types)
+            ).values('id', 'bnk_code', 'branch_id', 'customer_id', 'loan_id').iterator(chunk_size=5000):
+                key = (r['bnk_code'], r['branch_id'], r['customer_id'], r['loan_id'])
+                existing_b1[key] = r['id']
+
+            print(f"  B1_Monthly ມີຢູ່: {len(existing_b1_monthly)}, B1 ມີຢູ່: {len(existing_b1)}")
+
+            b1_monthly_update_items = []
+            b1_monthly_create_items = []
+            b1_update_items = []
+            b1_create_items = []
+            b1_monthly_ids_to_delete = set()
+            b1_ids_to_delete = set()
+
+            for idx, item in enumerate(data_edits, 1):
+                key_m = (item.bnk_code, item.branch_id, item.customer_id, item.loan_id, item.period)
+                key_b = (item.bnk_code, item.branch_id, item.customer_id, item.loan_id)
+
+                if key_m in existing_b1_monthly:
+                    b1_monthly_update_items.append(item)
+                    b1_monthly_ids_to_delete.add(existing_b1_monthly[key_m])
+                else:
+                    b1_monthly_create_items.append(item)
+
+                if key_b in existing_b1:
+                    b1_update_items.append(item)
+                    b1_ids_to_delete.add(existing_b1[key_b])
+                else:
+                    b1_create_items.append(item)
+
+                if idx % 1000 == 0 or idx == len(data_edits):
+                    print(f"  ວິເຄາະ: {idx}/{len(data_edits)}")
+
+            print(f"  ສະຖິຕິ:")
+            print(f"    B1_Monthly Update: {len(b1_monthly_update_items)}")
+            print(f"    B1_Monthly Create: {len(b1_monthly_create_items)}")
+            print(f"    B1 Update: {len(b1_update_items)}")
+            print(f"    B1 Create: {len(b1_create_items)}")
+
+            if b1_monthly_ids_to_delete:
+                print(f"  ກຳລັງລຶບ B1_Monthly ເກົ່າ...")
+                B1_Monthly.objects.filter(id__in=b1_monthly_ids_to_delete).delete()
+
+            if b1_ids_to_delete:
+                print(f"  ກຳລັງລຶບ B1 ເກົ່າ...")
+                B1.objects.filter(id__in=b1_ids_to_delete).delete()
+
+            if b1_monthly_update_items:
+                print(f"  ກຳລັງ Update B1_Monthly...")
+                B1_Monthly.objects.bulk_create([
+                    B1_Monthly(
+                        lcicID=item.lcicID, com_enterprise_code=item.customer_id,
+                        segmentType=item.segmentType, bnk_code=item.bnk_code,
+                        customer_id=item.customer_id, branch_id=item.branch_id,
+                        user_id=item.user_id, period=item.period, product_type=item.product_type,
+                        lon_sys_id=item.lon_sys_id, loan_id=item.loan_id,
+                        lon_open_date=item.lon_open_date, lon_exp_date=item.lon_exp_date,
+                        lon_ext_date=item.lon_ext_date, lon_int_rate=item.lon_int_rate,
+                        lon_purpose_code=item.lon_purpose_code, lon_credit_line=item.lon_credit_line,
+                        lon_currency_code=item.lon_currency_code, lon_outstanding_balance=item.lon_outstanding_balance,
+                        lon_account_no=item.lon_account_no, lon_no_days_slow=item.lon_no_days_slow,
+                        lon_class=item.lon_class, lon_type=item.lon_type, lon_term=item.lon_term,
+                        lon_status=item.lon_status, lon_insert_date=item.lon_insert_date,
+                        lon_update_date=item.lon_update_date, lon_applied_date=item.lon_applied_date,
+                        is_disputed=item.is_disputed, id_file=item.id_file,
+                        LCIC_code=item.LCIC_code, status_data='u'
+                    ) for item in b1_monthly_update_items
+                ], ignore_conflicts=True)
+
+            if b1_monthly_create_items:
+                print(f"  ກຳລັງ Create B1_Monthly...")
+                B1_Monthly.objects.bulk_create([
+                    B1_Monthly(
+                        lcicID=item.lcicID, com_enterprise_code=item.customer_id,
+                        segmentType=item.segmentType, bnk_code=item.bnk_code,
+                        customer_id=item.customer_id, branch_id=item.branch_id,
+                        user_id=item.user_id, period=item.period, product_type=item.product_type,
+                        lon_sys_id=item.lon_sys_id, loan_id=item.loan_id,
+                        lon_open_date=item.lon_open_date, lon_exp_date=item.lon_exp_date,
+                        lon_ext_date=item.lon_ext_date, lon_int_rate=item.lon_int_rate,
+                        lon_purpose_code=item.lon_purpose_code, lon_credit_line=item.lon_credit_line,
+                        lon_currency_code=item.lon_currency_code, lon_outstanding_balance=item.lon_outstanding_balance,
+                        lon_account_no=item.lon_account_no, lon_no_days_slow=item.lon_no_days_slow,
+                        lon_class=item.lon_class, lon_type=item.lon_type, lon_term=item.lon_term,
+                        lon_status=item.lon_status, lon_insert_date=item.lon_insert_date,
+                        lon_update_date=item.lon_update_date, lon_applied_date=item.lon_applied_date,
+                        is_disputed=item.is_disputed, id_file=item.id_file,
+                        LCIC_code=item.LCIC_code, status_data='i'
+                    ) for item in b1_monthly_create_items
+                ], ignore_conflicts=True)
+
+            if b1_update_items:
+                print(f"  ກຳລັງ Update B1...")
+                B1.objects.bulk_create([
+                    B1(
+                        lcicID=item.lcicID, com_enterprise_code=item.customer_id,
+                        segmentType=item.segmentType, bnk_code=item.bnk_code,
+                        user_id=item.user_id, customer_id=item.customer_id,
+                        branch_id=item.branch_id, lon_sys_id=item.lon_sys_id,
+                        loan_id=item.loan_id, period=item.period, product_type=item.product_type,
+                        lon_open_date=item.lon_open_date, lon_exp_date=item.lon_exp_date,
+                        lon_ext_date=item.lon_ext_date, lon_int_rate=item.lon_int_rate,
+                        lon_purpose_code=item.lon_purpose_code, lon_credit_line=item.lon_credit_line,
+                        lon_currency_code=item.lon_currency_code, lon_outstanding_balance=item.lon_outstanding_balance,
+                        lon_account_no=item.lon_account_no, lon_no_days_slow=item.lon_no_days_slow,
+                        lon_class=item.lon_class, lon_type=item.lon_type, lon_term=item.lon_term,
+                        lon_status=item.lon_status, lon_insert_date=item.lon_insert_date,
+                        lon_update_date=item.lon_update_date, lon_applied_date=item.lon_applied_date,
+                        is_disputed=item.is_disputed, id_file=item.id_file,
+                        LCIC_code=item.LCIC_code, status_data='u'
+                    ) for item in b1_update_items
+                ], ignore_conflicts=True)
+
+            if b1_create_items:
+                print(f"  ກຳລັງ Create B1...")
+                B1.objects.bulk_create([
+                    B1(
+                        lcicID=item.lcicID, com_enterprise_code=item.customer_id,
+                        segmentType=item.segmentType, bnk_code=item.bnk_code,
+                        user_id=item.user_id, customer_id=item.customer_id,
+                        branch_id=item.branch_id, lon_sys_id=item.lon_sys_id,
+                        loan_id=item.loan_id, period=item.period, product_type=item.product_type,
+                        lon_open_date=item.lon_open_date, lon_exp_date=item.lon_exp_date,
+                        lon_ext_date=item.lon_ext_date, lon_int_rate=item.lon_int_rate,
+                        lon_purpose_code=item.lon_purpose_code, lon_credit_line=item.lon_credit_line,
+                        lon_currency_code=item.lon_currency_code, lon_outstanding_balance=item.lon_outstanding_balance,
+                        lon_account_no=item.lon_account_no, lon_no_days_slow=item.lon_no_days_slow,
+                        lon_class=item.lon_class, lon_type=item.lon_type, lon_term=item.lon_term,
+                        lon_status=item.lon_status, lon_insert_date=item.lon_insert_date,
+                        lon_update_date=item.lon_update_date, lon_applied_date=item.lon_applied_date,
+                        is_disputed=item.is_disputed, id_file=item.id_file,
+                        LCIC_code=item.LCIC_code, status_data='i'
+                    ) for item in b1_create_items
+                ], ignore_conflicts=True)
+
+            print(f"  ປະມວນຜົນໃໝ່ສຳເລັດ: {len(data_edits)} ລາຍການ")
+            return True
+
+    except Exception as e:
+        print(f"  ຜິດພາດໃນ _process_reconfirm_data: {str(e)}")
+        traceback.print_exc()
+        return False
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@csrf_exempt
 @require_POST
 def confirm_upload(request):
     try:
@@ -12363,7 +12733,7 @@ def confirm_upload(request):
         Upload_File.objects.filter(FID=FID).update(statussubmit='2')
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
-# @csrf_exempt
+# 
 # @require_POST
 # def confirm_upload(request):
 #     try:
@@ -17924,28 +18294,28 @@ def upload_json(request):
             
             today = date.today().strftime("%Y%m%d")
             
-            # ຄົ້ນຫາໄຟລ໌ທີ່ມີຊື່ຄ້າຍກັນໃນມື້ນີ້
+           
             today_files = Search_batfile.objects.filter(
                 fileName__startswith=f"{name_without_ext}-{today}-",
                 insertDate__date=date.today()
             ).count()
             
-            # ກຳນົດລຳດັບໃຫມ່
+         
             sequence = today_files + 1
-            sequence_str = f"{sequence:03d}"  # ແປງເປັນ 3 ໂຕເລກ 001, 002, 003...
+            sequence_str = f"{sequence:03d}"  
             
-            # ສ້າງຊື່ໄຟລ໌ໃຫມ່
+          
             new_filename = f"{name_without_ext}-{today}-{sequence_str}{extension}"
             return new_filename
 
-        # ສ້າງຊື່ໄຟລ໌ໃຫມ່
+      
         new_filename = generate_filename(file.name)
 
         search_batfile = Search_batfile(
-            fileName=new_filename,  # ໃຊ້ຊື່ໄຟລ໌ໃຫມ່
+            fileName=new_filename,
             fileUpload=file,
             fileSize=f"{file.size} bytes",
-            path=f"searchfile/{new_filename}",  # path ກໍໃຊ້ຊື່ໃຫມ່ເຊັ່ນກັນ
+            path=f"searchfile/{new_filename}", 
             status="Uploaded",
             FileType="json",
             user_id=user_id,
@@ -17980,31 +18350,31 @@ def upload_json(request):
 
             enterprise = None
             search_criteria = ""
-            final_lcic_id = lcic_id  # ເກັບຄ່າສຸດທ້າຍທີ່ຈະບັນທຶກ
-            final_com_code = com_code  # ເກັບຄ່າສຸດທ້າຍທີ່ຈະບັນທຶກ
+            final_lcic_id = lcic_id 
+            final_com_code = com_code 
 
             if lcic_id and com_code:
-                # ລອງຄົ້ນຫາດ້ວຍທັງສອງຄ່າກ່ອນ
+               
                 enterprise = EnterpriseInfo.objects.filter(
                     LCIC_code=lcic_id, 
                     EnterpriseID=com_code
                 ).first()
                 search_criteria = "both"
                 
-                # ຖ້າບໍ່ເຈົ້າ, ລອງຄົ້ນຫາແຍກ ແລະດຶງຄ່າທີ່ຂາດໄປ
+               
                 if not enterprise:
-                    # ລອງຄົ້ນຫາດ້ວຍ LCIC_code ກ່ອນ
+                    
                     enterprise_by_lcic = EnterpriseInfo.objects.filter(LCIC_code=lcic_id).first()
                     if enterprise_by_lcic:
                         enterprise = enterprise_by_lcic
-                        final_com_code = enterprise_by_lcic.EnterpriseID  # ດຶງ com_code ທີ່ຖືກຈາກ DB
+                        final_com_code = enterprise_by_lcic.EnterpriseID  
                         search_criteria = "found_by_lcic_updated_com_code"
                     else:
-                        # ຖ້າບໍ່ເຈົ້າດ້ວຍ LCIC, ລອງຄົ້ນຫາດ້ວຍ com_code
+                      
                         enterprise_by_com = EnterpriseInfo.objects.filter(EnterpriseID=com_code).first()
                         if enterprise_by_com:
                             enterprise = enterprise_by_com
-                            final_lcic_id = enterprise_by_com.LCIC_code  # ດຶງ LCIC_code ທີ່ຖືກຈາກ DB
+                            final_lcic_id = enterprise_by_com.LCIC_code  
                             search_criteria = "found_by_com_code_updated_lcic"
                         
             elif lcic_id:
@@ -18101,7 +18471,7 @@ from .models import SearchResult
 def update_multiple_search_results_status(request):
   
     try:
-        # ອ່ານ JSON data
+       
         data = json.loads(request.body)
         ids = data.get('ids', [])
         
@@ -18116,10 +18486,10 @@ def update_multiple_search_results_status(request):
         found_ids = list(search_results.values_list('id', flat=True))
         not_found_ids = [id for id in ids if id not in found_ids]
         
-        # ອັບເດດ status ເປັນ 'Found'
+        
         updated_count = search_results.update(status='Not Found')
         
-        # ດຶງຂໍ້ມູນທີ່ອັບເດດແລ້ວ
+       
         updated_results = list(search_results.values(
             'id', 'status', 'lcicID', 'LCIC_code', 
             'com_enterprise_code', 'enterpriseNameLao'
@@ -18166,10 +18536,9 @@ class InsertSearchLogView(APIView):
         charge_amount_com = chargeType.chg_amount
         EnterpriseID = request.data.get('EnterpriseID')
         LCIC_code = request.data.get('LCIC_code')
-        # search_loan = B1.objects.filter(LCIC_code=LCIC_code or EnterpriseID=EnterpriseID)
+   
         search_loan = B1.objects.filter(Q(LCIC_code=LCIC_code) | Q(com_enterprise_code=EnterpriseID))
-        print("LCIC_code: =-=============================>", LCIC_code)
-        print("EnterpriseID: =-=============================>", EnterpriseID)
+
         
         for loan_log in search_loan:
          sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
@@ -18226,7 +18595,7 @@ class InsertSearchLogView(APIView):
         else:
             return Response({'error': 'EnterpriseID and LCIC_code are required'}, status=status.HTTP_400_BAD_REQUEST)
        
-# views.py
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -18255,14 +18624,14 @@ class IndividualInfoSearchView(APIView):
 
             bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
 
-            # === 1. ດຶງຂໍ້ມູນ ===
+            
             lcic_id = request.data.get('lcic_id', '').strip()
             loan_purpose = request.data.get('CatalogID', '')
 
             if not lcic_id:
                 return Response({'error': 'lcic_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # === 2. ຄົ້ນຫາ ===
+           
             all_individual_info = IndividualBankIbkInfo.objects.filter(
                 lcic_id=lcic_id
             ).order_by('mm_ind_sys_id')
@@ -18270,7 +18639,7 @@ class IndividualInfoSearchView(APIView):
             if not all_individual_info.exists():
                 return Response({'error': 'Individual info not found'}, status=status.HTTP_404_NOT_FOUND)
 
-            # === 3. Deduplication ===
+            
             unique_individuals = []
             seen_mm_ids = set()
             for info in all_individual_info:
@@ -18278,7 +18647,7 @@ class IndividualInfoSearchView(APIView):
                     unique_individuals.append(info)
                     seen_mm_ids.add(info.mm_ind_sys_id)
 
-            # === 4. ດຶງ customerid ===
+           
             mm_ids = [info.mm_ind_sys_id for info in unique_individuals if info.mm_ind_sys_id]
             bank_records = {}
             if mm_ids:
@@ -18287,14 +18656,14 @@ class IndividualInfoSearchView(APIView):
                     for rec in IndividualBankIbk.objects.filter(ind_sys_id__in=mm_ids)
                 }
 
-            # === 5. ກຳນົດຄ່າທຳນຽມ ===
+           
             charge_sys_id = 2 if bank_info.bnk_type == 1 else 5
             try:
                 chargeType = ChargeMatrix.objects.get(chg_sys_id=charge_sys_id)
             except ChargeMatrix.DoesNotExist:
                 return Response({'error': 'Charge type not found'}, status=status.HTTP_404_NOT_FOUND)
 
-            # === 6. ສ້າງ log + charge ===
+           
             now = timezone.now()
             inquiry_month_charge = now.strftime('%d%m%Y')
             sys_usr = f"{UID}-{bank.bnk_code}"
@@ -18306,17 +18675,18 @@ class IndividualInfoSearchView(APIView):
                 customerid = bank_record.customerid if bank_record else ''
                 branch_code = bank_record.branchcode if bank_record else ''
 
-                # ສ້າງ searchLog — ໃຊ້ inquiry_date ເທົ່ານັ້ນ
+                
                 search_log = searchLog.objects.create(
                     enterprise_ID='',
                     LCIC_ID=lcic_id,
+                    LCIC_code=lcic_id,
                     bnk_code=bank_info.bnk_code,
                     bnk_type=bank_info.bnk_type,
                     branch=branch_code,
                     cus_ID=customerid,
-                    cusType='individual',
+                    cusType='A1',
                     credit_type=chargeType.chg_code,
-                    inquiry_month=now.strftime('%Y-%m'),  # ຄຳນວນໃນ view
+                    inquiry_month=now.strftime('%Y-%m'),  
                     com_tel='',
                     com_location='',
                     rec_loan_amount=0.0,
@@ -18326,7 +18696,7 @@ class IndividualInfoSearchView(APIView):
                     sys_usr=sys_usr
                 )
 
-                # ສ້າງ charge
+                
                 charge = request_charge.objects.create(
                     bnk_code=bank_info.bnk_code,
                     bnk_type=bank_info.bnk_type,
@@ -18338,7 +18708,7 @@ class IndividualInfoSearchView(APIView):
                     chg_unit=chargeType.chg_unit,
                     user_sys_id=sys_usr,
                     LCIC_code=lcic_id,
-                    cusType='individual',
+                    cusType='A1',
                     user_session_id='',
                     rec_reference_code='',
                     search_log=search_log
@@ -18347,15 +18717,15 @@ class IndividualInfoSearchView(APIView):
                 charge.save()
 
                 created_logs.append({
-                    'search_log_id': search_log.search_ID,   # ໃຊ້ .search_ID ແທນ .id
+                    'search_log_id': search_log.search_ID,   
                     'charge_id': charge.rec_charge_ID,
                     'customerid': customerid
                 })
 
-            # === 7. Serialize ===
+           
             serializer = IndividualBankIbkInfoSerializer(unique_individuals, many=True)
 
-            # === 8. Response ===
+          
             return Response({
                 'individual_info': serializer.data,
                 'total_found': len(unique_individuals),
@@ -18375,7 +18745,7 @@ class IndividualInfoSearchView(APIView):
                 'error': 'Internal server error',
                 'details': traceback.format_exc()
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
 # from rest_framework.views import APIView
 # from rest_framework.response import Response
 # from rest_framework import status
@@ -26432,30 +26802,27 @@ class SearchLogReportDetailView(APIView):
         if not enquiry_type:
             return ''
         return enquiry_type_map.get(enquiry_type.lower(), enquiry_type)
+    
+    
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Sum, Count, Q
-from django.db.models.functions import TruncMonth, TruncDate
+from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from datetime import datetime, date, timedelta
 import calendar
-from .models import request_charge, memberInfo, EnterpriseInfo, Main_catalog_cat
 
 
 class ChargeReportSummaryView(APIView):
-    """
-    Enhanced API endpoint for charge report summary statistics.
-    Provides monthly, daily, and top bank statistics.
-    """
+    """Enhanced API endpoint for charge report summary statistics"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
         try:
             user = request.user
             
-            # User validation
             if not hasattr(user, 'GID') or not user.GID:
                 return Response({
                     'error': 'ບໍ່ພົບບົດບາດຜູ້ໃຊ້ (GID)'
@@ -26468,31 +26835,28 @@ class ChargeReportSummaryView(APIView):
             
             is_admin = user_gid in [1, 2, 3, 4, 5]
             
-            # Get current date info
             today = timezone.now().date()
             current_month = today.month
             current_year = today.year
             
-            # Build base queryset
             base_queryset = request_charge.objects.filter(
                 status__isnull=False,
                 rec_insert_date__isnull=False
             )
             
-            # Apply role-based filtering
             if not is_admin and user_bank_code:
                 base_queryset = base_queryset.filter(bnk_code=user_bank_code)
             
-            # Apply optional filters from request
+            # ✅ Apply ALL filters including bank and chg_code
             filters = self._get_filters(request)
+            filtered_queryset = self._apply_all_filters(base_queryset, filters)
             
-            # Calculate summary statistics
             summary_data = {
                 'current_month_stats': self._get_monthly_stats(
-                    base_queryset, filters, current_year, current_month, today
+                    filtered_queryset, filters, current_year, current_month, today
                 ),
-                'today_stats': self._get_today_stats(base_queryset, today, user_bank_code, is_admin),
-                'top_banks': self._get_top_banks(base_queryset, filters, is_admin) if is_admin else None,
+                'today_stats': self._get_today_stats(filtered_queryset, today),
+                'top_banks': self._get_top_banks(filtered_queryset, filters, is_admin) if is_admin else None,
                 'filter_applied': filters,
                 'user_info': {
                     'role_id': user_gid,
@@ -26515,10 +26879,9 @@ class ChargeReportSummaryView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def _get_filters(self, request):
-        """Extract and validate filters from request"""
+        """Extract filters from request"""
         filters = {}
         
-        # Date range filter
         from_date = request.query_params.get('fromDate')
         to_date = request.query_params.get('toDate')
         if from_date:
@@ -26526,24 +26889,37 @@ class ChargeReportSummaryView(APIView):
         if to_date:
             filters['to_date'] = datetime.strptime(to_date, '%Y-%m-%d').date()
             
-        # Month/Year filter
         month = request.query_params.get('month')
         year = request.query_params.get('year')
         if month and month.isdigit():
             filters['month'] = int(month)
         if year and year.isdigit():
             filters['year'] = int(year)
-            
-        # Bank filter
+        
+        # ✅ Bank filter
         bank = request.query_params.get('bank')
         if bank and bank != 'all':
             filters['bank'] = bank
+        
+        # ✅ Charge code filter
+        chg_code = request.query_params.get('chg_code')
+        if chg_code and chg_code != 'all':
+            filters['chg_code'] = chg_code
             
         return filters
     
+    def _apply_all_filters(self, queryset, filters):
+        """Apply all filters to queryset"""
+        if filters.get('bank'):
+            queryset = queryset.filter(bnk_code=filters['bank'])
+        
+        if filters.get('chg_code'):
+            queryset = queryset.filter(chg_code=filters['chg_code'])
+        
+        return queryset
+    
     def _get_monthly_stats(self, queryset, filters, current_year, current_month, today):
-        """Calculate monthly statistics"""
-        # Apply filters or use current month
+        """Calculate monthly statistics with filters applied"""
         if filters.get('from_date') and filters.get('to_date'):
             month_queryset = queryset.filter(
                 rec_insert_date__date__gte=filters['from_date'],
@@ -26557,24 +26933,17 @@ class ChargeReportSummaryView(APIView):
             )
             month_label = f"{filters['month']:02d}-{filters['year']}"
         else:
-            # Default to current month
             month_queryset = queryset.filter(
                 rec_insert_date__year=current_year,
                 rec_insert_date__month=current_month
             )
             month_label = f"{current_month:02d}-{current_year}"
         
-        # Apply bank filter if specified
-        if filters.get('bank'):
-            month_queryset = month_queryset.filter(bnk_code=filters['bank'])
-        
-        # Calculate aggregates
         month_stats = month_queryset.aggregate(
             total_transactions=Count('rec_charge_ID'),
             total_amount=Sum('chg_amount')
         )
         
-        # Today's stats for the same filters - Fixed with __date lookup
         today_queryset = month_queryset.filter(rec_insert_date__date=today)
         today_stats = today_queryset.aggregate(
             today_transactions=Count('rec_charge_ID'),
@@ -26591,12 +26960,9 @@ class ChargeReportSummaryView(APIView):
             'formatted_today_amount': self._format_amount(today_stats['today_amount'] or 0)
         }
     
-    def _get_today_stats(self, queryset, today, user_bank_code, is_admin):
-        """Get today's statistics - Fixed with __date lookup"""
+    def _get_today_stats(self, queryset, today):
+        """Get today's statistics with filters applied"""
         today_queryset = queryset.filter(rec_insert_date__date=today)
-        
-        if not is_admin and user_bank_code:
-            today_queryset = today_queryset.filter(bnk_code=user_bank_code)
         
         stats = today_queryset.aggregate(
             transactions=Count('rec_charge_ID'),
@@ -26611,43 +26977,21 @@ class ChargeReportSummaryView(APIView):
         }
     
     def _get_top_banks(self, queryset, filters, is_admin):
-        """Get top performing banks (admin only)"""
+        """Get top performing banks with filters applied"""
         if not is_admin:
             return None
         
-        # Apply date filters
-        if filters.get('from_date') and filters.get('to_date'):
-            queryset = queryset.filter(
-                rec_insert_date__date__gte=filters['from_date'],
-                rec_insert_date__date__lte=filters['to_date']
-            )
-        elif filters.get('month') and filters.get('year'):
-            queryset = queryset.filter(
-                rec_insert_date__year=filters['year'],
-                rec_insert_date__month=filters['month']
-            )
-        else:
-            # Current month by default
-            today = timezone.now().date()
-            queryset = queryset.filter(
-                rec_insert_date__year=today.year,
-                rec_insert_date__month=today.month
-            )
+        today = timezone.now().date()
         
-        # Top bank by amount
         top_by_amount = queryset.values('bnk_code').annotate(
             total_amount=Sum('chg_amount'),
             total_transactions=Count('rec_charge_ID')
         ).order_by('-total_amount').first()
         
-        # Top bank by transactions
         top_by_transactions = queryset.values('bnk_code').annotate(
             total_transactions=Count('rec_charge_ID'),
             total_amount=Sum('chg_amount')
         ).order_by('-total_transactions').first()
-        
-        # Get today's stats for top banks - Fixed with __date lookup
-        today = timezone.now().date()
         
         result = {
             'by_amount': None,
@@ -26700,8 +27044,8 @@ class ChargeReportSummaryView(APIView):
     
     @staticmethod
     def _get_bank_info(bank_code):
-        """Get bank information"""
         try:
+            from .models import memberInfo
             bank = memberInfo.objects.filter(bnk_code=bank_code).first()
             if bank:
                 bank_name = getattr(bank, 'nameL', '') or getattr(bank, 'nameE', '')
@@ -26715,23 +27059,19 @@ class ChargeReportSummaryView(APIView):
     
     @staticmethod
     def _format_amount(amount):
-        """Format amount with thousand separators"""
         if amount is None:
             return "0"
         return "{:,.0f}".format(float(amount))
 
 
 class ChargeReportMainView(APIView):
-    """
-    Enhanced API endpoint for aggregated charge report with proper filtering.
-    """
+    """Enhanced API endpoint with grouping by year/month"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
         try:
             user = request.user
             
-            # User validation
             if not hasattr(user, 'GID') or not user.GID:
                 return Response({
                     'error': 'ບໍ່ພົບບົດບາດຜູ້ໃຊ້ (GID)'
@@ -26744,52 +27084,31 @@ class ChargeReportMainView(APIView):
             
             is_admin = user_gid in [1, 2, 3, 4, 5]
             
-            # Base queryset
             queryset = request_charge.objects.filter(
                 status__isnull=False,
                 rec_insert_date__isnull=False
             )
             
-            # Role-based filtering
             if not is_admin and user_bank_code:
                 queryset = queryset.filter(bnk_code=user_bank_code)
             
-            # Apply filters
             queryset, filter_info = self._apply_filters(request, queryset)
             
-            # Group by bank for aggregation
-            aggregated_data = queryset.values('bnk_code').annotate(
-                total_charge_amount=Sum('chg_amount'),
-                transaction_count=Count('rec_charge_ID')
-            ).order_by('bnk_code')
+            month = request.query_params.get('month', '')
+            year = request.query_params.get('year', '')
+            from_date = request.query_params.get('fromDate')
+            to_date = request.query_params.get('toDate')
             
-            # Format response data
-            dashboard_data = []
-            for item in aggregated_data:
-                bank_info = self._get_bank_info(item['bnk_code'])
-                
-                dashboard_data.append({
-                    'bank_code': item['bnk_code'],
-                    'bank_name': bank_info['name'],
-                    'bank_display': bank_info['display'],
-                    'total_charge_amount': round(float(item['total_charge_amount'] or 0), 2),
-                    'transaction_count': item['transaction_count'] or 0,
-                    'formatted_amount': self._format_amount(item['total_charge_amount'] or 0),
-                    'currency': 'ກີບ',
-                    'currency_code': 'LAK'
-                })
-            
-            # Calculate totals
-            total_summary = {
-                'total_transactions': sum(item['transaction_count'] for item in dashboard_data),
-                'total_amount': round(sum(item['total_charge_amount'] for item in dashboard_data), 2),
-                'unique_banks': len(dashboard_data),
-                'formatted_total_amount': self._format_amount(
-                    sum(item['total_charge_amount'] for item in dashboard_data)
-                ),
-                'currency': 'ກີບ',
-                'currency_code': 'LAK'
-            }
+            # ✅ Fixed grouping logic - only group if no date range
+            if not from_date and not to_date:
+                if (month == '' or month == 'all') and (year == '' or year == 'all'):
+                    data = self._group_by_year(queryset)
+                elif month == '' or month == 'all':
+                    data = self._group_by_month(queryset, year)
+                else:
+                    data = self._group_by_bank(queryset)
+            else:
+                data = self._group_by_bank(queryset)
             
             return Response({
                 'status': 'success',
@@ -26801,95 +27120,171 @@ class ChargeReportMainView(APIView):
                     'role_name': 'ຜູ້ເບິ່ງແຍງລະບົບ' if is_admin else 'ລູກຄ້າ'
                 },
                 'filter_info': filter_info,
-                'summary': total_summary,
-                'data': dashboard_data
+                'data': data
             }, status=status.HTTP_200_OK)
             
         except Exception as e:
+            import traceback
+            print(f"Error in ChargeReportMainView: {str(e)}")
+            print(traceback.format_exc())
             return Response({
                 'error': 'ຂໍ້ຜິດພາດພາຍໃນລະບົບ',
                 'detail': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def _apply_filters(self, request, queryset):
-        """Apply filters with proper validation"""
+        """Apply all filters"""
         filter_info = {}
         
-        # Date range filter (highest priority)
         from_date = request.query_params.get('fromDate')
         to_date = request.query_params.get('toDate')
         
+        # ✅ Fixed date range filter
         if from_date and to_date:
-            # Parse dates if they are strings
-            if isinstance(from_date, str):
-                from_date = datetime.strptime(from_date, '%Y-%m-%d').date()
-            if isinstance(to_date, str):
-                to_date = datetime.strptime(to_date, '%Y-%m-%d').date()
-            # Use __date__gte and __date__lte to handle DateTimeField properly
-            queryset = queryset.filter(
-                rec_insert_date__date__gte=from_date,
-                rec_insert_date__date__lte=to_date
-            )
-            filter_info['date_range'] = f"{from_date} to {to_date}"
-            filter_info['type'] = 'date_range'
+            try:
+                from_date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+                to_date_obj = datetime.strptime(to_date, '%Y-%m-%d').date()
+                queryset = queryset.filter(
+                    rec_insert_date__date__gte=from_date_obj,
+                    rec_insert_date__date__lte=to_date_obj
+                )
+                filter_info['date_range'] = f"{from_date} to {to_date}"
+                filter_info['type'] = 'date_range'
+            except ValueError as e:
+                print(f"Date parsing error: {e}")
         elif from_date:
-            if isinstance(from_date, str):
-                from_date = datetime.strptime(from_date, '%Y-%m-%d').date()
-            # For gte on date, use __date__gte lookup
-            queryset = queryset.filter(rec_insert_date__date__gte=from_date)
-            filter_info['from_date'] = from_date
-            filter_info['type'] = 'from_date'
+            try:
+                from_date_obj = datetime.strptime(from_date, '%Y-%m-%d').date()
+                queryset = queryset.filter(rec_insert_date__date__gte=from_date_obj)
+                filter_info['from_date'] = from_date
+                filter_info['type'] = 'from_date'
+            except ValueError as e:
+                print(f"Date parsing error: {e}")
         elif to_date:
-            if isinstance(to_date, str):
-                to_date = datetime.strptime(to_date, '%Y-%m-%d').date()
-            # For lte on date, use __date__lte lookup
-            queryset = queryset.filter(rec_insert_date__date__lte=to_date)
-            filter_info['to_date'] = to_date
-            filter_info['type'] = 'to_date'
+            try:
+                to_date_obj = datetime.strptime(to_date, '%Y-%m-%d').date()
+                queryset = queryset.filter(rec_insert_date__date__lte=to_date_obj)
+                filter_info['to_date'] = to_date
+                filter_info['type'] = 'to_date'
+            except ValueError as e:
+                print(f"Date parsing error: {e}")
         else:
-            # Month/Year filter (if no date range)
-            month = request.query_params.get('month')
-            year = request.query_params.get('year')
+            month = request.query_params.get('month', '')
+            year = request.query_params.get('year', '')
             
-            if year:
-                if isinstance(year, str) and year.isdigit():
-                    year = int(year)
-                queryset = queryset.filter(rec_insert_date__year=year)
+            if year and year != 'all':
+                queryset = queryset.filter(rec_insert_date__year=int(year))
                 filter_info['year'] = year
                 
-                if month:
-                    if isinstance(month, str) and month.isdigit():
-                        month = int(month)
-                    queryset = queryset.filter(rec_insert_date__month=month)
+                if month and month != 'all':
+                    queryset = queryset.filter(rec_insert_date__month=int(month))
                     filter_info['month'] = month
                     filter_info['type'] = 'month_year'
                 else:
-                    filter_info['type'] = 'year'
-            elif month:
-                # Month without year - use current year
-                current_year = timezone.now().year
-                if isinstance(month, str) and month.isdigit():
-                    month = int(month)
-                queryset = queryset.filter(
-                    rec_insert_date__year=current_year,
-                    rec_insert_date__month=month
-                )
-                filter_info['month'] = month
-                filter_info['year'] = current_year
-                filter_info['type'] = 'month_current_year'
+                    filter_info['type'] = 'year_only'
         
-        # Bank filter (applies regardless)
+        # ✅ Bank filter
         bank = request.query_params.get('bank')
         if bank and bank != 'all':
             queryset = queryset.filter(bnk_code=bank)
             filter_info['bank'] = bank
         
+        # ✅ Charge code filter
+        chg_code = request.query_params.get('chg_code')
+        if chg_code and chg_code != 'all':
+            queryset = queryset.filter(chg_code=chg_code)
+            filter_info['chg_code'] = chg_code
+        
         return queryset, filter_info
+    
+    def _group_by_bank(self, queryset):
+        """Normal grouping by bank"""
+        aggregated_data = queryset.values('bnk_code').annotate(
+            total_charge_amount=Sum('chg_amount'),
+            transaction_count=Count('rec_charge_ID')
+        ).order_by('bnk_code')
+        
+        result = []
+        for item in aggregated_data:
+            bank_info = self._get_bank_info(item['bnk_code'])
+            result.append({
+                'bank_code': item['bnk_code'],
+                'bank_name': bank_info['name'],
+                'bank_display': bank_info['display'],
+                'total_charge_amount': round(float(item['total_charge_amount'] or 0), 2),
+                'transaction_count': item['transaction_count'] or 0,
+                'formatted_amount': self._format_amount(item['total_charge_amount'] or 0)
+            })
+        
+        return result
+    
+    def _group_by_month(self, queryset, year):
+        """Group by month within a specific year"""
+        aggregated_data = queryset.annotate(
+            month=TruncMonth('rec_insert_date')
+        ).values('month', 'bnk_code').annotate(
+            total_charge_amount=Sum('chg_amount'),
+            transaction_count=Count('rec_charge_ID')
+        ).order_by('month', 'bnk_code')
+        
+        grouped = {}
+        for item in aggregated_data:
+            month_key = item['month'].strftime('%m-%Y')
+            if month_key not in grouped:
+                grouped[month_key] = {
+                    'period': month_key,
+                    'period_type': 'month',
+                    'banks': []
+                }
+            
+            bank_info = self._get_bank_info(item['bnk_code'])
+            grouped[month_key]['banks'].append({
+                'bank_code': item['bnk_code'],
+                'bank_name': bank_info['name'],
+                'bank_display': bank_info['display'],
+                'total_charge_amount': round(float(item['total_charge_amount'] or 0), 2),
+                'transaction_count': item['transaction_count'] or 0,
+                'formatted_amount': self._format_amount(item['total_charge_amount'] or 0)
+            })
+        
+        return list(grouped.values())
+    
+    def _group_by_year(self, queryset):
+        """Group by year - Fixed aggregation"""
+        # ✅ Use values() with year extraction instead of TruncDate
+        aggregated_data = queryset.extra(
+            select={'year': "EXTRACT(year FROM rec_insert_date)"}
+        ).values('year', 'bnk_code').annotate(
+            total_charge_amount=Sum('chg_amount'),
+            transaction_count=Count('rec_charge_ID')
+        ).order_by('year', 'bnk_code')
+        
+        grouped = {}
+        for item in aggregated_data:
+            year_key = str(int(item['year']))
+            if year_key not in grouped:
+                grouped[year_key] = {
+                    'period': year_key,
+                    'period_type': 'year',
+                    'banks': []
+                }
+            
+            bank_info = self._get_bank_info(item['bnk_code'])
+            grouped[year_key]['banks'].append({
+                'bank_code': item['bnk_code'],
+                'bank_name': bank_info['name'],
+                'bank_display': bank_info['display'],
+                'total_charge_amount': round(float(item['total_charge_amount'] or 0), 2),
+                'transaction_count': item['transaction_count'] or 0,
+                'formatted_amount': self._format_amount(item['total_charge_amount'] or 0)
+            })
+        
+        return list(grouped.values())
     
     @staticmethod
     def _get_bank_info(bank_code):
-        """Get bank information"""
         try:
+            from .models import memberInfo
             bank = memberInfo.objects.filter(bnk_code=bank_code).first()
             if bank:
                 bank_name = getattr(bank, 'nameL', '') or getattr(bank, 'nameE', '')
@@ -26903,10 +27298,10 @@ class ChargeReportMainView(APIView):
     
     @staticmethod
     def _format_amount(amount):
-        """Format amount with thousand separators"""
         if amount is None:
             return "0"
         return "{:,.0f}".format(float(amount))
+
 
 
 # Keep the existing ChargeReportDetailView class as is, but fix filters
@@ -29011,3 +29406,207 @@ class UserAccessLogListView(APIView):
         logs = UserAccessLog.objects.select_related('user').order_by('-login_time')
         serializer = UserAccessLogSerializer(logs, many=True)
         return Response(serializer.data)
+    
+    
+# -------------------------- SEARCH INDIVIDUAL BANK IBK --------------------------
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import IndividualBankIbkInfo, B1_Yearly, InvestorInfo, B1_Monthly, C1, request_charge, Main_catalog_cat, B1  # Added B1 if not already imported
+from django.forms.models import model_to_dict
+from .serializers import IndividualBankIbkInfoSerializer, B1_YearlySerializer, InvestorInfoSerializer, B1Serializer, RequestChargeSerializer
+from datetime import date, timedelta
+from django.db.models import Q
+
+# Assuming these collateral models are imported elsewhere in your .models; add if missing
+# from .models import col_real_estates, col_money_mia, col_equipment_eqi, col_project_prj, col_vechicle_veh, col_guarantor_gua, col_goldsilver_gold
+    
+class FCR_reportIndividualView(APIView):    
+    def get(self, request):  # Changed to GET
+        lcic_id = request.GET.get('lcic_id', '').strip()  # Changed to request.GET.get()
+        loan_purpose = request.GET.get('CatalogID', '')  # Changed to request.GET.get(); remove if unused
+
+        print("test lcic", lcic_id)
+        print("test print", loan_purpose)
+
+        status_inactive = "INACTIVE"
+        status_active = "ACTIVE"
+
+        # --- Get dynamic years from catalog ---
+        year_record = Main_catalog_cat.objects.filter(ct_type="FRY").first()
+        inactive_years = int(year_record.cat_value) if year_record else 3  # fallback 3 years
+        cutoff_date = date.today() - timedelta(days=inactive_years * 365)
+        
+        # --- Apply loan filters ---
+        loan_info = B1.objects.filter(
+            LCIC_code=lcic_id
+        ).exclude(
+            Q(lon_status="INACTIVE") & Q(lon_exp_date__lt=cutoff_date)
+        ).order_by('lon_status')
+        # -------------------------------------
+        
+        try:
+           
+            ind_info = IndividualBankIbkInfo.objects.filter(lcic_id=lcic_id)
+            print("Individual Info: ", ind_info)
+            loan_info = B1.objects.filter(  # Redundant but kept as-is
+                LCIC_code=lcic_id
+            ).exclude(
+                Q(lon_status="INACTIVE") & Q(lon_exp_date__lt=cutoff_date)
+            ).order_by('lon_status')
+            # inves_info = InvestorInfo.objects.filter(lcic_id=lcic_id)  # Uncomment/adjust if needed
+            search_history = request_charge.objects.filter(LCIC_code=lcic_id)
+            
+            
+            
+
+            # if not ind_info.exists():
+            #     return Response({"detail": "Individual information not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            loan_info_list_active = []   
+
+            
+            col_type_to_model = {
+                'C2.1': col_real_estates,
+                'C2.2': col_money_mia,
+                'C2.3': col_equipment_eqi,
+                'C2.4': col_project_prj,
+                'C2.5': col_vechicle_veh,
+                'C2.6': col_guarantor_gua,
+                'C2.7': col_goldsilver_gold,
+            }
+            
+            for loan in loan_info:
+                    lon_class_history = B1_Monthly.objects.filter(
+                        LCIC_code=lcic_id,
+                        bnk_code=loan.bnk_code,
+                        customer_id=loan.customer_id,
+                        branch_id=loan.branch_id,
+                        loan_id=loan.loan_id,
+                    ).order_by('-period')[:12]
+                    
+                  
+                    
+                    lon_class_history_list = list(lon_class_history.values())
+
+                    
+                    colleteral_list = C1.objects.filter(
+                        LCIC_code=lcic_id,
+                        bnk_code=loan.bnk_code,
+                        branch_id_code=loan.branch_id,
+                        bank_customer_ID=loan.customer_id,
+                        loan_id=loan.loan_id,
+                    )
+                    print("Colleteral ---------------> : ", colleteral_list)
+                    
+                    
+                    collateral_history_list = []
+                    for collateral in colleteral_list:
+                        col_id = collateral.col_id
+                        col_type = collateral.col_type
+
+                       
+                        
+
+                        # Get the related model based on col_type
+                        related_model = col_type_to_model.get(col_type)
+                        print("related_model: ======>", related_model)
+
+                        if related_model:
+                            # Query the related table using col_id
+                            related_record = related_model.objects.filter(col_id=col_id).first()
+                                
+                            print("get Related_Records : ====> ", related_record)
+
+                            if related_record:
+                                related_record_dict = model_to_dict(related_record)
+                                collateral_dict = model_to_dict(collateral)
+
+                               
+                                collateral_history_list.append({
+                                    "col_id": col_id,
+                                    "col_type": col_type,
+                                    "collateral_info": collateral_dict, #C1
+                                    "related_record": related_record_dict, #C2.n
+                                })
+                        else:
+                            print(f"Unrecognized col_type: {col_type} for collateral ID {col_id}")
+                    
+                    lon_purpose_detail = (
+                        Main_catalog_cat.objects.filter(ct_type="LPR", cat_value=loan.lon_purpose_code)
+                        .first()
+                    )
+
+                    lon_purpose_detail = lon_purpose_detail.cat_lao_name if lon_purpose_detail else None
+                        
+                    loan_data_active = {
+                        "id": loan.loan_id,
+                        "lon_update_date": loan.lon_update_date,
+                        "bank": loan.bnk_code,
+                        "lon_insert_date": loan.lon_insert_date,
+                        "lon_credit_line": loan.lon_credit_line,
+                        "lon_outstanding_balance": loan.lon_outstanding_balance,
+                        "lon_currency_code": loan.lon_currency_code,
+                        "lon_no_days_slow": loan.lon_no_days_slow,
+                        "lon_class": loan.lon_class,
+                        "period": loan.period,
+                        "lon_open_date": loan.lon_open_date,
+                        "lon_exp_date": loan.lon_exp_date,
+                        "lon_ext_date": loan.lon_ext_date,
+                        "lon_int_rate": loan.lon_int_rate,
+                        # "lon_purpose_code": loan.lon_purpose_code,
+                        "lon_purpose_code": lon_purpose_detail,
+                        "lon_account_no": loan.lon_account_no,
+                        "lon_status": loan.lon_status,
+                        "lon_type": loan.lon_type,
+                        "lon_term": loan.lon_term,
+                        "is_disputed": loan.is_disputed,
+                        "lon_applied_date": loan.lon_applied_date,
+                        "lon_class_history": lon_class_history_list,
+                        "collateral_history": collateral_history_list,
+                    }
+
+                    loan_info_list_active.append(loan_data_active)
+                    print("Loan Data For Active: -------> ", loan_info_list_active)
+                    
+            # Exclude bnk_code=01 directly in query
+            search_history = request_charge.objects.filter(
+                LCIC_code=lcic_id
+            ).exclude(bnk_code="01")
+
+            lon_search_history_list = []
+            for lon_search in search_history:
+                print(lon_search.lon_purpose)
+                lon_purpose_detail = Main_catalog_cat.objects.filter(cat_value=lon_search.lon_purpose)
+                
+                for lon_pur_code in lon_purpose_detail:
+                    print("Loan_purpose:-->", lon_pur_code.cat_lao_name)
+
+                search_data = {
+                    "id": lon_search.insert_date,
+                    "bnk_code": lon_search.bnk_code,
+                    "lon_purpose": lon_pur_code.cat_lao_name if lon_purpose_detail.exists() else None
+                }
+                lon_search_history_list.append(search_data)
+
+            ind_info_serializer = IndividualBankIbkInfoSerializer(ind_info, many=True)
+            loan_info_serializer = B1Serializer(loan_info, many=True)
+            # inves_info_serializer = InvestorInfoSerializer(inves_info, many=True)
+            request_charge_serializer = RequestChargeSerializer(search_history, many=True)
+            print("---> FCR Report View: ", request_charge_serializer)
+            
+            
+            response_data = {
+                'enterprise_info': ind_info_serializer.data,
+                'loan_info': loan_info_serializer.data,
+                # 'inves_info': inves_info_serializer.data,
+                'active_loans': loan_info_list_active,
+                # 'search_history': request_charge_serializer.data
+                'search_history':lon_search_history_list
+            }
+
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"Error occurred: {str(e)}")
+            return Response({"detail": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
