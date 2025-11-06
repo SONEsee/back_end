@@ -395,6 +395,7 @@ urlpatterns = [
 
     
     path('api/rollback_reconfirm/', views.rollback_and_reconfirm_individual, name='rollback_reconfirm'),
+    path('api/rollback_reconfirm_collateral/', views.rollback_and_reconfirm_collateral, name='rollback_reconfirm_collateral'),
 
 
     # path('api/search-individual/', views.search_individual_bank_advanced, name='search_individual_bank_advanced'),
