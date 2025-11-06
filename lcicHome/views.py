@@ -3302,698 +3302,490 @@ logger = logging.getLogger(__name__)
 #                 'message': f'ອັບໂຫຼດສຳເລັດ {len(success)} ໄຟລ໌',
 #                 'uploaded': success
 #             }, status=201)
-from rest_framework import generics
-from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.response import Response
-from django.views.decorators.csrf import ensure_csrf_cookie
-from django.utils.decorators import method_decorator
-from django.db import transaction
-from django.utils import timezone
-from django.core.files.uploadedfile import UploadedFile  # ← ເພີ່ມນີ້
-from collections import defaultdict
-import json
-import logging
-# ຫຼື
-# from .processing import process_collateral_file  # ຖ້າເກັບຢູ່ໃນ processing.py
-
-logger = logging.getLogger(__name__)
-
-class FileUploadViewIndividual(generics.CreateAPIView):
-    queryset = Upload_File_Individual_Collateral.objects.all()
-    serializer_class = IndividualFileSerializer
-    parser_classes = (MultiPartParser, FormParser)
-
-    @method_decorator(ensure_csrf_cookie)
-    def post(self, request, *args, **kwargs):
-        user_id = request.data.get('user_id')
-        if not user_id:
-            return Response({
-                'status': 'error',
-                'error_code': 'MISSING_USER_ID',
-                'message': 'ກະລຸນາປ້ອນ User ID'
-            }, status=400)
-
-        files = request.FILES.getlist('file')
-        if not files:
-            return Response({
-                'status': 'error',
-                'error_code': 'NO_FILES',
-                'message': 'ກະລຸນາເລືອກໄຟລ໌'
-            }, status=400)
-
-        upload_success = []
-        upload_errors = []
-
-        for file in files:
-            try:
-                with transaction.atomic():
-                    result = self._process_single_file(file, user_id)
-                    if 'error_code' in result:
-                        upload_errors.append(result)
-                    else:
-                        upload_success.append(result)
-            except Exception as e:
-                logger.error(f"Unexpected error processing {file.name}: {str(e)}", exc_info=True)
-                upload_errors.append({
-                    'file_name': file.name,
-                    'error_code': 'UNEXPECTED_ERROR',
-                    'message': f'ຜິດພາດທີ່ບໍ່ຄາດຄິດ: {str(e)}'
-                })
-
-        return self._create_response(upload_success, upload_errors)
-
-    def _process_single_file(self, file, user_id):
-        if not file.name.endswith('.json'):
-            return {
-                'file_name': file.name,
-                'error_code': 'INVALID_FILE_TYPE',
-                'message': 'ຕ້ອງເປັນໄຟລ໌ .json ເທົ່ານັ້ນ'
-            }
-
-        # ອ່ານແລະ parse JSON
-        try:
-            file_content = file.read().decode('utf-8')
-            file.seek(0)
-            file_data = json.loads(file_content)
-            if isinstance(file_data, list) and file_data:
-                file_data = file_data[0]
-            elif not isinstance(file_data, dict):
-                return {
-                    'file_name': file.name,
-                    'error_code': 'INVALID_JSON',
-                    'message': 'ໂຄງສ້າງ JSON ບໍ່ຖືກຕ້ອງ'
-                }
-        except json.JSONDecodeError:
-            return {
-                'file_name': file.name,
-                'error_code': 'INVALID_JSON',
-                'message': 'JSON ບໍ່ຖືກຕ້ອງ ຫຼື ບໍ່ສາມາດອ່ານໄດ້'
-            }
-
-        # ກວດສອບ bnk_code ແລະ segmentType
-        bnk_code = file_data.get('bnk_code')
-        segment_type = file_data.get('segmentType')
-        if not bnk_code:
-            return {'file_name': file.name, 'error_code': 'MISSING_BNK_CODE', 'message': 'ບໍ່ພົບ bnk_code ໃນ JSON'}
-        if not segment_type:
-            return {'file_name': file.name, 'error_code': 'MISSING_SEGMENT_TYPE', 'message': 'ບໍ່ພົບ segmentType ໃນ JSON'}
-
-        if str(user_id) != str(bnk_code):
-            return {
-                'file_name': file.name,
-                'error_code': 'MISMATCH_BNK_CODE',
-                'message': f'user_id ({user_id}) ບໍ່ກົງກັບ bnk_code ({bnk_code})'
-            }
-
-        # ກວດສອບໄຟລ໌ຊ້ຳ
-        if Upload_File_Individual_Collateral.objects.filter(
-            fileName=file.name, user_id=user_id
-        ).exists():
-            return {
-                'file_name': file.name,
-                'error_code': 'FILE_EXISTS',
-                'message': 'ໄຟລ໌ນີ້ມີແລ້ວໃນລະບົບ'
-            }
-
-        # ຕັດເອົາ period ຈາກຊື່ໄຟລ໌
-        file_name_without_ext = file.name.rsplit('.', 1)[0]
-        file_name_parts = file_name_without_ext.split('_')
-
-        period_part = None
-        for part in file_name_parts:
-            if part.startswith('M') and len(part) == 7 and part[1:].isdigit():
-                period_part = part
-                break
-
-        if not period_part:
-            return {
-                'file_name': file.name,
-                'error_code': 'INVALID_PERIOD_FORMAT',
-                'message': 'ບໍ່ພົບ period ໃນຊື່ໄຟລ໌ (ຕ້ອງການ M062020)'
-            }
-
-        try:
-            month_str = period_part[1:3]
-            year_str = period_part[3:7]
-            period_month = int(month_str)
-            period_year = int(year_str)
-            if not (1 <= period_month <= 12):
-                raise ValueError
-            file_period = f"{period_year}{month_str}"
-            file_period_int = int(file_period)
-        except ValueError:
-            return {
-                'file_name': file.name,
-                'error_code': 'INVALID_PERIOD_FORMAT',
-                'message': 'Period ບໍ່ຖືກຕ້ອງ (ຕົວຢ່າງ: M062020)'
-            }
-
-        # ກວດສອບ period ກັບ C1
-        c1_entries = C1.objects.filter(bnk_code=bnk_code, segmentType=segment_type)
-        if c1_entries.exists():
-            latest_c1 = c1_entries.order_by('-period').first()
-            c1_period_str = latest_c1.period
-            if len(c1_period_str) != 6 or not c1_period_str.isdigit():
-                return {
-                    'file_name': file.name,
-                    'error_code': 'INVALID_C1_PERIOD',
-                    'message': 'ຂໍ້ມູນ period ໃນ C1 ບໍ່ຖືກຕ້ອງ'
-                }
-            c1_period_int = int(c1_period_str)
-            if file_period_int < c1_period_int:
-                return {
-                    'file_name': file.name,
-                    'error_code': 'PERIOD_TOO_OLD',
-                    'message': f'Period {file_period} ເກົ່າກວ່າ C1 ຫຼ້າສຸດ {c1_period_str}'
-                }
-
-        # ກວດສອບ member
-        try:
-            member = memberInfo.objects.get(bnk_code=bnk_code)
-        except memberInfo.DoesNotExist:
-            return {'file_name': file.name, 'error_code': 'BANK_NOT_FOUND', 'message': f'ບໍ່ພົບທະນາຄານ {bnk_code}'}
-
-        # ດຶງຂໍ້ມູນ reference ຈາກ IndividualBankIbk
-        print(f"\n[CACHE] ດຶງຂໍ້ມູນຈາກ IndividualBankIbk ສຳລັບ bnk_code: {bnk_code}...")
-        bank_data = list(
-            IndividualBankIbk.objects.filter(bnk_code=bnk_code)
-                                    .values('lcic_id', 'customerid')
-                                    .iterator()
-        )
-        print(f"  ດຶງມາແລ້ວ: {len(bank_data):,} records")
-
-        lcic_customer_pairs = {(d['lcic_id'], d['customerid']) for d in bank_data}
-        valid_lcic_ids = {d['lcic_id'] for d in bank_data}
-        valid_customer_ids = {d['customerid'] for d in bank_data}
-
-        print(f"  ຄູ່ LCIC+Customer: {len(lcic_customer_pairs):,}")
-        print(f"  LCIC IDs: {len(valid_lcic_ids):,}")
-        print(f"  Customer IDs: {len(valid_customer_ids):,}")
-
-        # ສົ່ງໄປປະມວນຜົນໃນ process_collateral_file
-        file.seek(0)
-        return process_collateral_file(
-            file, user_id, member, file_period,
-            lcic_customer_pairs, valid_lcic_ids, valid_customer_ids
-        )
-
-    def _create_response(self, success, errors):
-        if errors and not success:
-            return Response({
-                'status': 'error',
-                'message': 'ລົ້ມເຫຼວທັງໝົດ',
-                'errors': errors
-            }, status=400)
-        elif errors:
-            return Response({
-                'status': 'partial',
-                'message': f'ສຳເລັດ {len(success)}, ລົ້ມເຫຼວ {len(errors)}',
-                'success': success,
-                'errors': errors
-            }, status=207)
-        else:
-            return Response({
-                'status': 'success',
-                'message': f'ອັບໂຫຼດສຳເລັດ {len(success)} ໄຟລ໌',
-                'uploaded': success
-            }, status=201)
+# from rest_framework import generics
+# from rest_framework.parsers import MultiPartParser, FormParser
+# from rest_framework.response import Response
+# from django.views.decorators.csrf import ensure_csrf_cookie
+# from django.utils.decorators import method_decorator
+# from django.db import transaction
+# from django.utils import timezone
+# from django.core.files.uploadedfile import UploadedFile  
+# from collections import defaultdict
+# import json
+# import logging
 
 
-def process_collateral_file(
-    file: UploadedFile, user_id: str, member, period_value: str,
-    lcic_customer_pairs, valid_lcic_ids, valid_customer_ids
-) -> dict:
-    print(f"\n{'='*80}")
-    print(f"PROCESSING ເລີ່ມປະມວນຜົນໄຟລ໌: {file.name}")
-    print(f"{'='*80}")
+# logger = logging.getLogger(__name__)
+
+# class FileUploadViewIndividual(generics.CreateAPIView):
+#     queryset = Upload_File_Individual_Collateral.objects.all()
+#     serializer_class = IndividualFileSerializer
+#     parser_classes = (MultiPartParser, FormParser)
+
+#     @method_decorator(ensure_csrf_cookie)
+#     def post(self, request, *args, **kwargs):
+#         user_id = request.data.get('user_id')
+#         if not user_id:
+#             return Response({
+#                 'status': 'error',
+#                 'error_code': 'MISSING_USER_ID',
+#                 'message': 'ກະລຸນາປ້ອນ User ID'
+#             }, status=400)
+
+#         files = request.FILES.getlist('file')
+#         if not files:
+#             return Response({
+#                 'status': 'error',
+#                 'error_code': 'NO_FILES',
+#                 'message': 'ກະລຸນາເລືອກໄຟລ໌'
+#             }, status=400)
+
+#         upload_success = []
+#         upload_errors = []
+
+#         for file in files:
+#             try:
+#                 with transaction.atomic():
+#                     result = self._process_single_file(file, user_id)
+#                     if 'error_code' in result:
+#                         upload_errors.append(result)
+#                     else:
+#                         upload_success.append(result)
+#             except Exception as e:
+#                 logger.error(f"Unexpected error processing {file.name}: {str(e)}", exc_info=True)
+#                 upload_errors.append({
+#                     'file_name': file.name,
+#                     'error_code': 'UNEXPECTED_ERROR',
+#                     'message': f'ຜິດພາດທີ່ບໍ່ຄາດຄິດ: {str(e)}'
+#                 })
+
+#         return self._create_response(upload_success, upload_errors)
+
+#     def _process_single_file(self, file, user_id):
+#         if not file.name.endswith('.json'):
+#             return {
+#                 'file_name': file.name,
+#                 'error_code': 'INVALID_FILE_TYPE',
+#                 'message': 'ຕ້ອງເປັນໄຟລ໌ .json ເທົ່ານັ້ນ'
+#             }
+
+#         try:
+#             file_content = file.read().decode('utf-8')
+#             file.seek(0)
+#             file_data = json.loads(file_content)
+#             if isinstance(file_data, list) and file_data:
+#                 file_data = file_data[0]
+#             elif not isinstance(file_data, dict):
+#                 return {
+#                     'file_name': file.name,
+#                     'error_code': 'INVALID_JSON',
+#                     'message': 'ໂຄງສ້າງ JSON ບໍ່ຖືກຕ້ອງ'
+#                 }
+#         except json.JSONDecodeError:
+#             return {
+#                 'file_name': file.name,
+#                 'error_code': 'INVALID_JSON',
+#                 'message': 'JSON ບໍ່ຖືກຕ້ອງ ຫຼື ບໍ່ສາມາດອ່ານໄດ້'
+#             }
+
+      
+#         bnk_code = file_data.get('bnk_code')
+#         segment_type = file_data.get('segmentType')
+#         if not bnk_code:
+#             return {'file_name': file.name, 'error_code': 'MISSING_BNK_CODE', 'message': 'ບໍ່ພົບ bnk_code ໃນ JSON'}
+#         if not segment_type:
+#             return {'file_name': file.name, 'error_code': 'MISSING_SEGMENT_TYPE', 'message': 'ບໍ່ພົບ segmentType ໃນ JSON'}
+
+#         if str(user_id) != str(bnk_code):
+#             return {
+#                 'file_name': file.name,
+#                 'error_code': 'MISMATCH_BNK_CODE',
+#                 'message': f'user_id ({user_id}) ບໍ່ກົງກັບ bnk_code ({bnk_code})'
+#             }
+
+       
+#         if Upload_File_Individual_Collateral.objects.filter(
+#             fileName=file.name, user_id=user_id
+#         ).exists():
+#             return {
+#                 'file_name': file.name,
+#                 'error_code': 'FILE_EXISTS',
+#                 'message': 'ໄຟລ໌ນີ້ມີແລ້ວໃນລະບົບ'
+#             }
+
+       
+#         file_name_without_ext = file.name.rsplit('.', 1)[0]
+#         file_name_parts = file_name_without_ext.split('_')
+
+#         period_part = None
+#         for part in file_name_parts:
+#             if part.startswith('M') and len(part) == 7 and part[1:].isdigit():
+#                 period_part = part
+#                 break
+
+#         if not period_part:
+#             return {
+#                 'file_name': file.name,
+#                 'error_code': 'INVALID_PERIOD_FORMAT',
+#                 'message': 'ບໍ່ພົບ period ໃນຊື່ໄຟລ໌ (ຕ້ອງການ M062020)'
+#             }
+
+#         try:
+#             month_str = period_part[1:3]
+#             year_str = period_part[3:7]
+#             period_month = int(month_str)
+#             period_year = int(year_str)
+#             if not (1 <= period_month <= 12):
+#                 raise ValueError
+#             file_period = f"{period_year}{month_str}"
+#             file_period_int = int(file_period)
+#         except ValueError:
+#             return {
+#                 'file_name': file.name,
+#                 'error_code': 'INVALID_PERIOD_FORMAT',
+#                 'message': 'Period ບໍ່ຖືກຕ້ອງ (ຕົວຢ່າງ: M062020)'
+#             }
+
+       
+#         c1_entries = C1.objects.filter(bnk_code=bnk_code, segmentType=segment_type)
+#         if c1_entries.exists():
+#             latest_c1 = c1_entries.order_by('-period').first()
+#             c1_period_str = latest_c1.period
+#             if len(c1_period_str) != 6 or not c1_period_str.isdigit():
+#                 return {
+#                     'file_name': file.name,
+#                     'error_code': 'INVALID_C1_PERIOD',
+#                     'message': 'ຂໍ້ມູນ period ໃນ C1 ບໍ່ຖືກຕ້ອງ'
+#                 }
+#             c1_period_int = int(c1_period_str)
+#             if file_period_int < c1_period_int:
+#                 return {
+#                     'file_name': file.name,
+#                     'error_code': 'PERIOD_TOO_OLD',
+#                     'message': f'Period {file_period} ເກົ່າກວ່າ C1 ຫຼ້າສຸດ {c1_period_str}'
+#                 }
+
+       
+#         try:
+#             member = memberInfo.objects.get(bnk_code=bnk_code)
+#         except memberInfo.DoesNotExist:
+#             return {'file_name': file.name, 'error_code': 'BANK_NOT_FOUND', 'message': f'ບໍ່ພົບທະນາຄານ {bnk_code}'}
+
+        
+#         print(f"\n[CACHE] ດຶງຂໍ້ມູນຈາກ IndividualBankIbk ສຳລັບ bnk_code: {bnk_code}...")
+#         bank_data = list(
+#             IndividualBankIbk.objects.filter(bnk_code=bnk_code)
+#                                     .values('lcic_id', 'customerid')
+#                                     .iterator()
+#         )
+#         print(f"  ດຶງມາແລ້ວ: {len(bank_data):,} records")
+
+#         lcic_customer_pairs = {(d['lcic_id'], d['customerid']) for d in bank_data}
+#         valid_lcic_ids = {d['lcic_id'] for d in bank_data}
+#         valid_customer_ids = {d['customerid'] for d in bank_data}
+
+#         print(f"  ຄູ່ LCIC+Customer: {len(lcic_customer_pairs):,}")
+#         print(f"  LCIC IDs: {len(valid_lcic_ids):,}")
+#         print(f"  Customer IDs: {len(valid_customer_ids):,}")
+
+       
+#         file.seek(0)
+#         return process_collateral_file(
+#             file, user_id, member, file_period,
+#             lcic_customer_pairs, valid_lcic_ids, valid_customer_ids
+#         )
+
+#     def _create_response(self, success, errors):
+#         if errors and not success:
+#             return Response({
+#                 'status': 'error',
+#                 'message': 'ລົ້ມເຫຼວທັງໝົດ',
+#                 'errors': errors
+#             }, status=400)
+#         elif errors:
+#             return Response({
+#                 'status': 'partial',
+#                 'message': f'ສຳເລັດ {len(success)}, ລົ້ມເຫຼວ {len(errors)}',
+#                 'success': success,
+#                 'errors': errors
+#             }, status=207)
+#         else:
+#             return Response({
+#                 'status': 'success',
+#                 'message': f'ອັບໂຫຼດສຳເລັດ {len(success)} ໄຟລ໌',
+#                 'uploaded': success
+#             }, status=201)
+
+
+# def process_collateral_file(
+#     file: UploadedFile, user_id: str, member, period_value: str,
+#     lcic_customer_pairs, valid_lcic_ids, valid_customer_ids
+# ) -> dict:
+#     print(f"\n{'='*80}")
+#     print(f"PROCESSING ເລີ່ມປະມວນຜົນໄຟລ໌: {file.name}")
+#     print(f"{'='*80}")
     
-    try:
-        # ກວດສອບໄຟລ໌ວ່າງ
-        if file.size == 0:
-            return {'file_name': file.name, 'error_code': 'EMPTY_FILE', 'message': 'ໄຟລ໌ວ່າງ'}
-
-        # ອ່ານແລະ parse JSON
-        file_content = file.read().decode('utf-8')
-        file.seek(0)
-        try:
-            data = json.loads(file_content)
-            data_list = data if isinstance(data, list) else [data]
-            if len(data_list) == 0:
-                return {'file_name': file.name, 'error_code': 'EMPTY_DATA', 'message': 'ບໍ່ມີຂໍ້ມູນ'}
-        except json.JSONDecodeError as e:
-            return {'file_name': file.name, 'error_code': 'INVALID_JSON', 'message': f'JSON ຜິດ: {str(e)}'}
-
-        # ສ້າງ Upload_File_Individual_Collateral record
-        upload_file = Upload_File_Individual_Collateral(
-            user_id=user_id,
-            file_id='',
-            fileName=file.name,
-            fileUpload=file,
-            fileSize=human_readable_size(file.size),
-            path=f"uploadFilesIdividualCallateral/{file.name}",
-            period=period_value,
-            status=STATUS_UPLOADED,
-            statussubmit=STATUSSUBMIT_INITIAL,
-            status_upload=STATUS_PENDING,
-            FileType='json',
-            percentage=0.0,
-            progress_percentage=0
-        )
-        upload_file.save()
-        CID = str(upload_file.CID)
-        CID_with_prefix = f"c-{CID}"
-
-        # ດຶງຂໍ້ມູນ C1 ເພື່ອສ້າງ lookup
-        print("  Loading C1 reference data...")
-        c1_records = C1.objects.values(
-            'bank_customer_ID', 'bnk_code', 'loan_id', 'col_id',
-            'LCIC_code', 'segmentType'
-        )
+#     try:
         
-        # ສ້າງ indexes ສຳລັບກວດສອບ
-        c1_case1_index = {}
-        c1_case2_index = {}
+#         if file.size == 0:
+#             return {'file_name': file.name, 'error_code': 'EMPTY_FILE', 'message': 'ໄຟລ໌ວ່າງ'}
+
         
-        for record in c1_records:
-            bank_id = record['bank_customer_ID']
-            bnk = record['bnk_code']
-            loan = record['loan_id']
-            col = record['col_id']
-            lcic = record['LCIC_code']
+#         file_content = file.read().decode('utf-8')
+#         file.seek(0)
+#         try:
+#             data = json.loads(file_content)
+#             data_list = data if isinstance(data, list) else [data]
+#             if len(data_list) == 0:
+#                 return {'file_name': file.name, 'error_code': 'EMPTY_DATA', 'message': 'ບໍ່ມີຂໍ້ມູນ'}
+#         except json.JSONDecodeError as e:
+#             return {'file_name': file.name, 'error_code': 'INVALID_JSON', 'message': f'JSON ຜິດ: {str(e)}'}
+
+        
+#         upload_file = Upload_File_Individual_Collateral(
+#             user_id=user_id,
+#             file_id='',
+#             fileName=file.name,
+#             fileUpload=file,
+#             fileSize=human_readable_size(file.size),
+#             path=f"uploadFilesIdividualCallateral/{file.name}",
+#             period=period_value,
+#             status=STATUS_UPLOADED,
+#             statussubmit=STATUSSUBMIT_INITIAL,
+#             status_upload=STATUS_PENDING,
+#             FileType='json',
+#             percentage=0.0,
+#             progress_percentage=0
+#         )
+#         upload_file.save()
+#         CID = str(upload_file.CID)
+#         CID_with_prefix = f"c-{CID}"
+
+        
+#         print("  Loading C1 reference data...")
+#         c1_records = C1.objects.values(
+#             'bank_customer_ID', 'bnk_code', 'loan_id', 'col_id',
+#             'LCIC_code', 'segmentType'
+#         )
+        
+       
+#         c1_case1_index = {}
+#         c1_case2_index = {}
+        
+#         for record in c1_records:
+#             bank_id = record['bank_customer_ID']
+#             bnk = record['bnk_code']
+#             loan = record['loan_id']
+#             col = record['col_id']
+#             lcic = record['LCIC_code']
             
-            key1 = (bank_id, bnk, loan, col)
-            if key1 not in c1_case1_index:
-                c1_case1_index[key1] = []
-            c1_case1_index[key1].append(lcic)
+#             key1 = (bank_id, bnk, loan, col)
+#             if key1 not in c1_case1_index:
+#                 c1_case1_index[key1] = []
+#             c1_case1_index[key1].append(lcic)
             
-            key2 = (bank_id, loan, col, lcic)
-            if key2 not in c1_case2_index:
-                c1_case2_index[key2] = []
-            c1_case2_index[key2].append(bnk)
+#             key2 = (bank_id, loan, col, lcic)
+#             if key2 not in c1_case2_index:
+#                 c1_case2_index[key2] = []
+#             c1_case2_index[key2].append(bnk)
         
-        print(f"  Loaded {len(c1_records)} C1 records for validation")
+#         print(f"  Loaded {len(c1_records)} C1 records for validation")
 
-        # ເລີ່ມປະມວນຜົນແຕ່ລະ record
-        damaged_batch = []
-        dispute_batch = []
-        good_batch_by_type = {f'c2.{i}': [] for i in range(1, 9)}
+       
+#         damaged_batch = []
+#         dispute_batch = []
+#         good_batch_by_type = {f'c2.{i}': [] for i in range(1, 9)}
         
-        total_records = len(data_list)
-        progress_interval = max(1, total_records // 10)
+#         total_records = len(data_list)
+#         progress_interval = max(1, total_records // 10)
 
-        print(f"\n  Processing {total_records} records...")
+#         print(f"\n  Processing {total_records} records...")
         
-        for idx, item in enumerate(data_list, 1):
-            if idx % progress_interval == 0 or idx == total_records:
-                percentage = (idx / total_records) * 100
-                good_count = sum(len(v) for v in good_batch_by_type.values())
-                print(f"  Progress: {idx}/{total_records} ({percentage:.1f}%) | Good: {good_count} | Dispute: {len(dispute_batch)} | Damaged: {len(damaged_batch)}")
+#         for idx, item in enumerate(data_list, 1):
+#             if idx % progress_interval == 0 or idx == total_records:
+#                 percentage = (idx / total_records) * 100
+#                 good_count = sum(len(v) for v in good_batch_by_type.values())
+#                 print(f"  Progress: {idx}/{total_records} ({percentage:.1f}%) | Good: {good_count} | Dispute: {len(dispute_batch)} | Damaged: {len(damaged_batch)}")
 
-            bnk_code = item.get('bnk_code', '')
-            lcic_code = item.get('LCIC_code', '')
-            customer_id = item.get('customer_id', '')
-            bank_customer_ID = item.get('bank_customer_ID', '')
-            loan_id = item.get('loan_id', '')
-            col_id = item.get('col_id', '')
-            col_type = item.get('col_type', '').lower()
-            segment_type = item.get('segmentType', '')
+#             bnk_code = item.get('bnk_code', '')
+#             lcic_code = item.get('LCIC_code', '')
+#             customer_id = item.get('customer_id', '')
+#             bank_customer_ID = item.get('bank_customer_ID', '')
+#             loan_id = item.get('loan_id', '')
+#             col_id = item.get('col_id', '')
+#             col_type = item.get('col_type', '').lower()
+#             segment_type = item.get('segmentType', '')
 
-            # 1. ກວດສອບ bnk_code
-            if not bnk_code:
-                damaged_batch.append(create_collateral_damaged_record(
-                    item, 'collateral_status', '99', CID_with_prefix, period_value, user_id
-                ))
-                continue
+           
+#             if not bnk_code:
+#                 damaged_batch.append(create_collateral_damaged_record(
+#                     item, 'collateral_status', '99', CID_with_prefix, period_value, user_id
+#                 ))
+#                 continue
 
-            # 2. ກວດສອບ LCIC_code & customer_id ກັບ IndividualBankIbk
-            if not lcic_code and not customer_id:
-                damaged_batch.append(create_collateral_damaged_record(
-                    item, 'collateral_status', '33', CID_with_prefix, period_value, user_id
-                ))
-                continue
             
-            # ກວດສອບກັບຖານຂໍ້ມູນ IndividualBankIbk
-            lcic_ok = lcic_code in valid_lcic_ids if lcic_code else False
-            customer_ok = customer_id in valid_customer_ids if customer_id else False
-            pair_ok = (lcic_code, customer_id) in lcic_customer_pairs if (lcic_code and customer_id) else False
-
-            if not lcic_code:
-                # ມີແຕ່ customer_id
-                if customer_ok:
-                    damaged_batch.append(create_collateral_damaged_record(
-                        item, 'collateral_status', '01', CID_with_prefix, period_value, user_id
-                    ))
-                else:
-                    damaged_batch.append(create_collateral_damaged_record(
-                        item, 'collateral_status', '03', CID_with_prefix, period_value, user_id
-                    ))
-                continue
+#             if not lcic_code and not customer_id:
+#                 damaged_batch.append(create_collateral_damaged_record(
+#                     item, 'collateral_status', '33', CID_with_prefix, period_value, user_id
+#                 ))
+#                 continue
             
-            if not customer_id:
-                # ມີແຕ່ lcic_code
-                if lcic_ok:
-                    damaged_batch.append(create_collateral_damaged_record(
-                        item, 'collateral_status', '10', CID_with_prefix, period_value, user_id
-                    ))
-                else:
-                    damaged_batch.append(create_collateral_damaged_record(
-                        item, 'collateral_status', '30', CID_with_prefix, period_value, user_id
-                    ))
-                continue
+          
+#             lcic_ok = lcic_code in valid_lcic_ids if lcic_code else False
+#             customer_ok = customer_id in valid_customer_ids if customer_id else False
+#             pair_ok = (lcic_code, customer_id) in lcic_customer_pairs if (lcic_code and customer_id) else False
 
-            # ມີທັງສອງແລ້ວ ກວດເພີ່ມເຕີມ
-            if not lcic_ok and not customer_ok:
-                damaged_batch.append(create_collateral_damaged_record(
-                    item, 'collateral_status', '33', CID_with_prefix, period_value, user_id
-                ))
-                continue
-            elif lcic_ok and not customer_ok:
-                damaged_batch.append(create_collateral_damaged_record(
-                    item, 'collateral_status', '31', CID_with_prefix, period_value, user_id
-                ))
-                continue
-            elif not lcic_ok and customer_ok:
-                damaged_batch.append(create_collateral_damaged_record(
-                    item, 'collateral_status', '13', CID_with_prefix, period_value, user_id
-                ))
-                continue
-            elif not pair_ok:
-                damaged_batch.append(create_collateral_damaged_record(
-                    item, 'collateral_status', '44', CID_with_prefix, period_value, user_id
-                ))
-                continue
+#             if not lcic_code:
+               
+#                 if customer_ok:
+#                     damaged_batch.append(create_collateral_damaged_record(
+#                         item, 'collateral_status', '01', CID_with_prefix, period_value, user_id
+#                     ))
+#                 else:
+#                     damaged_batch.append(create_collateral_damaged_record(
+#                         item, 'collateral_status', '03', CID_with_prefix, period_value, user_id
+#                     ))
+#                 continue
+            
+#             if not customer_id:
+                
+#                 if lcic_ok:
+#                     damaged_batch.append(create_collateral_damaged_record(
+#                         item, 'collateral_status', '10', CID_with_prefix, period_value, user_id
+#                     ))
+#                 else:
+#                     damaged_batch.append(create_collateral_damaged_record(
+#                         item, 'collateral_status', '30', CID_with_prefix, period_value, user_id
+#                     ))
+#                 continue
 
-            # 3. ຜ່ານການກວດສອບກັບ IndividualBankIbk ແລ້ວ, ກວດກັບ C1
-            inconsistency_found = False
-            action_code = None
+           
+#             if not lcic_ok and not customer_ok:
+#                 damaged_batch.append(create_collateral_damaged_record(
+#                     item, 'collateral_status', '33', CID_with_prefix, period_value, user_id
+#                 ))
+#                 continue
+#             elif lcic_ok and not customer_ok:
+#                 damaged_batch.append(create_collateral_damaged_record(
+#                     item, 'collateral_status', '31', CID_with_prefix, period_value, user_id
+#                 ))
+#                 continue
+#             elif not lcic_ok and customer_ok:
+#                 damaged_batch.append(create_collateral_damaged_record(
+#                     item, 'collateral_status', '13', CID_with_prefix, period_value, user_id
+#                 ))
+#                 continue
+#             elif not pair_ok:
+#                 damaged_batch.append(create_collateral_damaged_record(
+#                     item, 'collateral_status', '44', CID_with_prefix, period_value, user_id
+#                 ))
+#                 continue
 
-            # Case 1: ກວດ (customer_id, bnk_code, loan_id, col_id)
-            # ໝາຍເຫດ: bank_customer_ID ໃນ C1 = customer_id ໃນ JSON
-            key1 = (customer_id, bnk_code, loan_id, col_id)
-            if key1 in c1_case1_index:
-                for existing_lcic in c1_case1_index[key1]:
-                    if existing_lcic != lcic_code:
-                        action_code = '01'
-                        inconsistency_found = True
-                        break
+           
+#             inconsistency_found = False
+#             action_code = None
 
-            # Case 2: ກວດ (customer_id, loan_id, col_id, LCIC_code)
-            if not inconsistency_found:
-                key2 = (customer_id, loan_id, col_id, lcic_code)
-                if key2 in c1_case2_index:
-                    for existing_bnk in c1_case2_index[key2]:
-                        if existing_bnk != bnk_code:
-                            action_code = '02'
-                            inconsistency_found = True
-                            break
+           
+#             key1 = (customer_id, bnk_code, loan_id, col_id)
+#             if key1 in c1_case1_index:
+#                 for existing_lcic in c1_case1_index[key1]:
+#                     if existing_lcic != lcic_code:
+#                         action_code = '01'
+#                         inconsistency_found = True
+#                         break
 
-            if inconsistency_found:
-                dispute_batch.append(create_collateral_dispute_record(
-                    item, action_code, CID_with_prefix, period_value, user_id
-                ))
-                continue
+         
+#             if not inconsistency_found:
+#                 key2 = (customer_id, loan_id, col_id, lcic_code)
+#                 if key2 in c1_case2_index:
+#                     for existing_bnk in c1_case2_index[key2]:
+#                         if existing_bnk != bnk_code:
+#                             action_code = '02'
+#                             inconsistency_found = True
+#                             break
 
-            # 4. ຂໍ້ມູນດີ - ແບ່ງຕາມ col_type
-            if col_type in good_batch_by_type:
-                good_batch_by_type[col_type].append(create_collateral_good_record(
-                    item, col_type, CID_with_prefix, period_value, user_id
-                ))
+#             if inconsistency_found:
+#                 dispute_batch.append(create_collateral_dispute_record(
+#                     item, action_code, CID_with_prefix, period_value, user_id
+#                 ))
+#                 continue
 
-        # Bulk Insert ທັງ 3 ປະເພດ
-        print("\n  Saving to database...")
-        BATCH_SIZE = 1000
+#             if col_type in good_batch_by_type:
+#                 good_batch_by_type[col_type].append(create_collateral_good_record(
+#                     item, col_type, CID_with_prefix, period_value, user_id
+#                 ))
+
+#         print("\n  Saving to database...")
+#         BATCH_SIZE = 1000
         
-        if damaged_batch:
-            for i in range(0, len(damaged_batch), BATCH_SIZE):
-                C_error.objects.bulk_create(damaged_batch[i:i + BATCH_SIZE])
-            print(f"    Saved {len(damaged_batch)} damaged records")
+#         if damaged_batch:
+#             for i in range(0, len(damaged_batch), BATCH_SIZE):
+#                 C_error.objects.bulk_create(damaged_batch[i:i + BATCH_SIZE])
+#             print(f"    Saved {len(damaged_batch)} damaged records")
 
-        if dispute_batch:
-            for i in range(0, len(dispute_batch), BATCH_SIZE):
-                C1_disptes.objects.bulk_create(dispute_batch[i:i + BATCH_SIZE])
-            print(f"    Saved {len(dispute_batch)} dispute records")
+#         if dispute_batch:
+#             for i in range(0, len(dispute_batch), BATCH_SIZE):
+#                 C1_disptes.objects.bulk_create(dispute_batch[i:i + BATCH_SIZE])
+#             print(f"    Saved {len(dispute_batch)} dispute records")
 
-        total_good = 0
-        for col_type_key, good_list in good_batch_by_type.items():
-            if good_list:
-                for i in range(0, len(good_list), BATCH_SIZE):
-                    CDL.objects.bulk_create(good_list[i:i + BATCH_SIZE])
-                total_good += len(good_list)
-        if total_good > 0:
-            print(f"    Saved {total_good} good records (CDL)")
+#         total_good = 0
+#         for col_type_key, good_list in good_batch_by_type.items():
+#             if good_list:
+#                 for i in range(0, len(good_list), BATCH_SIZE):
+#                     CDL.objects.bulk_create(good_list[i:i + BATCH_SIZE])
+#                 total_good += len(good_list)
+#         if total_good > 0:
+#             print(f"    Saved {total_good} good records (CDL)")
 
-        # ຄຳນວນ error percentage ແລະ update status
-        damaged_count = len(damaged_batch)
-        dispute_count = len(dispute_batch)
-        good_count = total_good
-        error_count = damaged_count + dispute_count
-        error_percentage = (error_count / total_records) * 100 if total_records > 0 else 0
+       
+#         damaged_count = len(damaged_batch)
+#         dispute_count = len(dispute_batch)
+#         good_count = total_good
+#         error_count = damaged_count + dispute_count
+#         error_percentage = (error_count / total_records) * 100 if total_records > 0 else 0
 
-        final_status = '2' if error_percentage > 15 else STATUS_PROCESSED
-        final_statussubmit = '2' if error_percentage > 15 else '1'
+#         final_status = '2' if error_percentage > 15 else STATUS_PROCESSED
+#         final_statussubmit = '2' if error_percentage > 15 else '1'
         
-        upload_file.percentage = round(error_percentage, 4)
-        upload_file.status = final_status
-        upload_file.statussubmit = final_statussubmit
-        upload_file.save()
+#         upload_file.percentage = round(error_percentage, 4)
+#         upload_file.status = final_status
+#         upload_file.statussubmit = final_statussubmit
+#         upload_file.save()
 
-        print(f"\n[SUCCESS] ສຳເລັດ: {file.name}")
-        print(f"  Total: {total_records} | Damaged: {damaged_count} | Dispute: {dispute_count} | Good: {good_count}")
-        print(f"  Error %: {round(error_percentage, 2)}% | Status: {final_status}")
+#         print(f"\n[SUCCESS] ສຳເລັດ: {file.name}")
+#         print(f"  Total: {total_records} | Damaged: {damaged_count} | Dispute: {dispute_count} | Good: {good_count}")
+#         print(f"  Error %: {round(error_percentage, 2)}% | Status: {final_status}")
         
-        return {
-            'file_name': file.name,
-            'file_id': upload_file.CID,
-            'id_file': CID_with_prefix,
-            'period': period_value,
-            'status': 'processed',
-            'upload_status': final_status,
-            'statussubmit': final_statussubmit,
-            'total': total_records,
-            'damaged': damaged_count,
-            'dispute': dispute_count,
-            'good': good_count,
-            'error_percentage': round(error_percentage, 2)
-        }
+#         return {
+#             'file_name': file.name,
+#             'file_id': upload_file.CID,
+#             'id_file': CID_with_prefix,
+#             'period': period_value,
+#             'status': 'processed',
+#             'upload_status': final_status,
+#             'statussubmit': final_statussubmit,
+#             'total': total_records,
+#             'damaged': damaged_count,
+#             'dispute': dispute_count,
+#             'good': good_count,
+#             'error_percentage': round(error_percentage, 2)
+#         }
 
-    except Exception as e:
-        logger.error(f"Error processing {file.name}: {str(e)}", exc_info=True)
-        return {'file_name': file.name, 'error_code': 'UNEXPECTED_ERROR', 'message': f'ຜິດພາດ: {str(e)}'}
-
-
-def human_readable_size(size_bytes):
-    """ແປງຂະໜາດໄຟລ໌ເປັນຮູບແບບທີ່ອ່ານງ່າຍ"""
-    if size_bytes == 0:
-        return "0B"
-    size_name = ("B", "KB", "MB", "GB", "TB")
-    i = 0
-    while size_bytes >= 1024 and i < len(size_name) - 1:
-        size_bytes /= 1024.0
-        i += 1
-    return f"{size_bytes:.2f} {size_name[i]}"
+#     except Exception as e:
+#         logger.error(f"Error processing {file.name}: {str(e)}", exc_info=True)
+#         return {'file_name': file.name, 'error_code': 'UNEXPECTED_ERROR', 'message': f'ຜິດພາດ: {str(e)}'}
 
 
-def create_collateral_damaged_record(item, status_field, status_value, id_file, period, user_id):
-    """ສ້າງ damaged record ສຳລັບ C_error"""
-    return C_error(
-        id_file=id_file,
-        LCIC_code=item.get('LCIC_code', ''),
-        com_enterprise_code=item.get('customer_id', ''),  # ຖືກຕ້ອງ
-        bnk_code=item.get('bnk_code', ''),
-        branch_id_code=item.get('branch_id_code', ''),
-        bank_customer_ID=item.get('bank_customer_ID', ''),
-        loan_id=item.get('loan_id', ''),
-        col_id=item.get('col_id', ''),
-        col_type=item.get('col_type', ''),
-        collateral_status=status_value,
-        datamatch='',
-        user_id=user_id,
-        period=period,
-        collateral_insert_date=timezone.now(),
-        collateral_update_date=timezone.now()
-    )
-
-
-
-
-def create_collateral_good_record(item, col_type, id_file, period, user_id):
-    """ສ້າງ good record ສຳລັບ CDL (ແບ່ງຕາມ col_type)"""
-    base_data = {
-        'id_file': id_file,
-        'c1': item.get('LCIC_code', ''),
-        'col_type': col_type.upper(),
-        'c2': item.get('customer_id', ''),
-        'c3': item.get('bnk_code', ''),
-        'c4': item.get('bank_customer_ID', ''),
-        'c5': item.get('branch_id_code', ''),
-        'c6': item.get('loan_id', ''),
-        'c7': item.get('col_id', ''),
-        'c39': item.get('segmentType', ''),
-        'user_id': user_id,
-        'period': period,
-        'c40': timezone.now().date(),
-        'c41': timezone.now().date()
-    }
-
-    # ເພີ່ມຂໍ້ມູນສະເພາະຕາມ col_type
-    if col_type == 'c2.1':
-        base_data.update({
-            'c8': item.get('col_value', ''),
-            'c9': item.get('land_plot_no', ''),
-            'c10': item.get('land_area', ''),
-            'c11': item.get('land_unit', ''),
-            'c12': item.get('land_map_no', ''),
-            'c13': item.get('land_document_no', ''),
-            'c14': item.get('land_registry_book_no', ''),
-            'c15': item.get('land_type', ''),
-            'c16': item.get('land_no', ''),
-            'c17': item.get('land_out_time', ''),
-            'c18': item.get('land_regis_date', ''),
-            'c19': item.get('place_regist', ''),
-            'c20': item.get('plot_vilid', ''),
-            'c21': item.get('plot_unit', ''),
-            'c22': item.get('owner_name', ''),
-            'c23': item.get('owner_birth_date', ''),
-            'c24': item.get('owner_nationality', ''),
-            'c25': item.get('owner_occupation', ''),
-            'c26': item.get('current_vilid', ''),
-            'c27': item.get('current_unit', ''),
-            'c28': item.get('ownership_status', ''),
-            'c29': item.get('spous_name', ''),
-            'c30': item.get('spous_birth_date', ''),
-            'c31': item.get('spous_nationality', ''),
-            'c32': item.get('spous_occupation', ''),
-            'c33': item.get('spous_acquisition', ''),
-        })
-    elif col_type == 'c2.2':
-        base_data.update({
-            'c8': item.get('ministry', ''),
-            'c9': item.get('project_name_en', ''),
-            'c10': item.get('project_name_la', ''),
-            'c11': item.get('project_number', ''),
-            'c12': item.get('value', ''),
-            'c13': item.get('value_unit', ''),
-            'c14': item.get('project_status', ''),
-            'c15': item.get('project_insert_date', ''),
-            'c16': item.get('owner_name', ''),
-            'c17': item.get('owner_surname', ''),
-            'c18': item.get('owner_gender', ''),
-            'c19': item.get('owner_lao_name', ''),
-            'c20': item.get('owner_lao_surname', ''),
-        })
-    elif col_type == 'c2.3':
-        base_data.update({
-            'c8': item.get('machine_type', ''),
-            'c9': item.get('machine_no', ''),
-            'c10': item.get('value', ''),
-            'c11': item.get('value_unit', ''),
-            'c12': item.get('machine_status', ''),
-            'c13': item.get('machine_insert_date', ''),
-            'c14': item.get('owner_name', ''),
-            'c15': item.get('owner_surname', ''),
-            'c16': item.get('owner_gender', ''),
-            'c17': item.get('owner_lao_name', ''),
-            'c18': item.get('owner_lao_surname', ''),
-        })
-    elif col_type == 'c2.4':
-        base_data.update({
-            'c8': item.get('ministry', ''),
-            'c9': item.get('project_name_en', ''),
-            'c10': item.get('project_name_la', ''),
-            'c11': item.get('project_number', ''),
-            'c12': item.get('value', ''),
-            'c13': item.get('value_unit', ''),
-            'c14': item.get('project_status', ''),
-            'c15': item.get('project_insert_date', ''),
-            'c16': item.get('owner_name', ''),
-            'c17': item.get('owner_surname', ''),
-            'c18': item.get('owner_gender', ''),
-            'c19': item.get('owner_lao_name', ''),
-            'c20': item.get('owner_lao_surname', ''),
-        })
-    elif col_type == 'c2.5':
-        base_data.update({
-            'c8': item.get('plate_number', ''),
-            'c9': item.get('engine_number', ''),
-            'c10': item.get('body_number', ''),
-            'c11': item.get('model', ''),
-            'c12': item.get('value', ''),
-            'c13': item.get('value_unit', ''),
-            'c14': item.get('vehicle_status', ''),
-            'c15': item.get('vehicle_insert_date', ''),
-            'c16': item.get('owner_name', ''),
-            'c17': item.get('owner_surname', ''),
-            'c18': item.get('owner_gender', ''),
-            'c19': item.get('owner_lao_name', ''),
-            'c20': item.get('owner_lao_surname', ''),
-        })
-    elif col_type == 'c2.6':
-        base_data.update({
-            'c8': item.get('value', ''),
-            'c9': item.get('value_unit', ''),
-            'c10': item.get('gua_ind_status', ''),
-            'c11': item.get('gua_ind_insert_date', ''),
-            'c12': item.get('guarantor_nationality', ''),
-            'c13': item.get('gua_national_id', ''),
-            'c14': item.get('national_id_expiry_date', ''),
-            'c15': item.get('gua_passport_id', ''),
-            'c16': item.get('gua_passport_expiry_date', ''),
-            'c17': item.get('gua_familybook_id', ''),
-            'c18': item.get('familybook_province_code', ''),
-            'c19': item.get('familybook_issue_date', ''),
-            'c20': item.get('gua_birthdate', ''),
-            'c21': item.get('gua_gender', ''),
-            'c22': item.get('gua_name', ''),
-            'c23': item.get('gua_surname', ''),
-            'c24': item.get('gua_lao_name', ''),
-            'c25': item.get('gua_lao_surname', ''),
-            'c26': item.get('adress_number_street_eng', ''),
-            'c27': item.get('adress_vill_eng', ''),
-            'c28': item.get('adress_district_eng', ''),
-            'c29': item.get('adress_number_street_la', ''),
-            'c30': item.get('adress_vill_la', ''),
-            'c31': item.get('adress_district_la', ''),
-            'c32': item.get('adress_province_code', ''),
-            'c33': item.get('owner_name', ''),
-            'c34': item.get('owner_surname', ''),
-            'c35': item.get('owner_gender', ''),
-            'c36': item.get('owner_lao_name', ''),
-            'c37': item.get('owner_lao_surname', ''),
-        })
-    elif col_type == 'c2.7':
-        base_data.update({
-            'c8': item.get('weight', ''),
-            'c9': item.get('value', ''),
-            'c10': item.get('unit', ''),
-            'c11': item.get('value_unit', ''),
-            'c12': item.get('gld_status', ''),
-            'c13': item.get('gld_insert_date', ''),
-            'c14': item.get('owner_name', ''),
-            'c15': item.get('owner_surname', ''),
-            'c16': item.get('owner_gender', ''),
-            'c17': item.get('owner_lao_name', ''),
-            'c18': item.get('owner_lao_surname', ''),
-        })
-    elif col_type == 'c2.8':
-        base_data.update({
-            'c8': item.get('value', ''),
-            'c9': item.get('value_unit', ''),
-            'c10': item.get('gua_com_status', ''),
-            'c11': item.get('gua_com_insert_date', ''),
-            'c12': item.get('gua_enterprise_code', ''),
-            'c13': item.get('enterprise_regist_date', ''),
-            'c14': item.get('enterprise_regist_place', ''),
-            'c15': item.get('company_name', ''),
-            'c16': item.get('company_lao_name', ''),
-            'c17': item.get('enterprise_category', ''),
-            'c18': item.get('owner_name', ''),
-            'c19': item.get('owner_surname', ''),
-            'c20': item.get('owner_gender', ''),
-            'c21': item.get('owner_lao_name', ''),
-            'c22': item.get('owner_lao_surname', ''),
-        })
-
-    return CDL(**base_data)
+# def human_readable_size(size_bytes):
+#     """ແປງຂະໜາດໄຟລ໌ເປັນຮູບແບບທີ່ອ່ານງ່າຍ"""
+#     if size_bytes == 0:
+#         return "0B"
+#     size_name = ("B", "KB", "MB", "GB", "TB")
+#     i = 0
+#     while size_bytes >= 1024 and i < len(size_name) - 1:
+#         size_bytes /= 1024.0
+#         i += 1
+#     return f"{size_bytes:.2f} {size_name[i]}"
 
 
 # def create_collateral_damaged_record(item, status_field, status_value, id_file, period, user_id):
@@ -4001,7 +3793,7 @@ def create_collateral_good_record(item, col_type, id_file, period, user_id):
 #     return C_error(
 #         id_file=id_file,
 #         LCIC_code=item.get('LCIC_code', ''),
-#         customer_id=item.get('customer_id', ''),
+#         com_enterprise_code=item.get('customer_id', ''),  
 #         bnk_code=item.get('bnk_code', ''),
 #         branch_id_code=item.get('branch_id_code', ''),
 #         bank_customer_ID=item.get('bank_customer_ID', ''),
@@ -4015,31 +3807,30 @@ def create_collateral_good_record(item, col_type, id_file, period, user_id):
 #         collateral_insert_date=timezone.now(),
 #         collateral_update_date=timezone.now()
 #     )
+# def create_collateral_dispute_record(item, action_code, id_file, period, user_id):
+#     """ສ້າງ dispute record ສຳລັບ C1_disptes"""
+#     return C1_disptes(
+#         LCIC_code=item.get('LCIC_code', ''),
+#         id_file=id_file,
+#         user_id=user_id,
+#         period=period,
+#         com_enterprise_code=item.get('customer_id', ''),
+#         bank_customer_ID=item.get('bank_customer_ID', ''),
+#         bnk_code=item.get('bnk_code', ''),
+#         branch_id_code=item.get('branch_id_code', ''),
+#         loan_id=item.get('loan_id', ''),
+#         col_id=item.get('col_id', ''),
+#         col_type=item.get('col_type', ''),
+#         insert_date=timezone.now(),
+#         update_date=timezone.now(),
+#         action_dispust=action_code,
+#         status='disputed',
+#         is_disputed=1,
+#         data_status='inconsistent',
+#         lcicID=item.get('LCIC_code', ''),
+#         segmentType=item.get('segmentType', '')
+#     )
 
-
-def create_collateral_dispute_record(item, action_code, id_file, period, user_id):
-    """ສ້າງ dispute record ສຳລັບ C1_disptes"""
-    return C1_disptes(
-        LCIC_code=item.get('LCIC_code', ''),
-        id_file=id_file,
-        user_id=user_id,
-        period=period,
-        com_enterprise_code=item.get('customer_id', ''),
-        bank_customer_ID=item.get('bank_customer_ID', ''),
-        bnk_code=item.get('bnk_code', ''),
-        branch_id_code=item.get('branch_id_code', ''),
-        loan_id=item.get('loan_id', ''),
-        col_id=item.get('col_id', ''),
-        col_type=item.get('col_type', ''),
-        insert_date=timezone.now(),
-        update_date=timezone.now(),
-        action_dispust=action_code,
-        status='disputed',
-        is_disputed=1,
-        data_status='inconsistent',
-        lcicID=item.get('LCIC_code', ''),
-        segmentType=item.get('segmentType', '')
-    )
 
 
 # def create_collateral_good_record(item, col_type, id_file, period, user_id):
@@ -4061,7 +3852,7 @@ def create_collateral_dispute_record(item, action_code, id_file, period, user_id
 #         'c41': timezone.now().date()
 #     }
 
-#     # ເພີ່ມຂໍ້ມູນສະເພາະຕາມ col_type
+    
 #     if col_type == 'c2.1':
 #         base_data.update({
 #             'c8': item.get('col_value', ''),
@@ -4221,18 +4012,717 @@ def create_collateral_dispute_record(item, action_code, id_file, period, user_id
 
 #     return CDL(**base_data)
 
+from rest_framework import generics
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
+from django.db import transaction
+from django.utils import timezone
+from django.core.files.uploadedfile import UploadedFile  
+from collections import defaultdict
+import json
+import logging
 
-# def human_readable_size(size_bytes):
-#     """ແປງຂະໜາດໄຟລ໌ເປັນຮູບແບບທີ່ອ່ານງ່າຍ"""
-#     if size_bytes == 0:
-#         return "0B"
-#     size_name = ("B", "KB", "MB", "GB", "TB")
-#     i = 0
-#     while size_bytes >= 1024 and i < len(size_name) - 1:
-#         size_bytes /= 1024.0
-#         i += 1
-#     return f"{size_bytes:.2f} {size_name[i]}"
 
+logger = logging.getLogger(__name__)
+
+class FileUploadViewIndividual(generics.CreateAPIView):
+    queryset = Upload_File_Individual_Collateral.objects.all()
+    serializer_class = IndividualFileSerializer
+    parser_classes = (MultiPartParser, FormParser)
+
+    @method_decorator(ensure_csrf_cookie)
+    def post(self, request, *args, **kwargs):
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({
+                'status': 'error',
+                'error_code': 'MISSING_USER_ID',
+                'message': 'ກະລຸນາປ້ອນ User ID'
+            }, status=400)
+
+        files = request.FILES.getlist('file')
+        if not files:
+            return Response({
+                'status': 'error',
+                'error_code': 'NO_FILES',
+                'message': 'ກະລຸນາເລືອກໄຟລ໌'
+            }, status=400)
+
+        upload_success = []
+        upload_errors = []
+
+        for file in files:
+            try:
+                with transaction.atomic():
+                    result = self._process_single_file(file, user_id)
+                    if 'error_code' in result:
+                        upload_errors.append(result)
+                    else:
+                        upload_success.append(result)
+            except Exception as e:
+                logger.error(f"Unexpected error processing {file.name}: {str(e)}", exc_info=True)
+                upload_errors.append({
+                    'file_name': file.name,
+                    'error_code': 'UNEXPECTED_ERROR',
+                    'message': f'ຜິດພາດທີ່ບໍ່ຄາດຄິດ: {str(e)}'
+                })
+
+        return self._create_response(upload_success, upload_errors)
+
+    def _process_single_file(self, file, user_id):
+        if not file.name.endswith('.json'):
+            return {
+                'file_name': file.name,
+                'error_code': 'INVALID_FILE_TYPE',
+                'message': 'ຕ້ອງເປັນໄຟລ໌ .json ເທົ່ານັ້ນ'
+            }
+
+        try:
+            file_content = file.read().decode('utf-8')
+            file.seek(0)
+            file_data = json.loads(file_content)
+            if isinstance(file_data, list) and file_data:
+                file_data = file_data[0]
+            elif not isinstance(file_data, dict):
+                return {
+                    'file_name': file.name,
+                    'error_code': 'INVALID_JSON',
+                    'message': 'ໂຄງສ້າງ JSON ບໍ່ຖືກຕ້ອງ'
+                }
+        except json.JSONDecodeError:
+            return {
+                'file_name': file.name,
+                'error_code': 'INVALID_JSON',
+                'message': 'JSON ບໍ່ຖືກຕ້ອງ ຫຼື ບໍ່ສາມາດອ່ານໄດ້'
+            }
+
+      
+        bnk_code = file_data.get('bnk_code')
+        segment_type = file_data.get('segmentType')
+        if not bnk_code:
+            return {'file_name': file.name, 'error_code': 'MISSING_BNK_CODE', 'message': 'ບໍ່ພົບ bnk_code ໃນ JSON'}
+        if not segment_type:
+            return {'file_name': file.name, 'error_code': 'MISSING_SEGMENT_TYPE', 'message': 'ບໍ່ພົບ segmentType ໃນ JSON'}
+
+        if str(user_id) != str(bnk_code):
+            return {
+                'file_name': file.name,
+                'error_code': 'MISMATCH_BNK_CODE',
+                'message': f'user_id ({user_id}) ບໍ່ກົງກັບ bnk_code ({bnk_code})'
+            }
+
+       
+        if Upload_File_Individual_Collateral.objects.filter(
+            fileName=file.name, user_id=user_id
+        ).exists():
+            return {
+                'file_name': file.name,
+                'error_code': 'FILE_EXISTS',
+                'message': 'ໄຟລ໌ນີ້ມີແລ້ວໃນລະບົບ'
+            }
+
+       
+        file_name_without_ext = file.name.rsplit('.', 1)[0]
+        file_name_parts = file_name_without_ext.split('_')
+
+        period_part = None
+        for part in file_name_parts:
+            if part.startswith('M') and len(part) == 7 and part[1:].isdigit():
+                period_part = part
+                break
+
+        if not period_part:
+            return {
+                'file_name': file.name,
+                'error_code': 'INVALID_PERIOD_FORMAT',
+                'message': 'ບໍ່ພົບ period ໃນຊື່ໄຟລ໌ (ຕ້ອງການ M062020)'
+            }
+
+        try:
+            month_str = period_part[1:3]
+            year_str = period_part[3:7]
+            period_month = int(month_str)
+            period_year = int(year_str)
+            if not (1 <= period_month <= 12):
+                raise ValueError
+            file_period = f"{period_year}{month_str}"
+            file_period_int = int(file_period)
+        except ValueError:
+            return {
+                'file_name': file.name,
+                'error_code': 'INVALID_PERIOD_FORMAT',
+                'message': 'Period ບໍ່ຖືກຕ້ອງ (ຕົວຢ່າງ: M062020)'
+            }
+
+       
+        c1_entries = C1.objects.filter(bnk_code=bnk_code, segmentType=segment_type)
+        if c1_entries.exists():
+            latest_c1 = c1_entries.order_by('-period').first()
+            c1_period_str = latest_c1.period
+            if len(c1_period_str) != 6 or not c1_period_str.isdigit():
+                return {
+                    'file_name': file.name,
+                    'error_code': 'INVALID_C1_PERIOD',
+                    'message': 'ຂໍ້ມູນ period ໃນ C1 ບໍ່ຖືກຕ້ອງ'
+                }
+            c1_period_int = int(c1_period_str)
+            if file_period_int < c1_period_int:
+                return {
+                    'file_name': file.name,
+                    'error_code': 'PERIOD_TOO_OLD',
+                    'message': f'Period {file_period} ເກົ່າກວ່າ C1 ຫຼ້າສຸດ {c1_period_str}'
+                }
+
+       
+        try:
+            member = memberInfo.objects.get(bnk_code=bnk_code)
+        except memberInfo.DoesNotExist:
+            return {'file_name': file.name, 'error_code': 'BANK_NOT_FOUND', 'message': f'ບໍ່ພົບທະນາຄານ {bnk_code}'}
+
+        
+        print(f"\n[CACHE] ດຶງຂໍ້ມູນຈາກ IndividualBankIbk ສຳລັບ bnk_code: {bnk_code}...")
+        bank_data = list(
+            IndividualBankIbk.objects.filter(bnk_code=bnk_code)
+                                    .values('lcic_id', 'customerid')
+                                    .iterator()
+        )
+        print(f"  ດຶງມາແລ້ວ: {len(bank_data):,} records")
+
+        lcic_customer_pairs = {(d['lcic_id'], d['customerid']) for d in bank_data}
+        valid_lcic_ids = {d['lcic_id'] for d in bank_data}
+        valid_customer_ids = {d['customerid'] for d in bank_data}
+
+        print(f"  ຄູ່ LCIC+Customer: {len(lcic_customer_pairs):,}")
+        print(f"  LCIC IDs: {len(valid_lcic_ids):,}")
+        print(f"  Customer IDs: {len(valid_customer_ids):,}")
+
+       
+        file.seek(0)
+        return process_collateral_file(
+            file, user_id, member, file_period,
+            lcic_customer_pairs, valid_lcic_ids, valid_customer_ids
+        )
+
+    def _create_response(self, success, errors):
+        if errors and not success:
+            return Response({
+                'status': 'error',
+                'message': 'ລົ້ມເຫຼວທັງໝົດ',
+                'errors': errors
+            }, status=400)
+        elif errors:
+            return Response({
+                'status': 'partial',
+                'message': f'ສຳເລັດ {len(success)}, ລົ້ມເຫຼວ {len(errors)}',
+                'success': success,
+                'errors': errors
+            }, status=207)
+        else:
+            return Response({
+                'status': 'success',
+                'message': f'ອັບໂຫຼດສຳເລັດ {len(success)} ໄຟລ໌',
+                'uploaded': success
+            }, status=201)
+
+
+def process_collateral_file(
+    file: UploadedFile, user_id: str, member, period_value: str,
+    lcic_customer_pairs, valid_lcic_ids, valid_customer_ids
+) -> dict:
+    print(f"\n{'='*80}")
+    print(f"PROCESSING ເລີ່ມປະມວນຜົນໄຟລ໌: {file.name}")
+    print(f"{'='*80}")
+    
+    try:
+        
+        if file.size == 0:
+            return {'file_name': file.name, 'error_code': 'EMPTY_FILE', 'message': 'ໄຟລ໌ວ່າງ'}
+
+        
+        file_content = file.read().decode('utf-8')
+        file.seek(0)
+        try:
+            data = json.loads(file_content)
+            data_list = data if isinstance(data, list) else [data]
+            if len(data_list) == 0:
+                return {'file_name': file.name, 'error_code': 'EMPTY_DATA', 'message': 'ບໍ່ມີຂໍ້ມູນ'}
+        except json.JSONDecodeError as e:
+            return {'file_name': file.name, 'error_code': 'INVALID_JSON', 'message': f'JSON ຜິດ: {str(e)}'}
+
+        
+        upload_file = Upload_File_Individual_Collateral(
+            user_id=user_id,
+            file_id='',
+            fileName=file.name,
+            fileUpload=file,
+            fileSize=human_readable_size(file.size),
+            path=f"uploadFilesIdividualCallateral/{file.name}",
+            period=period_value,
+            status=STATUS_UPLOADED,
+            statussubmit=STATUSSUBMIT_INITIAL,
+            status_upload=STATUS_PENDING,
+            FileType='json',
+            percentage=0.0,
+            progress_percentage=0
+        )
+        upload_file.save()
+        CID = str(upload_file.CID)
+        CID_with_prefix = f"c-{CID}"
+
+        
+        print("  Loading C1 reference data...")
+        c1_records = C1.objects.values(
+            'bank_customer_ID', 'bnk_code', 'loan_id', 'col_id',
+            'LCIC_code', 'segmentType'
+        )
+        
+       
+        c1_case1_index = {}
+        c1_case2_index = {}
+        
+        for record in c1_records:
+            bank_id = record['bank_customer_ID']
+            bnk = record['bnk_code']
+            loan = record['loan_id']
+            col = record['col_id']
+            lcic = record['LCIC_code']
+            
+            key1 = (bank_id, bnk, loan, col)
+            if key1 not in c1_case1_index:
+                c1_case1_index[key1] = []
+            c1_case1_index[key1].append(lcic)
+            
+            key2 = (bank_id, loan, col, lcic)
+            if key2 not in c1_case2_index:
+                c1_case2_index[key2] = []
+            c1_case2_index[key2].append(bnk)
+        
+        print(f"  Loaded {len(c1_records)} C1 records for validation")
+
+       
+        damaged_batch = []
+        dispute_batch = []
+        good_batch_by_type = {f'c2.{i}': [] for i in range(1, 9)}
+        
+        total_records = len(data_list)
+        progress_interval = max(1, total_records // 10)
+
+        print(f"\n  Processing {total_records} records...")
+        
+        for idx, item in enumerate(data_list, 1):
+            if idx % progress_interval == 0 or idx == total_records:
+                percentage = (idx / total_records) * 100
+                good_count = sum(len(v) for v in good_batch_by_type.values())
+                print(f"  Progress: {idx}/{total_records} ({percentage:.1f}%) | Good: {good_count} | Dispute: {len(dispute_batch)} | Damaged: {len(damaged_batch)}")
+
+            bnk_code = item.get('bnk_code', '')
+            lcic_code = item.get('LCIC_code', '')
+            customer_id = item.get('customer_id', '')
+            bank_customer_ID = item.get('bank_customer_ID', '')
+            loan_id = item.get('loan_id', '')
+            col_id = item.get('col_id', '')
+            col_type = item.get('col_type', '').lower()
+            segment_type = item.get('segmentType', '')
+
+           
+            if not bnk_code:
+                damaged_batch.append(create_collateral_damaged_record(
+                    item, 'collateral_status', '99', CID_with_prefix, period_value, user_id
+                ))
+                continue
+
+            
+            if not lcic_code and not customer_id:
+                damaged_batch.append(create_collateral_damaged_record(
+                    item, 'collateral_status', '33', CID_with_prefix, period_value, user_id
+                ))
+                continue
+            
+          
+            lcic_ok = lcic_code in valid_lcic_ids if lcic_code else False
+            customer_ok = customer_id in valid_customer_ids if customer_id else False
+            pair_ok = (lcic_code, customer_id) in lcic_customer_pairs if (lcic_code and customer_id) else False
+
+            if not lcic_code:
+               
+                if customer_ok:
+                    damaged_batch.append(create_collateral_damaged_record(
+                        item, 'collateral_status', '01', CID_with_prefix, period_value, user_id
+                    ))
+                else:
+                    damaged_batch.append(create_collateral_damaged_record(
+                        item, 'collateral_status', '03', CID_with_prefix, period_value, user_id
+                    ))
+                continue
+            
+            if not customer_id:
+                
+                if lcic_ok:
+                    damaged_batch.append(create_collateral_damaged_record(
+                        item, 'collateral_status', '10', CID_with_prefix, period_value, user_id
+                    ))
+                else:
+                    damaged_batch.append(create_collateral_damaged_record(
+                        item, 'collateral_status', '30', CID_with_prefix, period_value, user_id
+                    ))
+                continue
+
+           
+            if not lcic_ok and not customer_ok:
+                damaged_batch.append(create_collateral_damaged_record(
+                    item, 'collateral_status', '33', CID_with_prefix, period_value, user_id
+                ))
+                continue
+            elif lcic_ok and not customer_ok:
+                damaged_batch.append(create_collateral_damaged_record(
+                    item, 'collateral_status', '31', CID_with_prefix, period_value, user_id
+                ))
+                continue
+            elif not lcic_ok and customer_ok:
+                damaged_batch.append(create_collateral_damaged_record(
+                    item, 'collateral_status', '13', CID_with_prefix, period_value, user_id
+                ))
+                continue
+            elif not pair_ok:
+                damaged_batch.append(create_collateral_damaged_record(
+                    item, 'collateral_status', '44', CID_with_prefix, period_value, user_id
+                ))
+                continue
+
+           
+            inconsistency_found = False
+            action_code = None
+
+           
+            key1 = (customer_id, bnk_code, loan_id, col_id)
+            if key1 in c1_case1_index:
+                for existing_lcic in c1_case1_index[key1]:
+                    if existing_lcic != lcic_code:
+                        action_code = '01'
+                        inconsistency_found = True
+                        break
+
+         
+            if not inconsistency_found:
+                key2 = (customer_id, loan_id, col_id, lcic_code)
+                if key2 in c1_case2_index:
+                    for existing_bnk in c1_case2_index[key2]:
+                        if existing_bnk != bnk_code:
+                            action_code = '02'
+                            inconsistency_found = True
+                            break
+
+            if inconsistency_found:
+                dispute_batch.append(create_collateral_dispute_record(
+                    item, action_code, CID_with_prefix, period_value, user_id
+                ))
+                continue
+
+            if col_type in good_batch_by_type:
+                good_batch_by_type[col_type].append(create_collateral_good_record(
+                    item, col_type, CID_with_prefix, period_value, user_id
+                ))
+
+        print("\n  Saving to database...")
+        BATCH_SIZE = 1000
+        
+        if damaged_batch:
+            for i in range(0, len(damaged_batch), BATCH_SIZE):
+                C_error.objects.bulk_create(damaged_batch[i:i + BATCH_SIZE])
+            print(f"    Saved {len(damaged_batch)} damaged records")
+
+        if dispute_batch:
+            for i in range(0, len(dispute_batch), BATCH_SIZE):
+                C1_disptes.objects.bulk_create(dispute_batch[i:i + BATCH_SIZE])
+            print(f"    Saved {len(dispute_batch)} dispute records")
+
+        total_good = 0
+        for col_type_key, good_list in good_batch_by_type.items():
+            if good_list:
+                for i in range(0, len(good_list), BATCH_SIZE):
+                    CDL.objects.bulk_create(good_list[i:i + BATCH_SIZE])
+                total_good += len(good_list)
+        if total_good > 0:
+            print(f"    Saved {total_good} good records (CDL)")
+
+       
+        damaged_count = len(damaged_batch)
+        dispute_count = len(dispute_batch)
+        good_count = total_good
+        error_count = damaged_count + dispute_count
+        error_percentage = (error_count / total_records) * 100 if total_records > 0 else 0
+
+        final_status = '2' if error_percentage > 15 else STATUS_PROCESSED
+        final_statussubmit = '2' if error_percentage > 15 else '1'
+        
+        # ອັບເດດທັງ percentage, status ແລະ dispuste
+        upload_file.percentage = round(error_percentage, 4)
+        upload_file.status = final_status
+        upload_file.statussubmit = final_statussubmit
+        upload_file.dispuste = dispute_count  # ເພີ່ມການອັບເດດຈຳນວນ dispute
+        upload_file.save()
+
+        print(f"\n[SUCCESS] ສຳເລັດ: {file.name}")
+        print(f"  Total: {total_records} | Damaged: {damaged_count} | Dispute: {dispute_count} | Good: {good_count}")
+        print(f"  Error %: {round(error_percentage, 2)}% | Status: {final_status}")
+        
+        return {
+            'file_name': file.name,
+            'file_id': upload_file.CID,
+            'id_file': CID_with_prefix,
+            'period': period_value,
+            'status': 'processed',
+            'upload_status': final_status,
+            'statussubmit': final_statussubmit,
+            'total': total_records,
+            'damaged': damaged_count,
+            'dispute': dispute_count,
+            'good': good_count,
+            'error_percentage': round(error_percentage, 2)
+        }
+
+    except Exception as e:
+        logger.error(f"Error processing {file.name}: {str(e)}", exc_info=True)
+        return {'file_name': file.name, 'error_code': 'UNEXPECTED_ERROR', 'message': f'ຜິດພາດ: {str(e)}'}
+
+
+def human_readable_size(size_bytes):
+    """ແປງຂະໜາດໄຟລ໌ເປັນຮູບແບບທີ່ອ່ານງ່າຍ"""
+    if size_bytes == 0:
+        return "0B"
+    size_name = ("B", "KB", "MB", "GB", "TB")
+    i = 0
+    while size_bytes >= 1024 and i < len(size_name) - 1:
+        size_bytes /= 1024.0
+        i += 1
+    return f"{size_bytes:.2f} {size_name[i]}"
+
+
+def create_collateral_damaged_record(item, status_field, status_value, id_file, period, user_id):
+    """ສ້າງ damaged record ສຳລັບ C_error"""
+    return C_error(
+        id_file=id_file,
+        LCIC_code=item.get('LCIC_code', ''),
+        com_enterprise_code=item.get('customer_id', ''),  
+        bnk_code=item.get('bnk_code', ''),
+        branch_id_code=item.get('branch_id_code', ''),
+        bank_customer_ID=item.get('bank_customer_ID', ''),
+        loan_id=item.get('loan_id', ''),
+        col_id=item.get('col_id', ''),
+        col_type=item.get('col_type', ''),
+        collateral_status=status_value,
+        datamatch='',
+        user_id=user_id,
+        period=period,
+        collateral_insert_date=timezone.now(),
+        collateral_update_date=timezone.now()
+    )
+
+def create_collateral_dispute_record(item, action_code, id_file, period, user_id):
+    """ສ້າງ dispute record ສຳລັບ C1_disptes"""
+    return C1_disptes(
+        LCIC_code=item.get('LCIC_code', ''),
+        id_file=id_file,
+        user_id=user_id,
+        period=period,
+        com_enterprise_code=item.get('customer_id', ''),
+        bank_customer_ID=item.get('bank_customer_ID', ''),
+        bnk_code=item.get('bnk_code', ''),
+        branch_id_code=item.get('branch_id_code', ''),
+        loan_id=item.get('loan_id', ''),
+        col_id=item.get('col_id', ''),
+        col_type=item.get('col_type', ''),
+        insert_date=timezone.now(),
+        update_date=timezone.now(),
+        action_dispust=action_code,
+        status='disputed',
+        is_disputed=1,
+        data_status='inconsistent',
+        lcicID=item.get('LCIC_code', ''),
+        segmentType=item.get('segmentType', '')
+    )
+
+
+def create_collateral_good_record(item, col_type, id_file, period, user_id):
+    """ສ້າງ good record ສຳລັບ CDL (ແບ່ງຕາມ col_type)"""
+    base_data = {
+        'id_file': id_file,
+        'c1': item.get('LCIC_code', ''),
+        'col_type': col_type.upper(),
+        'c2': item.get('customer_id', ''),
+        'c3': item.get('bnk_code', ''),
+        'c4': item.get('bank_customer_ID', ''),
+        'c5': item.get('branch_id_code', ''),
+        'c6': item.get('loan_id', ''),
+        'c7': item.get('col_id', ''),
+        'c39': item.get('segmentType', ''),
+        'user_id': user_id,
+        'period': period,
+        'c40': timezone.now().date(),
+        'c41': timezone.now().date()
+    }
+
+    
+    if col_type == 'c2.1':
+        base_data.update({
+            'c8': item.get('col_value', ''),
+            'c9': item.get('land_plot_no', ''),
+            'c10': item.get('land_area', ''),
+            'c11': item.get('land_unit', ''),
+            'c12': item.get('land_map_no', ''),
+            'c13': item.get('land_document_no', ''),
+            'c14': item.get('land_registry_book_no', ''),
+            'c15': item.get('land_type', ''),
+            'c16': item.get('land_no', ''),
+            'c17': item.get('land_out_time', ''),
+            'c18': item.get('land_regis_date', ''),
+            'c19': item.get('place_regist', ''),
+            'c20': item.get('plot_vilid', ''),
+            'c21': item.get('plot_unit', ''),
+            'c22': item.get('owner_name', ''),
+            'c23': item.get('owner_birth_date', ''),
+            'c24': item.get('owner_nationality', ''),
+            'c25': item.get('owner_occupation', ''),
+            'c26': item.get('current_vilid', ''),
+            'c27': item.get('current_unit', ''),
+            'c28': item.get('ownership_status', ''),
+            'c29': item.get('spous_name', ''),
+            'c30': item.get('spous_birth_date', ''),
+            'c31': item.get('spous_nationality', ''),
+            'c32': item.get('spous_occupation', ''),
+            'c33': item.get('spous_acquisition', ''),
+        })
+    elif col_type == 'c2.2':
+        base_data.update({
+            'c8': item.get('ministry', ''),
+            'c9': item.get('project_name_en', ''),
+            'c10': item.get('project_name_la', ''),
+            'c11': item.get('project_number', ''),
+            'c12': item.get('value', ''),
+            'c13': item.get('value_unit', ''),
+            'c14': item.get('project_status', ''),
+            'c15': item.get('project_insert_date', ''),
+            'c16': item.get('owner_name', ''),
+            'c17': item.get('owner_surname', ''),
+            'c18': item.get('owner_gender', ''),
+            'c19': item.get('owner_lao_name', ''),
+            'c20': item.get('owner_lao_surname', ''),
+        })
+    elif col_type == 'c2.3':
+        base_data.update({
+            'c8': item.get('machine_type', ''),
+            'c9': item.get('machine_no', ''),
+            'c10': item.get('value', ''),
+            'c11': item.get('value_unit', ''),
+            'c12': item.get('machine_status', ''),
+            'c13': item.get('machine_insert_date', ''),
+            'c14': item.get('owner_name', ''),
+            'c15': item.get('owner_surname', ''),
+            'c16': item.get('owner_gender', ''),
+            'c17': item.get('owner_lao_name', ''),
+            'c18': item.get('owner_lao_surname', ''),
+        })
+    elif col_type == 'c2.4':
+        base_data.update({
+            'c8': item.get('ministry', ''),
+            'c9': item.get('project_name_en', ''),
+            'c10': item.get('project_name_la', ''),
+            'c11': item.get('project_number', ''),
+            'c12': item.get('value', ''),
+            'c13': item.get('value_unit', ''),
+            'c14': item.get('project_status', ''),
+            'c15': item.get('project_insert_date', ''),
+            'c16': item.get('owner_name', ''),
+            'c17': item.get('owner_surname', ''),
+            'c18': item.get('owner_gender', ''),
+            'c19': item.get('owner_lao_name', ''),
+            'c20': item.get('owner_lao_surname', ''),
+        })
+    elif col_type == 'c2.5':
+        base_data.update({
+            'c8': item.get('plate_number', ''),
+            'c9': item.get('engine_number', ''),
+            'c10': item.get('body_number', ''),
+            'c11': item.get('model', ''),
+            'c12': item.get('value', ''),
+            'c13': item.get('value_unit', ''),
+            'c14': item.get('vehicle_status', ''),
+            'c15': item.get('vehicle_insert_date', ''),
+            'c16': item.get('owner_name', ''),
+            'c17': item.get('owner_surname', ''),
+            'c18': item.get('owner_gender', ''),
+            'c19': item.get('owner_lao_name', ''),
+            'c20': item.get('owner_lao_surname', ''),
+        })
+    elif col_type == 'c2.6':
+        base_data.update({
+            'c8': item.get('value', ''),
+            'c9': item.get('value_unit', ''),
+            'c10': item.get('gua_ind_status', ''),
+            'c11': item.get('gua_ind_insert_date', ''),
+            'c12': item.get('guarantor_nationality', ''),
+            'c13': item.get('gua_national_id', ''),
+            'c14': item.get('national_id_expiry_date', ''),
+            'c15': item.get('gua_passport_id', ''),
+            'c16': item.get('gua_passport_expiry_date', ''),
+            'c17': item.get('gua_familybook_id', ''),
+            'c18': item.get('familybook_province_code', ''),
+            'c19': item.get('familybook_issue_date', ''),
+            'c20': item.get('gua_birthdate', ''),
+            'c21': item.get('gua_gender', ''),
+            'c22': item.get('gua_name', ''),
+            'c23': item.get('gua_surname', ''),
+            'c24': item.get('gua_lao_name', ''),
+            'c25': item.get('gua_lao_surname', ''),
+            'c26': item.get('adress_number_street_eng', ''),
+            'c27': item.get('adress_vill_eng', ''),
+            'c28': item.get('adress_district_eng', ''),
+            'c29': item.get('adress_number_street_la', ''),
+            'c30': item.get('adress_vill_la', ''),
+            'c31': item.get('adress_district_la', ''),
+            'c32': item.get('adress_province_code', ''),
+            'c33': item.get('owner_name', ''),
+            'c34': item.get('owner_surname', ''),
+            'c35': item.get('owner_gender', ''),
+            'c36': item.get('owner_lao_name', ''),
+            'c37': item.get('owner_lao_surname', ''),
+        })
+    elif col_type == 'c2.7':
+        base_data.update({
+            'c8': item.get('weight', ''),
+            'c9': item.get('value', ''),
+            'c10': item.get('unit', ''),
+            'c11': item.get('value_unit', ''),
+            'c12': item.get('gld_status', ''),
+            'c13': item.get('gld_insert_date', ''),
+            'c14': item.get('owner_name', ''),
+            'c15': item.get('owner_surname', ''),
+            'c16': item.get('owner_gender', ''),
+            'c17': item.get('owner_lao_name', ''),
+            'c18': item.get('owner_lao_surname', ''),
+        })
+    elif col_type == 'c2.8':
+        base_data.update({
+            'c8': item.get('value', ''),
+            'c9': item.get('value_unit', ''),
+            'c10': item.get('gua_com_status', ''),
+            'c11': item.get('gua_com_insert_date', ''),
+            'c12': item.get('gua_enterprise_code', ''),
+            'c13': item.get('enterprise_regist_date', ''),
+            'c14': item.get('enterprise_regist_place', ''),
+            'c15': item.get('company_name', ''),
+            'c16': item.get('company_lao_name', ''),
+            'c17': item.get('enterprise_category', ''),
+            'c18': item.get('owner_name', ''),
+            'c19': item.get('owner_surname', ''),
+            'c20': item.get('owner_gender', ''),
+            'c21': item.get('owner_lao_name', ''),
+            'c22': item.get('owner_lao_surname', ''),
+        })
+
+    return CDL(**base_data)
 
 import json
 from django.utils.encoding import smart_str
