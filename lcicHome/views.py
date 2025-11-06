@@ -3109,6 +3109,215 @@ from .serializers import IndividualFileSerializer
 
 logger = logging.getLogger(__name__)
 
+# class FileUploadViewIndividual(generics.CreateAPIView):
+#     queryset = Upload_File_Individual_Collateral.objects.all()
+#     serializer_class = IndividualFileSerializer
+#     parser_classes = (MultiPartParser, FormParser)
+
+#     @method_decorator(ensure_csrf_cookie)
+#     def post(self, request, *args, **kwargs):
+#         user_id = request.data.get('user_id')
+#         if not user_id:
+#             return Response({
+#                 'status': 'error',
+#                 'error_code': 'MISSING_USER_ID',
+#                 'message': 'ກະລຸນາປ້ອນ User ID'
+#             }, status=400)
+
+#         files = request.FILES.getlist('file')
+#         if not files:
+#             return Response({
+#                 'status': 'error',
+#                 'error_code': 'NO_FILES',
+#                 'message': 'ກະລຸນາເລືອກໄຟລ໌'
+#             }, status=400)
+
+#         upload_success = []
+#         upload_errors = []
+
+#         for file in files:
+#             try:
+#                 with transaction.atomic():
+#                     result = self._process_single_file(file, user_id)
+#                     if 'error_code' in result:
+#                         upload_errors.append(result)
+#                     else:
+#                         upload_success.append(result)
+#             except Exception as e:
+#                 logger.error(f"Unexpected error processing {file.name}: {str(e)}", exc_info=True)
+#                 upload_errors.append({
+#                     'file_name': file.name,
+#                     'error_code': 'UNEXPECTED_ERROR',
+#                     'message': f'ຜິດພາດທີ່ບໍ່ຄາດຄິດ: {str(e)}'
+#                 })
+
+#         return self._create_response(upload_success, upload_errors)
+
+#     def _process_single_file(self, file, user_id):
+#         if not file.name.endswith('.json'):
+#             return {
+#                 'file_name': file.name,
+#                 'error_code': 'INVALID_FILE_TYPE',
+#                 'message': 'ຕ້ອງເປັນໄຟລ໌ .json ເທົ່ານັ້ນ'
+#             }
+
+        
+#         try:
+#             file_content = file.read().decode('utf-8')
+#             file.seek(0)  
+#             file_data = json.loads(file_content)
+#             if isinstance(file_data, list) and file_data:
+#                 file_data = file_data[0]
+#             elif not isinstance(file_data, dict):
+#                 return {
+#                     'file_name': file.name,
+#                     'error_code': 'INVALID_JSON',
+#                     'message': 'ໂຄງສ້າງ JSON ບໍ່ຖືກຕ້ອງ'
+#                 }
+#         except json.JSONDecodeError:
+#             return {
+#                 'file_name': file.name,
+#                 'error_code': 'INVALID_JSON',
+#                 'message': 'JSON ບໍ່ຖືກຕ້ອງ ຫຼື ບໍ່ສາມາດອ່ານໄດ້'
+#             }
+
+        
+#         bnk_code = file_data.get('bnk_code')
+#         segment_type = file_data.get('segmentType')
+#         if not bnk_code:
+#             return {'file_name': file.name, 'error_code': 'MISSING_BNK_CODE', 'message': 'ບໍ່ພົບ bnk_code ໃນ JSON'}
+#         if not segment_type:
+#             return {'file_name': file.name, 'error_code': 'MISSING_SEGMENT_TYPE', 'message': 'ບໍ່ພົບ segmentType ໃນ JSON'}
+
+#         if str(user_id) != str(bnk_code):
+#             return {
+#                 'file_name': file.name,
+#                 'error_code': 'MISMATCH_BNK_CODE',
+#                 'message': f'user_id ({user_id}) ບໍ່ກົງກັບ bnk_code ({bnk_code})'
+#             }
+
+        
+#         file_name_without_ext = file.name.rsplit('.', 1)[0]
+#         file_name_parts = file_name_without_ext.split('_')
+
+#         period_part = None
+#         for part in file_name_parts:
+#             if part.startswith('M') and len(part) == 7 and part[1:].isdigit():
+#                 period_part = part
+#                 break
+
+#         if not period_part:
+#             return {
+#                 'file_name': file.name,
+#                 'error_code': 'INVALID_PERIOD_FORMAT',
+#                 'message': 'ບໍ່ພົບ period ໃນຊື່ໄຟລ໌ (ຕ້ອງການ M062020)'
+#             }
+
+#         try:
+#             month_str = period_part[1:3]
+#             year_str = period_part[3:7]
+#             period_month = int(month_str)
+#             period_year = int(year_str)
+#             if not (1 <= period_month <= 12):
+#                 raise ValueError
+#             file_period = f"{period_year}{month_str}"
+#             file_period_int = int(file_period)
+#         except ValueError:
+#             return {
+#                 'file_name': file.name,
+#                 'error_code': 'INVALID_PERIOD_FORMAT',
+#                 'message': 'Period ບໍ່ຖືກຕ້ອງ (ຕົວຢ່າງ: M062020)'
+#             }
+
+        
+#         if Upload_File_Individual_Collateral.objects.filter(
+#             fileName=file.name, user_id=user_id
+#         ).exists():
+#             return {
+#                 'file_name': file.name,
+#                 'error_code': 'FILE_EXISTS',
+#                 'message': 'ໄຟລ໌ນີ້ມີແລ້ວໃນລະບົບ'
+#             }
+
+        
+#         c1_entries = C1.objects.filter(bnk_code=bnk_code, segmentType=segment_type)
+#         if c1_entries.exists():
+#             latest_c1 = c1_entries.order_by('-period').first()
+#             c1_period_str = latest_c1.period
+#             if len(c1_period_str) != 6 or not c1_period_str.isdigit():
+#                 return {
+#                     'file_name': file.name,
+#                     'error_code': 'INVALID_C1_PERIOD',
+#                     'message': 'ຂໍ້ມູນ period ໃນ C1 ບໍ່ຖືກຕ້ອງ'
+#                 }
+#             c1_period_int = int(c1_period_str)
+#             if file_period_int < c1_period_int:
+#                 return {
+#                     'file_name': file.name,
+#                     'error_code': 'PERIOD_TOO_OLD',
+#                     'message': f'Period {file_period} ເກົ່າກວ່າ C1 ຫຼ້າສຸດ {c1_period_str}'
+#                 }
+
+        
+#         file_instance = Upload_File_Individual_Collateral.objects.create(
+#             user_id=user_id,
+#             file_id="",
+#             fileName=file.name,
+#             fileUpload=file,
+#             fileSize=str(file.size),
+#             path="uploadFilesIdividualCallateral/" + file.name,
+#             period=file_period,
+#             status='new',
+#             statussubmit='1',
+#             status_upload='in_progress',
+#             FileType='json',
+#             progress_percentage=0,
+#             percentage=0.0,
+#         )
+
+#         return {
+#             'file_name': file.name,
+#             'CID': file_instance.CID,
+#             'period': file_period,
+#             'message': 'ອັບໂຫຼດສຳເລັດ'
+#         }
+
+#     def _create_response(self, success, errors):
+#         if errors and not success:
+#             return Response({
+#                 'status': 'error',
+#                 'message': 'ລົ້ມເຫຼວທັງໝົດ',
+#                 'errors': errors
+#             }, status=400)
+#         elif errors:
+#             return Response({
+#                 'status': 'partial',
+#                 'message': f'ສຳເລັດ {len(success)}, ລົ້ມເຫຼວ {len(errors)}',
+#                 'success': success,
+#                 'errors': errors
+#             }, status=207)
+#         else:
+#             return Response({
+#                 'status': 'success',
+#                 'message': f'ອັບໂຫຼດສຳເລັດ {len(success)} ໄຟລ໌',
+#                 'uploaded': success
+#             }, status=201)
+from rest_framework import generics
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
+from django.db import transaction
+from django.utils import timezone
+from django.core.files.uploadedfile import UploadedFile  # ← ເພີ່ມນີ້
+from collections import defaultdict
+import json
+import logging
+# ຫຼື
+# from .processing import process_collateral_file  # ຖ້າເກັບຢູ່ໃນ processing.py
+
+logger = logging.getLogger(__name__)
+
 class FileUploadViewIndividual(generics.CreateAPIView):
     queryset = Upload_File_Individual_Collateral.objects.all()
     serializer_class = IndividualFileSerializer
@@ -3161,10 +3370,10 @@ class FileUploadViewIndividual(generics.CreateAPIView):
                 'message': 'ຕ້ອງເປັນໄຟລ໌ .json ເທົ່ານັ້ນ'
             }
 
-        
+        # ອ່ານແລະ parse JSON
         try:
             file_content = file.read().decode('utf-8')
-            file.seek(0)  
+            file.seek(0)
             file_data = json.loads(file_content)
             if isinstance(file_data, list) and file_data:
                 file_data = file_data[0]
@@ -3181,7 +3390,7 @@ class FileUploadViewIndividual(generics.CreateAPIView):
                 'message': 'JSON ບໍ່ຖືກຕ້ອງ ຫຼື ບໍ່ສາມາດອ່ານໄດ້'
             }
 
-        
+        # ກວດສອບ bnk_code ແລະ segmentType
         bnk_code = file_data.get('bnk_code')
         segment_type = file_data.get('segmentType')
         if not bnk_code:
@@ -3196,7 +3405,17 @@ class FileUploadViewIndividual(generics.CreateAPIView):
                 'message': f'user_id ({user_id}) ບໍ່ກົງກັບ bnk_code ({bnk_code})'
             }
 
-        
+        # ກວດສອບໄຟລ໌ຊ້ຳ
+        if Upload_File_Individual_Collateral.objects.filter(
+            fileName=file.name, user_id=user_id
+        ).exists():
+            return {
+                'file_name': file.name,
+                'error_code': 'FILE_EXISTS',
+                'message': 'ໄຟລ໌ນີ້ມີແລ້ວໃນລະບົບ'
+            }
+
+        # ຕັດເອົາ period ຈາກຊື່ໄຟລ໌
         file_name_without_ext = file.name.rsplit('.', 1)[0]
         file_name_parts = file_name_without_ext.split('_')
 
@@ -3229,17 +3448,7 @@ class FileUploadViewIndividual(generics.CreateAPIView):
                 'message': 'Period ບໍ່ຖືກຕ້ອງ (ຕົວຢ່າງ: M062020)'
             }
 
-        
-        if Upload_File_Individual_Collateral.objects.filter(
-            fileName=file.name, user_id=user_id
-        ).exists():
-            return {
-                'file_name': file.name,
-                'error_code': 'FILE_EXISTS',
-                'message': 'ໄຟລ໌ນີ້ມີແລ້ວໃນລະບົບ'
-            }
-
-        
+        # ກວດສອບ period ກັບ C1
         c1_entries = C1.objects.filter(bnk_code=bnk_code, segmentType=segment_type)
         if c1_entries.exists():
             latest_c1 = c1_entries.order_by('-period').first()
@@ -3258,29 +3467,35 @@ class FileUploadViewIndividual(generics.CreateAPIView):
                     'message': f'Period {file_period} ເກົ່າກວ່າ C1 ຫຼ້າສຸດ {c1_period_str}'
                 }
 
-        
-        file_instance = Upload_File_Individual_Collateral.objects.create(
-            user_id=user_id,
-            file_id="",
-            fileName=file.name,
-            fileUpload=file,
-            fileSize=str(file.size),
-            path="uploadFilesIdividualCallateral/" + file.name,
-            period=file_period,
-            status='new',
-            statussubmit='1',
-            status_upload='in_progress',
-            FileType='json',
-            progress_percentage=0,
-            percentage=0.0,
-        )
+        # ກວດສອບ member
+        try:
+            member = memberInfo.objects.get(bnk_code=bnk_code)
+        except memberInfo.DoesNotExist:
+            return {'file_name': file.name, 'error_code': 'BANK_NOT_FOUND', 'message': f'ບໍ່ພົບທະນາຄານ {bnk_code}'}
 
-        return {
-            'file_name': file.name,
-            'CID': file_instance.CID,
-            'period': file_period,
-            'message': 'ອັບໂຫຼດສຳເລັດ'
-        }
+        # ດຶງຂໍ້ມູນ reference ຈາກ IndividualBankIbk
+        print(f"\n[CACHE] ດຶງຂໍ້ມູນຈາກ IndividualBankIbk ສຳລັບ bnk_code: {bnk_code}...")
+        bank_data = list(
+            IndividualBankIbk.objects.filter(bnk_code=bnk_code)
+                                    .values('lcic_id', 'customerid')
+                                    .iterator()
+        )
+        print(f"  ດຶງມາແລ້ວ: {len(bank_data):,} records")
+
+        lcic_customer_pairs = {(d['lcic_id'], d['customerid']) for d in bank_data}
+        valid_lcic_ids = {d['lcic_id'] for d in bank_data}
+        valid_customer_ids = {d['customerid'] for d in bank_data}
+
+        print(f"  ຄູ່ LCIC+Customer: {len(lcic_customer_pairs):,}")
+        print(f"  LCIC IDs: {len(valid_lcic_ids):,}")
+        print(f"  Customer IDs: {len(valid_customer_ids):,}")
+
+        # ສົ່ງໄປປະມວນຜົນໃນ process_collateral_file
+        file.seek(0)
+        return process_collateral_file(
+            file, user_id, member, file_period,
+            lcic_customer_pairs, valid_lcic_ids, valid_customer_ids
+        )
 
     def _create_response(self, success, errors):
         if errors and not success:
@@ -3302,6 +3517,721 @@ class FileUploadViewIndividual(generics.CreateAPIView):
                 'message': f'ອັບໂຫຼດສຳເລັດ {len(success)} ໄຟລ໌',
                 'uploaded': success
             }, status=201)
+
+
+def process_collateral_file(
+    file: UploadedFile, user_id: str, member, period_value: str,
+    lcic_customer_pairs, valid_lcic_ids, valid_customer_ids
+) -> dict:
+    print(f"\n{'='*80}")
+    print(f"PROCESSING ເລີ່ມປະມວນຜົນໄຟລ໌: {file.name}")
+    print(f"{'='*80}")
+    
+    try:
+        # ກວດສອບໄຟລ໌ວ່າງ
+        if file.size == 0:
+            return {'file_name': file.name, 'error_code': 'EMPTY_FILE', 'message': 'ໄຟລ໌ວ່າງ'}
+
+        # ອ່ານແລະ parse JSON
+        file_content = file.read().decode('utf-8')
+        file.seek(0)
+        try:
+            data = json.loads(file_content)
+            data_list = data if isinstance(data, list) else [data]
+            if len(data_list) == 0:
+                return {'file_name': file.name, 'error_code': 'EMPTY_DATA', 'message': 'ບໍ່ມີຂໍ້ມູນ'}
+        except json.JSONDecodeError as e:
+            return {'file_name': file.name, 'error_code': 'INVALID_JSON', 'message': f'JSON ຜິດ: {str(e)}'}
+
+        # ສ້າງ Upload_File_Individual_Collateral record
+        upload_file = Upload_File_Individual_Collateral(
+            user_id=user_id,
+            file_id='',
+            fileName=file.name,
+            fileUpload=file,
+            fileSize=human_readable_size(file.size),
+            path=f"uploadFilesIdividualCallateral/{file.name}",
+            period=period_value,
+            status=STATUS_UPLOADED,
+            statussubmit=STATUSSUBMIT_INITIAL,
+            status_upload=STATUS_PENDING,
+            FileType='json',
+            percentage=0.0,
+            progress_percentage=0
+        )
+        upload_file.save()
+        CID = str(upload_file.CID)
+        CID_with_prefix = f"c-{CID}"
+
+        # ດຶງຂໍ້ມູນ C1 ເພື່ອສ້າງ lookup
+        print("  Loading C1 reference data...")
+        c1_records = C1.objects.values(
+            'bank_customer_ID', 'bnk_code', 'loan_id', 'col_id',
+            'LCIC_code', 'segmentType'
+        )
+        
+        # ສ້າງ indexes ສຳລັບກວດສອບ
+        c1_case1_index = {}
+        c1_case2_index = {}
+        
+        for record in c1_records:
+            bank_id = record['bank_customer_ID']
+            bnk = record['bnk_code']
+            loan = record['loan_id']
+            col = record['col_id']
+            lcic = record['LCIC_code']
+            
+            key1 = (bank_id, bnk, loan, col)
+            if key1 not in c1_case1_index:
+                c1_case1_index[key1] = []
+            c1_case1_index[key1].append(lcic)
+            
+            key2 = (bank_id, loan, col, lcic)
+            if key2 not in c1_case2_index:
+                c1_case2_index[key2] = []
+            c1_case2_index[key2].append(bnk)
+        
+        print(f"  Loaded {len(c1_records)} C1 records for validation")
+
+        # ເລີ່ມປະມວນຜົນແຕ່ລະ record
+        damaged_batch = []
+        dispute_batch = []
+        good_batch_by_type = {f'c2.{i}': [] for i in range(1, 9)}
+        
+        total_records = len(data_list)
+        progress_interval = max(1, total_records // 10)
+
+        print(f"\n  Processing {total_records} records...")
+        
+        for idx, item in enumerate(data_list, 1):
+            if idx % progress_interval == 0 or idx == total_records:
+                percentage = (idx / total_records) * 100
+                good_count = sum(len(v) for v in good_batch_by_type.values())
+                print(f"  Progress: {idx}/{total_records} ({percentage:.1f}%) | Good: {good_count} | Dispute: {len(dispute_batch)} | Damaged: {len(damaged_batch)}")
+
+            bnk_code = item.get('bnk_code', '')
+            lcic_code = item.get('LCIC_code', '')
+            customer_id = item.get('customer_id', '')
+            bank_customer_ID = item.get('bank_customer_ID', '')
+            loan_id = item.get('loan_id', '')
+            col_id = item.get('col_id', '')
+            col_type = item.get('col_type', '').lower()
+            segment_type = item.get('segmentType', '')
+
+            # 1. ກວດສອບ bnk_code
+            if not bnk_code:
+                damaged_batch.append(create_collateral_damaged_record(
+                    item, 'collateral_status', '99', CID_with_prefix, period_value, user_id
+                ))
+                continue
+
+            # 2. ກວດສອບ LCIC_code & customer_id ກັບ IndividualBankIbk
+            if not lcic_code and not customer_id:
+                damaged_batch.append(create_collateral_damaged_record(
+                    item, 'collateral_status', '33', CID_with_prefix, period_value, user_id
+                ))
+                continue
+            
+            # ກວດສອບກັບຖານຂໍ້ມູນ IndividualBankIbk
+            lcic_ok = lcic_code in valid_lcic_ids if lcic_code else False
+            customer_ok = customer_id in valid_customer_ids if customer_id else False
+            pair_ok = (lcic_code, customer_id) in lcic_customer_pairs if (lcic_code and customer_id) else False
+
+            if not lcic_code:
+                # ມີແຕ່ customer_id
+                if customer_ok:
+                    damaged_batch.append(create_collateral_damaged_record(
+                        item, 'collateral_status', '01', CID_with_prefix, period_value, user_id
+                    ))
+                else:
+                    damaged_batch.append(create_collateral_damaged_record(
+                        item, 'collateral_status', '03', CID_with_prefix, period_value, user_id
+                    ))
+                continue
+            
+            if not customer_id:
+                # ມີແຕ່ lcic_code
+                if lcic_ok:
+                    damaged_batch.append(create_collateral_damaged_record(
+                        item, 'collateral_status', '10', CID_with_prefix, period_value, user_id
+                    ))
+                else:
+                    damaged_batch.append(create_collateral_damaged_record(
+                        item, 'collateral_status', '30', CID_with_prefix, period_value, user_id
+                    ))
+                continue
+
+            # ມີທັງສອງແລ້ວ ກວດເພີ່ມເຕີມ
+            if not lcic_ok and not customer_ok:
+                damaged_batch.append(create_collateral_damaged_record(
+                    item, 'collateral_status', '33', CID_with_prefix, period_value, user_id
+                ))
+                continue
+            elif lcic_ok and not customer_ok:
+                damaged_batch.append(create_collateral_damaged_record(
+                    item, 'collateral_status', '31', CID_with_prefix, period_value, user_id
+                ))
+                continue
+            elif not lcic_ok and customer_ok:
+                damaged_batch.append(create_collateral_damaged_record(
+                    item, 'collateral_status', '13', CID_with_prefix, period_value, user_id
+                ))
+                continue
+            elif not pair_ok:
+                damaged_batch.append(create_collateral_damaged_record(
+                    item, 'collateral_status', '44', CID_with_prefix, period_value, user_id
+                ))
+                continue
+
+            # 3. ຜ່ານການກວດສອບກັບ IndividualBankIbk ແລ້ວ, ກວດກັບ C1
+            inconsistency_found = False
+            action_code = None
+
+            # Case 1: ກວດ (customer_id, bnk_code, loan_id, col_id)
+            # ໝາຍເຫດ: bank_customer_ID ໃນ C1 = customer_id ໃນ JSON
+            key1 = (customer_id, bnk_code, loan_id, col_id)
+            if key1 in c1_case1_index:
+                for existing_lcic in c1_case1_index[key1]:
+                    if existing_lcic != lcic_code:
+                        action_code = '01'
+                        inconsistency_found = True
+                        break
+
+            # Case 2: ກວດ (customer_id, loan_id, col_id, LCIC_code)
+            if not inconsistency_found:
+                key2 = (customer_id, loan_id, col_id, lcic_code)
+                if key2 in c1_case2_index:
+                    for existing_bnk in c1_case2_index[key2]:
+                        if existing_bnk != bnk_code:
+                            action_code = '02'
+                            inconsistency_found = True
+                            break
+
+            if inconsistency_found:
+                dispute_batch.append(create_collateral_dispute_record(
+                    item, action_code, CID_with_prefix, period_value, user_id
+                ))
+                continue
+
+            # 4. ຂໍ້ມູນດີ - ແບ່ງຕາມ col_type
+            if col_type in good_batch_by_type:
+                good_batch_by_type[col_type].append(create_collateral_good_record(
+                    item, col_type, CID_with_prefix, period_value, user_id
+                ))
+
+        # Bulk Insert ທັງ 3 ປະເພດ
+        print("\n  Saving to database...")
+        BATCH_SIZE = 1000
+        
+        if damaged_batch:
+            for i in range(0, len(damaged_batch), BATCH_SIZE):
+                C_error.objects.bulk_create(damaged_batch[i:i + BATCH_SIZE])
+            print(f"    Saved {len(damaged_batch)} damaged records")
+
+        if dispute_batch:
+            for i in range(0, len(dispute_batch), BATCH_SIZE):
+                C1_disptes.objects.bulk_create(dispute_batch[i:i + BATCH_SIZE])
+            print(f"    Saved {len(dispute_batch)} dispute records")
+
+        total_good = 0
+        for col_type_key, good_list in good_batch_by_type.items():
+            if good_list:
+                for i in range(0, len(good_list), BATCH_SIZE):
+                    CDL.objects.bulk_create(good_list[i:i + BATCH_SIZE])
+                total_good += len(good_list)
+        if total_good > 0:
+            print(f"    Saved {total_good} good records (CDL)")
+
+        # ຄຳນວນ error percentage ແລະ update status
+        damaged_count = len(damaged_batch)
+        dispute_count = len(dispute_batch)
+        good_count = total_good
+        error_count = damaged_count + dispute_count
+        error_percentage = (error_count / total_records) * 100 if total_records > 0 else 0
+
+        final_status = '2' if error_percentage > 15 else STATUS_PROCESSED
+        final_statussubmit = '2' if error_percentage > 15 else '1'
+        
+        upload_file.percentage = round(error_percentage, 4)
+        upload_file.status = final_status
+        upload_file.statussubmit = final_statussubmit
+        upload_file.save()
+
+        print(f"\n[SUCCESS] ສຳເລັດ: {file.name}")
+        print(f"  Total: {total_records} | Damaged: {damaged_count} | Dispute: {dispute_count} | Good: {good_count}")
+        print(f"  Error %: {round(error_percentage, 2)}% | Status: {final_status}")
+        
+        return {
+            'file_name': file.name,
+            'file_id': upload_file.CID,
+            'id_file': CID_with_prefix,
+            'period': period_value,
+            'status': 'processed',
+            'upload_status': final_status,
+            'statussubmit': final_statussubmit,
+            'total': total_records,
+            'damaged': damaged_count,
+            'dispute': dispute_count,
+            'good': good_count,
+            'error_percentage': round(error_percentage, 2)
+        }
+
+    except Exception as e:
+        logger.error(f"Error processing {file.name}: {str(e)}", exc_info=True)
+        return {'file_name': file.name, 'error_code': 'UNEXPECTED_ERROR', 'message': f'ຜິດພາດ: {str(e)}'}
+
+
+def human_readable_size(size_bytes):
+    """ແປງຂະໜາດໄຟລ໌ເປັນຮູບແບບທີ່ອ່ານງ່າຍ"""
+    if size_bytes == 0:
+        return "0B"
+    size_name = ("B", "KB", "MB", "GB", "TB")
+    i = 0
+    while size_bytes >= 1024 and i < len(size_name) - 1:
+        size_bytes /= 1024.0
+        i += 1
+    return f"{size_bytes:.2f} {size_name[i]}"
+
+
+def create_collateral_damaged_record(item, status_field, status_value, id_file, period, user_id):
+    """ສ້າງ damaged record ສຳລັບ C_error"""
+    return C_error(
+        id_file=id_file,
+        LCIC_code=item.get('LCIC_code', ''),
+        com_enterprise_code=item.get('customer_id', ''),  # ຖືກຕ້ອງ
+        bnk_code=item.get('bnk_code', ''),
+        branch_id_code=item.get('branch_id_code', ''),
+        bank_customer_ID=item.get('bank_customer_ID', ''),
+        loan_id=item.get('loan_id', ''),
+        col_id=item.get('col_id', ''),
+        col_type=item.get('col_type', ''),
+        collateral_status=status_value,
+        datamatch='',
+        user_id=user_id,
+        period=period,
+        collateral_insert_date=timezone.now(),
+        collateral_update_date=timezone.now()
+    )
+
+
+
+
+def create_collateral_good_record(item, col_type, id_file, period, user_id):
+    """ສ້າງ good record ສຳລັບ CDL (ແບ່ງຕາມ col_type)"""
+    base_data = {
+        'id_file': id_file,
+        'c1': item.get('LCIC_code', ''),
+        'col_type': col_type.upper(),
+        'c2': item.get('customer_id', ''),
+        'c3': item.get('bnk_code', ''),
+        'c4': item.get('bank_customer_ID', ''),
+        'c5': item.get('branch_id_code', ''),
+        'c6': item.get('loan_id', ''),
+        'c7': item.get('col_id', ''),
+        'c39': item.get('segmentType', ''),
+        'user_id': user_id,
+        'period': period,
+        'c40': timezone.now().date(),
+        'c41': timezone.now().date()
+    }
+
+    # ເພີ່ມຂໍ້ມູນສະເພາະຕາມ col_type
+    if col_type == 'c2.1':
+        base_data.update({
+            'c8': item.get('col_value', ''),
+            'c9': item.get('land_plot_no', ''),
+            'c10': item.get('land_area', ''),
+            'c11': item.get('land_unit', ''),
+            'c12': item.get('land_map_no', ''),
+            'c13': item.get('land_document_no', ''),
+            'c14': item.get('land_registry_book_no', ''),
+            'c15': item.get('land_type', ''),
+            'c16': item.get('land_no', ''),
+            'c17': item.get('land_out_time', ''),
+            'c18': item.get('land_regis_date', ''),
+            'c19': item.get('place_regist', ''),
+            'c20': item.get('plot_vilid', ''),
+            'c21': item.get('plot_unit', ''),
+            'c22': item.get('owner_name', ''),
+            'c23': item.get('owner_birth_date', ''),
+            'c24': item.get('owner_nationality', ''),
+            'c25': item.get('owner_occupation', ''),
+            'c26': item.get('current_vilid', ''),
+            'c27': item.get('current_unit', ''),
+            'c28': item.get('ownership_status', ''),
+            'c29': item.get('spous_name', ''),
+            'c30': item.get('spous_birth_date', ''),
+            'c31': item.get('spous_nationality', ''),
+            'c32': item.get('spous_occupation', ''),
+            'c33': item.get('spous_acquisition', ''),
+        })
+    elif col_type == 'c2.2':
+        base_data.update({
+            'c8': item.get('ministry', ''),
+            'c9': item.get('project_name_en', ''),
+            'c10': item.get('project_name_la', ''),
+            'c11': item.get('project_number', ''),
+            'c12': item.get('value', ''),
+            'c13': item.get('value_unit', ''),
+            'c14': item.get('project_status', ''),
+            'c15': item.get('project_insert_date', ''),
+            'c16': item.get('owner_name', ''),
+            'c17': item.get('owner_surname', ''),
+            'c18': item.get('owner_gender', ''),
+            'c19': item.get('owner_lao_name', ''),
+            'c20': item.get('owner_lao_surname', ''),
+        })
+    elif col_type == 'c2.3':
+        base_data.update({
+            'c8': item.get('machine_type', ''),
+            'c9': item.get('machine_no', ''),
+            'c10': item.get('value', ''),
+            'c11': item.get('value_unit', ''),
+            'c12': item.get('machine_status', ''),
+            'c13': item.get('machine_insert_date', ''),
+            'c14': item.get('owner_name', ''),
+            'c15': item.get('owner_surname', ''),
+            'c16': item.get('owner_gender', ''),
+            'c17': item.get('owner_lao_name', ''),
+            'c18': item.get('owner_lao_surname', ''),
+        })
+    elif col_type == 'c2.4':
+        base_data.update({
+            'c8': item.get('ministry', ''),
+            'c9': item.get('project_name_en', ''),
+            'c10': item.get('project_name_la', ''),
+            'c11': item.get('project_number', ''),
+            'c12': item.get('value', ''),
+            'c13': item.get('value_unit', ''),
+            'c14': item.get('project_status', ''),
+            'c15': item.get('project_insert_date', ''),
+            'c16': item.get('owner_name', ''),
+            'c17': item.get('owner_surname', ''),
+            'c18': item.get('owner_gender', ''),
+            'c19': item.get('owner_lao_name', ''),
+            'c20': item.get('owner_lao_surname', ''),
+        })
+    elif col_type == 'c2.5':
+        base_data.update({
+            'c8': item.get('plate_number', ''),
+            'c9': item.get('engine_number', ''),
+            'c10': item.get('body_number', ''),
+            'c11': item.get('model', ''),
+            'c12': item.get('value', ''),
+            'c13': item.get('value_unit', ''),
+            'c14': item.get('vehicle_status', ''),
+            'c15': item.get('vehicle_insert_date', ''),
+            'c16': item.get('owner_name', ''),
+            'c17': item.get('owner_surname', ''),
+            'c18': item.get('owner_gender', ''),
+            'c19': item.get('owner_lao_name', ''),
+            'c20': item.get('owner_lao_surname', ''),
+        })
+    elif col_type == 'c2.6':
+        base_data.update({
+            'c8': item.get('value', ''),
+            'c9': item.get('value_unit', ''),
+            'c10': item.get('gua_ind_status', ''),
+            'c11': item.get('gua_ind_insert_date', ''),
+            'c12': item.get('guarantor_nationality', ''),
+            'c13': item.get('gua_national_id', ''),
+            'c14': item.get('national_id_expiry_date', ''),
+            'c15': item.get('gua_passport_id', ''),
+            'c16': item.get('gua_passport_expiry_date', ''),
+            'c17': item.get('gua_familybook_id', ''),
+            'c18': item.get('familybook_province_code', ''),
+            'c19': item.get('familybook_issue_date', ''),
+            'c20': item.get('gua_birthdate', ''),
+            'c21': item.get('gua_gender', ''),
+            'c22': item.get('gua_name', ''),
+            'c23': item.get('gua_surname', ''),
+            'c24': item.get('gua_lao_name', ''),
+            'c25': item.get('gua_lao_surname', ''),
+            'c26': item.get('adress_number_street_eng', ''),
+            'c27': item.get('adress_vill_eng', ''),
+            'c28': item.get('adress_district_eng', ''),
+            'c29': item.get('adress_number_street_la', ''),
+            'c30': item.get('adress_vill_la', ''),
+            'c31': item.get('adress_district_la', ''),
+            'c32': item.get('adress_province_code', ''),
+            'c33': item.get('owner_name', ''),
+            'c34': item.get('owner_surname', ''),
+            'c35': item.get('owner_gender', ''),
+            'c36': item.get('owner_lao_name', ''),
+            'c37': item.get('owner_lao_surname', ''),
+        })
+    elif col_type == 'c2.7':
+        base_data.update({
+            'c8': item.get('weight', ''),
+            'c9': item.get('value', ''),
+            'c10': item.get('unit', ''),
+            'c11': item.get('value_unit', ''),
+            'c12': item.get('gld_status', ''),
+            'c13': item.get('gld_insert_date', ''),
+            'c14': item.get('owner_name', ''),
+            'c15': item.get('owner_surname', ''),
+            'c16': item.get('owner_gender', ''),
+            'c17': item.get('owner_lao_name', ''),
+            'c18': item.get('owner_lao_surname', ''),
+        })
+    elif col_type == 'c2.8':
+        base_data.update({
+            'c8': item.get('value', ''),
+            'c9': item.get('value_unit', ''),
+            'c10': item.get('gua_com_status', ''),
+            'c11': item.get('gua_com_insert_date', ''),
+            'c12': item.get('gua_enterprise_code', ''),
+            'c13': item.get('enterprise_regist_date', ''),
+            'c14': item.get('enterprise_regist_place', ''),
+            'c15': item.get('company_name', ''),
+            'c16': item.get('company_lao_name', ''),
+            'c17': item.get('enterprise_category', ''),
+            'c18': item.get('owner_name', ''),
+            'c19': item.get('owner_surname', ''),
+            'c20': item.get('owner_gender', ''),
+            'c21': item.get('owner_lao_name', ''),
+            'c22': item.get('owner_lao_surname', ''),
+        })
+
+    return CDL(**base_data)
+
+
+# def create_collateral_damaged_record(item, status_field, status_value, id_file, period, user_id):
+#     """ສ້າງ damaged record ສຳລັບ C_error"""
+#     return C_error(
+#         id_file=id_file,
+#         LCIC_code=item.get('LCIC_code', ''),
+#         customer_id=item.get('customer_id', ''),
+#         bnk_code=item.get('bnk_code', ''),
+#         branch_id_code=item.get('branch_id_code', ''),
+#         bank_customer_ID=item.get('bank_customer_ID', ''),
+#         loan_id=item.get('loan_id', ''),
+#         col_id=item.get('col_id', ''),
+#         col_type=item.get('col_type', ''),
+#         collateral_status=status_value,
+#         datamatch='',
+#         user_id=user_id,
+#         period=period,
+#         collateral_insert_date=timezone.now(),
+#         collateral_update_date=timezone.now()
+#     )
+
+
+def create_collateral_dispute_record(item, action_code, id_file, period, user_id):
+    """ສ້າງ dispute record ສຳລັບ C1_disptes"""
+    return C1_disptes(
+        LCIC_code=item.get('LCIC_code', ''),
+        id_file=id_file,
+        user_id=user_id,
+        period=period,
+        com_enterprise_code=item.get('customer_id', ''),
+        bank_customer_ID=item.get('bank_customer_ID', ''),
+        bnk_code=item.get('bnk_code', ''),
+        branch_id_code=item.get('branch_id_code', ''),
+        loan_id=item.get('loan_id', ''),
+        col_id=item.get('col_id', ''),
+        col_type=item.get('col_type', ''),
+        insert_date=timezone.now(),
+        update_date=timezone.now(),
+        action_dispust=action_code,
+        status='disputed',
+        is_disputed=1,
+        data_status='inconsistent',
+        lcicID=item.get('LCIC_code', ''),
+        segmentType=item.get('segmentType', '')
+    )
+
+
+# def create_collateral_good_record(item, col_type, id_file, period, user_id):
+#     """ສ້າງ good record ສຳລັບ CDL (ແບ່ງຕາມ col_type)"""
+#     base_data = {
+#         'id_file': id_file,
+#         'c1': item.get('LCIC_code', ''),
+#         'col_type': col_type.upper(),
+#         'c2': item.get('customer_id', ''),
+#         'c3': item.get('bnk_code', ''),
+#         'c4': item.get('bank_customer_ID', ''),
+#         'c5': item.get('branch_id_code', ''),
+#         'c6': item.get('loan_id', ''),
+#         'c7': item.get('col_id', ''),
+#         'c39': item.get('segmentType', ''),
+#         'user_id': user_id,
+#         'period': period,
+#         'c40': timezone.now().date(),
+#         'c41': timezone.now().date()
+#     }
+
+#     # ເພີ່ມຂໍ້ມູນສະເພາະຕາມ col_type
+#     if col_type == 'c2.1':
+#         base_data.update({
+#             'c8': item.get('col_value', ''),
+#             'c9': item.get('land_plot_no', ''),
+#             'c10': item.get('land_area', ''),
+#             'c11': item.get('land_unit', ''),
+#             'c12': item.get('land_map_no', ''),
+#             'c13': item.get('land_document_no', ''),
+#             'c14': item.get('land_registry_book_no', ''),
+#             'c15': item.get('land_type', ''),
+#             'c16': item.get('land_no', ''),
+#             'c17': item.get('land_out_time', ''),
+#             'c18': item.get('land_regis_date', ''),
+#             'c19': item.get('place_regist', ''),
+#             'c20': item.get('plot_vilid', ''),
+#             'c21': item.get('plot_unit', ''),
+#             'c22': item.get('owner_name', ''),
+#             'c23': item.get('owner_birth_date', ''),
+#             'c24': item.get('owner_nationality', ''),
+#             'c25': item.get('owner_occupation', ''),
+#             'c26': item.get('current_vilid', ''),
+#             'c27': item.get('current_unit', ''),
+#             'c28': item.get('ownership_status', ''),
+#             'c29': item.get('spous_name', ''),
+#             'c30': item.get('spous_birth_date', ''),
+#             'c31': item.get('spous_nationality', ''),
+#             'c32': item.get('spous_occupation', ''),
+#             'c33': item.get('spous_acquisition', ''),
+#         })
+#     elif col_type == 'c2.2':
+#         base_data.update({
+#             'c8': item.get('ministry', ''),
+#             'c9': item.get('project_name_en', ''),
+#             'c10': item.get('project_name_la', ''),
+#             'c11': item.get('project_number', ''),
+#             'c12': item.get('value', ''),
+#             'c13': item.get('value_unit', ''),
+#             'c14': item.get('project_status', ''),
+#             'c15': item.get('project_insert_date', ''),
+#             'c16': item.get('owner_name', ''),
+#             'c17': item.get('owner_surname', ''),
+#             'c18': item.get('owner_gender', ''),
+#             'c19': item.get('owner_lao_name', ''),
+#             'c20': item.get('owner_lao_surname', ''),
+#         })
+#     elif col_type == 'c2.3':
+#         base_data.update({
+#             'c8': item.get('machine_type', ''),
+#             'c9': item.get('machine_no', ''),
+#             'c10': item.get('value', ''),
+#             'c11': item.get('value_unit', ''),
+#             'c12': item.get('machine_status', ''),
+#             'c13': item.get('machine_insert_date', ''),
+#             'c14': item.get('owner_name', ''),
+#             'c15': item.get('owner_surname', ''),
+#             'c16': item.get('owner_gender', ''),
+#             'c17': item.get('owner_lao_name', ''),
+#             'c18': item.get('owner_lao_surname', ''),
+#         })
+#     elif col_type == 'c2.4':
+#         base_data.update({
+#             'c8': item.get('ministry', ''),
+#             'c9': item.get('project_name_en', ''),
+#             'c10': item.get('project_name_la', ''),
+#             'c11': item.get('project_number', ''),
+#             'c12': item.get('value', ''),
+#             'c13': item.get('value_unit', ''),
+#             'c14': item.get('project_status', ''),
+#             'c15': item.get('project_insert_date', ''),
+#             'c16': item.get('owner_name', ''),
+#             'c17': item.get('owner_surname', ''),
+#             'c18': item.get('owner_gender', ''),
+#             'c19': item.get('owner_lao_name', ''),
+#             'c20': item.get('owner_lao_surname', ''),
+#         })
+#     elif col_type == 'c2.5':
+#         base_data.update({
+#             'c8': item.get('plate_number', ''),
+#             'c9': item.get('engine_number', ''),
+#             'c10': item.get('body_number', ''),
+#             'c11': item.get('model', ''),
+#             'c12': item.get('value', ''),
+#             'c13': item.get('value_unit', ''),
+#             'c14': item.get('vehicle_status', ''),
+#             'c15': item.get('vehicle_insert_date', ''),
+#             'c16': item.get('owner_name', ''),
+#             'c17': item.get('owner_surname', ''),
+#             'c18': item.get('owner_gender', ''),
+#             'c19': item.get('owner_lao_name', ''),
+#             'c20': item.get('owner_lao_surname', ''),
+#         })
+#     elif col_type == 'c2.6':
+#         base_data.update({
+#             'c8': item.get('value', ''),
+#             'c9': item.get('value_unit', ''),
+#             'c10': item.get('gua_ind_status', ''),
+#             'c11': item.get('gua_ind_insert_date', ''),
+#             'c12': item.get('guarantor_nationality', ''),
+#             'c13': item.get('gua_national_id', ''),
+#             'c14': item.get('national_id_expiry_date', ''),
+#             'c15': item.get('gua_passport_id', ''),
+#             'c16': item.get('gua_passport_expiry_date', ''),
+#             'c17': item.get('gua_familybook_id', ''),
+#             'c18': item.get('familybook_province_code', ''),
+#             'c19': item.get('familybook_issue_date', ''),
+#             'c20': item.get('gua_birthdate', ''),
+#             'c21': item.get('gua_gender', ''),
+#             'c22': item.get('gua_name', ''),
+#             'c23': item.get('gua_surname', ''),
+#             'c24': item.get('gua_lao_name', ''),
+#             'c25': item.get('gua_lao_surname', ''),
+#             'c26': item.get('adress_number_street_eng', ''),
+#             'c27': item.get('adress_vill_eng', ''),
+#             'c28': item.get('adress_district_eng', ''),
+#             'c29': item.get('adress_number_street_la', ''),
+#             'c30': item.get('adress_vill_la', ''),
+#             'c31': item.get('adress_district_la', ''),
+#             'c32': item.get('adress_province_code', ''),
+#             'c33': item.get('owner_name', ''),
+#             'c34': item.get('owner_surname', ''),
+#             'c35': item.get('owner_gender', ''),
+#             'c36': item.get('owner_lao_name', ''),
+#             'c37': item.get('owner_lao_surname', ''),
+#         })
+#     elif col_type == 'c2.7':
+#         base_data.update({
+#             'c8': item.get('weight', ''),
+#             'c9': item.get('value', ''),
+#             'c10': item.get('unit', ''),
+#             'c11': item.get('value_unit', ''),
+#             'c12': item.get('gld_status', ''),
+#             'c13': item.get('gld_insert_date', ''),
+#             'c14': item.get('owner_name', ''),
+#             'c15': item.get('owner_surname', ''),
+#             'c16': item.get('owner_gender', ''),
+#             'c17': item.get('owner_lao_name', ''),
+#             'c18': item.get('owner_lao_surname', ''),
+#         })
+#     elif col_type == 'c2.8':
+#         base_data.update({
+#             'c8': item.get('value', ''),
+#             'c9': item.get('value_unit', ''),
+#             'c10': item.get('gua_com_status', ''),
+#             'c11': item.get('gua_com_insert_date', ''),
+#             'c12': item.get('gua_enterprise_code', ''),
+#             'c13': item.get('enterprise_regist_date', ''),
+#             'c14': item.get('enterprise_regist_place', ''),
+#             'c15': item.get('company_name', ''),
+#             'c16': item.get('company_lao_name', ''),
+#             'c17': item.get('enterprise_category', ''),
+#             'c18': item.get('owner_name', ''),
+#             'c19': item.get('owner_surname', ''),
+#             'c20': item.get('owner_gender', ''),
+#             'c21': item.get('owner_lao_name', ''),
+#             'c22': item.get('owner_lao_surname', ''),
+#         })
+
+#     return CDL(**base_data)
+
+
+# def human_readable_size(size_bytes):
+#     """ແປງຂະໜາດໄຟລ໌ເປັນຮູບແບບທີ່ອ່ານງ່າຍ"""
+#     if size_bytes == 0:
+#         return "0B"
+#     size_name = ("B", "KB", "MB", "GB", "TB")
+#     i = 0
+#     while size_bytes >= 1024 and i < len(size_name) - 1:
+#         size_bytes /= 1024.0
+#         i += 1
+#     return f"{size_bytes:.2f} {size_name[i]}"
 
 
 import json
@@ -3852,7 +4782,6 @@ def process_uploaded_file(uploaded_data, user_id, period, file_period):
             'status': 'error',
             'message': str(e)
         }, status=500)
-
 
 
 
@@ -10065,6 +10994,10 @@ def confirm_upload_individual(request):
 
 
 
+
+
+
+
 from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -10074,6 +11007,11 @@ from dateutil.relativedelta import relativedelta
 from datetime import datetime
 import re
 import traceback
+
+
+
+
+
 
 @csrf_exempt
 @require_POST
@@ -13502,6 +14440,8 @@ from datetime import timedelta
 
 
 
+
+
 # from rest_framework.views import APIView
 # from rest_framework.response import Response
 # from rest_framework import status
@@ -13567,6 +14507,66 @@ from datetime import timedelta
 #             return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
 
+# from datetime import datetime
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from rest_framework import status
+# from rest_framework.permissions import AllowAny
+# from rest_framework_simplejwt.tokens import RefreshToken
+# from .models import Login, UserAccessLog
+
+# class UserLoginView(APIView):
+#     permission_classes = [AllowAny]
+
+#     def post(self, request):
+#         username = request.data.get('username')
+#         password = request.data.get('password')
+
+#         try:
+#             user = Login.objects.get(username=username)
+#             if not user.check_password(password):
+#                 return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
+#             # Update last_login
+#             user.last_login = datetime.now()
+#             user.save(update_fields=['last_login'])
+
+#             # Create tokens
+#             refresh = RefreshToken.for_user(user)
+
+#             # Return only the path under MEDIA_ROOT, e.g. "/profile_images/foo.png"
+#             profile_path = f"/{user.profile_image.name}" if user.profile_image else None
+
+#             return Response({
+#                 'detail': 'Successfully logged in.',
+#                 'access': str(refresh.access_token),
+#                 'refresh': str(refresh),
+#                 'user': {
+#                     'UID': user.UID,
+#                     'MID': {
+#                         'id': user.MID.bnk_code if user.MID else None,
+#                         'code': user.MID.code if user.MID else None,
+#                     },
+#                     'GID': {
+#                         'GID': user.GID.GID if user.GID else None,
+#                         'nameL': user.GID.nameL if user.GID else None,
+#                     },
+#                     'username': user.username,
+#                     'nameL': user.nameL,
+#                     'nameE': user.nameE,
+#                     'surnameL': user.surnameL,
+#                     'surnameE': user.surnameE,
+#                     'profile_image': profile_path,
+#                     'is_active': user.is_active,
+#                     'last_login': user.last_login,
+#                     'is_staff': user.is_staff,
+#                     'is_superuser': user.is_superuser,
+#                 }
+#             }, status=status.HTTP_200_OK)
+
+#         except Login.DoesNotExist:
+#             return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+
 from datetime import datetime
 from django.utils.timezone import now
 from rest_framework.views import APIView
@@ -13588,6 +14588,8 @@ class UserLoginView(APIView):
 
         try:
             user = Login.objects.get(username=username)
+            
+            # ✅ ตรวจสอบรหัสผ่าน
             if not user.check_password(password):
                 # ❌ Password ผิด - บันทึก log พร้อม logout_time
                 UserAccessLog.objects.create(
@@ -13608,7 +14610,7 @@ class UserLoginView(APIView):
             user.last_login = current_time
             user.save(update_fields=['last_login'])
 
-            # Create tokens
+            # ✅ Create JWT tokens
             refresh = RefreshToken.for_user(user)
             access_token = str(refresh.access_token)
             bnk_code = user.MID.bnk_code if user.MID else None
@@ -13630,7 +14632,7 @@ class UserLoginView(APIView):
             # ✅ Return response ทันที
             return Response({
                 'detail': 'Successfully logged in.',
-                'access': str(refresh.access_token),
+                'access': access_token,
                 'refresh': str(refresh),
                 'user': {
                     'UID': user.UID,
@@ -14062,6 +15064,8 @@ class SidebarCreateView(APIView):
             
         except (SidebarItem.DoesNotExist, SidebarSubItem.DoesNotExist):
             return Response({"error": "Item not found."}, status=status.HTTP_404_NOT_FOUND)
+
+
 class AssignRoleView(APIView):
     """Assign roles to sidebar items and sub-items"""
     
@@ -14069,34 +15073,33 @@ class AssignRoleView(APIView):
         role_id = request.data.get('role_id')
         sidebar_item_ids = request.data.get('sidebar_items', [])
         sidebar_sub_item_ids = request.data.get('sidebar_sub_items', [])
-        
+
         try:
             role = Role.objects.get(id=role_id)
 
-            # Always clear existing assignments first
-            role.sidebar_items.clear()
-            role.sidebar_sub_items.clear()
+            # Clear existing assignments if replace_existing is True
+            if request.data.get('replace_existing', False):
+                role.sidebar_items.clear()
+                SidebarSubItem.objects.filter(roles=role).update(roles=None)
 
-            # Assign selected items
+            # Assign items
             if sidebar_item_ids:
                 sidebar_items = SidebarItem.objects.filter(id__in=sidebar_item_ids)
                 role.sidebar_items.add(*sidebar_items)
 
-            # Assign selected sub-items
+            # Assign sub-items
             if sidebar_sub_item_ids:
                 sidebar_sub_items = SidebarSubItem.objects.filter(id__in=sidebar_sub_item_ids)
-                role.sidebar_sub_items.add(*sidebar_sub_items)
+                for sub_item in sidebar_sub_items:
+                    sub_item.roles.add(role)
 
-            return Response({
-                "detail": "Role assigned successfully",
-                "assigned_items": len(sidebar_item_ids),
-                "assigned_sub_items": len(sidebar_sub_item_ids)
-            }, status=status.HTTP_200_OK)
+            return Response({"detail": "Role assigned successfully"}, status=status.HTTP_200_OK)
 
         except Role.DoesNotExist:
             return Response({"error": "Role not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 class ReorderSidebarView(APIView):
     """Reorder sidebar items efficiently"""
@@ -19051,6 +20054,7 @@ def fix_problematic_dates():
 #             return Response({"error": "Charge configuration not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 #         except Exception as e:
 #             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -19067,11 +20071,8 @@ import uuid
 
 class ElectricReportAPIView(APIView):
     """
-    API View for Electric Supply Report.
-    
-    IMPORTANT: Field names differ between tables:
-    - Customer table: Province_ID, Dustrict_ID
-    - Bill table: ProID, DisID
+    API View for Electric Supply Report with Province and District filtering.
+    Handles duplicate customer IDs across different provinces/districts.
     """
     permission_classes = [IsAuthenticated]
 
@@ -19080,7 +20081,7 @@ class ElectricReportAPIView(APIView):
             # Get query parameters
             customer_id = request.query_params.get('edl')
             province_id = request.query_params.get('province_id')
-            district_id = request.query_params.get('district_id')
+            district_id = request.query_params.get('district_id')  # Optional
 
             # Validate required parameters
             if not customer_id:
@@ -19109,18 +20110,20 @@ class ElectricReportAPIView(APIView):
             
             charge_amount_com = chargeType.chg_amount
 
-            # Query CUSTOMER using Customer table field names: Province_ID, Dustrict_ID
-            customer_filter = Q(Customer_ID=customer_id) & Q(Province_ID=province_id)
+            # Build customer filter query
+            customer_filter = Q(Customer_ID=customer_id) & Q(province_id=province_id)
             
+            # Add district filter if provided
             if district_id:
-                customer_filter &= Q(Dustrict_ID=district_id)
+                customer_filter &= Q(district_id=district_id)
 
+            # Query customer with province and district filtering
             try:
                 customers = edl_customer_info.objects.filter(customer_filter)
                 
                 if not customers.exists():
                     return Response({
-                        "error": "Customer not found for the specified province",
+                        "error": "Customer not found for the specified province and district",
                         "details": {
                             "customer_id": customer_id,
                             "province_id": province_id,
@@ -19128,7 +20131,22 @@ class ElectricReportAPIView(APIView):
                         }
                     }, status=status.HTTP_404_NOT_FOUND)
                 
-                customer = customers.first()
+                # If multiple records found, take the first one or return error
+                if customers.count() > 1:
+                    if not district_id:
+                        return Response({
+                            "error": "Multiple customers found. Please provide district_id",
+                            "details": {
+                                "customer_id": customer_id,
+                                "province_id": province_id,
+                                "available_districts": list(customers.values_list('district_id', flat=True).distinct())
+                            }
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                    else:
+                        # Multiple records even with district - should not happen, but handle it
+                        customer = customers.first()
+                else:
+                    customer = customers.first()
                     
             except Exception as e:
                 return Response({
@@ -19136,23 +20154,23 @@ class ElectricReportAPIView(APIView):
                     "details": str(e)
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # Custom function to convert MM-YYYY to YYYY-MM for sorting
+            # Custom function to convert MM-YYYY to YYYY-MM for sorting (PostgreSQL)
             class ReorderMonthYear(Func):
                 function = "TO_CHAR"
                 template = "SUBSTRING(%(expressions)s FROM 4 FOR 4) || '-' || SUBSTRING(%(expressions)s FROM 1 FOR 2)"
 
-            # Query BILLS using Bill table field names: ProID, DisID (NOT Province_ID!)
-            bill_filter = Q(Customer_ID=customer_id) & Q(ProID=province_id)
+            # Build bill filter query with province and district
+            bill_filter = Q(Customer_ID=customer_id) & Q(province_id=province_id)
             
             if district_id:
-                bill_filter &= Q(DisID=district_id)
+                bill_filter &= Q(district_id=district_id)
 
             # Sort bills by InvoiceMonth in descending order
             bills = Electric_Bill.objects.filter(bill_filter).annotate(
                 year_month=ReorderMonthYear(F('InvoiceMonth'))
             ).order_by('-year_month')
 
-            # Log the search
+            # Log the search with province and district information
             search_log = searchlog_utility.objects.create(
                 bnk_code=bank.bnk_code,
                 sys_usr=sys_usr,
@@ -19162,23 +20180,22 @@ class ElectricReportAPIView(APIView):
                 proID_edl=province_id,
                 proID_wt='',
                 proID_tel='',
-
+                district_id_edl=district_id if district_id else '',  # Add district to log
                 credittype='edl',
                 inquiry_date=timezone.now(),
                 inquiry_time=timezone.now()
             )
 
-            # Get current timestamp
+            # Get current timestamp for rec_insert_date
             rec_insert_date = timezone.now()
             date_str = rec_insert_date.strftime('%d%m%Y')
             report_date = rec_insert_date.strftime('%d-%m-%Y')
             
-            # Reference code
-            district_code = district_id if district_id else '00'
-            rec_reference_code = f"{chargeType.chg_code}-0-{bank.bnk_code}-{province_id}-{district_code}-{date_str}-{search_log.search_id}"
+            # Include province and district in reference code for uniqueness
+            rec_reference_code = f"{chargeType.chg_code}-0-{bank.bnk_code}-{province_id}-{district_id or '00'}-{date_str}-{search_log.search_id}"
             rec_reference_code = rec_reference_code[:100]
 
-            # Log charge request
+            # Log the charge request with province and district
             request_charge_utility.objects.create(
                 usr_session_id=str(uuid.uuid4()),
                 search_id=search_log,
@@ -19194,7 +20211,7 @@ class ElectricReportAPIView(APIView):
                 proID_edl=province_id,
                 proID_wt='',
                 proID_tel='',
-
+                district_id_edl=district_id if district_id else '',  # Add district
                 rec_reference_code=rec_reference_code
             )
 
@@ -19203,7 +20220,7 @@ class ElectricReportAPIView(APIView):
             bill_serializer = ElectricBillSerializer(bills, many=True)
             search_log_serializer = SearchLogUtilitySerializer(search_log)
 
-            # Construct reference_data
+            # Construct reference_data with province and district info
             reference_data = (
                 rec_reference_code,
                 customer_id,
@@ -19214,7 +20231,7 @@ class ElectricReportAPIView(APIView):
                 district_id if district_id else ''
             )
 
-            # Return response
+            # Return comprehensive response
             return Response({
                 "reference_data": reference_data,
                 "customer": [customer_serializer.data],
@@ -19223,14 +20240,15 @@ class ElectricReportAPIView(APIView):
                     "customer_id": customer_id,
                     "province_id": province_id,
                     "district_id": district_id,
-                    "province_name": getattr(customer, 'province_name', ''),
-                    "district_name": getattr(customer, 'district_name', '')
+                    "province_name": customer.province_name if hasattr(customer, 'province_name') else '',
+                    "district_name": customer.district_name if hasattr(customer, 'district_name') else ''
                 }
             }, status=status.HTTP_200_OK)
 
         except edl_customer_info.DoesNotExist:
             return Response({
-                "error": "Customer not found"
+                "error": "Customer not found",
+                "details": "No customer record found for the provided ID, province, and district"
             }, status=status.HTTP_404_NOT_FOUND)
             
         except memberInfo.DoesNotExist:
@@ -19252,13 +20270,15 @@ class ElectricReportAPIView(APIView):
 
 class ElectricCustomerSearchAPIView(APIView):
     """
-    API View for searching Electric customers across all provinces.
+    API View for searching Electric customers with province filtering.
+    Used for autocomplete/quick search functionality.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         try:
             query = request.query_params.get('query', '').strip()
+            province_id = request.query_params.get('province_id')
             limit = int(request.query_params.get('limit', 100))
 
             if not query or len(query) < 2:
@@ -19266,7 +20286,7 @@ class ElectricCustomerSearchAPIView(APIView):
                     "error": "Query parameter must be at least 2 characters"
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            # Search across all provinces
+            # Build search query
             search_filter = (
                 Q(Customer_ID__icontains=query) |
                 Q(Name__icontains=query) |
@@ -19274,12 +20294,18 @@ class ElectricCustomerSearchAPIView(APIView):
                 Q(Company_name__icontains=query)
             )
 
-            # Use correct customer table field names
+            # Add province filter if provided
+            if province_id:
+                search_filter &= Q(province_id=province_id)
+
+            # Execute search with limit
             customers = edl_customer_info.objects.filter(
                 search_filter
-            ).order_by('Province_ID', 'Dustrict_ID', 'Customer_ID')[:limit]
+            ).select_related().order_by('province_id', 'district_id', 'Customer_ID')[:limit]
 
+            # Serialize results
             serializer = EDLCustomerSerializer(customers, many=True)
+
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         except ValueError:
@@ -19292,6 +20318,7 @@ class ElectricCustomerSearchAPIView(APIView):
                 "error": "Search failed",
                 "details": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
     
 from .models import ChargeMatrix
 from .serializers import ChargeMatrixSerializer
@@ -25196,12 +26223,6 @@ class ChargeReportMainView(APIView):
         return "{:,.0f}".format(float(amount))
 
 
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
-from datetime import datetime
-
 
 class ChargeReportDetailView(APIView):
     """
@@ -27020,9 +28041,10 @@ class ChargeMatrixDetailAPIView(APIView):
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Q
+from django.db.models import Q, Count
 from .models import request_charge
 from .serializers import RequestChargeSerializer
+from datetime import datetime
 
 
 class RequestChargeSummaryAPIView(APIView):
@@ -27038,25 +28060,29 @@ class RequestChargeSummaryAPIView(APIView):
         bnk_code = request.GET.get('bnk_code', '').strip()
         date_filter_type = request.GET.get('date_filter_type', 'day')
         date_filter_value = request.GET.get('date_filter_value', '')
+        
+        # ✅ รับค่า date range (ใหม่)
+        start_date = request.GET.get('start_date', '').strip()
+        end_date = request.GET.get('end_date', '').strip()
 
         # ✅ กลุ่ม chg_code
         group1 = ['FCRFI', 'NLRFI', 'NLR', 'FCR']
         group2 = ['SCR', 'SCRFI']
         group3 = ['UTLT', 'UTLTFI']
 
-        # ✅ base queryset (เริ่มจากทั้งหมด)
+        # ✅ base queryset
         queryset = request_charge.objects.all()
 
         # ✅ Logic แยกตาม bnk_code
         if bnk_code == "01":
-            # ถ้า bnk_code == "01" → ดูทั้งหมด (ไม่ filter)
-            pass  # ไม่ต้องทำอะไร
+            pass  # Admin: ดูทั้งหมด
         elif bnk_code:
-            # ถ้า bnk_code != "01" และมีค่า → filter เฉพาะธนาคารนั้น
             queryset = queryset.filter(bnk_code=bnk_code)
 
         # ✅ Apply date filter
-        if date_filter_value:
+        if date_filter_type == 'range' and start_date and end_date:
+            queryset = self._apply_date_range_filter(queryset, start_date, end_date)
+        elif date_filter_value:
             queryset = self._apply_date_filter(queryset, date_filter_type, date_filter_value)
 
         # ✅ นับจำนวนในแต่ละกลุ่ม
@@ -27066,9 +28092,11 @@ class RequestChargeSummaryAPIView(APIView):
 
         data = {
             "bnk_code": bnk_code,
-            "is_admin": bnk_code == "01",  # ✅ บอกว่าเป็น admin หรือไม่
+            "is_admin": bnk_code == "01",
             "date_filter_type": date_filter_type,
             "date_filter_value": date_filter_value,
+            "start_date": start_date,
+            "end_date": end_date,
             "group1": count_group1,
             "group2": count_group2,
             "group3": count_group3,
@@ -27098,11 +28126,20 @@ class RequestChargeSummaryAPIView(APIView):
             print(f"Date filter error: {e}")
         return queryset
 
+    def _apply_date_range_filter(self, queryset, start_date, end_date):
+        """Apply date range filter (start_date to end_date)"""
+        try:
+            start = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end = datetime.strptime(end_date, '%Y-%m-%d').date()
+            return queryset.filter(rec_insert_date__date__range=[start, end])
+        except Exception as e:
+            print(f"Date range filter error: {e}")
+        return queryset
+
 
 class RequestChargeReportAllAPIView(APIView):
     """
     API สำหรับแสดงจำนวน request ของแต่ละธนาคาร (สำหรับ admin เท่านั้น)
-    แสดงตาราง: NO, bnk_code, ชื่อธนาคาร, จำนวน
     """
 
     def get(self, request, *args, **kwargs):
@@ -27111,8 +28148,12 @@ class RequestChargeReportAllAPIView(APIView):
         group_type = request.GET.get('group', 'group1')
         date_filter_type = request.GET.get('date_filter_type', 'day')
         date_filter_value = request.GET.get('date_filter_value', '')
+        
+        # ✅ รับค่า date range
+        start_date = request.GET.get('start_date', '').strip()
+        end_date = request.GET.get('end_date', '').strip()
 
-        # ✅ ตรวจสอบว่าเป็น admin (bnk_code = "01") หรือไม่
+        # ✅ ตรวจสอบว่าเป็น admin
         if bnk_code != "01":
             return Response({
                 "error": "Access denied. Only admin (bnk_code=01) can access this endpoint."
@@ -27130,15 +28171,16 @@ class RequestChargeReportAllAPIView(APIView):
         queryset = request_charge.objects.filter(chg_code__in=chg_codes)
 
         # ✅ Apply date filter
-        if date_filter_value:
+        if date_filter_type == 'range' and start_date and end_date:
+            queryset = self._apply_date_range_filter(queryset, start_date, end_date)
+        elif date_filter_value:
             queryset = self._apply_date_filter(queryset, date_filter_type, date_filter_value)
 
-        # ✅ Group by bnk_code และนับจำนวน
+        # ✅ Group by bnk_code
         bank_summary = queryset.values('bnk_code').annotate(
             total=Count('rec_charge_ID')
         ).order_by('bnk_code')
 
-        # ✅ แปลงเป็น list
         results = list(bank_summary)
 
         data = {
@@ -27148,6 +28190,8 @@ class RequestChargeReportAllAPIView(APIView):
             "chg_codes": chg_codes,
             "date_filter_type": date_filter_type,
             "date_filter_value": date_filter_value,
+            "start_date": start_date,
+            "end_date": end_date,
             "total_banks": len(results),
             "results": results
         }
@@ -27176,18 +28220,20 @@ class RequestChargeReportAllAPIView(APIView):
             print(f"Date filter error: {e}")
         return queryset
 
+    def _apply_date_range_filter(self, queryset, start_date, end_date):
+        """Apply date range filter"""
+        try:
+            start = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end = datetime.strptime(end_date, '%Y-%m-%d').date()
+            return queryset.filter(rec_insert_date__date__range=[start, end])
+        except Exception as e:
+            print(f"Date range filter error: {e}")
+        return queryset
+
 
 class RequestChargeDetailAPIView(APIView):
     """
     API สำหรับดึงรายละเอียดของแต่ละกลุ่ม พร้อม Date Filter
-    
-    Logic:
-    - ถ้า bnk_code == "01" (Admin):
-      → ต้องมี detail_bnk_code (มาจากตาราง report_all)
-      → ดูรายละเอียดของธนาคารที่เลือก
-    - ถ้า bnk_code != "01" (User ธรรมดา):
-      → ดูเฉพาะธนาคารของตัวเอง
-      → ไม่สนใจ detail_bnk_code
     """
 
     def get(self, request, *args, **kwargs):
@@ -27197,6 +28243,10 @@ class RequestChargeDetailAPIView(APIView):
         group_type = request.GET.get('group', 'group1')
         date_filter_type = request.GET.get('date_filter_type', 'day')
         date_filter_value = request.GET.get('date_filter_value', '')
+        
+        # ✅ รับค่า date range
+        start_date = request.GET.get('start_date', '').strip()
+        end_date = request.GET.get('end_date', '').strip()
 
         # ✅ mapping group
         group_mapping = {
@@ -27211,40 +28261,40 @@ class RequestChargeDetailAPIView(APIView):
 
         # ✅ Logic แยกตาม bnk_code
         if bnk_code == "01":
-            # Admin: ต้องใช้ detail_bnk_code (มาจาก report_all)
             if detail_bnk_code:
                 queryset = queryset.filter(bnk_code=detail_bnk_code)
                 actual_bnk_code = detail_bnk_code
             else:
-                # ถ้าไม่มี detail_bnk_code = error (admin ต้องเลือกธนาคารจากตาราง)
                 return Response({
-                    "error": "Admin must select a bank from report_all table. Missing detail_bnk_code."
+                    "error": "Admin must select a bank. Missing detail_bnk_code."
                 }, status=400)
         else:
-            # User ธรรมดา: ดูเฉพาะของตัวเอง (ไม่สนใจ detail_bnk_code)
             queryset = queryset.filter(bnk_code=bnk_code)
             actual_bnk_code = bnk_code
 
-        # ✅ date filter
-        if date_filter_value:
+        # ✅ Apply date filter
+        if date_filter_type == 'range' and start_date and end_date:
+            queryset = self._apply_date_range_filter(queryset, start_date, end_date)
+        elif date_filter_value:
             queryset = self._apply_date_filter(queryset, date_filter_type, date_filter_value)
 
-        # ✅ เรียงข้อมูลใหม่สุดก่อน
+        # ✅ เรียงข้อมูล
         queryset = queryset.order_by('-rec_insert_date')
 
         # ✅ serialize
-        from .serializers import RequestChargeSerializer
         serializer = RequestChargeSerializer(queryset, many=True)
 
         data = {
-            "bnk_code": bnk_code,  # bnk_code ของ user ที่ login
-            "detail_bnk_code": detail_bnk_code,  # ธนาคารที่เลือกจากตาราง (สำหรับ admin)
-            "actual_bnk_code": actual_bnk_code,  # ธนาคารที่แสดงผลจริง
+            "bnk_code": bnk_code,
+            "detail_bnk_code": detail_bnk_code,
+            "actual_bnk_code": actual_bnk_code,
             "is_admin": bnk_code == "01",
             "group": group_type,
             "chg_codes": chg_codes,
             "date_filter_type": date_filter_type,
             "date_filter_value": date_filter_value,
+            "start_date": start_date,
+            "end_date": end_date,
             "total_count": queryset.count(),
             "results": serializer.data
         }
@@ -27273,6 +28323,31 @@ class RequestChargeDetailAPIView(APIView):
             print(f"Date filter error: {e}")
         return queryset
 
+    def _apply_date_range_filter(self, queryset, start_date, end_date):
+        """Apply date range filter"""
+        try:
+            start = datetime.strptime(start_date, '%Y-%m-%d').date()
+            end = datetime.strptime(end_date, '%Y-%m-%d').date()
+            return queryset.filter(rec_insert_date__date__range=[start, end])
+        except Exception as e:
+            print(f"Date range filter error: {e}")
+        return queryset
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from .models import UserAccessLog
+from .serializers import UserAccessLogSerializer
+
+
+class UserAccessLogListView(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        logs = UserAccessLog.objects.select_related('user').order_by('-login_time')
+        serializer = UserAccessLogSerializer(logs, many=True)
+        return Response(serializer.data)
+    
+    
 # -------------------------- SEARCH INDIVIDUAL BANK IBK --------------------------
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -27285,7 +28360,7 @@ from django.db.models import Q
 
 # Assuming these collateral models are imported elsewhere in your .models; add if missing
 # from .models import col_real_estates, col_money_mia, col_equipment_eqi, col_project_prj, col_vechicle_veh, col_guarantor_gua, col_goldsilver_gold
-
+    
 class FCR_reportIndividualView(APIView):    
     def get(self, request):  # Changed to GET
         lcic_id = request.GET.get('lcic_id', '').strip()  # Changed to request.GET.get()
