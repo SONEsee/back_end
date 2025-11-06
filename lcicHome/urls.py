@@ -390,9 +390,12 @@ urlpatterns = [
     path('api/dispute-loans/', views.get_dispute_loans, name='get_dispute_loans'),
     path('api/dispute-collateral/', views.get_dispute_collateral, name='get_dispute_collateral'),
     path('api/disputes/confirmc/', views.confirm_dispute_colatteral, name='confirm_dispute_colatteral'),
+    path('api/reject_individual_loan/<str:id_file>/', views.reject_individual_loan_view, name='reject_individual_loan'),
+    path('api/reject_individual_collateral/<str:id_file>/', views.reject_individual_collateral_view, name='reject_individual_loan'),
 
     
     path('api/rollback_reconfirm/', views.rollback_and_reconfirm_individual, name='rollback_reconfirm'),
+    path('api/rollback_reconfirm_collateral/', views.rollback_and_reconfirm_collateral, name='rollback_reconfirm_collateral'),
 
 
     # path('api/search-individual/', views.search_individual_bank_advanced, name='search_individual_bank_advanced'),
@@ -402,6 +405,7 @@ urlpatterns = [
     path('api/productinfo4/', get_data_by_id_file, name='get_data_by_id_file'),
     path('confirm_upload/', views.confirm_upload, name='confirm_upload'),
     path('confirm_upload_individual/', views.confirm_upload_individual, name='confirm_upload_individual'),
+    path('confirm_upload_individual_collateral/', views.confirm_upload_individual_collateral, name='confirm_upload_individual_collateral'),
     path('confirm_uploadc/', views.confirm_uploadc, name='confirm_uploadc'),
     path('unload_uploadc/', views.unload_data, name='unload_data'),
     # path('check-upload-status/<str:FID>/', views.check_upload_status, name='check_upload_status'),
