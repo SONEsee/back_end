@@ -14576,7 +14576,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Login, UserAccessLog
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 77765ce4d909c9351786ba3bd43faf99a42e0ec9
 class UserLoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -14584,7 +14587,10 @@ class UserLoginView(APIView):
         username = request.data.get('username')
         password = request.data.get('password')
 
+<<<<<<< HEAD
         # ✅ เก็บ IP และ User-Agent
+=======
+>>>>>>> 77765ce4d909c9351786ba3bd43faf99a42e0ec9
         ip_address = request.META.get('REMOTE_ADDR')
         user_agent = request.META.get('HTTP_USER_AGENT', '')
 
@@ -14593,24 +14599,41 @@ class UserLoginView(APIView):
             
             # ✅ ตรวจสอบรหัสผ่าน
             if not user.check_password(password):
+<<<<<<< HEAD
                 # ✅ บันทึก log เมื่อรหัสผ่านผิด
+=======
+                # ❌ Password ผิด - บันทึก log พร้อม logout_time
+>>>>>>> 77765ce4d909c9351786ba3bd43faf99a42e0ec9
                 UserAccessLog.objects.create(
                     user=user,
                     bnk_code=user.MID.bnk_code if user.MID else None,
                     login_time=now(),
+<<<<<<< HEAD
+=======
+                    logout_time=now(),  # ✅ เพิ่ม logout_time ตอน fail
+>>>>>>> 77765ce4d909c9351786ba3bd43faf99a42e0ec9
                     ip_address=ip_address,
                     user_agent=user_agent,
                     remarks="Login failed - Invalid password"
                 )
                 return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
+<<<<<<< HEAD
             # ✅ Update last login
             user.last_login = now()
+=======
+            # ✅ Login สำเร็จ
+            current_time = now()
+            
+            # ✅ Update last login
+            user.last_login = current_time
+>>>>>>> 77765ce4d909c9351786ba3bd43faf99a42e0ec9
             user.save(update_fields=['last_login'])
 
             # ✅ Create JWT tokens
             refresh = RefreshToken.for_user(user)
             access_token = str(refresh.access_token)
+<<<<<<< HEAD
 
             # ✅ ดึง bnk_code จาก MID
             bnk_code = user.MID.bnk_code if user.MID else None
@@ -14628,8 +14651,25 @@ class UserLoginView(APIView):
             )
 
             # ✅ Profile path
+=======
+            bnk_code = user.MID.bnk_code if user.MID else None
+
+            # ✅ บันทึก log เมื่อ login สำเร็จ
+            UserAccessLog.objects.create(
+                user=user,
+                bnk_code=bnk_code,
+                access_token=access_token,
+                refresh_token=str(refresh),
+                login_time=current_time,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                remarks="Login success"
+            )
+
+>>>>>>> 77765ce4d909c9351786ba3bd43faf99a42e0ec9
             profile_path = f"/{user.profile_image.name}" if user.profile_image else None
 
+            # ✅ Return response ทันที
             return Response({
                 'detail': 'Successfully logged in.',
                 'access': access_token,
@@ -14658,11 +14698,20 @@ class UserLoginView(APIView):
             }, status=status.HTTP_200_OK)
 
         except Login.DoesNotExist:
+<<<<<<< HEAD
             # ✅ บันทึก log เมื่อ username ไม่มีในระบบ
             UserAccessLog.objects.create(
                 user=None,  # ไม่มี user
                 bnk_code=None,
                 login_time=now(),
+=======
+            # ❌ Username ไม่มีในระบบ - บันทึก log พร้อม logout_time
+            UserAccessLog.objects.create(
+                user=None,
+                bnk_code=None,
+                login_time=now(),
+                logout_time=now(),  # ✅ เพิ่ม logout_time ตอน fail
+>>>>>>> 77765ce4d909c9351786ba3bd43faf99a42e0ec9
                 ip_address=ip_address,
                 user_agent=user_agent,
                 remarks=f"Login failed - Username not found: {username}"
@@ -14671,6 +14720,7 @@ class UserLoginView(APIView):
 
 
 class UserLogoutView(APIView):
+<<<<<<< HEAD
     """
     ✅ Logout view - remarks เก็บแค่ base message
     """
@@ -14771,6 +14821,59 @@ class UserLogoutView(APIView):
                 {"error": f"Logout failed: {str(e)}"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+=======
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        try:
+            # ✅ พยายาม authenticate แต่ไม่บังคับ
+            jwt_auth = JWTAuthentication()
+            user = None
+            
+            try:
+                auth_result = jwt_auth.authenticate(request)
+                if auth_result is not None:
+                    user, token = auth_result
+            except Exception as e:
+                print(f"Token authentication failed: {e}")
+            
+            ip_address = request.META.get('REMOTE_ADDR')
+            user_agent = request.META.get('HTTP_USER_AGENT', '')
+            
+            # ✅ รับ remarks จาก frontend
+            custom_remarks = request.data.get('remarks', 'Logout success')
+            
+            # ✅ ถ้ามี user ให้บันทึก logout log
+            if user:
+                access_log = UserAccessLog.objects.filter(
+                    user=user,
+                    logout_time__isnull=True
+                ).order_by('-login_time').first()
+                
+                if access_log:
+                    access_log.logout_time = now()
+                    access_log.remarks = custom_remarks  # ✅ ใช้ remarks จาก frontend
+                    access_log.save()
+            
+            # ✅ Blacklist refresh token
+            refresh_token = request.data.get('refresh_token')
+            if refresh_token:
+                try:
+                    token = RefreshToken(refresh_token)
+                    token.blacklist()
+                except Exception as e:
+                    print(f"Token blacklist failed: {e}")
+            
+            return Response({
+                'detail': 'Successfully logged out.'
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            print(f"Logout error: {e}")
+            return Response({
+                'detail': 'Successfully logged out.'
+            }, status=status.HTTP_200_OK)
+>>>>>>> 77765ce4d909c9351786ba3bd43faf99a42e0ec9
 
 # from django.db.models import IntegerField
 # from django.db.models.functions import Cast
@@ -28598,3 +28701,21 @@ class FCR_reportIndividualView(APIView):
         except Exception as e:
             print(f"Error occurred: {str(e)}")
             return Response({"detail": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+<<<<<<< HEAD
+=======
+        
+#tik
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from .models import UserAccessLog
+from .serializers import UserAccessLogSerializer
+
+
+class UserAccessLogListView(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        logs = UserAccessLog.objects.select_related('user').order_by('-login_time')
+        serializer = UserAccessLogSerializer(logs, many=True)
+        return Response(serializer.data)
+>>>>>>> 77765ce4d909c9351786ba3bd43faf99a42e0ec9
