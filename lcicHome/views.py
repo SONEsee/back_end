@@ -17562,11 +17562,10 @@ class memberinfolistView(APIView):
 #         except Exception as e:
 #             print(f"Error: {e}")
 #             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Prefetch, Q
+from django.db.models import Prefetch
 from .serializers import SidebarItemSerializer, RoleSerializer, SidebarSubItemSerializer
 from .models import SidebarItem, Role, SidebarSubItem
 
@@ -17642,6 +17641,7 @@ class SidebarCreateView(APIView):
     
     def post(self, request):
         item_type = request.data.get('item_type')
+        roles_data = request.data.get('roles', [])
         
         if item_type == 'sidebar_item':
             serializer = SidebarItemSerializer(data=request.data)
@@ -17652,12 +17652,18 @@ class SidebarCreateView(APIView):
                           status=status.HTTP_400_BAD_REQUEST)
 
         if serializer.is_valid():
-            serializer.save()
+            instance = serializer.save()
+            
+            # Assign roles if provided
+            if roles_data:
+                instance.roles.set(roles_data)
+            
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def put(self, request, pk):
         item_type = request.data.get('item_type')
+        roles_data = request.data.get('roles', [])
 
         try:
             if item_type == 'sidebar_item':
@@ -17670,7 +17676,14 @@ class SidebarCreateView(APIView):
                 return Response({"error": "Invalid item_type."}, status=status.HTTP_400_BAD_REQUEST)
 
             if serializer.is_valid():
-                serializer.save()
+                instance = serializer.save()
+                
+                # Update roles if provided
+                if roles_data is not None:  # Allow empty list to clear all roles
+                    instance.roles.set(roles_data)
+                
+                # Refresh to get updated data with roles
+                serializer = type(serializer)(instance)
                 return Response(serializer.data, status=status.HTTP_200_OK)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             
@@ -17706,23 +17719,34 @@ class AssignRoleView(APIView):
         try:
             role = Role.objects.get(id=role_id)
 
-            # Clear existing assignments if replace_existing is True
-            if request.data.get('replace_existing', False):
-                role.sidebar_items.clear()
-                SidebarSubItem.objects.filter(roles=role).update(roles=None)
+            # ALWAYS clear existing assignments first (replacement strategy)
+            # Clear main items
+            existing_items = SidebarItem.objects.filter(roles=role)
+            for item in existing_items:
+                item.roles.remove(role)
+            
+            # Clear sub-items
+            existing_sub_items = SidebarSubItem.objects.filter(roles=role)
+            for sub_item in existing_sub_items:
+                sub_item.roles.remove(role)
 
-            # Assign items
+            # Assign new items
             if sidebar_item_ids:
                 sidebar_items = SidebarItem.objects.filter(id__in=sidebar_item_ids)
-                role.sidebar_items.add(*sidebar_items)
+                for item in sidebar_items:
+                    item.roles.add(role)
 
-            # Assign sub-items
+            # Assign new sub-items
             if sidebar_sub_item_ids:
                 sidebar_sub_items = SidebarSubItem.objects.filter(id__in=sidebar_sub_item_ids)
                 for sub_item in sidebar_sub_items:
                     sub_item.roles.add(role)
 
-            return Response({"detail": "Role assigned successfully"}, status=status.HTTP_200_OK)
+            return Response({
+                "detail": "Role assigned successfully",
+                "assigned_items": len(sidebar_item_ids),
+                "assigned_sub_items": len(sidebar_sub_item_ids)
+            }, status=status.HTTP_200_OK)
 
         except Role.DoesNotExist:
             return Response({"error": "Role not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -17753,8 +17777,6 @@ class ReorderSidebarView(APIView):
             
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
-    
         
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -31479,3 +31501,6 @@ class UserAccessLogListView(APIView):
         logs = UserAccessLog.objects.select_related('user').order_by('-login_time')
         serializer = UserAccessLogSerializer(logs, many=True)
         return Response(serializer.data)
+
+
+
