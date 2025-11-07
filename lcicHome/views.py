@@ -16240,11 +16240,10 @@ class memberinfolistView(APIView):
 #         except Exception as e:
 #             print(f"Error: {e}")
 #             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Prefetch, Q
+from django.db.models import Prefetch
 from .serializers import SidebarItemSerializer, RoleSerializer, SidebarSubItemSerializer
 from .models import SidebarItem, Role, SidebarSubItem
 
@@ -16320,6 +16319,7 @@ class SidebarCreateView(APIView):
     
     def post(self, request):
         item_type = request.data.get('item_type')
+        roles_data = request.data.get('roles', [])
         
         if item_type == 'sidebar_item':
             serializer = SidebarItemSerializer(data=request.data)
@@ -16330,12 +16330,18 @@ class SidebarCreateView(APIView):
                           status=status.HTTP_400_BAD_REQUEST)
 
         if serializer.is_valid():
-            serializer.save()
+            instance = serializer.save()
+            
+            # Assign roles if provided
+            if roles_data:
+                instance.roles.set(roles_data)
+            
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def put(self, request, pk):
         item_type = request.data.get('item_type')
+        roles_data = request.data.get('roles', [])
 
         try:
             if item_type == 'sidebar_item':
@@ -16348,7 +16354,14 @@ class SidebarCreateView(APIView):
                 return Response({"error": "Invalid item_type."}, status=status.HTTP_400_BAD_REQUEST)
 
             if serializer.is_valid():
-                serializer.save()
+                instance = serializer.save()
+                
+                # Update roles if provided
+                if roles_data is not None:  # Allow empty list to clear all roles
+                    instance.roles.set(roles_data)
+                
+                # Refresh to get updated data with roles
+                serializer = type(serializer)(instance)
                 return Response(serializer.data, status=status.HTTP_200_OK)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             
@@ -16384,23 +16397,34 @@ class AssignRoleView(APIView):
         try:
             role = Role.objects.get(id=role_id)
 
-            # Clear existing assignments if replace_existing is True
-            if request.data.get('replace_existing', False):
-                role.sidebar_items.clear()
-                SidebarSubItem.objects.filter(roles=role).update(roles=None)
+            # ALWAYS clear existing assignments first (replacement strategy)
+            # Clear main items
+            existing_items = SidebarItem.objects.filter(roles=role)
+            for item in existing_items:
+                item.roles.remove(role)
+            
+            # Clear sub-items
+            existing_sub_items = SidebarSubItem.objects.filter(roles=role)
+            for sub_item in existing_sub_items:
+                sub_item.roles.remove(role)
 
-            # Assign items
+            # Assign new items
             if sidebar_item_ids:
                 sidebar_items = SidebarItem.objects.filter(id__in=sidebar_item_ids)
-                role.sidebar_items.add(*sidebar_items)
+                for item in sidebar_items:
+                    item.roles.add(role)
 
-            # Assign sub-items
+            # Assign new sub-items
             if sidebar_sub_item_ids:
                 sidebar_sub_items = SidebarSubItem.objects.filter(id__in=sidebar_sub_item_ids)
                 for sub_item in sidebar_sub_items:
                     sub_item.roles.add(role)
 
-            return Response({"detail": "Role assigned successfully"}, status=status.HTTP_200_OK)
+            return Response({
+                "detail": "Role assigned successfully",
+                "assigned_items": len(sidebar_item_ids),
+                "assigned_sub_items": len(sidebar_sub_item_ids)
+            }, status=status.HTTP_200_OK)
 
         except Role.DoesNotExist:
             return Response({"error": "Role not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -16431,8 +16455,6 @@ class ReorderSidebarView(APIView):
             
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
-    
         
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -29126,7 +29148,7 @@ from django.conf import settings
 from django.db import transaction
 
 from .models import Login, searchLog, request_charge, ChargeMatrix
-from .serializers import UserSerializer
+from .serializers import UserSerializers
 
 
 class UserListAPIView(APIView):
@@ -29172,7 +29194,7 @@ class UserListAPIView(APIView):
         user_bnk_code = request.data.get('user_bnk_code', None)
         
         # Validate serializer
-        serializer = UserSerializer(data=request.data)
+        serializer = UserSerializers(data=request.data)
         if serializer.is_valid():
             try:
                 # บันทึก user ใหม่
@@ -29247,7 +29269,7 @@ class UserDetailAPIView(APIView):
         user = self.get_object(uid)
         if not user:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
-        serializer = UserSerializer(user)
+        serializer = UserSerializers(user)
         return Response(serializer.data)
 
     @transaction.atomic
@@ -29259,7 +29281,7 @@ class UserDetailAPIView(APIView):
         # เก็บ status เดิม
         old_status = user.is_active
     
-        serializer = UserSerializer(user, data=request.data, partial=True)
+        serializer = UserSerializers(user, data=request.data, partial=True)
         if serializer.is_valid():
             updated_user = serializer.save()
         
@@ -29335,7 +29357,7 @@ class UserDetailAPIView(APIView):
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from .models import User_Group
-from .serializers import UserGroupSerializer
+from .serializers import UserGroupSerializers
 
 class UserGroupList(APIView):
     authentication_classes = []
@@ -29343,7 +29365,7 @@ class UserGroupList(APIView):
 
     def get(self, request):
         groups = User_Group.objects.all().order_by('nameL')
-        serializer = UserGroupSerializer(groups, many=True)
+        serializer = UserGroupSerializers(groups, many=True)
         return Response(serializer.data)
     
     
@@ -29575,7 +29597,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Q, Count
-from .models import request_charge
+from .models import request_charge,IndividualBankIbk,EnterpriseInfo,IndividualBankIbkInfo
 from .serializers import RequestChargeSerializer
 from datetime import datetime
 
@@ -29763,7 +29785,6 @@ class RequestChargeReportAllAPIView(APIView):
             print(f"Date range filter error: {e}")
         return queryset
 
-
 class RequestChargeDetailAPIView(APIView):
     """
     API สำหรับดึงรายละเอียดของแต่ละกลุ่ม พร้อม Date Filter
@@ -29816,6 +29837,9 @@ class RequestChargeDetailAPIView(APIView):
 
         # ✅ serialize
         serializer = RequestChargeSerializer(queryset, many=True)
+        
+        # ✅ เพิ่มข้อมูลชื่อตาม cusType
+        results_with_names = self._add_customer_names(serializer.data)
 
         data = {
             "bnk_code": bnk_code,
@@ -29829,10 +29853,81 @@ class RequestChargeDetailAPIView(APIView):
             "start_date": start_date,
             "end_date": end_date,
             "total_count": queryset.count(),
-            "results": serializer.data
+            "results": results_with_names
         }
 
         return Response(data, status=200)
+
+    def _add_customer_names(self, serialized_data):
+        """
+        เพิ่มข้อมูลลูกค้าตาม cusType แบบ nested object
+        - A1: ดึงข้อมูลจาก IndividualBankIbk (ind_lao_name + ind_lao_surname หรือ ind_name + ind_surname)
+        - A2: ดึงข้อมูลจาก EnterpriseInfo (enterpriseNameLao หรือ eneterpriseNameEnglish)
+        """
+        results = []
+        
+        for item in serialized_data:
+            result_item = dict(item)
+            cus_type = item.get('cusType')
+            lcic_code = item.get('LCIC_code')
+            
+            result_item['customer_detail'] = None
+            result_item['customer_name'] = None
+            
+            if lcic_code:
+                if cus_type == 'A1':
+                    try:
+                        individual = IndividualBankIbkInfo.objects.filter(
+                            lcic_id=lcic_code
+                        ).first()
+                        
+                        if individual:
+                            # สร้างชื่อตาม priority
+                            display_name = None
+                            if individual.ind_lao_name and individual.ind_lao_surname:
+                                display_name = f"{individual.ind_lao_name} {individual.ind_lao_surname}"
+                            elif individual.ind_name and individual.ind_surname:
+                                display_name = f"{individual.ind_name} {individual.ind_surname}"
+                            elif individual.ind_lao_name:
+                                display_name = individual.ind_lao_name
+                            elif individual.ind_name:
+                                display_name = individual.ind_name
+                            
+                            result_item['customer_detail'] = {
+                                'ind_lao_name': individual.ind_lao_name,
+                                'ind_lao_surname': individual.ind_lao_surname,
+                                'ind_name': individual.ind_name,
+                                'ind_surname': individual.ind_surname,
+                                'lcic_id': individual.lcic_id,
+                                'ind_sys_id': individual.ind_sys_id
+                            }
+                            result_item['customer_name'] = display_name
+                    except Exception as e:
+                        print(f"Error fetching individual data: {e}")
+                
+                elif cus_type == 'A2':
+                    try:
+                        enterprise = EnterpriseInfo.objects.filter(
+                            LCIC_code=lcic_code
+                        ).first()
+                        
+                        if enterprise:
+                            # สร้างชื่อตาม priority
+                            display_name = enterprise.enterpriseNameLao or enterprise.eneterpriseNameEnglish
+                            
+                            result_item['customer_detail'] = {
+                                'enterpriseNameLao': enterprise.enterpriseNameLao,
+                                'eneterpriseNameEnglish': enterprise.eneterpriseNameEnglish,
+                                'LCIC_code': enterprise.LCIC_code,
+                                'EnterpriseID': enterprise.EnterpriseID
+                            }
+                            result_item['customer_name'] = display_name
+                    except Exception as e:
+                        print(f"Error fetching enterprise data: {e}")
+            
+            results.append(result_item)
+        
+        return results
 
     def _apply_date_filter(self, queryset, filter_type, filter_value):
         """Filter rec_insert_date ตาม year/month/day"""
@@ -29866,21 +29961,7 @@ class RequestChargeDetailAPIView(APIView):
             print(f"Date range filter error: {e}")
         return queryset
 
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from .models import UserAccessLog
-from .serializers import UserAccessLogSerializer
 
-
-class UserAccessLogListView(APIView):
-    permission_classes = []
-
-    def get(self, request):
-        logs = UserAccessLog.objects.select_related('user').order_by('-login_time')
-        serializer = UserAccessLogSerializer(logs, many=True)
-        return Response(serializer.data)
-    
-    
 # -------------------------- SEARCH INDIVIDUAL BANK IBK --------------------------
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -30098,3 +30179,6 @@ class UserAccessLogListView(APIView):
         logs = UserAccessLog.objects.select_related('user').order_by('-login_time')
         serializer = UserAccessLogSerializer(logs, many=True)
         return Response(serializer.data)
+
+
+
