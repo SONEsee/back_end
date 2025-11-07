@@ -391,7 +391,7 @@ def parse_datetime(dt_str):
 
 import re
 from django.utils import timezone
-from .models import data_edit, B_Data_is_damaged, disputes, Upload_File_Individual
+from .models import data_edit, B_Data_is_damaged, disputes, Upload_File_Individual,CDL,Upload_File_Individual_Collateral
 
 
 def reject_individual_loan(id_file):
@@ -471,3 +471,81 @@ def reject_individual_loan(id_file):
                 'deleted': deleted_count
             }
         }
+    
+def reject_individual_collateral(id_file):
+    deleted_count = {
+        'CDL': 0,
+        
+    }
+    cid_to_update = None
+    update_status_success = False
+    current_status = None
+
+    try:
+     
+        match = re.match(r'c-(\d+)', id_file.strip())
+        if not match:
+            return {
+                'success': False,
+                'message': f'id_file ບໍ່ຖືກຕ້ອງ: {id_file}',
+                'details': {}
+            }
+        cid_to_update = int(match.group(1))
+
+       
+        deleted_count['CDL'] = data_edit.objects.filter(id_file=id_file).delete()[0]
+       
+        total_deleted = sum(deleted_count.values())
+
+       
+        file_obj = Upload_File_Individual_Collateral.objects.filter(CID=cid_to_update).first()
+        if not file_obj:
+            return {
+                'success': False,
+                'message': f'ບໍ່ພົບຂໍ້ມູນໄຟລ໌ FID: {cid_to_update}',
+                'details': {'fid': cid_to_update}
+            }
+
+        current_status = file_obj.statussubmit
+
+       
+        file_obj.statussubmit = '7'
+        file_obj.updateDate = timezone.now()
+        file_obj.save()
+        update_status_success = True
+
+        
+        msg = []
+        if total_deleted:
+            msg.append(f'ລົບ: {total_deleted} ລາຍການ')
+        else:
+            msg.append('ບໍ່ມີຂໍ້ມູນຖືກລົບ')
+
+        msg.append(f'ປະຕິເສດສຳເລັດ (FID: {cid_to_update}) → statussubmit {current_status} → 7')
+
+        return {
+            'success': True,
+            'message': ' | '.join(msg),
+            'details': {
+                'id_file': id_file,
+                'fid': cid_to_update,
+                'current_status': current_status,
+                'new_status': '7',
+                'deleted': deleted_count,
+                'status_updated': update_status_success
+            }
+        }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}',
+            'details': {
+                'id_file': id_file,
+                'fid_extracted': cid_to_update,
+                'current_status': current_status,
+                'deleted': deleted_count
+            }
+        }
+    
+

@@ -1709,7 +1709,7 @@ class CustomerInfoSerializer(serializers.ModelSerializer):
 from rest_framework import serializers
 from .models import Login
 
-class UserSerializer(serializers.ModelSerializer):
+class UserSerializers(serializers.ModelSerializer):
     profile_image = serializers.ImageField(use_url=True,required=False,allow_null=True)
     class Meta:
         model = Login
@@ -1723,7 +1723,7 @@ class UserSerializer(serializers.ModelSerializer):
 from rest_framework import serializers
 from .models import User_Group
 
-class UserGroupSerializer(serializers.ModelSerializer):
+class UserGroupSerializers(serializers.ModelSerializer):
     class Meta:
         model = User_Group
         fields = ['GID', 'nameL', 'nameE']
