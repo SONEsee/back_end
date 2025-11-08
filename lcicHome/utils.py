@@ -584,11 +584,16 @@ def confirm_collateral_logic(CID_with_prefix):
             CID_number = int(CID_with_prefix.replace('c-', ''))
         else:
             CID_number = int(CID_with_prefix)
+        
+        print(f"  CID_number: {CID_number}")
 
         # 2. ກວດໄຟລ໌
         upload_file = Upload_File_Individual_Collateral.objects.filter(CID=CID_number).first()
         if not upload_file:
+            print(f"  ❌ ບໍ່ພົບໄຟລ໌ CID={CID_number}")
             return {'status': 'error', 'message': 'ບໍ່ພົບໄຟລ໌ Collateral', 'code': 404}
+
+        print(f"  ພົບໄຟລ໌: statussubmit={upload_file.statussubmit}")
 
         if upload_file.statussubmit == '0':
             return {'status': 'error', 'message': 'ໄຟລ໌ຖືກຢືນຢັນແລ້ວ', 'code': 400}
@@ -599,8 +604,15 @@ def confirm_collateral_logic(CID_with_prefix):
         Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(statussubmit='3')
         print("  ອັບເດດ statussubmit → '3' (ກຳລັງປະມວນຜົນ)")
 
-        # 3. ດຶງ CDL ດ້ວຍ .values() — ປ້ອງກັນ MultipleObjectsReturned
-        print("  ກຳລັງດຶງຂໍ້ມູນຈາກ CDL...")
+        # 3. ດຶງ CDL
+        print(f"  ກຳລັງດຶງຂໍ້ມູນຈາກ CDL ທີ່ມີ id_file='{CID_with_prefix}'...")
+        cdl_count = CDL.objects.filter(id_file=CID_with_prefix).count()
+        print(f"  ມີ CDL ທັງໝົດ: {cdl_count} ແຖວ")
+        
+        if cdl_count == 0:
+            Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(statussubmit='2')
+            return {'status': 'error', 'message': f'ບໍ່ພົບຂໍ້ມູນໃນ CDL ສຳລັບ id_file={CID_with_prefix}', 'code': 404}
+
         data_list = list(CDL.objects.filter(id_file=CID_with_prefix).values(
             'id_file', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8', 'c9', 'c10',
             'c11', 'c12', 'c13', 'c14', 'c15', 'c16', 'c17', 'c18', 'c19', 'c20',
@@ -609,11 +621,9 @@ def confirm_collateral_logic(CID_with_prefix):
             'period', 'col_type', 'user_id'
         ))
 
-        if not data_list:
-            Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(statussubmit='2')
-            return {'status': 'error', 'message': 'ບໍ່ພົບຂໍ້ມູນໃນ CDL', 'code': 404}
-
         print(f"  ພົບ {len(data_list)} ລາຍການ")
+
+        # ... ສ່ວນທີ່ເຫຼືອຂອງ function ຍັງຄືເກົ່າ
 
         # 4. ກວດ period
         first_item = data_list[0]
