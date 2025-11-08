@@ -21401,6 +21401,7 @@ from .serializers import EDLCustomerSerializer, ElectricBillSerializer, SearchLo
 import uuid
 
 
+
 class ElectricReportAPIView(APIView):
     """
     API View for Electric Supply Report with Province and District filtering.
@@ -21442,12 +21443,12 @@ class ElectricReportAPIView(APIView):
             
             charge_amount_com = chargeType.chg_amount
 
-            # Build customer filter query
-            customer_filter = Q(Customer_ID=customer_id) & Q(province_id=province_id)
+            # CUSTOMER QUERY - Uses Province_ID and Dustrict_ID (from edl_customer_info model)
+            customer_filter = Q(Customer_ID=customer_id) & Q(Province_ID=province_id)
             
             # Add district filter if provided
             if district_id:
-                customer_filter &= Q(district_id=district_id)
+                customer_filter &= Q(Dustrict_ID=district_id)
 
             # Query customer with province and district filtering
             try:
@@ -21471,7 +21472,7 @@ class ElectricReportAPIView(APIView):
                             "details": {
                                 "customer_id": customer_id,
                                 "province_id": province_id,
-                                "available_districts": list(customers.values_list('district_id', flat=True).distinct())
+                                "available_districts": list(customers.values_list('Dustrict_ID', flat=True).distinct())
                             }
                         }, status=status.HTTP_400_BAD_REQUEST)
                     else:
@@ -21491,11 +21492,11 @@ class ElectricReportAPIView(APIView):
                 function = "TO_CHAR"
                 template = "SUBSTRING(%(expressions)s FROM 4 FOR 4) || '-' || SUBSTRING(%(expressions)s FROM 1 FOR 2)"
 
-            # Build bill filter query with province and district
-            bill_filter = Q(Customer_ID=customer_id) & Q(province_id=province_id)
+            # BILL QUERY - FIXED: Uses ProID and DisID (from Electric_Bill model)
+            bill_filter = Q(Customer_ID=customer_id) & Q(ProID=province_id)
             
             if district_id:
-                bill_filter &= Q(district_id=district_id)
+                bill_filter &= Q(DisID=district_id)
 
             # Sort bills by InvoiceMonth in descending order
             bills = Electric_Bill.objects.filter(bill_filter).annotate(
@@ -21512,7 +21513,7 @@ class ElectricReportAPIView(APIView):
                 proID_edl=province_id,
                 proID_wt='',
                 proID_tel='',
-                district_id_edl=district_id if district_id else '',  # Add district to log
+                # district_id_edl=district_id if district_id else '',
                 credittype='edl',
                 inquiry_date=timezone.now(),
                 inquiry_time=timezone.now()
@@ -21543,7 +21544,7 @@ class ElectricReportAPIView(APIView):
                 proID_edl=province_id,
                 proID_wt='',
                 proID_tel='',
-                district_id_edl=district_id if district_id else '',  # Add district
+                # district_id_edl=district_id if district_id else '',
                 rec_reference_code=rec_reference_code
             )
 
@@ -21572,8 +21573,8 @@ class ElectricReportAPIView(APIView):
                     "customer_id": customer_id,
                     "province_id": province_id,
                     "district_id": district_id,
-                    "province_name": customer.province_name if hasattr(customer, 'province_name') else '',
-                    "district_name": customer.district_name if hasattr(customer, 'district_name') else ''
+                    "province_name": customer_serializer.get_province_name(customer),
+                    "district_name": customer_serializer.get_district_name(customer)
                 }
             }, status=status.HTTP_200_OK)
 
@@ -21626,14 +21627,14 @@ class ElectricCustomerSearchAPIView(APIView):
                 Q(Company_name__icontains=query)
             )
 
-            # Add province filter if provided
+            # Add province filter with correct field name (Province_ID for customer table)
             if province_id:
-                search_filter &= Q(province_id=province_id)
+                search_filter &= Q(Province_ID=province_id)
 
             # Execute search with limit
             customers = edl_customer_info.objects.filter(
                 search_filter
-            ).select_related().order_by('province_id', 'district_id', 'Customer_ID')[:limit]
+            ).select_related().order_by('Province_ID', 'Dustrict_ID', 'Customer_ID')[:limit]
 
             # Serialize results
             serializer = EDLCustomerSerializer(customers, many=True)
@@ -21650,6 +21651,8 @@ class ElectricCustomerSearchAPIView(APIView):
                 "error": "Search failed",
                 "details": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
     
     
 from .models import ChargeMatrix
