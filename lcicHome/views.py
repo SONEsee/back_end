@@ -4969,7 +4969,7 @@ def rollback_and_reconfirm_collateral(request):
                     'message': f'Reconfirm exception ສຳລັບ {id_file}: {str(e)}'
                 }, status=500)
 
-        # 9. ອັບເດດສະຖານະສຳເລັດ
+        
         Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
             statussubmit='5', dispuste=0, updateDate=timezone.now(), period=prev_period
         )
