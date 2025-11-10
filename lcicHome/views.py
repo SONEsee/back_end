@@ -21401,6 +21401,7 @@ from .serializers import EDLCustomerSerializer, ElectricBillSerializer, SearchLo
 import uuid
 
 
+
 class ElectricReportAPIView(APIView):
     """
     API View for Electric Supply Report with Province and District filtering.
@@ -21442,12 +21443,12 @@ class ElectricReportAPIView(APIView):
             
             charge_amount_com = chargeType.chg_amount
 
-            # Build customer filter query
-            customer_filter = Q(Customer_ID=customer_id) & Q(province_id=province_id)
+            # CUSTOMER QUERY - Uses Province_ID and Dustrict_ID (from edl_customer_info model)
+            customer_filter = Q(Customer_ID=customer_id) & Q(Province_ID=province_id)
             
             # Add district filter if provided
             if district_id:
-                customer_filter &= Q(district_id=district_id)
+                customer_filter &= Q(Dustrict_ID=district_id)
 
             # Query customer with province and district filtering
             try:
@@ -21471,7 +21472,7 @@ class ElectricReportAPIView(APIView):
                             "details": {
                                 "customer_id": customer_id,
                                 "province_id": province_id,
-                                "available_districts": list(customers.values_list('district_id', flat=True).distinct())
+                                "available_districts": list(customers.values_list('Dustrict_ID', flat=True).distinct())
                             }
                         }, status=status.HTTP_400_BAD_REQUEST)
                     else:
@@ -21491,11 +21492,11 @@ class ElectricReportAPIView(APIView):
                 function = "TO_CHAR"
                 template = "SUBSTRING(%(expressions)s FROM 4 FOR 4) || '-' || SUBSTRING(%(expressions)s FROM 1 FOR 2)"
 
-            # Build bill filter query with province and district
-            bill_filter = Q(Customer_ID=customer_id) & Q(province_id=province_id)
+            # BILL QUERY - FIXED: Uses ProID and DisID (from Electric_Bill model)
+            bill_filter = Q(Customer_ID=customer_id) & Q(ProID=province_id)
             
             if district_id:
-                bill_filter &= Q(district_id=district_id)
+                bill_filter &= Q(DisID=district_id)
 
             # Sort bills by InvoiceMonth in descending order
             bills = Electric_Bill.objects.filter(bill_filter).annotate(
@@ -21512,7 +21513,7 @@ class ElectricReportAPIView(APIView):
                 proID_edl=province_id,
                 proID_wt='',
                 proID_tel='',
-                district_id_edl=district_id if district_id else '',  # Add district to log
+                # district_id_edl=district_id if district_id else '',
                 credittype='edl',
                 inquiry_date=timezone.now(),
                 inquiry_time=timezone.now()
@@ -21543,7 +21544,7 @@ class ElectricReportAPIView(APIView):
                 proID_edl=province_id,
                 proID_wt='',
                 proID_tel='',
-                district_id_edl=district_id if district_id else '',  # Add district
+                # district_id_edl=district_id if district_id else '',
                 rec_reference_code=rec_reference_code
             )
 
@@ -21572,8 +21573,8 @@ class ElectricReportAPIView(APIView):
                     "customer_id": customer_id,
                     "province_id": province_id,
                     "district_id": district_id,
-                    "province_name": customer.province_name if hasattr(customer, 'province_name') else '',
-                    "district_name": customer.district_name if hasattr(customer, 'district_name') else ''
+                    "province_name": customer_serializer.get_province_name(customer),
+                    "district_name": customer_serializer.get_district_name(customer)
                 }
             }, status=status.HTTP_200_OK)
 
@@ -21626,14 +21627,14 @@ class ElectricCustomerSearchAPIView(APIView):
                 Q(Company_name__icontains=query)
             )
 
-            # Add province filter if provided
+            # Add province filter with correct field name (Province_ID for customer table)
             if province_id:
-                search_filter &= Q(province_id=province_id)
+                search_filter &= Q(Province_ID=province_id)
 
             # Execute search with limit
             customers = edl_customer_info.objects.filter(
                 search_filter
-            ).select_related().order_by('province_id', 'district_id', 'Customer_ID')[:limit]
+            ).select_related().order_by('Province_ID', 'Dustrict_ID', 'Customer_ID')[:limit]
 
             # Serialize results
             serializer = EDLCustomerSerializer(customers, many=True)
@@ -21650,6 +21651,8 @@ class ElectricCustomerSearchAPIView(APIView):
                 "error": "Search failed",
                 "details": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
     
     
 from .models import ChargeMatrix
@@ -30183,5 +30186,153 @@ class UserAccessLogListView(APIView):
         serializer = UserAccessLogSerializer(logs, many=True)
         return Response(serializer.data)
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db.models import Q
+from django.utils import timezone
+from django.db import transaction
+import traceback
 
+from .models import (
+    IndividualBankIbkInfo, IndividualBankIbk,
+    searchLog, request_charge, memberInfo, ChargeMatrix
+)
+from .serializers import IndividualBankIbkInfoSerializer
+
+class ScoringIndividualInfoSearchView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        try:
+            user = request.user
+            UID = getattr(user, 'UID', '')
+            bank = getattr(user, 'MID', None)
+            if not bank or not hasattr(bank, 'bnk_code'):
+                return Response({'error': 'Invalid bank info'}, status=status.HTTP_400_BAD_REQUEST)
+
+            bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
+
+            
+            lcic_id = request.data.get('lcic_id', '').strip()
+            loan_purpose = request.data.get('CatalogID', '')
+
+            if not lcic_id:
+                return Response({'error': 'lcic_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+           
+            all_individual_info = IndividualBankIbkInfo.objects.filter(
+                lcic_id=lcic_id
+            ).order_by('mm_ind_sys_id')
+
+            if not all_individual_info.exists():
+                return Response({'error': 'Individual info not found'}, status=status.HTTP_404_NOT_FOUND)
+
+            
+            unique_individuals = []
+            seen_mm_ids = set()
+            for info in all_individual_info:
+                if info.mm_ind_sys_id and info.mm_ind_sys_id not in seen_mm_ids:
+                    unique_individuals.append(info)
+                    seen_mm_ids.add(info.mm_ind_sys_id)
+
+           
+            mm_ids = [info.mm_ind_sys_id for info in unique_individuals if info.mm_ind_sys_id]
+            bank_records = {}
+            if mm_ids:
+                bank_records = {
+                    rec.ind_sys_id: rec
+                    for rec in IndividualBankIbk.objects.filter(ind_sys_id__in=mm_ids)
+                }
+
+           
+            charge_sys_id = 7 if bank_info.bnk_type == 1 else 8
+            try:
+                chargeType = ChargeMatrix.objects.get(chg_sys_id=charge_sys_id)
+            except ChargeMatrix.DoesNotExist:
+                return Response({'error': 'Charge type not found'}, status=status.HTTP_404_NOT_FOUND)
+
+           
+            now = timezone.now()
+            inquiry_month_charge = now.strftime('%d%m%Y')
+            sys_usr = f"{UID}-{bank.bnk_code}"
+
+            created_logs = []
+
+            for info in unique_individuals:
+                bank_record = bank_records.get(info.mm_ind_sys_id)
+                customerid = bank_record.customerid if bank_record else ''
+                branch_code = bank_record.branchcode if bank_record else ''
+
+                
+                search_log = searchLog.objects.create(
+                    enterprise_ID='',
+                    LCIC_ID=lcic_id,
+                    LCIC_code=lcic_id,
+                    bnk_code=bank_info.bnk_code,
+                    bnk_type=bank_info.bnk_type,
+                    branch=branch_code,
+                    cus_ID=customerid,
+                    cusType='A1',
+                    credit_type=chargeType.chg_code,
+                    inquiry_month=now.strftime('%Y-%m'),  
+                    com_tel='',
+                    com_location='',
+                    rec_loan_amount=0.0,
+                    rec_loan_amount_currency='LAK',
+                    rec_loan_purpose=loan_purpose or '',
+                    rec_enquiry_type='1',
+                    sys_usr=sys_usr
+                )
+
+                
+                charge = request_charge.objects.create(
+                    bnk_code=bank_info.bnk_code,
+                    bnk_type=bank_info.bnk_type,
+                    chg_amount=chargeType.chg_amount,
+                    chg_code=chargeType.chg_code,
+                    status='pending',
+                    rtp_code='1',
+                    lon_purpose=loan_purpose or '',
+                    chg_unit=chargeType.chg_unit,
+                    user_sys_id=sys_usr,
+                    LCIC_code=lcic_id,
+                    cusType='A1',
+                    user_session_id='',
+                    rec_reference_code='',
+                    search_log=search_log
+                )
+                charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
+                charge.save()
+
+                created_logs.append({
+                    'search_log_id': search_log.search_ID,   
+                    'charge_id': charge.rec_charge_ID,
+                    'customerid': customerid
+                })
+
+           
+            serializer = IndividualBankIbkInfoSerializer(unique_individuals, many=True)
+
+          
+            return Response({
+                'individual_info': serializer.data,
+                'total_found': len(unique_individuals),
+                'log_created': len(created_logs),
+                'created_logs': created_logs,
+                'debug_info': {
+                    'total_raw_records': all_individual_info.count(),
+                    'unique_records': len(unique_individuals),
+                    'search_criteria': {'lcic_id': lcic_id}
+                }
+            }, status=status.HTTP_200_OK)
+
+        except memberInfo.DoesNotExist:
+            return Response({'error': 'Bank not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({
+                'error': 'Internal server error',
+                'details': traceback.format_exc()
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
