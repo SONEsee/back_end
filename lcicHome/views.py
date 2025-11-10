@@ -23696,7 +23696,7 @@ class UploadDataAPIView(APIView):
                         Passport=self.truncate(safe_get('PASSPORT_NO', ''), 100),
                         Address=self.truncate(safe_get('FORW_ADDRESS', ''), 100),
                         Dustrict_ID=self.truncate(safe_get('DIS_ID', ''), 100),
-                        Province_ID=self.truncate(safe_get('PRO_ID', ''), 100),
+                        Province_ID=self.truncate(safe_get('PRO_ID', ''), 100), #pup hai mun kep yark Params
                         Tel=self.truncate(safe_get('TEL_NO', ''), 100),
                         Email=self.truncate(safe_get('EMAIL_NO', ''), 100),
                         Cus_type=self.truncate(safe_get('SUPPLY_TYPE', ''), 100),
@@ -30337,3 +30337,532 @@ class ScoringIndividualInfoSearchView(APIView):
                 'details': traceback.format_exc()
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+#Mapping IndividualBankIbkInfo and IndividualBankIbk ----------------------------------------------------------------                                                       
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
+from django.core.paginator import Paginator
+from django.utils import timezone
+import traceback
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def find_matching_candidates(request):
+    """
+    Find potential matching customers
+    
+    POST /api/find-candidates/
+    Body:
+    {
+        "min_score": 60.0,
+        "limit": 1000,
+        "save_to_db": true
+    }
+    """
+    try:
+        # Import services here to avoid circular imports
+        from .matching_service import CustomerMatchingService
+        from .models import IndividualBankIbk, MatchingCandidate
+        
+        min_score = float(request.data.get('min_score', 60.0))
+        limit = int(request.data.get('limit', 1000))
+        save_to_db = request.data.get('save_to_db', False)
+        
+        # Validate inputs
+        if min_score < 0 or min_score > 100:
+            return Response({
+                'success': False,
+                'error': 'min_score must be between 0 and 100'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if limit < 1 or limit > 10000:
+            return Response({
+                'success': False,
+                'error': 'limit must be between 1 and 10000'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Find matches
+        candidates = CustomerMatchingService.find_matches(
+            IndividualBankIbk,
+            limit=limit,
+            min_score=min_score
+        )
+        
+        if save_to_db:
+            saved_count = 0
+            for candidate in candidates:
+                try:
+                    MatchingCandidate.objects.update_or_create(
+                        source_ind_sys_id=candidate['source_ind_sys_id'],
+                        target_ind_sys_id=candidate['target_ind_sys_id'],
+                        defaults={
+                            'source_lcic_id': candidate.get('source_lcic_id'),
+                            'target_lcic_id': candidate.get('target_lcic_id'),
+                            'similarity_score': candidate['similarity_score'],
+                            'match_details': candidate.get('match_details', {}),
+                            'status': 'PENDING',
+                        }
+                    )
+                    saved_count += 1
+                except Exception as e:
+                    print(f"Error saving candidate: {e}")
+                    continue
+            
+            return Response({
+                'success': True,
+                'message': f'Found {len(candidates)} matching candidates',
+                'saved_to_db': saved_count,
+                'total_found': len(candidates),
+                'candidates_preview': candidates[:10],  # Return first 10 for preview
+            })
+        
+        return Response({
+            'success': True,
+            'count': len(candidates),
+            'candidates': candidates[:50],  # Limit response size
+        })
+        
+    except ImportError as e:
+        return Response({
+            'success': False,
+            'error': f'Import error: {str(e)}. Please check that matching_service.py and models are in the correct location.'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception as e:
+        print(f"Error in find_matching_candidates: {traceback.format_exc()}")
+        return Response({
+            'success': False,
+            'error': str(e),
+            'details': traceback.format_exc()
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_matching_candidates(request):
+    """
+    Get paginated list of matching candidates
+    
+    GET /api/candidates/?status=PENDING&page=1&page_size=20&min_score=70
+    """
+    try:
+        from .models import MatchingCandidate, IndividualBankIbk
+        
+        status_filter = request.GET.get('status', 'PENDING')
+        min_score = float(request.GET.get('min_score', 0))
+        page = request.GET.get('page', 1)
+        page_size = request.GET.get('page_size', 20)
+        
+        # Validate
+        if page_size > 100:
+            page_size = 100
+        
+        queryset = MatchingCandidate.objects.filter(status=status_filter)
+        
+        if min_score > 0:
+            queryset = queryset.filter(similarity_score__gte=min_score)
+        
+        queryset = queryset.order_by('-similarity_score', '-created_at')
+        
+        paginator = Paginator(queryset, page_size)
+        page_obj = paginator.get_page(page)
+        
+        candidates = []
+        for candidate in page_obj:
+            source_record = IndividualBankIbk.objects.filter(
+                ind_sys_id=candidate.source_ind_sys_id
+            ).values().first()
+            
+            target_record = IndividualBankIbk.objects.filter(
+                ind_sys_id=candidate.target_ind_sys_id
+            ).values().first()
+            
+            candidates.append({
+                'id': candidate.id,
+                'similarity_score': float(candidate.similarity_score),
+                'match_details': candidate.match_details,
+                'status': candidate.status,
+                'created_at': candidate.created_at.isoformat() if candidate.created_at else None,
+                'reviewed_by': candidate.reviewed_by,
+                'reviewed_at': candidate.reviewed_at.isoformat() if candidate.reviewed_at else None,
+                'source': source_record,
+                'target': target_record,
+            })
+        
+        return Response({
+            'success': True,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': paginator.num_pages,
+            'total_count': paginator.count,
+            'candidates': candidates,
+        })
+        
+    except Exception as e:
+        print(f"Error in get_matching_candidates: {traceback.format_exc()}")
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def merge_customers(request):
+    """
+    Merge multiple customer records
+    
+    POST /api/merge/
+    Body:
+    {
+        "source_ids": [1688040, 1703369, 2223701],
+        "master_record_id": 1688040,
+        "reason": "Same person, different spellings"
+    }
+    """
+    try:
+        from .merge_service import CustomerMergeService
+        from .models import (
+            IndividualBankIbk, 
+            IndividualBankIbkInfo,
+            IndividualIdentifier,
+            MergeHistory,
+            MatchingCandidate
+        )
+        
+        source_ids = request.data.get('source_ids', [])
+        master_record_id = request.data.get('master_record_id')
+        reason = request.data.get('reason', '')
+        
+        if not source_ids or len(source_ids) < 2:
+            return Response({
+                'success': False,
+                'error': 'At least 2 records required for merge. Provide source_ids as an array.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Convert to integers
+        try:
+            source_ids = [int(id) for id in source_ids]
+            if master_record_id:
+                master_record_id = int(master_record_id)
+        except (ValueError, TypeError):
+            return Response({
+                'success': False,
+                'error': 'source_ids and master_record_id must be valid integers'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        result = CustomerMergeService.merge_customers(
+            IndividualBankIbk=IndividualBankIbk,
+            IndividualBankIbkInfo=IndividualBankIbkInfo,
+            IndividualIdentifier=IndividualIdentifier,
+            MergeHistory=MergeHistory,
+            source_ids=source_ids,
+            master_record_id=master_record_id,
+            performed_by=request.user.username,
+            reason=reason
+        )
+        
+        # Update matching candidates status
+        MatchingCandidate.objects.filter(
+            source_ind_sys_id__in=source_ids,
+            target_ind_sys_id__in=source_ids,
+            status='PENDING'
+        ).update(
+            status='APPROVED',
+            reviewed_by=request.user.username,
+            reviewed_at=timezone.now()
+        )
+        
+        return Response({
+            'success': True,
+            'message': 'Customers merged successfully',
+            'result': result
+        })
+        
+    except Exception as e:
+        print(f"Error in merge_customers: {traceback.format_exc()}")
+        return Response({
+            'success': False,
+            'error': str(e),
+            'details': traceback.format_exc()
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def unmerge_customer(request):
+    """
+    Unmerge a customer record
+    
+    POST /api/unmerge/
+    Body:
+    {
+        "ind_sys_id": 1703369,
+        "reason": "Incorrect merge"
+    }
+    """
+    try:
+        from .merge_service import CustomerMergeService
+        from .models import (
+            IndividualBankIbk,
+            IndividualIdentifier,
+            MergeHistory
+        )
+        
+        ind_sys_id = request.data.get('ind_sys_id')
+        reason = request.data.get('reason', '')
+        
+        if not ind_sys_id:
+            return Response({
+                'success': False,
+                'error': 'ind_sys_id is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            ind_sys_id = int(ind_sys_id)
+        except (ValueError, TypeError):
+            return Response({
+                'success': False,
+                'error': 'ind_sys_id must be a valid integer'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        result = CustomerMergeService.unmerge_customer(
+            IndividualBankIbk=IndividualBankIbk,
+            IndividualIdentifier=IndividualIdentifier,
+            MergeHistory=MergeHistory,
+            ind_sys_id=ind_sys_id,
+            performed_by=request.user.username,
+            reason=reason
+        )
+        
+        return Response({
+            'success': True,
+            'message': 'Customer unmerged successfully',
+            'result': result
+        })
+        
+    except Exception as e:
+        print(f"Error in unmerge_customer: {traceback.format_exc()}")
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def review_candidate(request):
+    """
+    Approve or reject a matching candidate
+    
+    POST /api/review/
+    Body:
+    {
+        "candidate_id": 123,
+        "action": "approve",
+        "notes": "Verified same person"
+    }
+    """
+    try:
+        from .merge_service import CustomerMergeService
+        from .models import (
+            MatchingCandidate,
+            IndividualBankIbk,
+            IndividualBankIbkInfo,
+            IndividualIdentifier,
+            MergeHistory
+        )
+        
+        candidate_id = request.data.get('candidate_id')
+        action = request.data.get('action')
+        notes = request.data.get('notes', '')
+        
+        if not candidate_id or not action:
+            return Response({
+                'success': False,
+                'error': 'candidate_id and action are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if action not in ['approve', 'reject']:
+            return Response({
+                'success': False,
+                'error': 'action must be "approve" or "reject"'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        candidate = MatchingCandidate.objects.filter(id=candidate_id).first()
+        if not candidate:
+            return Response({
+                'success': False,
+                'error': 'Candidate not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        if action == 'approve':
+            result = CustomerMergeService.merge_customers(
+                IndividualBankIbk=IndividualBankIbk,
+                IndividualBankIbkInfo=IndividualBankIbkInfo,
+                IndividualIdentifier=IndividualIdentifier,
+                MergeHistory=MergeHistory,
+                source_ids=[candidate.source_ind_sys_id, candidate.target_ind_sys_id],
+                performed_by=request.user.username,
+                reason=f"Approved match - Score: {candidate.similarity_score}. {notes}"
+            )
+            
+            candidate.status = 'APPROVED'
+            candidate.reviewed_by = request.user.username
+            candidate.reviewed_at = timezone.now()
+            candidate.notes = notes
+            candidate.save()
+            
+            return Response({
+                'success': True,
+                'message': 'Match approved and records merged',
+                'result': result
+            })
+        
+        else:  # reject
+            candidate.status = 'REJECTED'
+            candidate.reviewed_by = request.user.username
+            candidate.reviewed_at = timezone.now()
+            candidate.notes = notes
+            candidate.save()
+            
+            return Response({
+                'success': True,
+                'message': 'Match rejected'
+            })
+        
+    except Exception as e:
+        print(f"Error in review_candidate: {traceback.format_exc()}")
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_customer_identifiers(request, lcic_id):
+    """
+    Get all identifiers for a customer
+    
+    GET /api/customer/{lcic_id}/identifiers/
+    """
+    try:
+        from .models import IndividualIdentifier
+        
+        identifiers = IndividualIdentifier.objects.filter(
+            lcic_id=lcic_id,
+            is_active=True
+        ).values()
+        
+        return Response({
+            'success': True,
+            'lcic_id': lcic_id,
+            'identifiers': list(identifiers)
+        })
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_merge_history(request, lcic_id):
+    """
+    Get merge history for a customer
+    
+    GET /api/customer/{lcic_id}/history/
+    """
+    try:
+        from .models import MergeHistory
+        
+        history = MergeHistory.objects.filter(
+            master_lcic_id=lcic_id
+        ).order_by('-performed_at').values()
+        
+        return Response({
+            'success': True,
+            'lcic_id': lcic_id,
+            'history': list(history)
+        })
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_statistics(request):
+    """
+    Get matching and merge statistics
+    
+    GET /api/statistics/
+    """
+    try:
+        from .models import MatchingCandidate, MergeHistory, IndividualBankIbk, IndividualBankIbkInfo
+        from django.db.models import Count, Avg, Q
+        
+        stats = {
+            'total_bank_records': IndividualBankIbk.objects.count(),
+            'normalized_records': IndividualBankIbkInfo.objects.count(),
+            'matching_candidates': {
+                'total': MatchingCandidate.objects.count(),
+                'pending': MatchingCandidate.objects.filter(status='PENDING').count(),
+                'approved': MatchingCandidate.objects.filter(status='APPROVED').count(),
+                'rejected': MatchingCandidate.objects.filter(status='REJECTED').count(),
+            },
+            'merge_operations': {
+                'total_merges': MergeHistory.objects.filter(action='MERGE').count(),
+                'total_unmerges': MergeHistory.objects.filter(action='UNMERGE').count(),
+            }
+        }
+        
+        # Calculate average score (handle None)
+        avg_score = MatchingCandidate.objects.aggregate(Avg('similarity_score'))['similarity_score__avg']
+        stats['matching_candidates']['avg_score'] = float(avg_score) if avg_score else 0.0
+        
+        return Response({
+            'success': True,
+            'statistics': stats
+        })
+        
+    except Exception as e:
+        print(f"Error in get_statistics: {traceback.format_exc()}")
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+def health_check(request):
+    """
+    Health check endpoint
+    GET /api/health/
+    """
+    try:
+        from .models import IndividualBankIbk
+        
+        # Test database connection
+        count = IndividualBankIbk.objects.count()
+        
+        return Response({
+            'success': True,
+            'status': 'healthy',
+            'database': 'connected',
+            'total_records': count
+        })
+    except Exception as e:
+        return Response({
+            'success': False,
+            'status': 'unhealthy',
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

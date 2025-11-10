@@ -543,6 +543,23 @@ urlpatterns = [
     path('charge_report_main/', ChargeReportMainView.as_view(), name='charge-report-main'),
     path('charge_report_detail/', ChargeReportDetailView.as_view(), name='charge-report-detail'),
     path('report_individual/', FCR_reportIndividualView.as_view(), name='fcr-report-individual'),
+    
+    # Matching endpoints
+    path('find-candidates/', views.find_matching_candidates, name='find_candidates'),
+    path('candidates/', views.get_matching_candidates, name='get_candidates'),
+    path('review/', views.review_candidate, name='review_candidate'),
+    
+    # Merge/Unmerge endpoints
+    path('merge/', views.merge_customers, name='merge_customers'),
+    path('unmerge/', views.unmerge_customer, name='unmerge_customer'),
+    
+    # Customer data endpoints
+    path('customer/<str:lcic_id>/identifiers/', views.get_customer_identifiers, name='get_identifiers'),
+    path('customer/<str:lcic_id>/history/', views.get_merge_history, name='get_history'),
+    
+    # Statistics
+    path('statistics/', views.get_statistics, name='statistics'),
+    
     # SearchLog Reports  
     path('searchlog_report_main/', SearchLogReportMainView.as_view(), name='searchlog-report-main'),
     path('searchlog_report_detail/', SearchLogReportDetailView.as_view(), name='searchlog-report-detail'),
