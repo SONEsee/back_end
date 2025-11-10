@@ -2381,7 +2381,26 @@ class UserAccessLog(models.Model):
 
     def __str__(self):
         return f"{self.user.username} logged in at {self.login_time}"
+    
+class scr_atttype_desc(models.Model):
+    id_desc = models.AutoField(primary_key=True) 
+    att_type = models.CharField(max_length=50, blank=False, null=False)
+    att_type_desc = models.CharField(max_length=100, blank=False, null=False)
+    att_type_lao_desc = models.CharField(max_length=100, blank=False, null=False)
+    att_weight = models.IntegerField() 
 
+    def __str__(self):
+        return f"{self.att_type_desc} ({self.att_type})"
+
+class scr_attribute_table(models.Model):
+    att_id = models.AutoField(primary_key=True) 
+    att_type = models.CharField(max_length=50, blank=False, null=False)
+    att_name = models.CharField(max_length=50, blank=False, null=False)
+    att_code = models.CharField(max_length=50, blank=False, null=False)
+    att_value = models.IntegerField()
+
+    def __str__(self):
+        return f"{self.att_name} ({self.att_code})"
 
 
 

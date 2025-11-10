@@ -157,7 +157,7 @@ from .views import (
 )
 #tik
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
-                    ,RequestChargeSummaryAPIView,RequestChargeReportAllAPIView,UserLogoutView,UserAccessLogListView,ScoringIndividualInfoSearchView)
+                    ,RequestChargeSummaryAPIView,RequestChargeReportAllAPIView,UserLogoutView,UserAccessLogListView,ScoringIndividualInfoSearchView,CreditScoreAPIView)
 
 from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView,process_dispute_notification, process_multiple_disputes,process_multiple_disputescollateral
 from .views import upload_json,MemberInfoViewSet
@@ -374,6 +374,7 @@ urlpatterns = [
     path('logout_update/', UserLogoutView.as_view(), name='logout_new'),
     path('access-logs/', UserAccessLogListView.as_view(), name='access-logs'),
     path('api/scoring-individual/', ScoringIndividualInfoSearchView.as_view(), name='scoring-individual'),
+    path('credit-score/calculate/', CreditScoreAPIView.as_view(), name='credit-score-calculate'),
     
     path('api/individual-files/', IndividualFileListView.as_view(), name='individual-file-list'),
     path('api/files-individual-collateral/', IndividualCollateralFileListView.as_view(), name='files-individual-collateral'),

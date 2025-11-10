@@ -30336,3 +30336,121 @@ class ScoringIndividualInfoSearchView(APIView):
                 'details': traceback.format_exc()
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+# views.py
+# views.py
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from django.shortcuts import get_object_or_404
+
+from .credit_score_service import CreditScoreService
+from .serializers import CreditScoreResponseSerializers
+
+class CreditScoreAPIView(APIView):
+    """
+    API endpoint to calculate credit score
+    
+    POST /api/credit-score/calculate/
+    Body: {
+        "lcic_id": "your_lcic_id"
+    }
+    """
+    
+    def post(self, request):
+        try:
+            # Get lcic_id from request
+            lcic_id = request.data.get('lcic_id')
+            
+            if not lcic_id:
+                return Response(
+                    {
+                        'error': 'lcic_id is required',
+                        'message': 'Please provide lcic_id in request body'
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Initialize service
+            service = CreditScoreService(lcic_id)
+            
+            # Calculate credit score
+            result = service.calculate_credit_score()
+            
+            if not result:
+                return Response(
+                    {
+                        'error': 'Customer not found',
+                        'message': f'No customer found with lcic_id: {lcic_id}'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Return response
+            return Response(
+                {
+                    'success': True,
+                    'data': result
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            return Response(
+                {
+                    'error': 'Internal server error',
+                    'message': str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def get(self, request):
+        """
+        GET /api/credit-score/calculate/?lcic_id=your_lcic_id
+        """
+        try:
+            # Get lcic_id from query params
+            lcic_id = request.query_params.get('lcic_id')
+            
+            if not lcic_id:
+                return Response(
+                    {
+                        'error': 'lcic_id is required',
+                        'message': 'Please provide lcic_id as query parameter'
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Initialize service
+            service = CreditScoreService(lcic_id)
+            
+            # Calculate credit score
+            result = service.calculate_credit_score()
+            
+            if not result:
+                return Response(
+                    {
+                        'error': 'Customer not found',
+                        'message': f'No customer found with lcic_id: {lcic_id}'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Return response
+            return Response(
+                {
+                    'success': True,
+                    'data': result
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            return Response(
+                {
+                    'error': 'Internal server error',
+                    'message': str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
