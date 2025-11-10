@@ -4764,260 +4764,263 @@ from .models import (
     data_edit,
 )
 
+
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
-from django.db import transaction
 from django.http import JsonResponse
 from django.utils import timezone
-from django.test import RequestFactory
-from datetime import datetime
 from dateutil.relativedelta import relativedelta
+from datetime import datetime
 import re
-import traceback
-import json
 
-# ຕາຕະລາງທີ່ເກັບຂໍ້ມູນ Collateral ຕາມເດືອນ
-COLLATERAL_TABLES = [
-    col_real_estates,
-    col_money_mia,
-    col_equipment_eqi,
-    col_project_prj,
-    col_vechicle_veh,
-    col_guarantor_gua,
-    col_goldsilver_gold,
-    col_guarantor_com,
-]
+# ນຳເຂົ້າທັງສອງຈາກ utils.py
+from .utils import confirm_collateral_logic, COLLATERAL_MODELS
 
 @csrf_exempt
 @require_POST
 def rollback_and_reconfirm_collateral(request):
-  
     CID_with_prefix = request.POST.get('CID')
     if not CID_with_prefix:
-        return JsonResponse({
-            'status': 'error',
-            'message': 'ບໍ່ມີ CID ທີ່ສົ່ງມາ'
-        }, status=400)
+        return JsonResponse({'status': 'error', 'message': 'ບໍ່ມີ CID'}, status=400)
 
     CID_number = None
-    
+    prev_period = None
+    cdl_objects = []
+
     try:
         print(f"\n{'='*80}")
         print(f"Rollback & Reconfirm: CID = {CID_with_prefix}")
         print(f"{'='*80}")
 
-        # 1. ກວດຮູບແບບ CID
+        # 1. ກວດສອບຮູບແບບ CID
         match = re.match(r'c-(\d+)', CID_with_prefix)
         if not match:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'ຮູບແບບ CID ບໍ່ຖືກຕ້ອງ (ຕ້ອງເປັນ c-ຕົວເລກ)'
-            }, status=400)
+            return JsonResponse({'status': 'error', 'message': 'ຮູບແບບ CID ບໍ່ຖືກ'}, status=400)
         CID_number = int(match.group(1))
 
-        # 2. ດຶງໄຟລ໌
+        # 2. ກວດສອບໄຟລ໌
         current_file = Upload_File_Individual_Collateral.objects.filter(CID=CID_number).first()
         if not current_file:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'ບໍ່ພົບໄຟລ໌ Collateral'
-            }, status=404)
+            return JsonResponse({'status': 'error', 'message': 'ບໍ່ພົບໄຟລ໌'}, status=404)
 
         current_period = current_file.period
         sample_data = CDL.objects.filter(id_file=CID_with_prefix).first()
         if not sample_data:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'ບໍ່ພົບຂໍ້ມູນໃນ CDL'
-            }, status=404)
+            return JsonResponse({'status': 'error', 'message': 'ບໍ່ພົບ CDL'}, status=404)
 
         bnk_code = sample_data.c3
         segment_type = (sample_data.c39 or '').strip().upper()
-        print(f"ກວດ: period={current_period}, bnk_code={bnk_code}, segmentType='{segment_type}'")
 
-        # 3. ລົບຂໍ້ມູນເກົ່າ
+        # 3. ລຶບຂໍ້ມູນເກົ່າທັງໝົດ
         print("  ກຳລັງລຶບຂໍ້ມູນເກົ່າ...")
-        deleted_counts = {}
-        for table in [C1] + COLLATERAL_TABLES:
+        for table in [C1] + list(COLLATERAL_MODELS.values()):
             count = table.objects.filter(id_file=CID_with_prefix).delete()[0]
             if count:
-                deleted_counts[table.__name__] = count
-                print(f"    ລຶບ {table.__name__}: {count} ລາຍການ")
+                print(f"    ລຶບ {table.__name__}: {count}")
 
-        # 4. ຄົ້ນຫາເດືອນກ່ອນ
+        # 4. ຄົ້ນຫາເດືອນກ່ອນໜ້າ (ຖອຍຫຼັງສູງສຸດ 300 ເດືອນ)
         period_dt = datetime.strptime(current_period, "%Y%m")
-        prev_period = None
-        print("  ກຳລັງຄົ້ນຫາເດືອນກ່ອນ...")
-        
-        for i in range(12):
+        for i in range(300):
             period_dt -= relativedelta(months=1)
             search_str = period_dt.strftime("%Y%m")
-            
-            print(f"    ກວດ: {search_str}...", end=' ')
-            
             has_data = any(
                 table.objects.filter(
                     period=search_str,
                     bnk_code=bnk_code,
                     segmentType__iexact=segment_type
                 ).exists()
-                for table in COLLATERAL_TABLES
+                for table in COLLATERAL_MODELS.values()
             )
-            
             if has_data:
                 prev_period = search_str
-                print(f"✅ ພົບ!")
+                print(f"    ພົບ: {prev_period}")
                 break
-            else:
-                print("❌")
+            print(f"    ກວດ: {search_str}...")
 
-        # 5. ອັບເດດສະຖານະກຳລັງ Rollback
+        # 5. ອັບເດດສະຖານະເປັນ "ກຳລັງປະມວນຜົນ"
         Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
-            statussubmit='4',
-            dispuste=0,
-            updateDate=timezone.now()
+            statussubmit='4', dispuste=0, updateDate=timezone.now()
         )
-        print("  ອັບເດດ statussubmit → '4' (ກຳລັງ Rollback)")
 
-        # 6. ກໍລະນີບໍ່ພົບເດືອນກ່ອນ
+        # 6. ຖ້າບໍ່ພົບເດືອນກ່ອນໜ້າ
         if not prev_period:
             Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
-                statussubmit='5',
-                dispuste=0,
-                updateDate=timezone.now()
+                statussubmit='5', dispuste=0, updateDate=timezone.now()
             )
-            print("  ອັບເດດ statussubmit → '5' (ບໍ່ມີຂໍ້ມູນເດືອນກ່ອນ)")
-            print(f"{'='*80}")
-            print("Rollback ສຳເລັດ: ບໍ່ມີຂໍ້ມູນເດືອນກ່ອນ")
-            print(f"{'='*80}")
-
             return JsonResponse({
                 'status': 'success',
                 'message': 'Rollback ສຳເລັດ: ບໍ່ມີຂໍ້ມູນເດືອນກ່ອນ',
                 'previous_period': None,
-                'new_status': '5',
-                'action': 'deleted_no_previous_data'
+                'new_status': '5'
             })
 
-        # 7. ສ້າງ CDL ໃໝ່ດ້ວຍ id_file ດຽວກັນ
-        print(f"  ກຳລັງສ້າງ CDL ໃໝ່ຈາກ period {prev_period}...")
+        # 7. ສ້າງ CDL ໃໝ່ຈາກຂໍ້ມູນເດືອນກ່ອນ
+        print(f"  ກຳລັງລຶບ CDL ເກົ່າທີ່ມີ id_file={CID_with_prefix}...")
         CDL.objects.filter(id_file=CID_with_prefix).delete()
         
-        cdl_objects = []
         now = timezone.now()
-
-        for table in COLLATERAL_TABLES:
-            print(f"    {table.__name__}...", end=' ')
-            
-            # ດຶງ object ທັງໝົດ
+        for table in COLLATERAL_MODELS.values():
             rows = table.objects.filter(
                 period=prev_period,
                 bnk_code=bnk_code,
                 segmentType__iexact=segment_type
             )
+            print(f"    ດຶງຂໍ້ມູນຈາກ {table.__name__}: {rows.count()} ແຖວ")
             
-            count = 0
             for obj in rows:
-                # ຫາ value field (ອາດຈະເປັນ 'value' ຫຼື 'col_value')
-                value_data = ''
-                if hasattr(obj, 'col_value'):
-                    value_data = obj.col_value or ''
-                elif hasattr(obj, 'value'):
-                    value_data = obj.value or ''
-                
+                original_id_file = getattr(obj, 'id_file', '')
+                if not original_id_file:
+                    print(f"    ⚠️ ແຖວນີ້ບໍ່ມີ id_file: {obj.id}")
+                    continue
+                    
+                value_data = getattr(obj, 'col_value', '') or getattr(obj, 'value', '') or ''
                 cdl_objects.append(CDL(
-                    id_file=CID_with_prefix,
+                    id_file=original_id_file,  # ✅ ເອົາ id_file ຕົ້ນສະບັບຈາກເດືອນກ່ອນ
                     period=prev_period,
-                    c1=obj.LCIC_code or '',
-                    c2=obj.com_enterprise_code or '',
-                    c3=bnk_code,
-                    c4=obj.bank_customer_ID or '',
-                    c5=obj.branch_id_code or '',
-                    c6=obj.loan_id or '',
-                    c7=obj.col_id or '',
+                    c1=getattr(obj, 'LCIC_code', ''), 
+                    c2=getattr(obj, 'com_enterprise_code', ''),
+                    c3=bnk_code, 
+                    c4=getattr(obj, 'bank_customer_ID', ''), 
+                    c5=getattr(obj, 'branch_id_code', ''),
+                    c6=getattr(obj, 'loan_id', ''), 
+                    c7=getattr(obj, 'col_id', ''), 
                     c8=value_data,
-                    c39=obj.segmentType or '',
-                    col_type=obj.col_type or '',
-                    user_id=obj.user_id or '',
-                    insert_date=now,
-                    update_date=now
+                    c39=getattr(obj, 'segmentType', ''), 
+                    col_type=getattr(obj, 'col_type', ''),
+                    user_id=getattr(obj, 'user_id', '')
                 ))
-                count += 1
-            
-            if count > 0:
-                print(f"✅ {count}")
-
+        
         if not cdl_objects:
             Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
-                statussubmit='2'
+                statussubmit='2', updateDate=timezone.now()
             )
             return JsonResponse({
                 'status': 'error',
-                'message': 'ບໍ່ພົບຂໍ້ມູນໃນເດືອນກ່ອນ'
-            }, status=404)
-
-        CDL.objects.bulk_create(cdl_objects, batch_size=1000)
-        print(f"  ✅ ສ້າງ CDL ທັງໝົດ: {len(cdl_objects)} ລາຍການ")
-
-        # 8. ສົ່ງຕໍ່ໄປ confirm
-        print("  ກຳລັງ Reconfirm...")
-        factory = RequestFactory()
-        mock_request = factory.post('/fake/', {'CID': CID_with_prefix})
-        
-        response = confirm_upload_individual_collateral(mock_request)
-        
-        # ✅ ກວດສະເພາະສະຖານະເທົ່ານັ້ນ - ບໍ່ຕ້ອງອ່ານ content
-        if response.status_code == 200:
-            print("  ✅ Reconfirm ສຳເລັດ")
+                'message': 'ບໍ່ສາມາດສ້າງ CDL ໄດ້ເພາະບໍ່ມີຂໍ້ມູນ'
+            }, status=400)
             
-            # 9. ສຳເລັດ
-            Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
-                statussubmit='5',
-                dispuste=0,
-                updateDate=timezone.now(),
-                period=prev_period
-            )
-            print(f"  ອັບເດດ statussubmit → '5', period → {prev_period}")
+        CDL.objects.bulk_create(cdl_objects, batch_size=1000)
+        print(f"  ສ້າງ CDL: {len(cdl_objects)}")
 
-            print(f"{'='*80}")
-            print(f"Rollback & Reconfirm ສຳເລັດ: ໃຊ້ {prev_period}")
-            print(f"{'='*80}")
+        # 8. Reconfirm ທຸກໆ id_file ທີ່ຖືກສ້າງ
+        print("  ກຳລັງ Reconfirm...")
+        # ດຶງ id_file ທັງໝົດທີ່ຖືກສ້າງ
+        unique_id_files = list(set(obj.id_file for obj in cdl_objects if obj.id_file))
+        print(f"  id_file ທີ່ຕ້ອງ confirm: {unique_id_files}")
 
-            return JsonResponse({
-                'status': 'success',
-                'message': f'Rollback ສຳເລັດ: ໃຊ້ຂໍ້ມູນ {prev_period}',
-                'previous_period': prev_period,
-                'original_period': current_period,
-                'original_id_file': CID_with_prefix,
-                'new_status': '5',
-                'cdl_created': len(cdl_objects)
-            })
-        else:
-            print(f"  ❌ Reconfirm ລົ້ມເຫຼວ: status={response.status_code}")
+        if not unique_id_files:
             Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
-                statussubmit='2'
+                statussubmit='2', updateDate=timezone.now()
             )
             return JsonResponse({
                 'status': 'error',
-                'message': 'Reconfirm ລົ້ມເຫຼວ'
-            }, status=500)
+                'message': 'ບໍ່ມີ id_file ທີ່ຖືກຕ້ອງສຳລັບການ confirm'
+            }, status=400)
+
+        success_count = 0
+        confirmed_details = []
+        
+        for id_file in unique_id_files:
+            print(f"  ກຳລັງ confirm: {id_file}")
+            
+            # ✅ ອັບເດດສະຖານະຂອງໄຟລ໌ກ່ອນ confirm
+            try:
+                match_id = re.match(r'c-(\d+)', id_file)
+                if match_id:
+                    file_cid_number = int(match_id.group(1))
+                    # ອັບເດດສະຖານະໃຫ້ສາມາດ confirm ໄດ້
+                    Upload_File_Individual_Collateral.objects.filter(CID=file_cid_number).update(
+                        statussubmit='4', updateDate=timezone.now()
+                    )
+                    print(f"    ອັບເດດ CID={file_cid_number} → statussubmit='4'")
+            except Exception as e:
+                print(f"    ⚠️ ບໍ່ສາມາດອັບເດດສະຖານະ {id_file}: {e}")
+            
+            try:
+                result = confirm_collateral_logic(id_file)
+                print(f"  ຜົນການ confirm {id_file}: {result.get('status')}")
+                
+                if result['status'] == 'success':
+                    success_count += 1
+                    confirmed_details.append({
+                        'id_file': id_file,
+                        'status': 'success'
+                    })
+                else:
+                    print(f"  ❌ Confirm ລົ້ມເຫຼວ: {result.get('message')}")
+                    Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
+                        statussubmit='2', updateDate=timezone.now()
+                    )
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': f'Reconfirm ລົ້ມເຫຼວສຳລັບ {id_file}',
+                        'detail': result.get('message'),
+                        'error_code': result.get('code')
+                    }, status=500)
+            except Exception as e:
+                print(f"  💥 EXCEPTION ໃນການ confirm {id_file}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
+                    statussubmit='2', updateDate=timezone.now()
+                )
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Reconfirm exception ສຳລັບ {id_file}: {str(e)}'
+                }, status=500)
+
+        # 9. ອັບເດດສະຖານະສຳເລັດ
+        Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
+            statussubmit='5', dispuste=0, updateDate=timezone.now(), period=prev_period
+        )
+        print(f"  ອັບເດດ status → '5', period → {prev_period}")
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Rollback ສຳເລັດ: ໃຊ້ {prev_period}',
+            'previous_period': prev_period,
+            'original_period': current_period,
+            'new_status': '5',
+            'cdl_created': len(cdl_objects),
+            'confirmed_files': success_count,
+            'id_files_confirmed': unique_id_files,
+            'details': confirmed_details
+        })
 
     except Exception as e:
-        print(f"\n❌ ERROR: {str(e)}")
+        print(f"ERROR: {e}")
+        import traceback
         traceback.print_exc()
-        
-        try:
-            if CID_number is not None:
+        if CID_number:
+            try:
                 Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
-                    statussubmit='2'
+                    statussubmit='2', updateDate=timezone.now()
                 )
-        except:
-            pass
-            
-        return JsonResponse({
-            'status': 'error',
-            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
-        }, status=500)
+            except:
+                pass
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 @csrf_exempt
@@ -26359,241 +26362,241 @@ def get_disputes_by_confirm_id_callateral(request):
 
 
 
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
-@csrf_exempt
-@require_POST
-@transaction.atomic
-def rollback_and_reconfirm_collateral(request):
-    """
-    Rollback & Reconfirm Collateral
-    """
-    CID_with_prefix = request.POST.get('CID')
-    if not CID_with_prefix:
-        return JsonResponse({
-            'status': 'error',
-            'message': 'ບໍ່ມີ CID ທີ່ສົ່ງມາ'
-        }, status=400)
+# from django.views.decorators.csrf import csrf_exempt
+# from django.views.decorators.http import require_POST
+# @csrf_exempt
+# @require_POST
+# @transaction.atomic
+# def rollback_and_reconfirm_collateral(request):
+#     """
+#     Rollback & Reconfirm Collateral
+#     """
+#     CID_with_prefix = request.POST.get('CID')
+#     if not CID_with_prefix:
+#         return JsonResponse({
+#             'status': 'error',
+#             'message': 'ບໍ່ມີ CID ທີ່ສົ່ງມາ'
+#         }, status=400)
 
-    CID_number = None  # ✅ ປະກາດໄວ້ກ່ອນເພື່ອໃຊ້ໃນ except block
+#     CID_number = None  # ✅ ປະກາດໄວ້ກ່ອນເພື່ອໃຊ້ໃນ except block
     
-    try:
-        print(f"\n{'='*80}")
-        print(f"Rollback & Reconfirm: CID = {CID_with_prefix}")
-        print(f"{'='*80}")
+#     try:
+#         print(f"\n{'='*80}")
+#         print(f"Rollback & Reconfirm: CID = {CID_with_prefix}")
+#         print(f"{'='*80}")
 
-        # 1. ກວດຮູບແບບ CID
-        match = re.match(r'c-(\d+)', CID_with_prefix)
-        if not match:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'ຮູບແບບ CID ບໍ່ຖືກຕ້ອງ (ຕ້ອງເປັນ c-ຕົວເລກ)'
-            }, status=400)
-        CID_number = int(match.group(1))
+#         # 1. ກວດຮູບແບບ CID
+#         match = re.match(r'c-(\d+)', CID_with_prefix)
+#         if not match:
+#             return JsonResponse({
+#                 'status': 'error',
+#                 'message': 'ຮູບແບບ CID ບໍ່ຖືກຕ້ອງ (ຕ້ອງເປັນ c-ຕົວເລກ)'
+#             }, status=400)
+#         CID_number = int(match.group(1))
 
-        # 2. ດຶງໄຟລ໌
-        current_file = Upload_File_Individual_Collateral.objects.filter(CID=CID_number).first()
-        if not current_file:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'ບໍ່ພົບໄຟລ໌ Collateral'
-            }, status=404)
+#         # 2. ດຶງໄຟລ໌
+#         current_file = Upload_File_Individual_Collateral.objects.filter(CID=CID_number).first()
+#         if not current_file:
+#             return JsonResponse({
+#                 'status': 'error',
+#                 'message': 'ບໍ່ພົບໄຟລ໌ Collateral'
+#             }, status=404)
 
-        current_period = current_file.period
-        sample_data = CDL.objects.filter(id_file=CID_with_prefix).first()
-        if not sample_data:
-            return JsonResponse({
-                'status': 'error',
-                'message': 'ບໍ່ພົບຂໍ້ມູນໃນ CDL'
-            }, status=404)
+#         current_period = current_file.period
+#         sample_data = CDL.objects.filter(id_file=CID_with_prefix).first()
+#         if not sample_data:
+#             return JsonResponse({
+#                 'status': 'error',
+#                 'message': 'ບໍ່ພົບຂໍ້ມູນໃນ CDL'
+#             }, status=404)
 
-        bnk_code = sample_data.c3
-        segment_type = (sample_data.c39 or '').strip().upper()
-        print(f"ກວດ: period={current_period}, bnk_code={bnk_code}, segmentType='{segment_type}'")
+#         bnk_code = sample_data.c3
+#         segment_type = (sample_data.c39 or '').strip().upper()
+#         print(f"ກວດ: period={current_period}, bnk_code={bnk_code}, segmentType='{segment_type}'")
 
-        # 3. ລົບຂໍ້ມູນເກົ່າ
-        print("  ກຳລັງລຶບຂໍ້ມູນເກົ່າ...")
-        deleted_counts = {}
-        for table in [C1] + COLLATERAL_TABLES:
-            count = table.objects.filter(id_file=CID_with_prefix).delete()[0]
-            if count:
-                deleted_counts[table.__name__] = count
-                print(f"    ລຶບ {table.__name__}: {count} ລາຍການ")
+#         # 3. ລົບຂໍ້ມູນເກົ່າ
+#         print("  ກຳລັງລຶບຂໍ້ມູນເກົ່າ...")
+#         deleted_counts = {}
+#         for table in [C1] + COLLATERAL_TABLES:
+#             count = table.objects.filter(id_file=CID_with_prefix).delete()[0]
+#             if count:
+#                 deleted_counts[table.__name__] = count
+#                 print(f"    ລຶບ {table.__name__}: {count} ລາຍການ")
 
-        # 4. ຄົ້ນຫາເດືອນກ່ອນ
-        period_dt = datetime.strptime(current_period, "%Y%m")
-        prev_period = None
-        print("  ກຳລັງຄົ້ນຫາເດືອນກ່ອນ...")
+#         # 4. ຄົ້ນຫາເດືອນກ່ອນ
+#         period_dt = datetime.strptime(current_period, "%Y%m")
+#         prev_period = None
+#         print("  ກຳລັງຄົ້ນຫາເດືອນກ່ອນ...")
         
-        for i in range(300):  # ✅ ຊອກ 12 ເດືອນກ່ອນ (ບໍ່ຕ້ອງ 300)
-            period_dt -= relativedelta(months=1)
-            search_str = period_dt.strftime("%Y%m")
+#         for i in range(300):  # ✅ ຊອກ 12 ເດືອນກ່ອນ (ບໍ່ຕ້ອງ 300)
+#             period_dt -= relativedelta(months=1)
+#             search_str = period_dt.strftime("%Y%m")
             
-            print(f"    ກວດ: {search_str}...", end=' ')
+#             print(f"    ກວດ: {search_str}...", end=' ')
             
-            has_data = any(
-                table.objects.filter(
-                    period=search_str,
-                    bnk_code=bnk_code,
-                    segmentType__iexact=segment_type
-                ).exists()
-                for table in COLLATERAL_TABLES
-            )
+#             has_data = any(
+#                 table.objects.filter(
+#                     period=search_str,
+#                     bnk_code=bnk_code,
+#                     segmentType__iexact=segment_type
+#                 ).exists()
+#                 for table in COLLATERAL_TABLES
+#             )
             
-            if has_data:
-                prev_period = search_str
-                print(f"✅ ພົບ!")
-                break
-            else:
-                print("❌")
+#             if has_data:
+#                 prev_period = search_str
+#                 print(f"✅ ພົບ!")
+#                 break
+#             else:
+#                 print("❌")
 
-        # 5. ອັບເດດສະຖານະກຳລັງ Rollback
-        Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
-            statussubmit='4',
-            dispuste=0,
-            updateDate=timezone.now()
-        )
-        print("  ອັບເດດ statussubmit → '4' (ກຳລັງ Rollback)")
+#         # 5. ອັບເດດສະຖານະກຳລັງ Rollback
+#         Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
+#             statussubmit='4',
+#             dispuste=0,
+#             updateDate=timezone.now()
+#         )
+#         print("  ອັບເດດ statussubmit → '4' (ກຳລັງ Rollback)")
 
-        # 6. ກໍລະນີບໍ່ພົບເດືອນກ່ອນ
-        if not prev_period:
-            Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
-                statussubmit='5',
-                dispuste=0,
-                updateDate=timezone.now()
-            )
-            print("  ອັບເດດ statussubmit → '5' (ບໍ່ມີຂໍ້ມູນເດືອນກ່ອນ)")
-            print(f"{'='*80}")
-            print("Rollback ສຳເລັດ: ບໍ່ມີຂໍ້ມູນເດືອນກ່ອນ")
-            print(f"{'='*80}")
+#         # 6. ກໍລະນີບໍ່ພົບເດືອນກ່ອນ
+#         if not prev_period:
+#             Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
+#                 statussubmit='5',
+#                 dispuste=0,
+#                 updateDate=timezone.now()
+#             )
+#             print("  ອັບເດດ statussubmit → '5' (ບໍ່ມີຂໍ້ມູນເດືອນກ່ອນ)")
+#             print(f"{'='*80}")
+#             print("Rollback ສຳເລັດ: ບໍ່ມີຂໍ້ມູນເດືອນກ່ອນ")
+#             print(f"{'='*80}")
 
-            return JsonResponse({
-                'status': 'success',
-                'message': 'Rollback ສຳເລັດ: ບໍ່ມີຂໍ້ມູນເດືອນກ່ອນ',
-                'previous_period': None,
-                'new_status': '5',
-                'action': 'deleted_no_previous_data'
-            })
+#             return JsonResponse({
+#                 'status': 'success',
+#                 'message': 'Rollback ສຳເລັດ: ບໍ່ມີຂໍ້ມູນເດືອນກ່ອນ',
+#                 'previous_period': None,
+#                 'new_status': '5',
+#                 'action': 'deleted_no_previous_data'
+#             })
 
        
-        print(f"  ກຳລັງສ້າງ CDL ໃໝ່ຈາກ period {prev_period}...")
-        CDL.objects.filter(id_file=CID_with_prefix).delete()
+#         print(f"  ກຳລັງສ້າງ CDL ໃໝ່ຈາກ period {prev_period}...")
+#         CDL.objects.filter(id_file=CID_with_prefix).delete()
         
-        cdl_objects = []
-        now = timezone.now()
+#         cdl_objects = []
+#         now = timezone.now()
 
-        for table in COLLATERAL_TABLES:
-            rows = table.objects.filter(
-                period=prev_period,
-                bnk_code=bnk_code,
-                segmentType__iexact=segment_type
-            ).values(
-                'LCIC_code', 'com_enterprise_code', 'bank_customer_ID',
-                'branch_id_code', 'loan_id', 'col_id', 
-                'col_type', 'segmentType', 'user_id'
-            )
+#         for table in COLLATERAL_TABLES:
+#             rows = table.objects.filter(
+#                 period=prev_period,
+#                 bnk_code=bnk_code,
+#                 segmentType__iexact=segment_type
+#             ).values(
+#                 'LCIC_code', 'com_enterprise_code', 'bank_customer_ID',
+#                 'branch_id_code', 'loan_id', 'col_id', 
+#                 'col_type', 'segmentType', 'user_id'
+#             )
 
-            for row in rows:
-                cdl_objects.append(CDL(
-                    id_file=CID_with_prefix,
-                    period=prev_period,
-                    c1=row.get('LCIC_code', ''),
-                    c2=row.get('com_enterprise_code', ''),
-                    c3=bnk_code,
-                    c4=row.get('bank_customer_ID', ''),
-                    c5=row.get('branch_id_code', ''),
-                    c6=row.get('loan_id', ''),
-                    c7=row.get('col_id', ''),
-                    # c8=row.get('value') or row.get('col_value', ''),
-                    c39=row.get('segmentType', ''),
-                    col_type=row.get('col_type', ''),
-                    user_id=row.get('user_id', ''),
+#             for row in rows:
+#                 cdl_objects.append(CDL(
+#                     id_file=CID_with_prefix,
+#                     period=prev_period,
+#                     c1=row.get('LCIC_code', ''),
+#                     c2=row.get('com_enterprise_code', ''),
+#                     c3=bnk_code,
+#                     c4=row.get('bank_customer_ID', ''),
+#                     c5=row.get('branch_id_code', ''),
+#                     c6=row.get('loan_id', ''),
+#                     c7=row.get('col_id', ''),
+#                     # c8=row.get('value') or row.get('col_value', ''),
+#                     c39=row.get('segmentType', ''),
+#                     col_type=row.get('col_type', ''),
+#                     user_id=row.get('user_id', ''),
                    
-                ))
+#                 ))
 
-        if not cdl_objects:
-            Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
-                statussubmit='2'
-            )
-            return JsonResponse({
-                'status': 'error',
-                'message': 'ບໍ່ພົບຂໍ້ມູນໃນເດືອນກ່ອນ'
-            }, status=404)
+#         if not cdl_objects:
+#             Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
+#                 statussubmit='2'
+#             )
+#             return JsonResponse({
+#                 'status': 'error',
+#                 'message': 'ບໍ່ພົບຂໍ້ມູນໃນເດືອນກ່ອນ'
+#             }, status=404)
 
-        CDL.objects.bulk_create(cdl_objects, batch_size=1000)
-        print(f"    ສ້າງ CDL: {len(cdl_objects)} ລາຍການ")
+#         CDL.objects.bulk_create(cdl_objects, batch_size=1000)
+#         print(f"    ສ້າງ CDL: {len(cdl_objects)} ລາຍການ")
 
        
-        print("  ກຳລັງ Reconfirm...")
-        factory = RequestFactory()
-        mock_request = factory.post('/fake/', {'CID': CID_with_prefix})
+#         print("  ກຳລັງ Reconfirm...")
+#         factory = RequestFactory()
+#         mock_request = factory.post('/fake/', {'CID': CID_with_prefix})
         
-        response = confirm_upload_individual_collateral(mock_request)
+#         response = confirm_upload_individual_collateral(mock_request)
         
-        # ກວດຜົນ
-        if response.status_code != 200:
-            Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
-                statussubmit='2'
-            )
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Reconfirm ລົ້ມເຫຼວ'
-            }, status=500)
+#         # ກວດຜົນ
+#         if response.status_code != 200:
+#             Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
+#                 statussubmit='2'
+#             )
+#             return JsonResponse({
+#                 'status': 'error',
+#                 'message': 'Reconfirm ລົ້ມເຫຼວ'
+#             }, status=500)
 
-        try:
-            response_data = response.json() if hasattr(response, 'json') else {}
-        except:
-            response_data = {}
+#         try:
+#             response_data = response.json() if hasattr(response, 'json') else {}
+#         except:
+#             response_data = {}
             
-        if response_data.get('status') != 'success':
-            Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
-                statussubmit='2'
-            )
-            return JsonResponse({
-                'status': 'error',
-                'message': 'Reconfirm ລົ້ມເຫຼວ',
-                'details': response_data
-            }, status=500)
+#         if response_data.get('status') != 'success':
+#             Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
+#                 statussubmit='2'
+#             )
+#             return JsonResponse({
+#                 'status': 'error',
+#                 'message': 'Reconfirm ລົ້ມເຫຼວ',
+#                 'details': response_data
+#             }, status=500)
 
-        # 9. ສຳເລັດ
-        Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
-            statussubmit='5',
-            dispuste=0,
-            updateDate=timezone.now(),
-            period=prev_period
-        )
-        print(f"  ອັບເດດ statussubmit → '5', period → {prev_period}")
+#         # 9. ສຳເລັດ
+#         Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
+#             statussubmit='5',
+#             dispuste=0,
+#             updateDate=timezone.now(),
+#             period=prev_period
+#         )
+#         print(f"  ອັບເດດ statussubmit → '5', period → {prev_period}")
 
-        print(f"{'='*80}")
-        print(f"Rollback & Reconfirm ສຳເລັດ: ໃຊ້ {prev_period}")
-        print(f"{'='*80}")
+#         print(f"{'='*80}")
+#         print(f"Rollback & Reconfirm ສຳເລັດ: ໃຊ້ {prev_period}")
+#         print(f"{'='*80}")
 
-        return JsonResponse({
-            'status': 'success',
-            'message': f'Rollback ສຳເລັດ: ໃຊ້ຂໍ້ມູນ {prev_period}',
-            'previous_period': prev_period,
-            'original_id_file': CID_with_prefix,
-            'new_status': '5',
-            'cdl_created': len(cdl_objects),
-            'confirm_stats': response_data.get('stats', {})
-        })
+#         return JsonResponse({
+#             'status': 'success',
+#             'message': f'Rollback ສຳເລັດ: ໃຊ້ຂໍ້ມູນ {prev_period}',
+#             'previous_period': prev_period,
+#             'original_id_file': CID_with_prefix,
+#             'new_status': '5',
+#             'cdl_created': len(cdl_objects),
+#             'confirm_stats': response_data.get('stats', {})
+#         })
 
-    except Exception as e:
-        print(f"\n❌ ERROR: {str(e)}")
-        traceback.print_exc()
+#     except Exception as e:
+#         print(f"\n❌ ERROR: {str(e)}")
+#         traceback.print_exc()
         
-        try:
-            if CID_number is not None:
-                Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
-                    statussubmit='2'
-                )
-        except:
-            pass
+#         try:
+#             if CID_number is not None:
+#                 Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
+#                     statussubmit='2'
+#                 )
+#         except:
+#             pass
             
-        return JsonResponse({
-            'status': 'error',
-            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
-        }, status=500)
+#         return JsonResponse({
+#             'status': 'error',
+#             'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+#         }, status=500)
     
 
 
