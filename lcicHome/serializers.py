@@ -916,32 +916,9 @@ class EDLCustomerSerializer(serializers.ModelSerializer):
     province_id = serializers.CharField(source='Province_ID')
     district_id = serializers.CharField(source='Dustrict_ID')
     
-    # If you have related fields for names, include them
-    # Otherwise, you may need to add SerializerMethodField
-    province_name = serializers.SerializerMethodField()
-    district_name = serializers.SerializerMethodField()
-    
     class Meta:
         model = edl_customer_info
-        fields = [
-            'Customer_ID',
-            'Name',
-            'Surname',
-            'Company_name',
-            'Address',
-            'Tel',
-            'Email',
-            'National_ID',
-            'Passport',
-            'Cus_type',
-            'province_id',      # Mapped from Province_ID
-            'district_id',      # Mapped from Dustrict_ID
-            'province_name',
-            'district_name',
-            'Regis_date',
-            'InsertDate',
-            'UpdateDate',
-        ]
+        fields = '__all__'
     
     def get_province_name(self, obj):
         """Get province name from Province_ID"""
