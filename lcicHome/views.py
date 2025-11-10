@@ -4188,6 +4188,7 @@ class FileUploadViewIndividual(generics.CreateAPIView):
                                     .values('lcic_id', 'customerid')
                                     .iterator()
         )
+        
         print(f"  ດຶງມາແລ້ວ: {len(bank_data):,} records")
 
         lcic_customer_pairs = {(d['lcic_id'], d['customerid']) for d in bank_data}
