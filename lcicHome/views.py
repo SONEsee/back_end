@@ -4188,6 +4188,7 @@ class FileUploadViewIndividual(generics.CreateAPIView):
                                     .values('lcic_id', 'customerid')
                                     .iterator()
         )
+        
         print(f"  ດຶງມາແລ້ວ: {len(bank_data):,} records")
 
         lcic_customer_pairs = {(d['lcic_id'], d['customerid']) for d in bank_data}
@@ -4969,7 +4970,7 @@ def rollback_and_reconfirm_collateral(request):
                     'message': f'Reconfirm exception ສຳລັບ {id_file}: {str(e)}'
                 }, status=500)
 
-        # 9. ອັບເດດສະຖານະສຳເລັດ
+        
         Upload_File_Individual_Collateral.objects.filter(CID=CID_number).update(
             statussubmit='5', dispuste=0, updateDate=timezone.now(), period=prev_period
         )
