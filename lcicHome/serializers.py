@@ -1807,7 +1807,6 @@ class UserAccessLogSerializer(serializers.ModelSerializer):
         ]
 
 # serializers.py
-# serializers.py
 from rest_framework import serializers
 from .models import (
     IndividualBankIbk, B1, C1,
