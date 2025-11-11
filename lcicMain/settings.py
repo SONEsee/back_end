@@ -146,7 +146,7 @@ DATABASES = {
        
     },
     'ned_sql': {
-        'ENGINE': 'mssql',
+        'ENGINE': 'sql_server.pyodbc',
         'NAME': 'LCIC_Fingers_old',
         'USER': 'sa',
         'PASSWORD': 'Lcic@12345',
@@ -274,6 +274,7 @@ CSRF_TRUSTED_ORIGINS = ['http://localhost:3000','http://192.168.45.56:3000']
 
 CORS_ALLOWED_ORIGINS = [
     "http://192.168.45.56:35729",
+    "http://192.168.45.53:3000",
     "http://localhost:3001",
     # origins ອື່ນໆທີ່ມີຢູ່ແລ້ວ...
 ]

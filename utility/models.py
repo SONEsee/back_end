@@ -119,7 +119,7 @@ class Electric_Bill(models.Model):
     PaymentType = models.TextField()
     Payment_Date = models.TextField()
     InvoiceMonth = models.CharField(max_length=50)
-    InvoiceDate = models.CharField(max_length=100)
+    InvoiceDate = models.CharField(max_length=100) 
     DisID = models.CharField(max_length=100)
     ProID = models.CharField(max_length=100)
     InsertDate = models.DateTimeField(auto_now_add=True)
@@ -495,3 +495,14 @@ class WaterSupplyAPIConfig(models.Model):
     def get_api_url(self, month):
         """Get full API URL for a given month"""
         return f"{self.api_base_url.rstrip('/')}/{self.api_endpoint_template.format(month=month)}"
+    
+class SType(models.Model):
+    SType = models.CharField(max_length=150, null=False)
+    nameL = models.CharField(max_length=150, null=False, blank=True)
+    nameE = models.CharField(max_length=150, null=False, blank=True)
+    class meta:
+        ordering=['SType']
+        verbose_name_plural ='SegmentType'
+    def _str_(self):
+        return self.nameL
+   
