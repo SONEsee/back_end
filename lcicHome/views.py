@@ -30353,105 +30353,42 @@ class CreditScoreAPIView(APIView):
     API endpoint to calculate credit score
     
     POST /api/credit-score/calculate/
-    Body: {
-        "lcic_id": "your_lcic_id"
-    }
+    GET  /api/credit-score/calculate/?lcic_id=your_lcic_id
     """
     
     def post(self, request):
-        try:
-            # Get lcic_id from request
-            lcic_id = request.data.get('lcic_id')
-            
-            if not lcic_id:
-                return Response(
-                    {
-                        'error': 'lcic_id is required',
-                        'message': 'Please provide lcic_id in request body'
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Initialize service
-            service = CreditScoreService(lcic_id)
-            
-            # Calculate credit score
-            result = service.calculate_credit_score()
-            
-            if not result:
-                return Response(
-                    {
-                        'error': 'Customer not found',
-                        'message': f'No customer found with lcic_id: {lcic_id}'
-                    },
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
-            # Return response
-            return Response(
-                {
-                    'success': True,
-                    'data': result
-                },
-                status=status.HTTP_200_OK
-            )
-            
-        except Exception as e:
-            return Response(
-                {
-                    'error': 'Internal server error',
-                    'message': str(e)
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        return self._calculate_score(request.data.get('lcic_id'))
     
     def get(self, request):
-        """
-        GET /api/credit-score/calculate/?lcic_id=your_lcic_id
-        """
+        return self._calculate_score(request.query_params.get('lcic_id'))
+    
+    def _calculate_score(self, lcic_id):
+        """Calculate credit score with error handling"""
         try:
-            # Get lcic_id from query params
-            lcic_id = request.query_params.get('lcic_id')
-            
+            # Validate lcic_id
             if not lcic_id:
                 return Response(
-                    {
-                        'error': 'lcic_id is required',
-                        'message': 'Please provide lcic_id as query parameter'
-                    },
+                    {'error': 'lcic_id is required'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Initialize service
-            service = CreditScoreService(lcic_id)
-            
             # Calculate credit score
+            service = CreditScoreService(lcic_id)
             result = service.calculate_credit_score()
             
+            # Check result
             if not result:
                 return Response(
-                    {
-                        'error': 'Customer not found',
-                        'message': f'No customer found with lcic_id: {lcic_id}'
-                    },
+                    {'error': f'Customer not found with lcic_id: {lcic_id}'},
                     status=status.HTTP_404_NOT_FOUND
                 )
             
-            # Return response
-            return Response(
-                {
-                    'success': True,
-                    'data': result
-                },
-                status=status.HTTP_200_OK
-            )
+            # Return success
+            return Response({'success': True, 'data': result}, status=status.HTTP_200_OK)
             
         except Exception as e:
             return Response(
-                {
-                    'error': 'Internal server error',
-                    'message': str(e)
-                },
+                {'error': 'Internal server error', 'message': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
