@@ -30378,11 +30378,13 @@ def find_matching_candidates(request):
                 'error': 'min_score must be between 0 and 100'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        if limit < 1 or limit > 10000:
+        if limit < 1 or limit > 1000000:
             return Response({
                 'success': False,
-                'error': 'limit must be between 1 and 10000'
+                'error': 'limit must be between 1 and 1,000,000 (use batches for larger)'
             }, status=status.HTTP_400_BAD_REQUEST)
+        if limit > 10000:
+            print(f"Warning: Large limit ({limit}) - Expect {limit**2/2 / 1e6:.1f}M potential pairs")  # Rough est
         
         # Find matches
         candidates = CustomerMatchingService.find_matches(
@@ -30390,6 +30392,7 @@ def find_matching_candidates(request):
             limit=limit,
             min_score=min_score
         )
+        duration = time.time() - start_time
         
         if save_to_db:
             saved_count = 0

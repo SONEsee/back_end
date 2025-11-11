@@ -4,6 +4,7 @@ from django.db import transaction
 from django.db.models import Q
 from typing import List, Dict, Tuple
 import re
+import time
 from collections import defaultdict  # New: For blocking
 
 class CustomerMatchingService:
@@ -178,6 +179,8 @@ class CustomerMatchingService:
         """
         from itertools import combinations
         
+        start_time = time.time()
+        
         # Step 1: Pre-filter at DB for records with potential (faster fetch)
         # Add partial matches on high-signal fields to skip obvious non-dups
         records_qs = IndividualBankIbk.objects.filter(
@@ -203,7 +206,7 @@ class CustomerMatchingService:
         print(f"Debug: {len(blocks)} blocks created from {len(records)} records")  # Log for tuning
         
         candidates = []
-        max_pairs = 100000  # Safety cap (tune based on your server)
+        max_pairs = 2000000  # Safety cap (tune based on your server)
         pair_count = 0
         
         # Step 3: Compare only within blocks
