@@ -9,6 +9,7 @@ Service สำหรับคำนวณคะแนนเครดิตขอ
 - C2.x: ข้อมูลหลักประกันแต่ละประเภท
 - scr_attribute_table & scr_atttype_desc: ตารางคะแนน
 - request_charge: ประวัติการตรวจสอบเครดิต
+- memberInfo: ข้อมูลธนาคาร
 """
 
 from decimal import Decimal
@@ -20,7 +21,8 @@ from .models import (
     col_project_prj, col_vechicle_veh, col_guarantor_gua,
     col_goldsilver_gold, col_guarantor_com,
     scr_atttype_desc, scr_attribute_table,
-    request_charge
+    request_charge,
+    memberInfo  # ⭐ เพิ่มบรรทัดนี้
 )
 
 
@@ -53,6 +55,139 @@ class CreditScoreService:
         self.customer = None
         self.loans = None
         self.collaterals = None
+    
+    # =====================================================
+    # HELPER FUNCTIONS
+    # =====================================================
+    # ⭐ get name collateral นี้
+    def get_collateral_type_name(self, col_type):
+        """
+        Map col_type to collateral type names
+        
+        Args:
+            col_type: รหัสประเภทหลักประกัน (เช่น 'C2.1', 'C2.2')
+        
+        Returns:
+            dict: ชื่อหลักประกันภาษาอังกฤษและลาว
+        """
+        collateral_mapping = {
+            'C2.1': {
+                'code': 'C2.1',
+                'name_eng': 'BUILDING / BUILDING+LAND / HOME / HOME+LAND / LAND',
+                'name_lao': 'ອາຄານ/ ອາຄານ + ທີ່ດິນ/ ເຮືອນ/ເຮືອນ+ທີ່ດິນ/ ທີ່ດິນ'
+            },
+            'C2.2': {
+                'code': 'C2.2',
+                'name_eng': 'MONEY IN ACCOUNT',
+                'name_lao': 'ເງິນໃນບັນຊີ'
+            },
+            'C2.3': {
+                'code': 'C2.3',
+                'name_eng': 'MACHINERY AND EQUIPMENTS',
+                'name_lao': 'ເຄື່ອງຈັກ ແລະ ອຸປະກອນຕ່າງໆ'
+            },
+            'C2.4': {
+                'code': 'C2.4',
+                'name_eng': 'PROJECT',
+                'name_lao': 'ໂຄງການ'
+            },
+            'C2.5': {
+                'code': 'C2.5',
+                'name_eng': 'VEHICLE',
+                'name_lao': 'ຍານພາຫະນະ'
+            },
+            'C2.6': {
+                'code': 'C2.6',
+                'name_eng': 'GUARANTOR_IND',
+                'name_lao': 'ຜູ້ຄຳ້ປະກັນບຸກຄົນ'
+            },
+            'C2.7': {
+                'code': 'C2.7',
+                'name_eng': 'GOLD AND SILVER',
+                'name_lao': 'ເງິນ ແລະ ຄຳ'
+            },
+            'C2.8': {
+                'code': 'C2.8',
+                'name_eng': 'GUARANTOR_COM',
+                'name_lao': 'ຜູ້ຄຳ້ປະກັນວິສາຫະກິດ'
+            }
+        }
+        
+        return collateral_mapping.get(col_type, {
+            'code': col_type,
+            'name_eng': f'Unknown Type ({col_type})',
+            'name_lao': f'ບໍ່ຮູ້ຈັກ ({col_type})'
+        })
+        
+    def get_bank_info(self, bnk_code):
+        """
+        Map bnk_code to bank information from memberInfo
+        
+        Args:
+            bnk_code: รหัสธนาคาร (เช่น '01', '02')
+        
+        Returns:
+            dict: ข้อมูลธนาคาร
+        """
+        try:
+            if not bnk_code:
+                return {
+                    'bnk_code': None,
+                    'code': None,
+                    'display_code': None,
+                    'name': None,
+                    'name_lao': None
+                }
+            
+            # หาธนาคารจาก bnk_code
+            bank = memberInfo.objects.filter(bnk_code=bnk_code).first()
+            
+            if bank:
+                return {
+                    'bnk_code': bank.bnk_code,
+                    'code': bank.code,
+                    'display_code': f"{bank.code}-{bank.bnk_code}",  # เช่น "LC-01"
+                    'name': bank.nameE,
+                    'name_lao': bank.nameL
+                }
+            else:
+                # ถ้าไม่เจอ return ค่าเดิม
+                return {
+                    'bnk_code': bnk_code,
+                    'code': None,
+                    'display_code': bnk_code,
+                    'name': f"Unknown Bank ({bnk_code})",
+                    'name_lao': f"ບໍ່ຮູ້ຈັກ ({bnk_code})"
+                }
+        except Exception as e:
+            return {
+                'bnk_code': bnk_code,
+                'code': None,
+                'display_code': bnk_code,
+                'name': f"Error: {str(e)}",
+                'name_lao': None
+            }
+    
+    def convert_to_lak(self, value, currency):
+        """
+        แปลงค่าเงินเป็น LAK
+        
+        Args:
+            value: จำนวนเงิน
+            currency: สกุลเงิน (USD, THB, LAK)
+        
+        Returns:
+            Decimal: มูลค่าใน LAK
+        """
+        try:
+            if not value:
+                return Decimal('0')
+            
+            value = Decimal(str(value))
+            rate = self.EXCHANGE_RATES.get(currency, Decimal('1'))
+            return value * rate
+        except:
+            return Decimal('0')
     
     # =====================================================
     # MAIN FUNCTION - เริ่มต้นการคำนวณคะแนน
@@ -185,15 +320,19 @@ class CreditScoreService:
                     (customer.ind_birth_date.month, customer.ind_birth_date.day)
                 )
             
+            # ⭐ เพิ่ม bank info
+            bank_info = self.get_bank_info(customer.bnk_code)
+            
             return {
                 'lcic_id': customer.lcic_id,
                 'customer_id': customer.customerid,
                 'bnk_code': customer.bnk_code,
+                'bank_info': bank_info,  # ⭐ เพิ่มบรรทัดนี้
                 'branch_code': customer.branchcode,
                 'national_id': customer.ind_national_id,
                 'passport': customer.ind_passport,
                 'familybook': customer.ind_familybook,
-                'familybook_prov_code': customer.ind_familybook_prov_code,  # ⭐ เพิ่มบรรทัดนี้
+                'familybook_prov_code': customer.ind_familybook_prov_code,
                 'name': customer.ind_name,
                 'surname': customer.ind_surname,
                 'lao_name': customer.ind_lao_name,
@@ -277,10 +416,14 @@ class CreditScoreService:
                     loan.customer_id
                 )
                 
+                # ⭐ เพิ่ม bank info
+                bank_info = self.get_bank_info(loan.bnk_code)
+                
                 # สร้าง dict ข้อมูลสินเชื่อ
                 loan_info = {
                     'loan_id': loan.loan_id,
                     'bnk_code': loan.bnk_code,
+                    'bank_info': bank_info,  # ⭐ เพิ่มบรรทัดนี้
                     'branch_id': loan.branch_id,
                     'customer_id': loan.customer_id,
                     'loan_status': loan.lon_status,
@@ -374,28 +517,25 @@ class CreditScoreService:
     def get_loan_collaterals(self, loan_id, bnk_code, branch_id, customer_id):
         """
         Get collaterals for a specific loan
-        
-        แสดง:
-        - LCIC_code
-        - loan_id ที่เป็นเจ้าของ collateral
-        - status ของแต่ละ collateral
         """
         try:
             collateral_data = []
             total_value_lak = Decimal('0')
             
-            # ⭐ เพิ่ม LCIC_code ในการ filter
             c1_records = C1.objects.filter(
                 loan_id=loan_id,
                 bnk_code=bnk_code,
                 branch_id_code=branch_id,
                 bank_customer_ID=customer_id,
-                LCIC_code=self.lcic_id  # ⭐ เพิ่มบรรทัดนี้
+                LCIC_code=self.lcic_id
             )
             
             for c1 in c1_records:
                 col_type = c1.col_type
                 col_id = c1.col_id
+                
+                # ⭐ เพิ่มบรรทัดนี้ - ดึงชื่อ collateral type
+                col_type_info = self.get_collateral_type_name(col_type)
                 
                 # C2.1 - Real Estate
                 if col_type == 'C2.1':
@@ -407,17 +547,18 @@ class CreditScoreService:
                         value_lak = self.convert_to_lak(item.value, item.value_unit)
                         collateral_data.append({
                             'col_type': 'C2.1',
-                            'col_type_name': 'Real Estate',
+                            'col_type_name_eng': col_type_info['name_eng'],  # ⭐ เพิ่มบรรทัดนี้
+                            'col_type_name_lao': col_type_info['name_lao'],  # ⭐ เพิ่มบรรทัดนี้
                             'col_id': item.col_id,
-                            'LCIC_code': item.LCIC_code,  # ⭐ เพิ่ม
-                            'loan_id': item.loan_id,  # ⭐ เพิ่ม
+                            'LCIC_code': item.LCIC_code,
+                            'loan_id': item.loan_id,
                             'description': f"Land No: {item.land_no}",
                             'value': float(value_lak),
                             'value_unit': item.value_unit,
-                            'original_value': float(item.value) if item.value else 0,  # ⭐ มูลค่าเดิม
+                            'original_value': float(item.value) if item.value else 0,
                             'owner': item.owner_name,
-                            'status': item.rel_status,  # ⭐ เพิ่ม status
-                            'is_own_loan': item.loan_id == loan_id  # ⭐ เช็คว่าเป็นของ loan นี้
+                            'status': item.rel_status,
+                            'is_own_loan': item.loan_id == loan_id
                         })
                         total_value_lak += value_lak
                 
@@ -431,18 +572,19 @@ class CreditScoreService:
                         value_lak = self.convert_to_lak(item.value, item.value_unit)
                         collateral_data.append({
                             'col_type': 'C2.2',
-                            'col_type_name': 'Money/MIA',
+                            'col_type_name_eng': col_type_info['name_eng'],  # ⭐ เพิ่มบรรทัดนี้
+                            'col_type_name_lao': col_type_info['name_lao'],  # ⭐ เพิ่มบรรทัดนี้
                             'col_id': item.col_id,
-                            'LCIC_code': item.LCIC_code,  # ⭐ เพิ่ม
-                            'loan_id': item.loan_id,  # ⭐ เพิ่ม
+                            'LCIC_code': item.LCIC_code,
+                            'loan_id': item.loan_id,
                             'description': f"Account: {item.account_no}",
                             'account_type': item.account_type,
                             'value': float(value_lak),
                             'value_unit': item.value_unit,
-                            'original_value': float(item.value) if item.value else 0,  # ⭐ มูลค่าเดิม
+                            'original_value': float(item.value) if item.value else 0,
                             'owner': item.owner_name,
-                            'status': item.mia_status,  # ⭐ เพิ่ม status
-                            'is_own_loan': item.loan_id == loan_id  # ⭐ เช็คว่าเป็นของ loan นี้
+                            'status': item.mia_status,
+                            'is_own_loan': item.loan_id == loan_id
                         })
                         total_value_lak += value_lak
                 
@@ -456,19 +598,20 @@ class CreditScoreService:
                         value_lak = self.convert_to_lak(item.value, item.value_unit)
                         collateral_data.append({
                             'col_type': 'C2.3',
-                            'col_type_name': 'Equipment',
+                            'col_type_name_eng': col_type_info['name_eng'],  # ⭐ เพิ่มบรรทัดนี้
+                            'col_type_name_lao': col_type_info['name_lao'],  # ⭐ เพิ่มบรรทัดนี้
                             'col_id': item.col_id,
-                            'LCIC_code': item.LCIC_code,  # ⭐ เพิ่ม
-                            'loan_id': item.loan_id,  # ⭐ เพิ่ม
+                            'LCIC_code': item.LCIC_code,
+                            'loan_id': item.loan_id,
                             'description': f"{item.machine_type} - {item.machine_no}",
                             'machine_type': item.machine_type,
                             'machine_no': item.machine_no,
                             'value': float(value_lak),
                             'value_unit': item.value_unit,
-                            'original_value': float(item.value) if item.value else 0,  # ⭐ มูลค่าเดิม
+                            'original_value': float(item.value) if item.value else 0,
                             'owner': item.owner_name,
-                            'status': item.machine_status,  # ⭐ เพิ่ม status
-                            'is_own_loan': item.loan_id == loan_id  # ⭐ เช็คว่าเป็นของ loan นี้
+                            'status': item.machine_status,
+                            'is_own_loan': item.loan_id == loan_id
                         })
                         total_value_lak += value_lak
                 
@@ -482,20 +625,21 @@ class CreditScoreService:
                         value_lak = self.convert_to_lak(item.value, item.value_unit)
                         collateral_data.append({
                             'col_type': 'C2.4',
-                            'col_type_name': 'Project',
+                            'col_type_name_eng': col_type_info['name_eng'],  # ⭐ เพิ่มบรรทัดนี้
+                            'col_type_name_lao': col_type_info['name_lao'],  # ⭐ เพิ่มบรรทัดนี้
                             'col_id': item.col_id,
-                            'LCIC_code': item.LCIC_code,  # ⭐ เพิ่ม
-                            'loan_id': item.loan_id,  # ⭐ เพิ่ม
+                            'LCIC_code': item.LCIC_code,
+                            'loan_id': item.loan_id,
                             'description': f"{item.project_name_en}",
                             'project_name': item.project_name_en,
                             'project_name_lao': item.project_name_la,
                             'project_number': item.project_number,
                             'value': float(value_lak),
                             'value_unit': item.value_unit,
-                            'original_value': float(item.value) if item.value else 0,  # ⭐ มูลค่าเดิม
+                            'original_value': float(item.value) if item.value else 0,
                             'owner': item.owner_name,
-                            'status': item.project_status,  # ⭐ เพิ่ม status
-                            'is_own_loan': item.loan_id == loan_id  # ⭐ เช็คว่าเป็นของ loan นี้
+                            'status': item.project_status,
+                            'is_own_loan': item.loan_id == loan_id
                         })
                         total_value_lak += value_lak
                 
@@ -509,10 +653,11 @@ class CreditScoreService:
                         value_lak = self.convert_to_lak(item.value, item.value_unit)
                         collateral_data.append({
                             'col_type': 'C2.5',
-                            'col_type_name': 'Vehicle',
+                            'col_type_name_eng': col_type_info['name_eng'],  # ⭐ เพิ่มบรรทัดนี้
+                            'col_type_name_lao': col_type_info['name_lao'],  # ⭐ เพิ่มบรรทัดนี้
                             'col_id': item.col_id,
-                            'LCIC_code': item.LCIC_code,  # ⭐ เพิ่ม
-                            'loan_id': item.loan_id,  # ⭐ เพิ่ม
+                            'LCIC_code': item.LCIC_code,
+                            'loan_id': item.loan_id,
                             'description': f"{item.model} - {item.plate_number}",
                             'model': item.model,
                             'plate_number': item.plate_number,
@@ -520,10 +665,10 @@ class CreditScoreService:
                             'body_number': item.body_number,
                             'value': float(value_lak),
                             'value_unit': item.value_unit,
-                            'original_value': float(item.value) if item.value else 0,  # ⭐ มูลค่าเดิม
+                            'original_value': float(item.value) if item.value else 0,
                             'owner': item.owner_name,
-                            'status': item.vehicle_status,  # ⭐ เพิ่ม status
-                            'is_own_loan': item.loan_id == loan_id  # ⭐ เช็คว่าเป็นของ loan นี้
+                            'status': item.vehicle_status,
+                            'is_own_loan': item.loan_id == loan_id
                         })
                         total_value_lak += value_lak
                 
@@ -537,10 +682,11 @@ class CreditScoreService:
                         value_lak = self.convert_to_lak(item.value, item.value_unit)
                         collateral_data.append({
                             'col_type': 'C2.6',
-                            'col_type_name': 'Guarantor Individual',
+                            'col_type_name_eng': col_type_info['name_eng'],  # ⭐ เพิ่มบรรทัดนี้
+                            'col_type_name_lao': col_type_info['name_lao'],  # ⭐ เพิ่มบรรทัดนี้
                             'col_id': item.col_id,
-                            'LCIC_code': item.LCIC_code,  # ⭐ เพิ่ม
-                            'loan_id': item.loan_id,  # ⭐ เพิ่ม
+                            'LCIC_code': item.LCIC_code,
+                            'loan_id': item.loan_id,
                             'description': f"{item.gua_name} {item.gua_surname}",
                             'guarantor_name': f"{item.gua_name} {item.gua_surname}",
                             'guarantor_lao_name': f"{item.gua_lao_name} {item.gua_lao_surname}",
@@ -548,10 +694,10 @@ class CreditScoreService:
                             'passport': item.gua_passport,
                             'value': float(value_lak),
                             'value_unit': item.value_unit,
-                            'original_value': float(item.value) if item.value else 0,  # ⭐ มูลค่าเดิม
+                            'original_value': float(item.value) if item.value else 0,
                             'owner': item.owner_name,
-                            'status': item.gua_ind_status,  # ⭐ เพิ่ม status
-                            'is_own_loan': item.loan_id == loan_id  # ⭐ เช็คว่าเป็นของ loan นี้
+                            'status': item.gua_ind_status,
+                            'is_own_loan': item.loan_id == loan_id
                         })
                         total_value_lak += value_lak
                 
@@ -565,19 +711,20 @@ class CreditScoreService:
                         value_lak = self.convert_to_lak(item.value, item.value_unit)
                         collateral_data.append({
                             'col_type': 'C2.7',
-                            'col_type_name': 'Gold/Silver',
+                            'col_type_name_eng': col_type_info['name_eng'],  # ⭐ เพิ่มบรรทัดนี้
+                            'col_type_name_lao': col_type_info['name_lao'],  # ⭐ เพิ่มบรรทัดนี้
                             'col_id': item.col_id,
-                            'LCIC_code': item.LCIC_code,  # ⭐ เพิ่ม
-                            'loan_id': item.loan_id,  # ⭐ เพิ่ม
+                            'LCIC_code': item.LCIC_code,
+                            'loan_id': item.loan_id,
                             'description': f"Weight: {item.weight} {item.unit}",
                             'weight': item.weight,
                             'unit': item.unit,
                             'value': float(value_lak),
                             'value_unit': item.value_unit,
-                            'original_value': float(item.value) if item.value else 0,  # ⭐ มูลค่าเดิม
+                            'original_value': float(item.value) if item.value else 0,
                             'owner': item.owner_name,
-                            'status': item.gld_status,  # ⭐ เพิ่ม status
-                            'is_own_loan': item.loan_id == loan_id  # ⭐ เช็คว่าเป็นของ loan นี้
+                            'status': item.gld_status,
+                            'is_own_loan': item.loan_id == loan_id
                         })
                         total_value_lak += value_lak
                 
@@ -591,20 +738,21 @@ class CreditScoreService:
                         value_lak = self.convert_to_lak(item.value, item.value_unit)
                         collateral_data.append({
                             'col_type': 'C2.8',
-                            'col_type_name': 'Guarantor Company',
+                            'col_type_name_eng': col_type_info['name_eng'],  # ⭐ เพิ่มบรรทัดนี้
+                            'col_type_name_lao': col_type_info['name_lao'],  # ⭐ เพิ่มบรรทัดนี้
                             'col_id': item.col_id,
-                            'LCIC_code': item.LCIC_code,  # ⭐ เพิ่ม
-                            'loan_id': item.loan_id,  # ⭐ เพิ่ม
+                            'LCIC_code': item.LCIC_code,
+                            'loan_id': item.loan_id,
                             'description': f"{item.company_name}",
                             'company_name': item.company_name,
                             'company_lao_name': item.company_lao_name,
                             'enterprise_code': item.gua_enterprise_code,
                             'value': float(value_lak),
                             'value_unit': item.value_unit,
-                            'original_value': float(item.value) if item.value else 0,  # ⭐ มูลค่าเดิม
+                            'original_value': float(item.value) if item.value else 0,
                             'owner': item.owner_name,
-                            'status': item.gua_com_status,  # ⭐ เพิ่ม status
-                            'is_own_loan': item.loan_id == loan_id  # ⭐ เช็คว่าเป็นของ loan นี้
+                            'status': item.gua_com_status,
+                            'is_own_loan': item.loan_id == loan_id
                         })
                         total_value_lak += value_lak
             
@@ -619,31 +767,10 @@ class CreditScoreService:
                 'count': 0,
                 'total_value': 0
             }
-        
+    
     # =====================================================
     # SECTION 3: ข้อมูลหลักประกัน (Collateral Summary)
     # =====================================================
-    
-    def convert_to_lak(self, value, currency):
-        """
-        แปลงค่าเงินเป็น LAK
-        
-        Args:
-            value: จำนวนเงิน
-            currency: สกุลเงิน (USD, THB, LAK)
-        
-        Returns:
-            Decimal: มูลค่าใน LAK
-        """
-        try:
-            if not value:
-                return Decimal('0')
-            
-            value = Decimal(str(value))
-            rate = self.EXCHANGE_RATES.get(currency, Decimal('1'))
-            return value * rate
-        except:
-            return Decimal('0')
     
     def get_collateral_summary(self):
         """Get collateral summary from all C2.x tables - รวมทั้งหมดของ customer"""
@@ -673,8 +800,7 @@ class CreditScoreService:
                         'owner': item.owner_name
                     })
                 
-                # ⭐ แก้ไขตรงนี้: เปลี่ยนจาก > 0 เป็นเช็คว่ามีรายการหรือไม่
-                if len(items) > 0:  # ✅ เช็คว่ามีรายการ ไม่สนใจมูลค่า
+                if len(items) > 0:
                     collateral_data['C2.1'] = {
                         'type': 'Real Estate',
                         'count': real_estates.count(),
@@ -701,7 +827,6 @@ class CreditScoreService:
                         'owner': item.owner_name
                     })
                 
-                # ⭐ แก้ไขตรงนี้
                 if len(items) > 0:
                     collateral_data['C2.2'] = {
                         'type': 'Money/MIA',
@@ -730,7 +855,6 @@ class CreditScoreService:
                         'owner': item.owner_name
                     })
                 
-                # ⭐ แก้ไขตรงนี้
                 if len(items) > 0:
                     collateral_data['C2.3'] = {
                         'type': 'Equipment',
@@ -759,7 +883,6 @@ class CreditScoreService:
                         'owner': item.owner_name
                     })
                 
-                # ⭐ แก้ไขตรงนี้
                 if len(items) > 0:
                     collateral_data['C2.4'] = {
                         'type': 'Project',
@@ -788,7 +911,6 @@ class CreditScoreService:
                         'owner': item.owner_name
                     })
                 
-                # ⭐ แก้ไขตรงนี้
                 if len(items) > 0:
                     collateral_data['C2.5'] = {
                         'type': 'Vehicle',
@@ -817,7 +939,6 @@ class CreditScoreService:
                         'owner': item.owner_name
                     })
                 
-                # ⭐ แก้ไขตรงนี้
                 if len(items) > 0:
                     collateral_data['C2.6'] = {
                         'type': 'Guarantor Individual',
@@ -846,7 +967,6 @@ class CreditScoreService:
                         'owner': item.owner_name
                     })
                 
-                # ⭐ แก้ไขตรงนี้
                 if len(items) > 0:
                     collateral_data['C2.7'] = {
                         'type': 'Gold/Silver',
@@ -875,7 +995,6 @@ class CreditScoreService:
                         'owner': item.owner_name
                     })
                 
-                # ⭐ แก้ไขตรงนี้
                 if len(items) > 0:
                     collateral_data['C2.8'] = {
                         'type': 'Guarantor Company',
@@ -921,7 +1040,7 @@ class CreditScoreService:
             # 2. นับจำนวนการตรวจสอบจาก request_charge
             inquiries = request_charge.objects.filter(
                 LCIC_code=self.lcic_id,
-                chg_code__in=['FCR', 'FCRF']  # ⭐ เพิ่มเงื่อนไขนี้
+                chg_code__in=['FCR', 'FCRF']
             )
             
             # 3. ยกเว้นการตรวจสอบจากธนาคารของลูกค้าเอง
@@ -933,11 +1052,11 @@ class CreditScoreService:
             
             # 5. จัดหมวดหมู่
             if inquiry_count == 0:
-                category = 0      # ไม่มีการตรวจสอบ
+                category = 0
             elif inquiry_count == 1:
-                category = 1      # ตรวจสอบ 1 ครั้ง
+                category = 1
             else:
-                category = 2      # ตรวจสอบมากกว่า 1 ครั้ง
+                category = 2
             
             return {
                 'count': inquiry_count,
@@ -969,13 +1088,6 @@ class CreditScoreService:
         คำนวณคะแนนแบบง่าย (ไม่มี range)
         
         สูตร: att_value × att_weight
-        
-        Args:
-            att_type: ประเภทคะแนน (เช่น gdID, mstatusID)
-            att_code: รหัส (เช่น M, F)
-        
-        Returns:
-            float: คะแนนถ่วงน้ำหนัก
         """
         try:
             result = scr_attribute_table.objects.filter(
@@ -994,15 +1106,6 @@ class CreditScoreService:
     def get_weighted_score_range(self, att_type, value):
         """
         คำนวณคะแนนแบบ range (เช่น อายุ 30-40 ปี)
-        
-        att_code format: "min|max"
-        
-        Args:
-            att_type: ประเภทคะแนน
-            value: ค่าที่ต้องการหา
-        
-        Returns:
-            float: คะแนนถ่วงน้ำหนัก
         """
         try:
             attributes = scr_attribute_table.objects.filter(att_type=att_type)
@@ -1024,9 +1127,6 @@ class CreditScoreService:
     def get_weighted_score_detail(self, att_type, att_code):
         """
         คำนวณคะแนนพร้อมรายละเอียด (แบบไม่มี range)
-        
-        Returns:
-            dict: คะแนนพร้อมรายละเอียดการคำนวณ
         """
         try:
             result = scr_attribute_table.objects.filter(
@@ -1066,19 +1166,17 @@ class CreditScoreService:
     def get_weighted_score_range_detail(self, att_type, value):
         """
         Get weighted score for range-based attributes with details
-    
+        
         รองรับทั้ง:
         - แบบไม่มี range: att_code = "0" 
         - แบบมี range: att_code = "1|29", "30|60"
         """
         try:
-            # Get all attributes of this type
             attributes = scr_attribute_table.objects.filter(att_type=att_type)
         
             for attr in attributes:
-                # ⭐ กรณีที่ 1: att_code ไม่มี | (เช่น "0")
+                # กรณีที่ 1: att_code ไม่มี | (เช่น "0")
                 if '|' not in attr.att_code:
-                    # ต้องตรงกันพอดี
                     if str(value) == str(attr.att_code):
                         att_desc = scr_atttype_desc.objects.filter(att_type=att_type).first()
                         if att_desc:
@@ -1097,14 +1195,13 @@ class CreditScoreService:
                                 'formula': f"{attr.att_value} × {att_desc.att_weight} = {float(weighted_score)}"
                             }
             
-                # ⭐ กรณีที่ 2: att_code มี | (เช่น "1|29", "30|60")
+                # กรณีที่ 2: att_code มี | (เช่น "1|29", "30|60")
                 else:
                     parts = attr.att_code.split('|')
                     try:
                         min_val = Decimal(parts[0]) if parts[0] else Decimal('0')
                         max_val = Decimal(parts[1]) if parts[1] else Decimal('999999999')
                     
-                        # ตรวจสอบว่าค่าอยู่ใน range หรือไม่
                         if min_val <= Decimal(str(value)) <= max_val:
                             att_desc = scr_atttype_desc.objects.filter(att_type=att_type).first()
                             if att_desc:
@@ -1125,7 +1222,6 @@ class CreditScoreService:
                     except (ValueError, IndexError):
                         continue
         
-            # ไม่พบข้อมูลที่ตรงกัน
             return {
                 'score': 0,
                 'att_type': att_type,
@@ -1153,9 +1249,7 @@ class CreditScoreService:
                 'details': gender_detail
             }
             
-            # ============================================================
-            # 2. Province Score (⭐ แก้ไขส่วนนี้)
-            # ============================================================
+            # 2. Province Score
             province_code = customer.get('familybook_prov_code', '')
             
             if province_code:
@@ -1271,14 +1365,10 @@ class CreditScoreService:
                 }
             }
             
-            # ============================================================
-            # 12. Collateral Type Score (🔥 แก้ไขใหม่)
-            # ============================================================
+            # 12. Collateral Type Score
             col_types = collateral_summary.get('collateral_types', [])
             
-            # ถ้าไม่มี collateral เลย
             if not col_types or len(col_types) == 0:
-                # หา "No Collateral" (att_code = "0")
                 no_col_detail = self.get_weighted_score_detail('colTypeID', '0')
                 breakdown['collateral_type'] = {
                     'score': no_col_detail['score'],
@@ -1286,29 +1376,20 @@ class CreditScoreService:
                     'details': no_col_detail
                 }
             else:
-                # มี collateral - คำนวณคะแนน
                 col_type_details = []
                 total_col_type_score = Decimal('0')
                 
-                # ดึงข้อมูล att_desc
                 att_desc = scr_atttype_desc.objects.filter(att_type='colTypeID').first()
-                
-                # ดึง attributes ทั้งหมด
                 attributes = scr_attribute_table.objects.filter(att_type='colTypeID')
                 
-                # Loop ผ่าน collateral types ที่มี
                 for col_type in col_types:
-                    # หา attribute ที่ตรงกับ col_type
                     for attr in attributes:
-                        # att_code format: "C2.6|C3|12.5"
                         if '|' in attr.att_code:
                             parts = attr.att_code.split('|')
-                            col_code = parts[0]  # เช่น "C2.6", "C2.1"
+                            col_code = parts[0]
                             
-                            # เช็คว่า col_type ตรงกับ col_code หรือไม่
                             if col_code == col_type:
                                 if att_desc:
-                                    # คำนวณคะแนน = att_value × att_weight
                                     score = Decimal(str(attr.att_value)) * Decimal(str(att_desc.att_weight))
                                     total_col_type_score += score
                                     
@@ -1321,7 +1402,7 @@ class CreditScoreService:
                                         'score': float(score),
                                         'formula': f"{attr.att_value} × {att_desc.att_weight} = {float(score)}"
                                     })
-                                    break  # เจอแล้วออกจาก loop
+                                    break
                 
                 breakdown['collateral_type'] = {
                     'score': float(total_col_type_score),
@@ -1335,13 +1416,10 @@ class CreditScoreService:
                     }
                 }
             
-            # ============================================================
-            # 13. Collateral Value Score (🔥 แก้ไขใหม่)
-            # ============================================================
+            # 13. Collateral Value Score
             col_value = collateral_summary.get('total_collateral_value_lak', 0)
             outstanding = loan_summary.get('total_outstanding_balance_active', 0)
             
-            # กำหนด code และ comparison ตาม condition
             if col_value < outstanding:
                 col_value_code = 'col_val_min'
                 comparison = 'Collateral value < outstanding loan'
@@ -1352,7 +1430,6 @@ class CreditScoreService:
                 col_value_code = 'col_val_max'
                 comparison = 'Collateral value > outstanding loan'
             else:
-                # กรณีอื่นๆ (ไม่ควรเกิด)
                 col_value_code = 'col_val_min'
                 comparison = 'Unknown comparison'
             
@@ -1371,31 +1448,3 @@ class CreditScoreService:
             return breakdown
         except Exception as e:
             raise Exception(f"Error calculating score breakdown: {str(e)}")
-    
-    def get_credit_rating(self, score):
-        """
-        ประเมินระดับเครดิตจากคะแนน
-        
-        ระดับคะแนน:
-        - 700+: Excellent
-        - 650-699: Good
-        - 600-649: Fair
-        - 550-599: Poor
-        - <550: Very Poor
-        
-        Args:
-            score: คะแนนเครดิต
-        
-        Returns:
-            str: ระดับเครดิต
-        """
-        if score >= 700:
-            return "Excellent"
-        elif score >= 650:
-            return "Good"
-        elif score >= 600:
-            return "Fair"
-        elif score >= 550:
-            return "Poor"
-        else:
-            return "Very Poor"
