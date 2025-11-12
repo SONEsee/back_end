@@ -153,7 +153,9 @@ from .views import (
     ElectricCustomerSearchAPIView, 
     FCR_reportIndividualView,
     FileUploadViewIndividual,
-    IndividualCollateralFileListView
+    IndividualCollateralFileListView,
+    EnterpriseMemberSubmitViewSet,
+    BorrowerFileUploadView
 )
 #tik
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
@@ -173,6 +175,7 @@ router.register(r'members', MemberInfoViewSet)
 router.register(r'investorinfo', InvestorInfoViewSet)
 router.register(r'enterpriseinfo', EnterpriseInfoViewSet)
 router.register(r'user-groups', UserGroupViewSet, basename='usergroup')
+router.register(r'enterprises', EnterpriseMemberSubmitViewSet, basename='enterprise')
 @ensure_csrf_cookie
 def get_csrf_token(request):
     return JsonResponse({'csrfToken': request.META.get('CSRF_COOKIE')})
@@ -414,6 +417,7 @@ urlpatterns = [
 
     # path('upload333/', FileUploadView3.as_view(), name='file-upload'),
     path('upload-files/', FileUploadView3.as_view(), name='upload_files_view'),
+    path('api/borrower/upload/', BorrowerFileUploadView.as_view(), name='borrower-upload'),
     path('upload-files-individual-loan/', IndividualFileUploadView.as_view(), name='upload_files_view_loan'),
     path('upload-files-individual-collateral/', FileUploadViewIndividual.as_view(), name='upload_files_view_collateral'),
     path('process-files/', upload_files, name='upload_files'),
@@ -439,6 +443,7 @@ urlpatterns = [
     path('process-multiple-disputes-collateral/', process_multiple_disputescollateral, name='process_multiple_disputescollateral'),
     path('api/dispute-loan/<int:id_disput_loan>/status/', views.update_dispute_status, name='update_dispute_status'),
     path('api/dispute-collateral/<int:id_disput_loan>/status/', views.update_dispute_status_collateral, name='update_dispute_status_collateral'),
+   
 
     path('api/enterprise-info/', views.create_enterprise_info, name='create_enterprise_info'),
     path('api/last-lcicid/', get_last_lcicid, name='get_last_lcicid'),

@@ -569,7 +569,33 @@ class Upload_File_Individual(models.Model):
     dispuste = models.CharField(max_length=255, null=True, blank=True)
 
     def __str__(self):
+        return self.title   
+     
+class Upload_File_Borrower(models.Model):
+    BID = models.AutoField(primary_key=True)
+    SType = models.ForeignKey(SType, null=True, blank=True, on_delete=models.CASCADE)
+    UType = models.ForeignKey(Upload_Type, null=True, blank=True, on_delete=models.CASCADE)
+    user_id = models.CharField(max_length=255)  
+    file_id = models.CharField(max_length=255)
+    fileName = models.CharField(max_length=255)
+    fileUpload = models.FileField(upload_to="borrower/")
+    progress_percentage = models.IntegerField(default=0)
+    fileSize = models.CharField(max_length=255)
+    path = models.CharField(max_length=255)
+    insertDate = models.DateTimeField(auto_now_add=True, blank=True)
+    updateDate = models.DateTimeField(auto_now_add=True, blank=True)
+    period = models.CharField(max_length=150)
+    status = models.CharField(max_length=150)
+    statussubmit = models.CharField(max_length=150)
+    status_upload = models.CharField(max_length=150)
+    FileType = models.CharField(max_length=10)
+    percentage = models.FloatField(default=0.0)
+    dispuste = models.CharField(max_length=255, null=True, blank=True)
+
+    def __str__(self):
         return self.title    
+    
+
 class Upload_File_Individual_Collateral(models.Model):
     CID = models.AutoField(primary_key=True)
     MID = models.ForeignKey(memberInfo, null=True, blank=True, on_delete=models.CASCADE)
@@ -1726,7 +1752,143 @@ class EnterpriseInfo(models.Model):
 
     def __str__(self):
         return f"EnterpriseInfo {self.LCICID} - {self.enterpriseNameLao}"
+    
+class Borrower(models.Model):
+    id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+    id_file = models.ForeignKey('Upload_File_Borrower', on_delete=models.CASCADE, null=True, blank=True)
+    EenterpriseID = models.CharField(max_length=50, blank=True, null=True)
+    loan_id = models.CharField(max_length=255)
+    segmentTypeBorrower = models.CharField(max_length=50, blank=True, null=True)
+    LCIC_code = models.CharField(max_length=100, blank=True, null=True)
+    period = models.CharField(max_length=50, blank=True, null=True)
+    SegmentType = models.CharField(max_length=50, blank=True, null=True)
+    Customer_ID = models.CharField(max_length=50, blank=True, null=True)
+    bnk_code = models.CharField(max_length=50, blank=True, null=True)
+    branch = models.CharField(max_length=100, blank=True, null=True)
+    status = models.IntegerField(default=0)
+    user_insert = models.CharField(max_length=100, blank=True, null=True)
+    user_update = models.CharField(max_length=100, blank=True, null=True)
+    InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
+    UpdateDate = models.DateTimeField(blank=True, null=True)
+    DeleteDate = models.DateTimeField(blank=True, null=True)
+    class Meta:
+        indexes = [
+            models.Index(fields=['bnk_code', 'SegmentType']),
+            models.Index(fields=['period']),
+        ]
 
+class BorrowerMonhtly(models.Model):
+    id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+    id_file = models.ForeignKey('Upload_File_Borrower', on_delete=models.CASCADE, null=True, blank=True)
+    EenterpriseID = models.CharField(max_length=50, blank=True, null=True)
+    loan_id = models.CharField(max_length=255)
+    LCIC_code = models.CharField(max_length=100, blank=True, null=True)
+    segmentTypeBorrower = models.CharField(max_length=50, blank=True, null=True)
+    period = models.CharField(max_length=50, blank=True, null=True)
+    SegmentType = models.CharField(max_length=50, blank=True, null=True)
+    Customer_ID = models.CharField(max_length=50, blank=True, null=True)
+    bnk_code = models.CharField(max_length=50, blank=True, null=True)
+    branch = models.CharField(max_length=100, blank=True, null=True)
+    status = models.IntegerField(default=0)
+    user_insert = models.CharField(max_length=100, blank=True, null=True)
+    user_update = models.CharField(max_length=100, blank=True, null=True)
+    InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
+    UpdateDate = models.DateTimeField(blank=True, null=True)
+    DeleteDate = models.DateTimeField(blank=True, null=True)
+
+
+class BorrowerError(models.Model):
+    id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+    id_file = models.ForeignKey('Upload_File_Borrower', on_delete=models.CASCADE, null=True, blank=True)
+    EenterpriseID = models.CharField(max_length=50, blank=True, null=True)
+    loan_id = models.CharField(max_length=255)
+    CodeError = models.CharField(max_length=10, blank=True, null=True)
+    segmentTypeBorrower = models.CharField(max_length=50, blank=True, null=True)
+    LCIC_code = models.CharField(max_length=100, blank=True, null=True)
+    period = models.CharField(max_length=50, blank=True, null=True)
+    SegmentType = models.CharField(max_length=50, blank=True, null=True)
+    Customer_ID = models.CharField(max_length=50, blank=True, null=True)
+    bnk_code = models.CharField(max_length=50, blank=True, null=True)
+    branch = models.CharField(max_length=100, blank=True, null=True)
+    status = models.IntegerField(default=0)
+    user_insert = models.CharField(max_length=100, blank=True, null=True)
+    user_update = models.CharField(max_length=100, blank=True, null=True)
+    InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
+    UpdateDate = models.DateTimeField(blank=True, null=True)
+    DeleteDate = models.DateTimeField(blank=True, null=True)
+
+
+class BorrowerGood(models.Model):
+    id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+    id_file = models.ForeignKey('Upload_File_Borrower', on_delete=models.CASCADE, null=True, blank=True)
+    EenterpriseID = models.CharField(max_length=50, blank=True, null=True)
+    loan_id = models.CharField(max_length=255)
+    LCIC_code = models.CharField(max_length=100, blank=True, null=True)
+    segmentTypeBorrower = models.CharField(max_length=50, blank=True, null=True)
+    period = models.CharField(max_length=50, blank=True, null=True)
+    SegmentType = models.CharField(max_length=50, blank=True, null=True)
+    Customer_ID = models.CharField(max_length=50, blank=True, null=True)
+    bnk_code = models.CharField(max_length=50, blank=True, null=True)
+    branch = models.CharField(max_length=100, blank=True, null=True)
+    status = models.IntegerField(default=0)
+    user_insert = models.CharField(max_length=100, blank=True, null=True)
+    user_update = models.CharField(max_length=100, blank=True, null=True)
+    InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
+    UpdateDate = models.DateTimeField(blank=True, null=True)
+    DeleteDate = models.DateTimeField(blank=True, null=True)
+
+
+
+
+
+
+
+class EnterpriseMemberSubmit(models.Model):
+    LCICID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+    EnterpriseID = models.CharField(max_length=50, blank=True, null=True)
+    enterpriseNameLao = models.CharField(max_length=255, blank=True, null=True)
+    eneterpriseNameEnglish = models.CharField(max_length=255, blank=True, null=True)
+    regisCertificateNumber = models.CharField(max_length=50, blank=True, null=True)
+    regisDate = models.DateTimeField(blank=True, null=True)
+    enLocation = models.CharField(max_length=50, blank=True, null=True)
+    regisStrationOfficeType = models.CharField(max_length=50, blank=True, null=True)
+    regisStationOfficeCode = models.CharField(max_length=50, blank=True, null=True)
+    enLegalStrature = models.CharField(max_length=500, blank=True, null=True)
+    foreigninvestorFlag = models.CharField(max_length=500, blank=True, null=True)
+    investmentAmount = models.FloatField(null=True, blank=True)
+    status = models.IntegerField(default=0)
+    investmentCurrency = models.CharField(max_length=50, blank=True, null=True)
+    representativeNationality = models.CharField(max_length=50, blank=True, null=True)
+    id_file = models.ForeignKey('UploadFile_enterpriseinfo', on_delete=models.CASCADE, null=True, blank=True)
+    LastUpdate = models.DateTimeField(blank=True, null=True)
+    user_insert = models.CharField(max_length=100, blank=True, null=True)
+    user_update = models.CharField(max_length=100, blank=True, null=True)
+    CancellationDate = models.DateTimeField(blank=True, null=True)
+    InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
+    UpdateDate = models.DateTimeField(blank=True, null=True)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True, unique=True,  db_index=True )
+    
+    class Meta:
+        db_table = 'enterprisemember_submit'  
+        indexes = [
+            models.Index(fields=['LCIC_code']), 
+        ]
+
+    def __str__(self):
+        return f"EnterpriseInfo {self.LCICID} - {self.enterpriseNameLao}"
+    
+class RegisterCustomerWhitEnterprise(models.Model):
+    id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+    EnterpriseID = models.CharField(max_length=50, blank=True, null=True)
+    customerID = models.CharField(max_length=50, blank=True, null=True)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
+    bnk_code = models.CharField(max_length=50, blank=True, null=True)
+    branch= models.CharField(max_length=100, blank=True, null=True)
+    status = models.IntegerField(default=0)
+    user_insert = models.CharField(max_length=100, blank=True, null=True)
+    user_update = models.CharField(max_length=100, blank=True, null=True)
+    InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
+    UpdateDate = models.DateTimeField(blank=True, null=True)
 
 class InvestorInfo(models.Model):
     ID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False,verbose_name='ID')

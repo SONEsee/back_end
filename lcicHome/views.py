@@ -4188,7 +4188,7 @@ class FileUploadViewIndividual(generics.CreateAPIView):
                                     .values('lcic_id', 'customerid')
                                     .iterator()
         )
-        
+
         print(f"  ດຶງມາແລ້ວ: {len(bank_data):,} records")
 
         lcic_customer_pairs = {(d['lcic_id'], d['customerid']) for d in bank_data}
@@ -8018,6 +8018,664 @@ def process_individual_file(
 #         return {'file_name': file.name, 'error_code': 'UNEXPECTED_ERROR', 'message': f'ຜິດພາດ: {str(e)}'}
 
 
+from rest_framework import generics
+from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
+from django.db import transaction
+from django.db.models import Max
+import json
+import logging
+
+from .models import Upload_File_Borrower, Borrower, BorrowerGood, BorrowerError, EnterpriseInfo, IndividualBankIbk, B1
+
+logger = logging.getLogger(__name__)
+
+
+class BorrowerFileUploadView(generics.CreateAPIView):
+    parser_classes = (MultiPartParser, FormParser)
+
+    def post(self, request, *args, **kwargs):
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({
+                'status': 'error',
+                'error_code': 'MISSING_USER_ID',
+                'message': 'ກະລຸນາປ້ອນ User ID'
+            }, status=400)
+
+        files = request.FILES.getlist('file')
+        if not files:
+            return Response({
+                'status': 'error',
+                'error_code': 'NO_FILES',
+                'message': 'ກະລຸນາເລືອກໄຟລ໌'
+            }, status=400)
+
+        upload_errors = []
+        upload_success = []
+
+        for file in files:
+            try:
+                with transaction.atomic():
+                    result = self._process_single_file(file, user_id)
+                    if 'error_code' in result:
+                        upload_errors.append(result)
+                    else:
+                        upload_success.append(result)
+            except Exception as e:
+                logger.error(f"Error: {str(e)}", exc_info=True)
+                upload_errors.append({
+                    'file_name': file.name,
+                    'error_code': 'UNEXPECTED_ERROR',
+                    'message': f'ຜິດພາດ: {str(e)}'
+                })
+
+        return self._create_response(upload_success, upload_errors)
+
+    def _process_single_file(self, file, user_id):
+        # 1. ກວດ file type
+        if not file.name.endswith('.json'):
+            return {
+                'file_name': file.name,
+                'error_code': 'INVALID_FILE_TYPE',
+                'message': 'ຕ້ອງເປັນ .json'
+            }
+
+        # 2. ອ່ານແລະ parse JSON
+        try:
+            file_content = file.read().decode('utf-8')
+            file.seek(0)
+            file_data = json.loads(file_content)
+            
+            # ກວດວ່າເປັນ array ບໍ່
+            if not isinstance(file_data, list):
+                return {
+                    'file_name': file.name,
+                    'error_code': 'INVALID_JSON',
+                    'message': 'JSON ຕ້ອງເປັນ array'
+                }
+            
+            if len(file_data) == 0:
+                return {
+                    'file_name': file.name,
+                    'error_code': 'EMPTY_JSON',
+                    'message': 'JSON ບໍ່ມີຂໍ້ມູນ'
+                }
+            
+            # ໃຊ້ record ທຳອິດເພື່ອກວດສອບ bnk_code ແລະ segmentType
+            first_record = file_data[0]
+            
+        except Exception:
+            return {
+                'file_name': file.name,
+                'error_code': 'INVALID_JSON',
+                'message': 'JSON ບໍ່ຖືກຕ້ອງ'
+            }
+
+        # 3. ກວດ bnk_code
+        bnk_code = first_record.get('bnk_code')
+        if not bnk_code:
+            return {
+                'file_name': file.name,
+                'error_code': 'MISSING_BNK_CODE',
+                'message': 'ບໍ່ພົບ bnk_code'
+            }
+
+        # 4. ກວດ segmentType (ໃນ JSON: segmentType, ໃນ DB: SegmentType)
+        segment_type = first_record.get('segmentType')
+        if not segment_type:
+            return {
+                'file_name': file.name,
+                'error_code': 'MISSING_SEGMENT_TYPE',
+                'message': 'ບໍ່ພົບ segmentType'
+            }
+
+        # 5. ກວດ user_id ກົງກັບ bnk_code
+        if str(user_id) != str(bnk_code):
+            return {
+                'file_name': file.name,
+                'error_code': 'MISMATCH_BNK_CODE',
+                'message': f'user_id ບໍ່ກົງກັບ bnk_code'
+            }
+
+        # 6. ກວດຊື່ໄຟລ໌ຊ້ຳ
+        if Upload_File_Borrower.objects.filter(fileName=file.name, user_id=user_id).exists():
+            return {
+                'file_name': file.name,
+                'error_code': 'FILE_EXISTS',
+                'message': 'ໄຟລ໌ມີແລ້ວ'
+            }
+
+        # 7. ດຶງ period ຈາກຊື່ໄຟລ໌ (format: XXX_XXX_XXX_M0125.json → 202501)
+        parts = file.name.split('_')
+        if len(parts) < 4:
+            return {
+                'file_name': file.name,
+                'error_code': 'INVALID_FILE_NAME',
+                'message': 'ຊື່ໄຟລ໌ບໍ່ຖືກຕ້ອງ'
+            }
+        
+        period_str = parts[3].replace('.json', '').replace('M', '').replace('m', '')
+        try:
+            period_month = int(period_str[:2])
+            period_year = int(period_str[2:])
+            if not (1 <= period_month <= 12 and 2000 <= period_year <= 2100):
+                raise ValueError
+            period_value = f"{period_year:04d}{period_month:02d}"
+        except Exception:
+            return {
+                'file_name': file.name,
+                'error_code': 'INVALID_PERIOD_FORMAT',
+                'message': 'Period ບໍ່ຖືກຕ້ອງ'
+            }
+
+        # 8. ກວດ period ໃໝ່ >= period ເກົ່າ (ໂດຍກວດຕາມ bnk_code + SegmentType)
+        max_borrower_period = Borrower.objects.filter(
+            bnk_code=bnk_code,
+            SegmentType=segment_type
+        ).aggregate(max_p=Max('period'))['max_p']
+        
+        if max_borrower_period and int(period_value) < int(str(max_borrower_period)):
+            return {
+                'file_name': file.name,
+                'error_code': 'PERIOD_TOO_OLD',
+                'message': f'Period {period_value} ນ້ອຍກວ່າ period ຫຼ້າສຸດ {max_borrower_period} ຂອງ SegmentType {segment_type}'
+            }
+
+        # 9. ເອີ້ນຟັງຊັ່ນ process
+        file.seek(0)
+        return process_borrower_file(file, user_id, period_value, bnk_code, segment_type)
+
+    def _create_response(self, success, errors):
+        if errors and not success:
+            return Response({
+                'status': 'error',
+                'message': 'ລົ້ມເຫຼວທັງໝົດ',
+                'errors': errors
+            }, status=400)
+        elif errors:
+            return Response({
+                'status': 'partial',
+                'message': f'ສຳເລັດ {len(success)}, ລົ້ມເຫຼວ {len(errors)}',
+                'success': success,
+                'errors': errors
+            }, status=207)
+        else:
+            return Response({
+                'status': 'success',
+                'message': f'ອັບໂຫຼດສຳເລັດ {len(success)} ໄຟລ໌',
+                'uploaded': success
+            }, status=201)
+
+def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
+    """
+    ປະມວນຜົນໄຟລ໌ Borrower ແລະແຍກປະເພດເຂົ້າ BorrowerGood ແລະ BorrowerError
+    (ປັບປຸງສຳລັບຂໍ້ມູນຂະໜາດໃຫຍ່)
+    """
+    try:
+        with transaction.atomic():
+            # 1. ອ່ານແລະ parse JSON
+            file_content = file.read().decode('utf-8')
+            json_data = json.loads(file_content)
+            
+            print(f"\n[PROCESS] ເລີ່ມປະມວນຜົນ {len(json_data):,} records...")
+
+            # 2. ແຍກຂໍ້ມູນຕາມ segmentTypeBorrower
+            a1_records = []  # Individual
+            a2_records = []  # Enterprise
+            other_records = []
+
+            for record in json_data:
+                seg_type_borrower = record.get('segmentTypeBorrower', '').strip()
+                if seg_type_borrower == 'A1':
+                    a1_records.append(record)
+                elif seg_type_borrower == 'A2':
+                    a2_records.append(record)
+                else:
+                    other_records.append(record)
+
+            print(f"  A1 (Individual): {len(a1_records):,}")
+            print(f"  A2 (Enterprise): {len(a2_records):,}")
+            print(f"  Other: {len(other_records):,}")
+
+            # 3. ສ້າງ set ຂອງ LCIC_code ທີ່ຕ້ອງການກວດ
+            a1_lcic_codes = {r.get('LCIC_code', '').strip() for r in a1_records if r.get('LCIC_code')}
+            a2_lcic_codes = {r.get('LCIC_code', '').strip() for r in a2_records if r.get('LCIC_code')}
+            all_lcic_codes = a1_lcic_codes | a2_lcic_codes
+            
+            print(f"\n[OPTIMIZATION] Unique LCIC codes to check: {len(all_lcic_codes):,}")
+
+            # 4. ດຶງຂໍ້ມູນອ້າງອີງລ່ວງໜ້າ (ດຶງສະເພາະທີ່ຕ້ອງການ)
+            print(f"\n[CACHE] ດຶງຂໍ້ມູນອ້າງອີງ...")
+            
+            # 4.1 ດຶງ EnterpriseInfo LCIC_code (ສຳລັບ A2) - ດຶງສະເພາະທີ່ມີໃນ JSON
+            if a2_lcic_codes:
+                enterprise_lcic_codes = set(
+                    EnterpriseInfo.objects
+                    .filter(LCIC_code__in=a2_lcic_codes)
+                    .values_list('LCIC_code', flat=True)
+                )
+            else:
+                enterprise_lcic_codes = set()
+            print(f"  EnterpriseInfo LCIC found: {len(enterprise_lcic_codes):,} / {len(a2_lcic_codes):,}")
+
+            # 4.2 ດຶງ IndividualBankIbk lcic_id (ສຳລັບ A1) - filter ທັງ bnk_code ແລະ lcic_id
+            if a1_lcic_codes:
+                individual_lcic_ids = set(
+                    IndividualBankIbk.objects
+                    .filter(
+                        bnk_code=bnk_code,
+                        lcic_id__in=a1_lcic_codes
+                    )
+                    .values_list('lcic_id', flat=True)
+                )
+            else:
+                individual_lcic_ids = set()
+            print(f"  IndividualBankIbk LCIC found: {len(individual_lcic_ids):,} / {len(a1_lcic_codes):,}")
+
+            # 4.3 ດຶງ B1 tuples - filter ດ້ວຍ bnk_code ແລະ LCIC_code ທີ່ຕ້ອງການກວດ
+            if all_lcic_codes:
+                b1_tuples = set(
+                    B1.objects
+                    .filter(
+                        bnk_code=bnk_code,
+                        LCIC_code__in=all_lcic_codes
+                    )
+                    .values_list('LCIC_code', 'bnk_code', 'customer_id', 'loan_id', 'segmentType')
+                )
+            else:
+                b1_tuples = set()
+            print(f"  B1 tuples found: {len(b1_tuples):,}")
+
+            # 5. ປະມວນຜົນ A2 (Enterprise)
+            print(f"\n[A2] ປະມວນຜົນ Enterprise records...")
+            a2_good = []
+            a2_error_no_lcic = []  # status=1
+            a2_error_no_b1 = []    # status=2
+
+            for record in a2_records:
+                lcic_code = record.get('LCIC_code', '').strip()
+                customer_id = record.get('customer_id', '').strip()
+                loan_id = record.get('loan_id', '').strip()
+                seg_type_borrower = record.get('segmentTypeBorrower', '').strip()
+                
+                # ກວດ LCIC_code ມີໃນ EnterpriseInfo ບໍ່
+                if lcic_code not in enterprise_lcic_codes:
+                    a2_error_no_lcic.append({
+                        'record': record,
+                        'status': 1
+                    })
+                    continue
+                
+                # ກວດມີໃນ B1 ບໍ່
+                b1_key = (lcic_code, bnk_code, customer_id, loan_id, seg_type_borrower)
+                if b1_key in b1_tuples:
+                    a2_good.append(record)
+                else:
+                    a2_error_no_b1.append({
+                        'record': record,
+                        'status': 2
+                    })
+
+            print(f"  A2 Good: {len(a2_good):,}")
+            print(f"  A2 Error (no LCIC): {len(a2_error_no_lcic):,}")
+            print(f"  A2 Error (no B1): {len(a2_error_no_b1):,}")
+
+            # 6. ປະມວນຜົນ A1 (Individual)
+            print(f"\n[A1] ປະມວນຜົນ Individual records...")
+            a1_good = []
+            a1_error_no_lcic = []  # status=1
+            a1_error_no_b1 = []    # status=2
+
+            for record in a1_records:
+                lcic_code = record.get('LCIC_code', '').strip()
+                customer_id = record.get('customer_id', '').strip()
+                loan_id = record.get('loan_id', '').strip()
+                seg_type_borrower = record.get('segmentTypeBorrower', '').strip()
+                
+                # ກວດ LCIC_code ມີໃນ IndividualBankIbk ບໍ່
+                if lcic_code not in individual_lcic_ids:
+                    a1_error_no_lcic.append({
+                        'record': record,
+                        'status': 1
+                    })
+                    continue
+                
+                # ກວດມີໃນ B1 ບໍ່
+                b1_key = (lcic_code, bnk_code, customer_id, loan_id, seg_type_borrower)
+                if b1_key in b1_tuples:
+                    a1_good.append(record)
+                else:
+                    a1_error_no_b1.append({
+                        'record': record,
+                        'status': 2
+                    })
+
+            print(f"  A1 Good: {len(a1_good):,}")
+            print(f"  A1 Error (no LCIC): {len(a1_error_no_lcic):,}")
+            print(f"  A1 Error (no B1): {len(a1_error_no_b1):,}")
+
+            # 7. ສ້າງ Upload_File_Borrower record
+            print(f"\n[SAVE] ສ້າງ Upload_File_Borrower...")
+            upload_file = Upload_File_Borrower.objects.create(
+                user_id=user_id,
+                fileName=file.name,
+                fileUpload=file,
+                period=period_value,
+                status='completed',
+                status_upload='success',
+                fileSize=str(file.size),
+                path=f"borrower/{file.name}"
+            )
+            
+            # ສ້າງ file_id ໃນ format: b-{BID}
+            file_id = f"b-{upload_file.BID}"
+            upload_file.file_id = file_id
+            upload_file.save(update_fields=['file_id'])
+            
+            print(f"  Created Upload_File_Borrower: {file_id}")
+
+            # 8. ບັນທຶກ BorrowerGood
+            total_good = len(a1_good) + len(a2_good)
+            if total_good > 0:
+                print(f"\n[SAVE] ບັນທຶກ {total_good:,} BorrowerGood records...")
+                good_objects = []
+                
+                for record in a1_good + a2_good:
+                    good_objects.append(BorrowerGood(
+                        id_file=upload_file,
+                        LCIC_code=record.get('LCIC_code', '').strip(),
+                        Customer_ID=record.get('customer_id', '').strip(),
+                        SegmentType=record.get('segmentType', '').strip(),
+                        bnk_code=record.get('bnk_code', '').strip(),
+                        branch=record.get('branch_id', '').strip(),
+                        loan_id=record.get('loan_id', '').strip(),
+                        segmentTypeBorrower=record.get('segmentTypeBorrower', '').strip(),
+                        period=period_value,
+                        status=0,
+                        user_insert=user_id
+                    ))
+                
+                BorrowerGood.objects.bulk_create(good_objects, batch_size=1000)
+                print(f"  ບັນທຶກສຳເລັດ!")
+
+            # 9. ບັນທຶກ BorrowerError
+            all_errors = a1_error_no_lcic + a1_error_no_b1 + a2_error_no_lcic + a2_error_no_b1
+            if len(all_errors) > 0:
+                print(f"\n[SAVE] ບັນທຶກ {len(all_errors):,} BorrowerError records...")
+                error_objects = []
+                
+                for error_item in all_errors:
+                    record = error_item['record']
+                    error_objects.append(BorrowerError(
+                        id_file=upload_file,
+                        LCIC_code=record.get('LCIC_code', '').strip(),
+                        Customer_ID=record.get('customer_id', '').strip(),
+                        SegmentType=record.get('segmentType', '').strip(),
+                        bnk_code=record.get('bnk_code', '').strip(),
+                        branch=record.get('branch_id', '').strip(),
+                        loan_id=record.get('loan_id', '').strip(),
+                        segmentTypeBorrower=record.get('segmentTypeBorrower', '').strip(),
+                        period=period_value,
+                        status=error_item['status'],
+                        user_insert=user_id
+                    ))
+                
+                BorrowerError.objects.bulk_create(error_objects, batch_size=1000)
+                print(f"  ບັນທຶກສຳເລັດ!")
+
+            # 10. ສຳເລັດ
+            print(f"\n[DONE] ປະມວນຜົນສຳເລັດ!")
+            return {
+                'file_name': file.name,
+                'file_id': file_id,
+                'period': period_value,
+                'total_records': len(json_data),
+                'good_records': total_good,
+                'error_records': len(all_errors),
+                'breakdown': {
+                    'a1_good': len(a1_good),
+                    'a1_error_no_lcic': len(a1_error_no_lcic),
+                    'a1_error_no_b1': len(a1_error_no_b1),
+                    'a2_good': len(a2_good),
+                    'a2_error_no_lcic': len(a2_error_no_lcic),
+                    'a2_error_no_b1': len(a2_error_no_b1)
+                }
+            }
+
+    except Exception as e:
+        logger.error(f"Error processing file: {str(e)}", exc_info=True)
+        return {
+            'file_name': file.name,
+            'error_code': 'PROCESSING_ERROR',
+            'message': f'ຜິດພາດໃນການປະມວນຜົນ: {str(e)}'
+        }
+# def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
+#     """
+#     ປະມວນຜົນໄຟລ໌ Borrower ແລະແຍກປະເພດເຂົ້າ BorrowerGood ແລະ BorrowerError
+#     """
+#     try:
+#         with transaction.atomic():  # ເພີ່ມ transaction
+#             # 1. ອ່ານແລະ parse JSON
+#             file_content = file.read().decode('utf-8')
+#             json_data = json.loads(file_content)
+            
+#             print(f"\n[PROCESS] ເລີ່ມປະມວນຜົນ {len(json_data):,} records...")
+
+#             # 2. ແຍກຂໍ້ມູນຕາມ segmentTypeBorrower
+#             a1_records = []  # Individual
+#             a2_records = []  # Enterprise
+#             other_records = []
+
+#             for record in json_data:
+#                 seg_type_borrower = record.get('segmentTypeBorrower', '').strip()
+#                 if seg_type_borrower == 'A1':
+#                     a1_records.append(record)
+#                 elif seg_type_borrower == 'A2':
+#                     a2_records.append(record)
+#                 else:
+#                     other_records.append(record)
+
+#             print(f"  A1 (Individual): {len(a1_records):,}")
+#             print(f"  A2 (Enterprise): {len(a2_records):,}")
+#             print(f"  Other: {len(other_records):,}")
+
+#             # 3. ດຶງຂໍ້ມູນອ້າງອີງລ່ວງໜ້າ
+#             print(f"\n[CACHE] ດຶງຂໍ້ມູນອ້າງອີງ...")
+            
+#             # 3.1 ດຶງ EnterpriseInfo LCIC_code (ສຳລັບ A2)
+#             enterprise_lcic_codes = set(
+#                 EnterpriseInfo.objects
+#                 .values_list('LCIC_code', flat=True)
+#                 .iterator()
+#             )
+#             print(f"  EnterpriseInfo LCIC: {len(enterprise_lcic_codes):,}")
+
+#             # 3.2 ດຶງ IndividualBankIbk lcic_id (ສຳລັບ A1)
+#             individual_lcic_ids = set(
+#                 IndividualBankIbk.objects
+#                 .filter(bnk_code=bnk_code)
+#                 .values_list('lcic_id', flat=True)
+#                 .iterator()
+#             )
+#             print(f"  IndividualBankIbk LCIC: {len(individual_lcic_ids):,}")
+
+#             # 3.3 ດຶງ B1 tuples: (LCIC_code, bnk_code, customer_id, loan_id, segmentType)
+#             b1_tuples = set(
+#                 B1.objects
+#                 .filter(bnk_code=bnk_code)
+#                 .values_list('LCIC_code', 'bnk_code', 'customer_id', 'loan_id', 'segmentType')
+#                 .iterator()
+#             )
+#             print(f"  B1 tuples: {len(b1_tuples):,}")
+
+#             # 4. ປະມວນຜົນ A2 (Enterprise)
+#             print(f"\n[A2] ປະມວນຜົນ Enterprise records...")
+#             a2_good = []
+#             a2_error_no_lcic = []  # status=1
+#             a2_error_no_b1 = []    # status=2
+
+#             for record in a2_records:
+#                 lcic_code = record.get('LCIC_code', '').strip()
+#                 customer_id = record.get('customer_id', '').strip()
+#                 loan_id = record.get('loan_id', '').strip()
+#                 seg_type_borrower = record.get('segmentTypeBorrower', '').strip()
+                
+#                 # ກວດ LCIC_code ມີໃນ EnterpriseInfo ບໍ່
+#                 if lcic_code not in enterprise_lcic_codes:
+#                     a2_error_no_lcic.append({
+#                         'record': record,
+#                         'status': 1
+#                     })
+#                     continue
+                
+#                 # ກວດມີໃນ B1 ບໍ່
+#                 b1_key = (lcic_code, bnk_code, customer_id, loan_id, seg_type_borrower)
+#                 if b1_key in b1_tuples:
+#                     a2_good.append(record)
+#                 else:
+#                     a2_error_no_b1.append({
+#                         'record': record,
+#                         'status': 2
+#                     })
+
+#             print(f"  A2 Good: {len(a2_good):,}")
+#             print(f"  A2 Error (no LCIC): {len(a2_error_no_lcic):,}")
+#             print(f"  A2 Error (no B1): {len(a2_error_no_b1):,}")
+
+#             # 5. ປະມວນຜົນ A1 (Individual)
+#             print(f"\n[A1] ປະມວນຜົນ Individual records...")
+#             a1_good = []
+#             a1_error_no_lcic = []  # status=1
+#             a1_error_no_b1 = []    # status=2
+
+#             for record in a1_records:
+#                 lcic_code = record.get('LCIC_code', '').strip()
+#                 customer_id = record.get('customer_id', '').strip()
+#                 loan_id = record.get('loan_id', '').strip()
+#                 seg_type_borrower = record.get('segmentTypeBorrower', '').strip()
+                
+#                 # ກວດ LCIC_code ມີໃນ IndividualBankIbk ບໍ່
+#                 if lcic_code not in individual_lcic_ids:
+#                     a1_error_no_lcic.append({
+#                         'record': record,
+#                         'status': 1
+#                     })
+#                     continue
+                
+#                 # ກວດມີໃນ B1 ບໍ່
+#                 b1_key = (lcic_code, bnk_code, customer_id, loan_id, seg_type_borrower)
+#                 if b1_key in b1_tuples:
+#                     a1_good.append(record)
+#                 else:
+#                     a1_error_no_b1.append({
+#                         'record': record,
+#                         'status': 2
+#                     })
+
+#             print(f"  A1 Good: {len(a1_good):,}")
+#             print(f"  A1 Error (no LCIC): {len(a1_error_no_lcic):,}")
+#             print(f"  A1 Error (no B1): {len(a1_error_no_b1):,}")
+
+#             # 6. ສ້າງ Upload_File_Borrower record
+#             print(f"\n[SAVE] ສ້າງ Upload_File_Borrower...")
+#             upload_file = Upload_File_Borrower.objects.create(
+#                 user_id=user_id,
+#                 fileName=file.name,
+#                 fileUpload=file,
+#                 period=period_value,
+#                 status='completed',
+#                 status_upload='success',
+#                 fileSize=str(file.size),
+#                 path=f"borrower/{file.name}"
+#             )
+            
+#             # ສ້າງ file_id ໃນ format: b-{BID}
+#             file_id = f"b-{upload_file.BID}"
+#             upload_file.file_id = file_id
+#             upload_file.save(update_fields=['file_id'])
+            
+#             print(f"  Created Upload_File_Borrower: {file_id}")
+
+#             # 7. ບັນທຶກ BorrowerGood
+#             total_good = len(a1_good) + len(a2_good)
+#             if total_good > 0:
+#                 print(f"\n[SAVE] ບັນທຶກ {total_good:,} BorrowerGood records...")
+#                 good_objects = []
+                
+#                 for record in a1_good + a2_good:
+#                     good_objects.append(BorrowerGood(
+#                         id_file=upload_file,
+#                         LCIC_code=record.get('LCIC_code', '').strip(),
+#                         Customer_ID=record.get('customer_id', '').strip(),
+#                         SegmentType=record.get('segmentType', '').strip(),
+#                         bnk_code=record.get('bnk_code', '').strip(),
+#                         branch=record.get('branch_id', '').strip(),
+#                         loan_id=record.get('loan_id', '').strip(),
+#                         segmentTypeBorrower=record.get('segmentTypeBorrower', '').strip(),
+#                         period=period_value,
+#                         status=0,
+#                         user_insert=user_id
+#                     ))
+                
+#                 BorrowerGood.objects.bulk_create(good_objects, batch_size=1000)
+#                 print(f"  ບັນທຶກສຳເລັດ!")
+
+#             # 8. ບັນທຶກ BorrowerError
+#             all_errors = a1_error_no_lcic + a1_error_no_b1 + a2_error_no_lcic + a2_error_no_b1
+#             if len(all_errors) > 0:
+#                 print(f"\n[SAVE] ບັນທຶກ {len(all_errors):,} BorrowerError records...")
+#                 error_objects = []
+                
+#                 for error_item in all_errors:
+#                     record = error_item['record']
+#                     error_objects.append(BorrowerError(
+#                         id_file=upload_file,
+#                         LCIC_code=record.get('LCIC_code', '').strip(),
+#                         Customer_ID=record.get('customer_id', '').strip(),
+#                         SegmentType=record.get('segmentType', '').strip(),
+#                         bnk_code=record.get('bnk_code', '').strip(),
+#                         branch=record.get('branch_id', '').strip(),
+#                         loan_id=record.get('loan_id', '').strip(),
+#                         segmentTypeBorrower=record.get('segmentTypeBorrower', '').strip(),
+#                         period=period_value,
+#                         status=error_item['status'],
+#                         user_insert=user_id
+#                     ))
+                
+#                 BorrowerError.objects.bulk_create(error_objects, batch_size=1000)
+#                 print(f"  ບັນທຶກສຳເລັດ!")
+
+#             # 9. ສຳເລັດ
+#             print(f"\n[DONE] ປະມວນຜົນສຳເລັດ!")
+#             return {
+#                 'file_name': file.name,
+#                 'file_id': file_id,  # ເພີ່ມ file_id ໃນ response
+#                 'period': period_value,
+#                 'total_records': len(json_data),
+#                 'good_records': total_good,
+#                 'error_records': len(all_errors),
+#                 'breakdown': {
+#                     'a1_good': len(a1_good),
+#                     'a1_error_no_lcic': len(a1_error_no_lcic),
+#                     'a1_error_no_b1': len(a1_error_no_b1),
+#                     'a2_good': len(a2_good),
+#                     'a2_error_no_lcic': len(a2_error_no_lcic),
+#                     'a2_error_no_b1': len(a2_error_no_b1)
+#                 }
+#             }
+
+#     except Exception as e:
+#         logger.error(f"Error processing file: {str(e)}", exc_info=True)
+#         return {
+#             'file_name': file.name,
+#             'error_code': 'PROCESSING_ERROR',
+#             'message': f'ຜິດພາດໃນການປະມວນຜົນ: {str(e)}'
+#         }
+
+
+
+
 
 
 class IndividualFileUploadView(generics.CreateAPIView):
@@ -8139,7 +8797,9 @@ class IndividualFileUploadView(generics.CreateAPIView):
             return Response({'status': 'partial', 'message': f'ສຳເລັດ {len(success)}, ລົ້ມເຫຼວ {len(errors)}', 'success': success, 'errors': errors}, status=207)
         else:
             return Response({'status': 'success', 'message': f'ອັບໂຫຼດສຳເລັດ {len(success)} ໄຟລ໌', 'uploaded': success}, status=201)    
-  
+
+
+
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework import status
@@ -14901,6 +15561,320 @@ def get_collaterals(request):
    
     result = collaterals.values()
     return JsonResponse(list(result), safe=False)
+
+
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.db.models import Q
+from django.utils import timezone
+from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet ສຳຫຼັບຈັດການຂໍ້ມູນວິສາຫະກິດທີ່ສົ່ງເຂົ້າມາ
+    ປະກອບດ້ວຍ CRUD operations ທັງໝົດ
+    """
+    queryset = EnterpriseMemberSubmit.objects.all()
+    serializer_class = EnterpriseMemberSubmitSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """
+        ກັ່ນຕອງ queryset ຕາມເງື່ອນໄຂຕ່າງໆ
+        """
+        queryset = EnterpriseMemberSubmit.objects.all()
+        
+        # ຄົ້ນຫາຕາມ LCIC_code
+        lcic_code = self.request.query_params.get('lcic_code', None)
+        if lcic_code:
+            queryset = queryset.filter(LCIC_code=lcic_code)
+        
+        # ຄົ້ນຫາຕາມ EnterpriseID
+        enterprise_id = self.request.query_params.get('enterprise_id', None)
+        if enterprise_id:
+            queryset = queryset.filter(EnterpriseID=enterprise_id)
+        
+        # ຄົ້ນຫາຕາມຊື່ວິສາຫະກິດ (ລາວ ຫຼື ອັງກິດ)
+        search = self.request.query_params.get('search', None)
+        if search:
+            queryset = queryset.filter(
+                Q(enterpriseNameLao__icontains=search) |
+                Q(eneterpriseNameEnglish__icontains=search) |
+                Q(regisCertificateNumber__icontains=search)
+            )
+        
+        # ກັ່ນຕອງຕາມສະຖານະ
+        status_filter = self.request.query_params.get('status', None)
+        if status_filter is not None:
+            queryset = queryset.filter(status=status_filter)
+        
+        # ກັ່ນຕອງຕາມວັນທີລົງທະບຽນ
+        start_date = self.request.query_params.get('start_date', None)
+        end_date = self.request.query_params.get('end_date', None)
+        if start_date:
+            queryset = queryset.filter(regisDate__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(regisDate__lte=end_date)
+        
+        # ຈັດລຽງຕາມວັນທີອັບເດດລ່າສຸດ
+        return queryset.order_by('-LastUpdate', '-InsertDate')
+    
+    def create(self, request, *args, **kwargs):
+        """
+        ສ້າງຂໍ້ມູນວິສາຫະກິດໃໝ່
+        """
+        try:
+            data = request.data.copy()
+            
+            # ກຳນົດຜູ້ສ້າງ ແລະ ວັນທີສ້າງ
+            data['user_insert'] = request.user.username
+            data['InsertDate'] = timezone.now()
+            data['LastUpdate'] = timezone.now()
+            
+            serializer = self.get_serializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            
+            logger.info(f"ສ້າງວິສາຫະກິດສຳເລັດ: {serializer.data.get('LCICID')} ໂດຍ {request.user.username}")
+            
+            return Response({
+                'success': True,
+                'message': 'ສ້າງຂໍ້ມູນວິສາຫະກິດສຳເລັດ',
+                'data': serializer.data
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            logger.error(f"ເກີດຂໍ້ຜິດພາດໃນການສ້າງວິສາຫະກິດ: {str(e)}")
+            return Response({
+                'success': False,
+                'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    def update(self, request, *args, **kwargs):
+        """
+        ອັບເດດຂໍ້ມູນວິສາຫະກິດ
+        """
+        try:
+            partial = kwargs.pop('partial', False)
+            instance = self.get_object()
+            
+            data = request.data.copy()
+            
+            # ກຳນົດຜູ້ອັບເດດ ແລະ ວັນທີອັບເດດ
+            data['user_update'] = request.user.username
+            data['UpdateDate'] = timezone.now()
+            data['LastUpdate'] = timezone.now()
+            
+            serializer = self.get_serializer(instance, data=data, partial=partial)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            
+            logger.info(f"ອັບເດດວິສາຫະກິດສຳເລັດ: {instance.LCICID} ໂດຍ {request.user.username}")
+            
+            return Response({
+                'success': True,
+                'message': 'ອັບເດດຂໍ້ມູນວິສາຫະກິດສຳເລັດ',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"ເກີດຂໍ້ຜິດພາດໃນການອັບເດດວິສາຫະກິດ: {str(e)}")
+            return Response({
+                'success': False,
+                'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    def partial_update(self, request, *args, **kwargs):
+        """
+        ອັບເດດບາງຟິວຂອງວິສາຫະກິດ
+        """
+        kwargs['partial'] = True
+        return self.update(request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        """
+        ລຶບຂໍ້ມູນວິສາຫະກິດ (Soft delete)
+        """
+        try:
+            instance = self.get_object()
+            
+            # Soft delete - ປ່ຽນສະຖານະເປັນ -1 ແທນການລຶບຕົວຈິງ
+            instance.status = -1
+            instance.CancellationDate = timezone.now()
+            instance.user_update = request.user.username
+            instance.LastUpdate = timezone.now()
+            instance.save()
+            
+            logger.info(f"ລຶບວິສາຫະກິດສຳເລັດ (Soft delete): {instance.LCICID} ໂດຍ {request.user.username}")
+            
+            return Response({
+                'success': True,
+                'message': 'ລຶບຂໍ້ມູນວິສາຫະກິດສຳເລັດ'
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"ເກີດຂໍ້ຜິດພາດໃນການລຶບວິສາຫະກິດ: {str(e)}")
+            return Response({
+                'success': False,
+                'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def activate(self, request, pk=None):
+        """
+        ເປີດໃຊ້ງານວິສາຫະກິດ
+        """
+        try:
+            instance = self.get_object()
+            instance.status = 1
+            instance.user_update = request.user.username
+            instance.LastUpdate = timezone.now()
+            instance.save()
+            
+            return Response({
+                'success': True,
+                'message': 'ເປີດໃຊ້ງານວິສາຫະກິດສຳເລັດ',
+                'data': self.get_serializer(instance).data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def deactivate(self, request, pk=None):
+        """
+        ປິດໃຊ້ງານວິສາຫະກິດ
+        """
+        try:
+            instance = self.get_object()
+            instance.status = 0
+            instance.user_update = request.user.username
+            instance.LastUpdate = timezone.now()
+            instance.save()
+            
+            return Response({
+                'success': True,
+                'message': 'ປິດໃຊ້ງານວິສາຫະກິດສຳເລັດ',
+                'data': self.get_serializer(instance).data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['get'])
+    def statistics(self, request):
+        """
+        ສະຖິຕິຂໍ້ມູນວິສາຫະກິດ
+        """
+        try:
+            total = EnterpriseMemberSubmit.objects.count()
+            active = EnterpriseMemberSubmit.objects.filter(status=1).count()
+            inactive = EnterpriseMemberSubmit.objects.filter(status=0).count()
+            deleted = EnterpriseMemberSubmit.objects.filter(status=-1).count()
+            
+            return Response({
+                'success': True,
+                'data': {
+                    'total': total,
+                    'active': active,
+                    'inactive': inactive,
+                    'deleted': deleted
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['post'])
+    def bulk_create(self, request):
+        """
+        ສ້າງຂໍ້ມູນວິສາຫະກິດຫຼາຍລາຍການພ້ອມກັນ
+        """
+        try:
+            enterprises_data = request.data.get('enterprises', [])
+            
+            if not enterprises_data:
+                return Response({
+                    'success': False,
+                    'message': 'ກະລຸນາໃສ່ຂໍ້ມູນວິສາຫະກິດ'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            created_enterprises = []
+            errors = []
+            
+            for idx, enterprise_data in enumerate(enterprises_data):
+                try:
+                    enterprise_data['user_insert'] = request.user.username
+                    enterprise_data['InsertDate'] = timezone.now()
+                    enterprise_data['LastUpdate'] = timezone.now()
+                    
+                    serializer = self.get_serializer(data=enterprise_data)
+                    serializer.is_valid(raise_exception=True)
+                    serializer.save()
+                    created_enterprises.append(serializer.data)
+                    
+                except Exception as e:
+                    errors.append({
+                        'index': idx,
+                        'error': str(e),
+                        'data': enterprise_data
+                    })
+            
+            logger.info(f"ສ້າງວິສາຫະກິດຫຼາຍລາຍການ: ສຳເລັດ {len(created_enterprises)}, ຜິດພາດ {len(errors)}")
+            
+            return Response({
+                'success': True,
+                'message': f'ສ້າງສຳເລັດ {len(created_enterprises)} ລາຍການ',
+                'created': created_enterprises,
+                'errors': errors,
+                'total_success': len(created_enterprises),
+                'total_errors': len(errors)
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            logger.error(f"ເກີດຂໍ້ຜິດພາດໃນການສ້າງຫຼາຍລາຍການ: {str(e)}")
+            return Response({
+                'success': False,
+                'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['get'])
+    def export(self, request):
+        """
+        Export ຂໍ້ມູນວິສາຫະກິດ
+        """
+        try:
+            queryset = self.filter_queryset(self.get_queryset())
+            serializer = self.get_serializer(queryset, many=True)
+            
+            return Response({
+                'success': True,
+                'data': serializer.data,
+                'total': queryset.count()
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+
 # def get_collaterals(request):
 #     collaterals = Collateral.objects.exclude(status=0).values('id', 'filename', 'image', 'pathfile', 'status')
 #     return JsonResponse(list(collaterals), safe=False)
@@ -14950,7 +15924,7 @@ def generate_unique_lcic_code(max_attempts=100):
     for attempt in range(max_attempts):
         lcic_code = generate_lcic_code()
         
-        # ກວດສອບວ່າມີໃນ DB ແລ້ວບໍ່
+        
         exists = EnterpriseInfo.objects.filter(LCIC_code=lcic_code).exists()
         print(f"   Attempt {attempt + 1}: {lcic_code} - Exists: {exists}")
         
@@ -14971,7 +15945,7 @@ def create_enterprise_info(request):
     print("🚀 CREATE ENTERPRISE INFO API CALLED")
     print("="*70)
     
-    # 1. ດຶງ collateral_id
+   
     collateral_id = request.data.get('collateral_id')
     print(f"\n[STEP 1] Collateral ID: {collateral_id}")
     
@@ -14982,7 +15956,7 @@ def create_enterprise_info(request):
             'message': 'ຕ້ອງມີ collateral_id'
         }, status=status.HTTP_400_BAD_REQUEST)
     
-    # ແປງເປັນ int
+    
     try:
         collateral_id = int(collateral_id)
         print(f"✅ Collateral ID validated: {collateral_id}")
@@ -14993,7 +15967,7 @@ def create_enterprise_info(request):
             'message': 'collateral_id ຕ້ອງເປັນຕົວເລກ'
         }, status=status.HTTP_400_BAD_REQUEST)
     
-    # 2. Validate data
+    
     print(f"\n[STEP 2] Validating enterprise data...")
     serializer = EnterpriseInfoSerializer(data=request.data)
     
@@ -15120,6 +16094,9 @@ def create_enterprise_info(request):
             'status': 'error',
             'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
 from django.http import JsonResponse
 from .models import C1
 
