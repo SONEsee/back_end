@@ -155,7 +155,10 @@ from .views import (
     FileUploadViewIndividual,
     IndividualCollateralFileListView,
     EnterpriseMemberSubmitViewSet,
-    BorrowerFileUploadView
+    BorrowerFileUploadView,
+    BorrowerFileListView,
+    BorrowerFilePeriodListView,
+    confirm_upload_borrower
 )
 #tik
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
@@ -308,7 +311,7 @@ urlpatterns = [
    path('charge_report/<str:bnk_code>', charge_reportView.as_view(), name='charge_searchlog'),
    path('searchlog_chart/', SearchLogChartView.as_view(), name='searchlog_chart'),
    path('api/individual-file-periods/', IndividualFilePeriodListView.as_view(), name='individual-file-periods'),
-   
+   path('api/borrower/periods/', BorrowerFilePeriodListView.as_view(), name='borrower-period-list'),
    
    path('searchlog_chart/month/<str:month_year>', SearchLogChart_MonthView.as_view(), name='searchlog_chartbymonth'),
    path('searchlog_chart/month/', SearchLogChart_MonthView.as_view(), name='searchlog_chart_current_month'),
@@ -379,6 +382,7 @@ urlpatterns = [
     path('api/scoring-individual/', ScoringIndividualInfoSearchView.as_view(), name='scoring-individual'),
     
     path('api/individual-files/', IndividualFileListView.as_view(), name='individual-file-list'),
+    path('api/borrwor-files/', BorrowerFileListView.as_view(), name='borrwor-file-list'),
     path('api/files-individual-collateral/', IndividualCollateralFileListView.as_view(), name='files-individual-collateral'),
   
 #    path('api/upload_files1', FileUploadView.as_view(), name='file-upload'),
@@ -412,6 +416,7 @@ urlpatterns = [
     path('confirm_upload_individual_collateral/', views.confirm_upload_individual_collateral, name='confirm_upload_individual_collateral'),
     path('confirm_uploadc/', views.confirm_uploadc, name='confirm_uploadc'),
     path('unload_uploadc/', views.unload_data, name='unload_data'),
+    path('api/borrower/confirm/', confirm_upload_borrower, name='confirm-borrower'),
     # path('check-upload-status/<str:FID>/', views.check_upload_status, name='check_upload_status'),
 
     # path('upload333/', FileUploadView3.as_view(), name='file-upload'),

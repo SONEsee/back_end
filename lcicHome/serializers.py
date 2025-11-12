@@ -35,7 +35,32 @@ class IndividualCollatteralFileSerializer(serializers.ModelSerializer):
 from rest_framework import serializers
 from .models import EnterpriseMemberSubmit
 
+from .models import Upload_File_Borrower
 
+class BorrowerFileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Upload_File_Borrower
+        fields = [
+            'BID',
+            'SType',
+            'UType',
+            'user_id',
+            'file_id',
+            'fileName',
+            'fileUpload',
+            'progress_percentage',
+            'fileSize',
+            'path',
+            'insertDate',
+            'updateDate',
+            'period',
+            'status',
+            'statussubmit',
+            'status_upload',
+            'FileType',
+            'percentage',
+            'dispuste'
+        ]
 class EnterpriseMemberSubmitSerializer(serializers.ModelSerializer):
     """
     Serializer ສຳຫຼັບ EnterpriseMemberSubmit
