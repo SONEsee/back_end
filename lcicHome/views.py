@@ -8424,15 +8424,30 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                 BorrowerError.objects.bulk_create(error_objects, batch_size=1000)
                 print(f"  ບັນທຶກສຳເລັດ!")
 
-            # 10. ສຳເລັດ
+            # 10. ຄຳນວນແລະອັບເດດເປີເຊັນ Error
+            total_records = len(json_data)
+            total_errors = len(all_errors)
+
+            if total_records > 0:
+                error_percentage = (total_errors / total_records) * 100
+            else:
+                error_percentage = 0.0
+
+            upload_file.percentage = round(error_percentage, 2)
+            upload_file.save(update_fields=['percentage'])
+
+            print(f"\n[PERCENTAGE] Error: {total_errors}/{total_records} = {error_percentage:.2f}%")
+
+            # 11. ສຳເລັດ
             print(f"\n[DONE] ປະມວນຜົນສຳເລັດ!")
             return {
                 'file_name': file.name,
                 'file_id': file_id,
                 'period': period_value,
-                'total_records': len(json_data),
+                'total_records': total_records,
                 'good_records': total_good,
-                'error_records': len(all_errors),
+                'error_records': total_errors,
+                'error_percentage': error_percentage,
                 'breakdown': {
                     'a1_good': len(a1_good),
                     'a1_error_no_lcic': len(a1_error_no_lcic),
@@ -8450,6 +8465,7 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
             'error_code': 'PROCESSING_ERROR',
             'message': f'ຜິດພາດໃນການປະມວນຜົນ: {str(e)}'
         }
+
 # def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
 #     """
 #     ປະມວນຜົນໄຟລ໌ Borrower ແລະແຍກປະເພດເຂົ້າ BorrowerGood ແລະ BorrowerError
