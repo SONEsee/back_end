@@ -893,3 +893,35 @@ def confirm_collateral_logic(CID_with_prefix):
                 pass
 
         return {'status': 'error', 'message': str(e), 'code': 500}
+# utils.py
+from .models import Upload_File_Borrower
+
+def process_borrower_file(file, user_id, member, period_value, lcic_customer_pairs,
+                         valid_lcic_ids, valid_customer_ids, segment_type, file_data):
+    try:
+        upload_entry = Upload_File_Borrower(
+            user_id=user_id,
+            fileName=file.name,
+            fileUpload=file,
+            fileSize=str(file.size),
+            path=f"borrower/{file.name}",
+            period=period_value,
+            status="pending",
+            statussubmit="not_submitted",
+            status_upload="uploading",
+            FileType="json",
+            percentage=0.0,
+            # ຖ້າມີ SType FK:
+            # SType_id=SType.objects.get(code=segment_type).id
+        )
+        upload_entry.save()
+
+        return {
+            'file_name': file.name,
+            'period': period_value,
+            'segment_type': segment_type,
+            'file_id': upload_entry.BID,
+            'message': 'ອັບໂຫຼດສຳເລັດ, ກຳລັງປະມວນຜົນ...'
+        }
+    except Exception as e:
+        raise RuntimeError(f"ບັນທຶກໄຟລ໌ລົ້ມເຫຼວ: {str(e)}")
