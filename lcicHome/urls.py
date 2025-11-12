@@ -544,21 +544,44 @@ urlpatterns = [
     path('charge_report_detail/', ChargeReportDetailView.as_view(), name='charge-report-detail'),
     path('report_individual/', FCR_reportIndividualView.as_view(), name='fcr-report-individual'),
     
-    # Matching endpoints
-    path('find-candidates/', views.find_matching_candidates, name='find_candidates'),
-    path('candidates/', views.get_matching_candidates, name='get_candidates'),
+    
+    #---------------------------------------------
+    #----- START POINTS -----------------------------
+    
+    # # Matching endpoints
+    # path('find-candidates/', views.find_matching_candidates, name='find_candidates'),
+    # path('candidates/', views.get_matching_candidates, name='get_candidates'),
+    # path('review/', views.review_candidate, name='review_candidate'),
+    # # Merge/Unmerge endpoints
+    # path('merge/', views.merge_customers, name='merge_customers'),
+    # path('unmerge/', views.unmerge_customer, name='unmerge_customer'),
+    # # Customer data endpoints
+    # path('customer/<str:lcic_id>/identifiers/', views.get_customer_identifiers, name='get_identifiers'),
+    # path('customer/<str:lcic_id>/history/', views.get_merge_history, name='get_history'),
+    # # Statistics
+    # path('statistics/', views.get_statistics, name='statistics'),
+    
+    # Matching Candidates
+    path('find-candidates/', views.find_matching_candidates, name='find_matching_candidates'),
+    path('candidates/', views.list_matching_candidates, name='list_matching_candidates'),
     path('review/', views.review_candidate, name='review_candidate'),
     
-    # Merge/Unmerge endpoints
-    path('merge/', views.merge_customers, name='merge_customers'),
+    # Merged Customers (IndividualBankIbkInfo)
+    path('merged-customers/', views.list_merged_customers, name='list_merged_customers'),
+    path('customer/<str:lcic_id>/', views.get_customer_details, name='get_customer_details'),
+    
+    # Approved Matches
+    path('approved-matches/', views.list_approved_matches, name='list_approved_matches'),
+    
+    # Manual Operations
+    path('merge/', views.manual_merge, name='manual_merge'),
     path('unmerge/', views.unmerge_customer, name='unmerge_customer'),
     
-    # Customer data endpoints
-    path('customer/<str:lcic_id>/identifiers/', views.get_customer_identifiers, name='get_identifiers'),
-    path('customer/<str:lcic_id>/history/', views.get_merge_history, name='get_history'),
-    
     # Statistics
-    path('statistics/', views.get_statistics, name='statistics'),
+    path('statistics/', views.get_statistics, name='get_statistics'),
+
+    #---------------------------------------------
+    #----- END POINTS -----------------------------
     
     # SearchLog Reports  
     path('searchlog_report_main/', SearchLogReportMainView.as_view(), name='searchlog-report-main'),
