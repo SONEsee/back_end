@@ -30337,6 +30337,7 @@ class ScoringIndividualInfoSearchView(APIView):
                 'details': traceback.format_exc()
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+<<<<<<< HEAD
 #Mapping IndividualBankIbkInfo and IndividualBankIbk ----------------------------------------------------------------                                                       
 # from rest_framework import status
 # from rest_framework.decorators import api_view, permission_classes
@@ -31607,3 +31608,60 @@ def get_statistics(request):
             'success': False,
             'error': str(e)
         }, status=status.HTTP_400_BAD_REQUEST)
+=======
+# views.py
+# views.py
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from django.shortcuts import get_object_or_404
+
+from .credit_score_service import CreditScoreService
+from .serializers import CreditScoreResponseSerializers
+
+class CreditScoreAPIView(APIView):
+    """
+    API endpoint to calculate credit score
+    
+    POST /api/credit-score/calculate/
+    GET  /api/credit-score/calculate/?lcic_id=your_lcic_id
+    """
+    
+    def post(self, request):
+        return self._calculate_score(request.data.get('lcic_id'))
+    
+    def get(self, request):
+        return self._calculate_score(request.query_params.get('lcic_id'))
+    
+    def _calculate_score(self, lcic_id):
+        """Calculate credit score with error handling"""
+        try:
+            # Validate lcic_id
+            if not lcic_id:
+                return Response(
+                    {'error': 'lcic_id is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Calculate credit score
+            service = CreditScoreService(lcic_id)
+            result = service.calculate_credit_score()
+            
+            # Check result
+            if not result:
+                return Response(
+                    {'error': f'Customer not found with lcic_id: {lcic_id}'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Return success
+            return Response({'success': True, 'data': result}, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {'error': 'Internal server error', 'message': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+>>>>>>> db61f4e520a6aaf654b36256af18e520141a2ef6

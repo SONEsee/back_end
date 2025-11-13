@@ -1806,3 +1806,62 @@ class UserAccessLogSerializer(serializers.ModelSerializer):
             'ip_address', 'user_agent', 'remarks'
         ]
 
+# serializers.py
+from rest_framework import serializers
+from .models import (
+    IndividualBankIbk, B1, C1,
+    col_real_estates, col_money_mia, col_equipment_eqi,
+    col_project_prj, col_vechicle_veh, col_guarantor_gua,
+    col_goldsilver_gold, col_guarantor_com,
+    scr_atttype_desc, scr_attribute_table
+)
+
+class IndividualBankIbkSerializers(serializers.ModelSerializer):
+    age = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = IndividualBankIbk
+        fields = '__all__'
+    
+    def get_age(self, obj):
+        if obj.ind_birth_date:
+            from datetime import date
+            today = date.today()
+            age = today.year - obj.ind_birth_date.year - (
+                (today.month, today.day) < (obj.ind_birth_date.month, obj.ind_birth_date.day)
+            )
+            return age
+        return None
+
+class B1Serializers(serializers.ModelSerializer):
+    class Meta:
+        model = B1
+        fields = '__all__'
+
+class C1Serializers(serializers.ModelSerializer):
+    class Meta:
+        model = C1
+        fields = '__all__'
+
+class CollateralDetailSerializers(serializers.Serializer):
+    col_type = serializers.CharField()
+    count = serializers.IntegerField()
+    total_value_lak = serializers.DecimalField(max_digits=20, decimal_places=2)
+    items = serializers.ListField()
+
+class CreditScoreResponseSerializers(serializers.Serializer):
+    # Customer Information
+    customer_info = IndividualBankIbkSerializers()
+    
+    # Loan Information
+    loan_summary = serializers.DictField()
+    
+    # Collateral Information
+    collateral_summary = serializers.DictField()
+    
+    # Score Breakdown
+    score_breakdown = serializers.DictField()
+    
+    # Final Credit Score
+    final_credit_score = serializers.DecimalField(max_digits=10, decimal_places=2)
+    credit_rating = serializers.CharField()
