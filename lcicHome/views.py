@@ -31911,6 +31911,21 @@ class UserAccessLogListView(APIView):
         serializer = UserAccessLogSerializer(logs, many=True)
         return Response(serializer.data)
 
+#tik
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from .models import UserAccessLog
+from .serializers import UserAccessLogSerializer
+
+
+class UserAccessLogListView(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        logs = UserAccessLog.objects.select_related('user').order_by('-login_time')
+        serializer = UserAccessLogSerializer(logs, many=True)
+        return Response(serializer.data)
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -31938,7 +31953,6 @@ class ScoringIndividualInfoSearchView(APIView):
                 return Response({'error': 'Invalid bank info'}, status=status.HTTP_400_BAD_REQUEST)
 
             bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
-
             
             lcic_id = request.data.get('lcic_id', '').strip()
             loan_purpose = request.data.get('CatalogID', '')
@@ -31946,7 +31960,6 @@ class ScoringIndividualInfoSearchView(APIView):
             if not lcic_id:
                 return Response({'error': 'lcic_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-           
             all_individual_info = IndividualBankIbkInfo.objects.filter(
                 lcic_id=lcic_id
             ).order_by('mm_ind_sys_id')
@@ -31954,7 +31967,6 @@ class ScoringIndividualInfoSearchView(APIView):
             if not all_individual_info.exists():
                 return Response({'error': 'Individual info not found'}, status=status.HTTP_404_NOT_FOUND)
 
-            
             unique_individuals = []
             seen_mm_ids = set()
             for info in all_individual_info:
@@ -31962,7 +31974,6 @@ class ScoringIndividualInfoSearchView(APIView):
                     unique_individuals.append(info)
                     seen_mm_ids.add(info.mm_ind_sys_id)
 
-           
             mm_ids = [info.mm_ind_sys_id for info in unique_individuals if info.mm_ind_sys_id]
             bank_records = {}
             if mm_ids:
@@ -31971,14 +31982,12 @@ class ScoringIndividualInfoSearchView(APIView):
                     for rec in IndividualBankIbk.objects.filter(ind_sys_id__in=mm_ids)
                 }
 
-           
             charge_sys_id = 7 if bank_info.bnk_type == 1 else 8
             try:
                 chargeType = ChargeMatrix.objects.get(chg_sys_id=charge_sys_id)
             except ChargeMatrix.DoesNotExist:
                 return Response({'error': 'Charge type not found'}, status=status.HTTP_404_NOT_FOUND)
 
-           
             now = timezone.now()
             inquiry_month_charge = now.strftime('%d%m%Y')
             sys_usr = f"{UID}-{bank.bnk_code}"
@@ -31990,7 +31999,7 @@ class ScoringIndividualInfoSearchView(APIView):
                 customerid = bank_record.customerid if bank_record else ''
                 branch_code = bank_record.branchcode if bank_record else ''
 
-                
+                # สร้าง search_log
                 search_log = searchLog.objects.create(
                     enterprise_ID='',
                     LCIC_ID=lcic_id,
@@ -32001,7 +32010,7 @@ class ScoringIndividualInfoSearchView(APIView):
                     cus_ID=customerid,
                     cusType='A1',
                     credit_type=chargeType.chg_code,
-                    inquiry_month=now.strftime('%Y-%m'),  
+                    inquiry_month=now.strftime('%Y-%m'),
                     com_tel='',
                     com_location='',
                     rec_loan_amount=0.0,
@@ -32011,7 +32020,7 @@ class ScoringIndividualInfoSearchView(APIView):
                     sys_usr=sys_usr
                 )
 
-                
+                # สร้าง charge
                 charge = request_charge.objects.create(
                     bnk_code=bank_info.bnk_code,
                     bnk_type=bank_info.bnk_type,
@@ -32028,24 +32037,31 @@ class ScoringIndividualInfoSearchView(APIView):
                     rec_reference_code='',
                     search_log=search_log
                 )
+                
+                # สร้าง rec_reference_code
                 charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
                 charge.save()
 
+                # ⭐ เพิ่มข้อมูลให้ครบถ้วน
                 created_logs.append({
-                    'search_log_id': search_log.search_ID,   
+                    'search_log_id': search_log.search_ID,
                     'charge_id': charge.rec_charge_ID,
-                    'customerid': customerid
+                    'rec_reference_code': charge.rec_reference_code,  # ⭐ ส่งค่านี้
+                    'rec_sys_id': charge.rec_charge_ID,  # ⭐ ส่งค่านี้
+                    'customerid': customerid,
+                    'lcic_id': lcic_id,
+                    'rec_insert_date': charge.rec_insert_date.strftime('%d/%m/%Y') if hasattr(charge, 'rec_insert_date') and charge.rec_insert_date else now.strftime('%d/%m/%Y')
                 })
 
-           
             serializer = IndividualBankIbkInfoSerializer(unique_individuals, many=True)
 
-          
+            # ⭐ Return ข้อมูลให้ครบถ้วน
             return Response({
+                'success': True,  # ⭐ เพิ่ม flag นี้
                 'individual_info': serializer.data,
                 'total_found': len(unique_individuals),
                 'log_created': len(created_logs),
-                'created_logs': created_logs,
+                'created_logs': created_logs,  # ⭐ ส่ง array นี้กลับไป
                 'debug_info': {
                     'total_raw_records': all_individual_info.count(),
                     'unique_records': len(unique_individuals),
@@ -32061,6 +32077,8 @@ class ScoringIndividualInfoSearchView(APIView):
                 'details': traceback.format_exc()
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+# views.py
+# views.py
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -32848,58 +32866,3 @@ def get_statistics(request):
             'success': False,
             'error': str(e)
         }, status=status.HTTP_400_BAD_REQUEST)
-
-# views.py
-# views.py
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from django.shortcuts import get_object_or_404
-
-from .credit_score_service import CreditScoreService
-from .serializers import CreditScoreResponseSerializers
-
-class CreditScoreAPIView(APIView):
-    """
-    API endpoint to calculate credit score
-    
-    POST /api/credit-score/calculate/
-    GET  /api/credit-score/calculate/?lcic_id=your_lcic_id
-    """
-    
-    def post(self, request):
-        return self._calculate_score(request.data.get('lcic_id'))
-    
-    def get(self, request):
-        return self._calculate_score(request.query_params.get('lcic_id'))
-    
-    def _calculate_score(self, lcic_id):
-        """Calculate credit score with error handling"""
-        try:
-            # Validate lcic_id
-            if not lcic_id:
-                return Response(
-                    {'error': 'lcic_id is required'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Calculate credit score
-            service = CreditScoreService(lcic_id)
-            result = service.calculate_credit_score()
-            
-            # Check result
-            if not result:
-                return Response(
-                    {'error': f'Customer not found with lcic_id: {lcic_id}'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
-            # Return success
-            return Response({'success': True, 'data': result}, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            return Response(
-                {'error': 'Internal server error', 'message': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
