@@ -11995,7 +11995,312 @@ from .models import Upload_File, data_edit, B1, B1_Monthly
 #         except:
 #             pass
 #         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+from django.db import connection, transaction
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from django.http import JsonResponse
+from .models import Upload_File_Borrower, BorrowerGood, Borrower, BorrowerMonhtly
+import logging
 
+logger = logging.getLogger(__name__)
+
+
+@csrf_exempt
+@require_POST
+def confirm_upload_borrower(request):
+    BID = request.POST.get('BID')
+    if not BID:
+        return JsonResponse({'status': 'error', 'message': 'BID is required'}, status=400)
+    
+    try:
+        print(f"\n{'='*80}")
+        print(f"ເລີ່ມຕົ້ນການຢືນຢັນການອັບໂຫຼດ (Borrower): BID = {BID}")
+        print(f"{'='*80}")
+        
+        # 1. ແປງ BID ເປັນຕົວເລກ
+        try:
+            BID_number = int(BID)
+        except ValueError:
+            print("  BID ບໍ່ຖືກຕ້ອງ → ຜິດພາດ")
+            return JsonResponse({'status': 'error', 'message': 'Invalid BID format'}, status=400)
+        
+        print(f"  BID ເປັນຕົວເລກ: {BID_number}")
+        
+        # 2. ອັບເດດສະຖານະເບື້ອງຕົ້ນ
+        Upload_File_Borrower.objects.filter(BID=BID_number).update(statussubmit='3', dispuste='0')
+        
+        # 3. ກວດໄຟລ໌ມີຢູ່ບໍ່
+        upload_file = Upload_File_Borrower.objects.filter(BID=BID_number).first()
+        if not upload_file:
+            print("  ບໍ່ພົບໄຟລ໌ → ຜິດພາດ")
+            return JsonResponse({'status': 'error', 'message': 'File not found'}, status=404)
+        
+        # 4. ກວດສະຖານະໄຟລ໌
+        if upload_file.statussubmit == '0':
+            print("  ໄຟລ໌ຖືກຢືນຢັນແລ້ວ → ບໍ່ສາມາດເຮັດຊ້ຳໄດ້")
+            return JsonResponse({'status': 'error', 'message': 'File already confirmed'}, status=400)
+        if upload_file.statussubmit == '2':
+            print("  ໄຟລ໌ຜິດພາດກ່ອນໜ້າ → ບໍ່ສາມາດຢືນຢັນໄດ້")
+            return JsonResponse({'status': 'error', 'message': 'File confirmation failed before'}, status=400)
+        
+        print(f"  ພົບ Upload_File_Borrower: statussubmit = '{upload_file.statussubmit}'")
+        
+        # 5. ສ້າງ file_id ໃນ format b-{BID}
+        file_id = f"b-{BID_number}"
+        
+        # 6. ດຶງຂໍ້ມູນຈາກ BorrowerGood
+        print("  ກຳລັງດຶງຂໍ້ມູນຈາກ BorrowerGood...")
+        borrower_goods = BorrowerGood.objects.filter(id_file=upload_file).select_related('id_file')
+        total_records = borrower_goods.count()
+        
+        if not borrower_goods.exists():
+            print("  ບໍ່ພົບຂໍ້ມູນ → ອັບເດດ statussubmit = '2'")
+            Upload_File_Borrower.objects.filter(BID=BID_number).update(statussubmit='2')
+            return JsonResponse({'status': 'error', 'message': 'No data found for the given BID'}, status=404)
+        
+        print(f"  ພົບ {total_records} ລາຍການ")
+        
+        # 7. ກວດ period กັບ Borrower ຫຼ້າສຸດ
+        first_item = borrower_goods.first()
+        print(f"  ກຳລັງກວດ period ກັບ Borrower ຫຼ້າສຸດ...")
+        print(f"    bnk_code: {first_item.bnk_code}")
+        print(f"    SegmentType: {first_item.SegmentType}")
+        print(f"    period ໄຟລ໌: {first_item.period}")
+        
+        latest_borrower = Borrower.objects.filter(
+            bnk_code=first_item.bnk_code,
+            SegmentType=first_item.SegmentType
+        ).order_by('-period').first()
+        
+        if latest_borrower:
+            print(f"    Borrower ຫຼ້າສຸດ: period = {latest_borrower.period}")
+            if first_item.period < latest_borrower.period:
+                print(f"  ❌ ຜິດພາດ: period ນ້ອຍກວ່າ Borrower ຫຼ້າສຸດ")
+                Upload_File_Borrower.objects.filter(BID=BID_number).update(statussubmit='2')
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Period {first_item.period} is earlier than latest Borrower period {latest_borrower.period}.'
+                }, status=400)
+            else:
+                print(f"  ✅ period ຖືກຕ້ອງ")
+        else:
+            print(f"  ℹ️  ບໍ່ພົບ Borrower ຫຼ້າສຸດ → ອະນຸຍາດ")
+        
+        # 8. ເກັບ bnk_codes ແລະ segment_types
+        bnk_codes = {item.bnk_code for item in borrower_goods}
+        segment_types = {item.SegmentType for item in borrower_goods if item.SegmentType}
+        
+        # 9. ໂຫຼດຂໍ້ມູນທີ່ມີຢູ່ແລ້ວ
+        print("  ກຳລັງໂຫຼດຂໍ້ມູນທີ່ມີຢູ່ແລ້ວ...")
+        
+        # 9.1 BorrowerMonthly: key = (loan_id, LCIC_code, Customer_ID, bnk_code, branch, period)
+        existing_borrower_monthly = {}
+        for r in BorrowerMonhtly.objects.filter(
+            bnk_code__in=bnk_codes, SegmentType__in=segment_types
+        ).values('id', 'loan_id', 'LCIC_code', 'Customer_ID', 'bnk_code', 'branch', 'period').iterator(chunk_size=5000):
+            key = (r['loan_id'], r['LCIC_code'], r['Customer_ID'], r['bnk_code'], r['branch'], r['period'])
+            existing_borrower_monthly[key] = r['id']
+        
+        # 9.2 Borrower: key = (loan_id, LCIC_code, Customer_ID, bnk_code, branch)
+        existing_borrower = {}
+        for r in Borrower.objects.filter(
+            bnk_code__in=bnk_codes, SegmentType__in=segment_types
+        ).values('id', 'loan_id', 'LCIC_code', 'Customer_ID', 'bnk_code', 'branch').iterator(chunk_size=5000):
+            key = (r['loan_id'], r['LCIC_code'], r['Customer_ID'], r['bnk_code'], r['branch'])
+            existing_borrower[key] = r['id']
+        
+        print(f"  BorrowerMonthly ມີຢູ່: {len(existing_borrower_monthly)}, Borrower ມີຢູ່: {len(existing_borrower)}")
+        
+        # 10. ວິເຄາະແລະແຍກປະເພດ
+        borrower_monthly_update_items = []
+        borrower_monthly_create_items = []
+        borrower_update_items = []
+        borrower_create_items = []
+        
+        borrower_monthly_ids_to_delete = set()
+        borrower_ids_to_delete = set()
+        
+        for idx, item in enumerate(borrower_goods, 1):
+            # Key ສຳລັບ BorrowerMonthly: loan_id, LCIC_code, Customer_ID, bnk_code, branch, period
+            key_m = (item.loan_id, item.LCIC_code, item.Customer_ID, item.bnk_code, item.branch, item.period)
+            
+            # Key ສຳລັບ Borrower: loan_id, LCIC_code, Customer_ID, bnk_code, branch
+            key_b = (item.loan_id, item.LCIC_code, item.Customer_ID, item.bnk_code, item.branch)
+            
+            # ກວດ BorrowerMonthly
+            if key_m in existing_borrower_monthly:
+                borrower_monthly_update_items.append(item)
+                borrower_monthly_ids_to_delete.add(existing_borrower_monthly[key_m])
+            else:
+                borrower_monthly_create_items.append(item)
+            
+            # ກວດ Borrower
+            if key_b in existing_borrower:
+                borrower_update_items.append(item)
+                borrower_ids_to_delete.add(existing_borrower[key_b])
+            else:
+                borrower_create_items.append(item)
+            
+            if idx % 1000 == 0 or idx == total_records:
+                print(f"  ວິເຄາະ: {idx}/{total_records}")
+        
+        print(f"  ສະຖິຕິ:")
+        print(f"    BorrowerMonthly Update: {len(borrower_monthly_update_items)} (ລຶບ {len(borrower_monthly_ids_to_delete)} ແຖວ)")
+        print(f"    BorrowerMonthly Create: {len(borrower_monthly_create_items)}")
+        print(f"    Borrower Update: {len(borrower_update_items)} (ລຶບ {len(borrower_ids_to_delete)} ແຖວ)")
+        print(f"    Borrower Create: {len(borrower_create_items)}")
+        
+        # 11. ປະມວນຜົນໃນ Transaction
+        with transaction.atomic():
+            # 11.1 ລຶບ BorrowerMonthly ເກົ່າ (UPDATE cases)
+            if borrower_monthly_ids_to_delete:
+                print(f"  ກຳລັງລຶບ BorrowerMonthly ເກົ່າ ({len(borrower_monthly_ids_to_delete)} ແຖວ)...")
+                ids_list = list(borrower_monthly_ids_to_delete)
+                batch_size = 1000
+                total_deleted = 0
+                
+                for i in range(0, len(ids_list), batch_size):
+                    batch = ids_list[i:i + batch_size]
+                    deleted_count = BorrowerMonhtly.objects.filter(id__in=batch).delete()[0]
+                    total_deleted += deleted_count
+                    print(f"    ລຶບແລ້ວ: {total_deleted}/{len(ids_list)} ແຖວ")
+            
+            # 11.2 ລຶບ Borrower ເກົ່າ (UPDATE cases)
+            if borrower_ids_to_delete:
+                print(f"  ກຳລັງລຶບ Borrower ເກົ່າ ({len(borrower_ids_to_delete)} ແຖວ)...")
+                ids_list = list(borrower_ids_to_delete)
+                batch_size = 1000
+                total_deleted = 0
+                
+                for i in range(0, len(ids_list), batch_size):
+                    batch = ids_list[i:i + batch_size]
+                    deleted_count = Borrower.objects.filter(id__in=batch).delete()[0]
+                    total_deleted += deleted_count
+                    print(f"    ລຶບແລ້ວ: {total_deleted}/{len(ids_list)} ແຖວ")
+            
+            # 11.3 ສ້າງ BorrowerMonthly ໃໝ່ (UPDATE)
+            if borrower_monthly_update_items:
+                print(f"  ກຳລັງສ້າງ BorrowerMonthly ໃໝ່ (UPDATE) ({len(borrower_monthly_update_items)} ແຖວ)...")
+                total_created = 0
+                for i in range(0, len(borrower_monthly_update_items), 1000):
+                    batch = borrower_monthly_update_items[i:i + 1000]
+                    BorrowerMonhtly.objects.bulk_create([
+                        BorrowerMonhtly(
+                            id_file=upload_file,
+                            EenterpriseID=item.EenterpriseID,
+                            LCIC_code=item.LCIC_code,
+                            segmentTypeBorrower=item.segmentTypeBorrower,
+                            period=item.period,
+                            SegmentType=item.SegmentType,
+                            Customer_ID=item.Customer_ID,
+                            bnk_code=item.bnk_code,
+                            branch=item.branch,
+                            loan_id=item.loan_id,
+                            status=1,  # status=1 for update
+                            user_insert=item.user_insert
+                        ) for item in batch
+                    ], ignore_conflicts=True)
+                    total_created += len(batch)
+                    print(f"    ສ້າງແລ້ວ: {total_created}/{len(borrower_monthly_update_items)} ແຖວ")
+            
+            # 11.4 ສ້າງ BorrowerMonthly ໃໝ່ (CREATE)
+            if borrower_monthly_create_items:
+                print(f"  ກຳລັງສ້າງ BorrowerMonthly ໃໝ່ (CREATE) ({len(borrower_monthly_create_items)} ແຖວ)...")
+                total_created = 0
+                for i in range(0, len(borrower_monthly_create_items), 1000):
+                    batch = borrower_monthly_create_items[i:i + 1000]
+                    BorrowerMonhtly.objects.bulk_create([
+                        BorrowerMonhtly(
+                            id_file=upload_file,
+                            EenterpriseID=item.EenterpriseID,
+                            LCIC_code=item.LCIC_code,
+                            segmentTypeBorrower=item.segmentTypeBorrower,
+                            period=item.period,
+                            SegmentType=item.SegmentType,
+                            Customer_ID=item.Customer_ID,
+                            bnk_code=item.bnk_code,
+                            branch=item.branch,
+                            loan_id=item.loan_id,
+                            status=0,  # status=0 for insert
+                            user_insert=item.user_insert
+                        ) for item in batch
+                    ], ignore_conflicts=True)
+                    total_created += len(batch)
+                    print(f"    ສ້າງແລ້ວ: {total_created}/{len(borrower_monthly_create_items)} ແຖວ")
+            
+            # 11.5 ສ້າງ Borrower ໃໝ່ (UPDATE)
+            if borrower_update_items:
+                print(f"  ກຳລັງສ້າງ Borrower ໃໝ່ (UPDATE) ({len(borrower_update_items)} ແຖວ)...")
+                total_created = 0
+                for i in range(0, len(borrower_update_items), 1000):
+                    batch = borrower_update_items[i:i + 1000]
+                    Borrower.objects.bulk_create([
+                        Borrower(
+                            id_file=upload_file,
+                            EenterpriseID=item.EenterpriseID,
+                            segmentTypeBorrower=item.segmentTypeBorrower,
+                            LCIC_code=item.LCIC_code,
+                            period=item.period,
+                            SegmentType=item.SegmentType,
+                            Customer_ID=item.Customer_ID,
+                            bnk_code=item.bnk_code,
+                            branch=item.branch,
+                            loan_id=item.loan_id,
+                            status=1,  # status=1 for update
+                            user_insert=item.user_insert
+                        ) for item in batch
+                    ], ignore_conflicts=True)
+                    total_created += len(batch)
+                    print(f"    ສ້າງແລ້ວ: {total_created}/{len(borrower_update_items)} ແຖວ")
+            
+            # 11.6 ສ້າງ Borrower ໃໝ່ (CREATE)
+            if borrower_create_items:
+                print(f"  ກຳລັງສ້າງ Borrower ໃໝ່ (CREATE) ({len(borrower_create_items)} ແຖວ)...")
+                total_created = 0
+                for i in range(0, len(borrower_create_items), 1000):
+                    batch = borrower_create_items[i:i + 1000]
+                    Borrower.objects.bulk_create([
+                        Borrower(
+                            id_file=upload_file,
+                            EenterpriseID=item.EenterpriseID,
+                            segmentTypeBorrower=item.segmentTypeBorrower,
+                            LCIC_code=item.LCIC_code,
+                            period=item.period,
+                            SegmentType=item.SegmentType,
+                            Customer_ID=item.Customer_ID,
+                            bnk_code=item.bnk_code,
+                            branch=item.branch,
+                            loan_id=item.loan_id,
+                            status=0,  # status=0 for insert
+                            user_insert=item.user_insert
+                        ) for item in batch
+                    ], ignore_conflicts=True)
+                    total_created += len(batch)
+                    print(f"    ສ້າງແລ້ວ: {total_created}/{len(borrower_create_items)} ແຖວ")
+            
+            # 11.7 ອັບເດດສະຖານະ
+            print("  ອັບເດດສະຖານະ...")
+            Upload_File_Borrower.objects.filter(BID=BID_number).update(statussubmit='0', dispuste='0')
+        
+        print(f"{'='*80}")
+        print(f"✅ ສຳເລັດການຢືນຢັນການອັບໂຫຼດ Borrower BID = {BID}")
+        print(f"{'='*80}")
+        
+        return JsonResponse({'status': 'success', 'message': 'Borrower data confirmed successfully'})
+    
+    except ValueError as e:
+        print(f"  ຌິດພາດການແປງເລກ: {str(e)}")
+        return JsonResponse({'status': 'error', 'message': 'Invalid BID format'}, status=400)
+    except Exception as e:
+        print(f"  ຜິດພາດ: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        try:
+            if 'BID_number' in locals():
+                Upload_File_Borrower.objects.filter(BID=BID_number).update(statussubmit='2')
+        except:
+            pass
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
 from django.db import connection, transaction
 

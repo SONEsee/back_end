@@ -418,6 +418,9 @@ urlpatterns = [
     path('confirm_uploadc/', views.confirm_uploadc, name='confirm_uploadc'),
     path('unload_uploadc/', views.unload_data, name='unload_data'),
     path('api/borrower/confirm/', confirm_upload_borrower, name='confirm-borrower'),
+
+
+    
     # path('check-upload-status/<str:FID>/', views.check_upload_status, name='check_upload_status'),
 
     # path('upload333/', FileUploadView3.as_view(), name='file-upload'),
