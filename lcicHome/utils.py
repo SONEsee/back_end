@@ -392,7 +392,7 @@ def parse_datetime(dt_str):
 import re
 from django.utils import timezone
 from .models import data_edit, B_Data_is_damaged, disputes, Upload_File_Individual,CDL,Upload_File_Individual_Collateral
-
+from .models import Upload_File_Borrower, BorrowerError, BorrowerGood
 
 def reject_individual_loan(id_file):
     deleted_count = {
@@ -548,7 +548,82 @@ def reject_individual_collateral(id_file):
             }
         }
     
+def reject_borrower_loan(BID):
+    deleted_count = {
+        'BorrowerGood': 0,
+        'BorrowerError': 0
+    }
+    bid_to_update = None
+    update_status_success = False
+    current_status = None
 
+    try:
+        # 1. ແປງ BID ເປັນຕົວເລກ
+        try:
+            bid_to_update = int(BID)
+        except ValueError:
+            return {
+                'success': False,
+                'message': f'BID ບໍ່ຖືກຕ້ອງ: {BID}',
+                'details': {}
+            }
+
+        # 2. ຫາໄຟລ໌
+        file_obj = Upload_File_Borrower.objects.filter(BID=bid_to_update).first()
+        if not file_obj:
+            return {
+                'success': False,
+                'message': f'ບໍ່ພົບຂໍ້ມູນໄຟລ໌ BID: {bid_to_update}',
+                'details': {'bid': bid_to_update}
+            }
+
+        current_status = file_obj.statussubmit
+
+        # 3. ລຶບຂໍ້ມູນທີ່ກ່ຽວຂ້ອງ
+        deleted_count['BorrowerGood'] = BorrowerGood.objects.filter(id_file=file_obj).delete()[0]
+        deleted_count['BorrowerError'] = BorrowerError.objects.filter(id_file=file_obj).delete()[0]
+        total_deleted = sum(deleted_count.values())
+
+        # 4. ອັບເດດສະຖານະ
+        file_obj.statussubmit = '7'
+        file_obj.updateDate = timezone.now()
+        file_obj.save()
+        update_status_success = True
+
+        # 5. ສ້າງ message
+        msg = []
+        if total_deleted:
+            msg.append(f'ລົບ: {total_deleted} ລາຍການ')
+        else:
+            msg.append('ບໍ່ມີຂໍ້ມູນຖືກລົບ')
+
+        msg.append(f'ປະຕິເສດສຳເລັດ (BID: {bid_to_update}) → statussubmit {current_status} → 7')
+
+        return {
+            'success': True,
+            'message': ' | '.join(msg),
+            'details': {
+                'BID': BID,
+                'bid': bid_to_update,
+                'file_id': file_obj.file_id,
+                'current_status': current_status,
+                'new_status': '7',
+                'deleted': deleted_count,
+                'status_updated': update_status_success
+            }
+        }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}',
+            'details': {
+                'BID': BID,
+                'bid_extracted': bid_to_update,
+                'current_status': current_status,
+                'deleted': deleted_count
+            }
+        }
 # utils.py
 from django.db import transaction
 from django.utils import timezone

@@ -158,7 +158,8 @@ from .views import (
     BorrowerFileUploadView,
     BorrowerFileListView,
     BorrowerFilePeriodListView,
-    confirm_upload_borrower
+    confirm_upload_borrower,
+    reject_borrower_loan_view
 )
 #tik
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
@@ -401,6 +402,7 @@ urlpatterns = [
     path('api/disputes/confirmc/', views.confirm_dispute_colatteral, name='confirm_dispute_colatteral'),
     path('api/reject_individual_loan/<str:id_file>/', views.reject_individual_loan_view, name='reject_individual_loan'),
     path('api/reject_individual_collateral/<str:id_file>/', views.reject_individual_collateral_view, name='reject_individual_loan'),
+    path('api/borrower/reject/<str:BID>/', reject_borrower_loan_view, name='reject-borrower'),
 
     
     path('api/rollback_reconfirm/', views.rollback_and_reconfirm_individual, name='rollback_reconfirm'),
