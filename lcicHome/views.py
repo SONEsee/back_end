@@ -12966,7 +12966,7 @@ def confirm_upload_borrower(request):
                 
                 for i in range(0, len(ids_list), batch_size):
                     batch = ids_list[i:i + batch_size]
-                    deleted_count = BorrowerMonthly.objects.filter(id__in=batch).delete()[0]
+                    deleted_count = BorrowerMonhtly.objects.filter(id__in=batch).delete()[0]
                     total_deleted += deleted_count
                     print(f"    ລຶບແລ້ວ: {total_deleted}/{len(ids_list)} ແຖວ")
             
@@ -12989,8 +12989,8 @@ def confirm_upload_borrower(request):
                 total_created = 0
                 for i in range(0, len(borrower_monthly_update_items), 1000):
                     batch = borrower_monthly_update_items[i:i + 1000]
-                    BorrowerMonthly.objects.bulk_create([
-                        BorrowerMonthly(
+                    BorrowerMonhtly.objects.bulk_create([
+                        BorrowerMonhtly(
                             id_file=upload_file,
                             EenterpriseID=item.EenterpriseID,
                             LCIC_code=item.LCIC_code,
@@ -13014,8 +13014,8 @@ def confirm_upload_borrower(request):
                 total_created = 0
                 for i in range(0, len(borrower_monthly_create_items), 1000):
                     batch = borrower_monthly_create_items[i:i + 1000]
-                    BorrowerMonthly.objects.bulk_create([
-                        BorrowerMonthly(
+                    BorrowerMonhtly.objects.bulk_create([
+                        BorrowerMonhtly(
                             id_file=upload_file,
                             EenterpriseID=item.EenterpriseID,
                             LCIC_code=item.LCIC_code,
