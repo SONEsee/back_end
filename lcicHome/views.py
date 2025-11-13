@@ -8207,11 +8207,267 @@ class BorrowerFileUploadView(generics.CreateAPIView):
                 'uploaded': success
             }, status=201)
 
+# def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
+#     """
+#     ປະມວນຜົນໄຟລ໌ Borrower ແລະແຍກປະເພດເຂົ້າ BorrowerGood ແລະ BorrowerError
+#     (ປັບປຸງສຳລັບຂໍ້ມູນຂະໜາດໃຫຍ່)
+#     """
+#     try:
+#         with transaction.atomic():
+            
+#             file_content = file.read().decode('utf-8')
+#             json_data = json.loads(file_content)
+            
+#             print(f"\n[PROCESS] ເລີ່ມປະມວນຜົນ {len(json_data):,} records...")
+
+        
+#             a1_records = []  
+#             a2_records = []  
+#             other_records = []
+
+#             for record in json_data:
+#                 seg_type_borrower = record.get('segmentTypeBorrower', '').strip()
+#                 if seg_type_borrower == 'A1':
+#                     a1_records.append(record)
+#                 elif seg_type_borrower == 'A2':
+#                     a2_records.append(record)
+#                 else:
+#                     other_records.append(record)
+
+#             print(f"  A1 (Individual): {len(a1_records):,}")
+#             print(f"  A2 (Enterprise): {len(a2_records):,}")
+#             print(f"  Other: {len(other_records):,}")
+
+          
+#             a1_lcic_codes = {r.get('LCIC_code', '').strip() for r in a1_records if r.get('LCIC_code')}
+#             a2_lcic_codes = {r.get('LCIC_code', '').strip() for r in a2_records if r.get('LCIC_code')}
+#             all_lcic_codes = a1_lcic_codes | a2_lcic_codes
+            
+#             print(f"\n[OPTIMIZATION] Unique LCIC codes to check: {len(all_lcic_codes):,}")
+
+           
+#             print(f"\n[CACHE] ດຶງຂໍ້ມູນອ້າງອີງ...")
+            
+            
+#             if a2_lcic_codes:
+#                 enterprise_lcic_codes = set(
+#                     EnterpriseInfo.objects
+#                     .filter(LCIC_code__in=a2_lcic_codes)
+#                     .values_list('LCIC_code', flat=True)
+#                 )
+#             else:
+#                 enterprise_lcic_codes = set()
+#             print(f"  EnterpriseInfo LCIC found: {len(enterprise_lcic_codes):,} / {len(a2_lcic_codes):,}")
+
+           
+#             if a1_lcic_codes:
+#                 individual_lcic_ids = set(
+#                     IndividualBankIbk.objects
+#                     .filter(
+#                         bnk_code=bnk_code,
+#                         lcic_id__in=a1_lcic_codes
+#                     )
+#                     .values_list('lcic_id', flat=True)
+#                 )
+#             else:
+#                 individual_lcic_ids = set()
+#             print(f"  IndividualBankIbk LCIC found: {len(individual_lcic_ids):,} / {len(a1_lcic_codes):,}")
+
+            
+#             if all_lcic_codes:
+#                 b1_tuples = set(
+#                     B1.objects
+#                     .filter(
+#                         bnk_code=bnk_code,
+#                         LCIC_code__in=all_lcic_codes
+#                     )
+#                     .values_list('LCIC_code', 'bnk_code', 'customer_id', 'loan_id', 'segmentType')
+#                 )
+#             else:
+#                 b1_tuples = set()
+#             print(f"  B1 tuples found: {len(b1_tuples):,}")
+
+         
+#             print(f"\n[A2] ປະມວນຜົນ Enterprise records...")
+#             a2_good = []
+#             a2_error_no_lcic = []  
+#             a2_error_no_b1 = []    
+
+#             for record in a2_records:
+#                 lcic_code = record.get('LCIC_code', '').strip()
+#                 customer_id = record.get('customer_id', '').strip()
+#                 loan_id = record.get('loan_id', '').strip()
+#                 seg_type_borrower = record.get('segmentTypeBorrower', '').strip()
+                
+                
+#                 if lcic_code not in enterprise_lcic_codes:
+#                     a2_error_no_lcic.append({
+#                         'record': record,
+#                         'status': 1
+#                     })
+#                     continue
+                
+              
+#                 b1_key = (lcic_code, bnk_code, customer_id, loan_id, seg_type_borrower)
+#                 if b1_key in b1_tuples:
+#                     a2_good.append(record)
+#                 else:
+#                     a2_error_no_b1.append({
+#                         'record': record,
+#                         'status': 2
+#                     })
+
+#             print(f"  A2 Good: {len(a2_good):,}")
+#             print(f"  A2 Error (no LCIC): {len(a2_error_no_lcic):,}")
+#             print(f"  A2 Error (no B1): {len(a2_error_no_b1):,}")
+
+            
+#             print(f"\n[A1] ປະມວນຜົນ Individual records...")
+#             a1_good = []
+#             a1_error_no_lcic = []  
+#             a1_error_no_b1 = []    
+
+#             for record in a1_records:
+#                 lcic_code = record.get('LCIC_code', '').strip()
+#                 customer_id = record.get('customer_id', '').strip()
+#                 loan_id = record.get('loan_id', '').strip()
+#                 seg_type_borrower = record.get('segmentTypeBorrower', '').strip()
+                
+               
+#                 if lcic_code not in individual_lcic_ids:
+#                     a1_error_no_lcic.append({
+#                         'record': record,
+#                         'status': 1
+#                     })
+#                     continue
+                
+                
+#                 b1_key = (lcic_code, bnk_code, customer_id, loan_id, seg_type_borrower)
+#                 if b1_key in b1_tuples:
+#                     a1_good.append(record)
+#                 else:
+#                     a1_error_no_b1.append({
+#                         'record': record,
+#                         'status': 2
+#                     })
+
+#             print(f"  A1 Good: {len(a1_good):,}")
+#             print(f"  A1 Error (no LCIC): {len(a1_error_no_lcic):,}")
+#             print(f"  A1 Error (no B1): {len(a1_error_no_b1):,}")
+
+            
+#             print(f"\n[SAVE] ສ້າງ Upload_File_Borrower...")
+#             upload_file = Upload_File_Borrower.objects.create(
+#                 user_id=user_id,
+#                 fileName=file.name,
+#                 fileUpload=file,
+#                 period=period_value,
+#                 status='1',
+#                 statussubmit='1',
+#                 status_upload='success',
+#                 fileSize=str(file.size),
+#                 path=f"borrower/{file.name}"
+#             )
+            
+          
+#             file_id = f"b-{upload_file.BID}"
+#             upload_file.file_id = file_id
+#             upload_file.save(update_fields=['file_id'])
+            
+#             print(f"  Created Upload_File_Borrower: {file_id}")
+
+           
+#             total_good = len(a1_good) + len(a2_good)
+#             if total_good > 0:
+#                 print(f"\n[SAVE] ບັນທຶກ {total_good:,} BorrowerGood records...")
+#                 good_objects = []
+                
+#                 for record in a1_good + a2_good:
+#                     good_objects.append(BorrowerGood(
+#                         id_file=upload_file,
+#                         LCIC_code=record.get('LCIC_code', '').strip(),
+#                         Customer_ID=record.get('customer_id', '').strip(),
+#                         SegmentType=record.get('segmentType', '').strip(),
+#                         bnk_code=record.get('bnk_code', '').strip(),
+#                         branch=record.get('branch_id', '').strip(),
+#                         loan_id=record.get('loan_id', '').strip(),
+#                         segmentTypeBorrower=record.get('segmentTypeBorrower', '').strip(),
+#                         period=period_value,
+#                         status=0,
+#                         user_insert=user_id
+#                     ))
+                
+#                 BorrowerGood.objects.bulk_create(good_objects, batch_size=1000)
+#                 print(f"  ບັນທຶກສຳເລັດ!")
+
+         
+#             all_errors = a1_error_no_lcic + a1_error_no_b1 + a2_error_no_lcic + a2_error_no_b1
+#             if len(all_errors) > 0:
+#                 print(f"\n[SAVE] ບັນທຶກ {len(all_errors):,} BorrowerError records...")
+#                 error_objects = []
+                
+#                 for error_item in all_errors:
+#                     record = error_item['record']
+#                     error_objects.append(BorrowerError(
+#                         id_file=upload_file,
+#                         LCIC_code=record.get('LCIC_code', '').strip(),
+#                         Customer_ID=record.get('customer_id', '').strip(),
+#                         SegmentType=record.get('segmentType', '').strip(),
+#                         bnk_code=record.get('bnk_code', '').strip(),
+#                         branch=record.get('branch_id', '').strip(),
+#                         loan_id=record.get('loan_id', '').strip(),
+#                         segmentTypeBorrower=record.get('segmentTypeBorrower', '').strip(),
+#                         period=period_value,
+#                         status=error_item['status'],
+#                         user_insert=user_id
+#                     ))
+                
+#                 BorrowerError.objects.bulk_create(error_objects, batch_size=1000)
+#                 print(f"  ບັນທຶກສຳເລັດ!")
+
+#             #
+#             total_records = len(json_data)
+#             total_errors = len(all_errors)
+
+#             if total_records > 0:
+#                 error_percentage = (total_errors / total_records) * 100
+#             else:
+#                 error_percentage = 0.0
+
+#             upload_file.percentage = round(error_percentage, 2)
+#             upload_file.save(update_fields=['percentage'])
+
+#             print(f"\n[PERCENTAGE] Error: {total_errors}/{total_records} = {error_percentage:.2f}%")
+
+           
+#             print(f"\n[DONE] ປະມວນຜົນສຳເລັດ!")
+#             return {
+#                 'file_name': file.name,
+#                 'file_id': file_id,
+#                 'period': period_value,
+#                 'total_records': total_records,
+#                 'good_records': total_good,
+#                 'error_records': total_errors,
+#                 'error_percentage': error_percentage,
+#                 'breakdown': {
+#                     'a1_good': len(a1_good),
+#                     'a1_error_no_lcic': len(a1_error_no_lcic),
+#                     'a1_error_no_b1': len(a1_error_no_b1),
+#                     'a2_good': len(a2_good),
+#                     'a2_error_no_lcic': len(a2_error_no_lcic),
+#                     'a2_error_no_b1': len(a2_error_no_b1)
+#                 }
+#             }
+
+#     except Exception as e:
+#         logger.error(f"Error processing file: {str(e)}", exc_info=True)
+#         return {
+#             'file_name': file.name,
+#             'error_code': 'PROCESSING_ERROR',
+#             'message': f'ຜິດພາດໃນການປະມວນຜົນ: {str(e)}'
+#         }
 def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
-    """
-    ປະມວນຜົນໄຟລ໌ Borrower ແລະແຍກປະເພດເຂົ້າ BorrowerGood ແລະ BorrowerError
-    (ປັບປຸງສຳລັບຂໍ້ມູນຂະໜາດໃຫຍ່)
-    """
+   
     try:
         with transaction.atomic():
             
@@ -8220,7 +8476,7 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
             
             print(f"\n[PROCESS] ເລີ່ມປະມວນຜົນ {len(json_data):,} records...")
 
-        
+           
             a1_records = []  
             a2_records = []  
             other_records = []
@@ -8238,17 +8494,17 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
             print(f"  A2 (Enterprise): {len(a2_records):,}")
             print(f"  Other: {len(other_records):,}")
 
-          
+            
             a1_lcic_codes = {r.get('LCIC_code', '').strip() for r in a1_records if r.get('LCIC_code')}
             a2_lcic_codes = {r.get('LCIC_code', '').strip() for r in a2_records if r.get('LCIC_code')}
             all_lcic_codes = a1_lcic_codes | a2_lcic_codes
             
             print(f"\n[OPTIMIZATION] Unique LCIC codes to check: {len(all_lcic_codes):,}")
 
-           
+            
             print(f"\n[CACHE] ດຶງຂໍ້ມູນອ້າງອີງ...")
             
-            
+           
             if a2_lcic_codes:
                 enterprise_lcic_codes = set(
                     EnterpriseInfo.objects
@@ -8259,7 +8515,7 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                 enterprise_lcic_codes = set()
             print(f"  EnterpriseInfo LCIC found: {len(enterprise_lcic_codes):,} / {len(a2_lcic_codes):,}")
 
-           
+            
             if a1_lcic_codes:
                 individual_lcic_ids = set(
                     IndividualBankIbk.objects
@@ -8287,7 +8543,7 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                 b1_tuples = set()
             print(f"  B1 tuples found: {len(b1_tuples):,}")
 
-         
+            
             print(f"\n[A2] ປະມວນຜົນ Enterprise records...")
             a2_good = []
             a2_error_no_lcic = []  
@@ -8307,7 +8563,7 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                     })
                     continue
                 
-              
+                
                 b1_key = (lcic_code, bnk_code, customer_id, loan_id, seg_type_borrower)
                 if b1_key in b1_tuples:
                     a2_good.append(record)
@@ -8355,7 +8611,27 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
             print(f"  A1 Error (no LCIC): {len(a1_error_no_lcic):,}")
             print(f"  A1 Error (no B1): {len(a1_error_no_b1):,}")
 
-            
+           
+            total_records = len(json_data)
+            all_errors = a1_error_no_lcic + a1_error_no_b1 + a2_error_no_lcic + a2_error_no_b1
+            total_errors = len(all_errors)
+
+            if total_records > 0:
+                error_percentage = (total_errors / total_records) * 100
+            else:
+                error_percentage = 0.0
+
+            print(f"\n[PERCENTAGE] Error: {total_errors}/{total_records} = {error_percentage:.2f}%")
+
+          
+            if error_percentage >= 15:
+                status_submit = '2'  
+                print(f"  ⚠️ Error percentage >= 15% → statussubmit='2'")
+            else:
+                status_submit = '1' 
+                print(f"  ✅ Error percentage < 15% → statussubmit='1'")
+
+           
             print(f"\n[SAVE] ສ້າງ Upload_File_Borrower...")
             upload_file = Upload_File_Borrower.objects.create(
                 user_id=user_id,
@@ -8363,20 +8639,21 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                 fileUpload=file,
                 period=period_value,
                 status='1',
-                statussubmit='1',
+                statussubmit=status_submit,  
                 status_upload='success',
                 fileSize=str(file.size),
-                path=f"borrower/{file.name}"
+                path=f"borrower/{file.name}",
+                percentage=round(error_percentage, 2)  
             )
             
-          
+            
             file_id = f"b-{upload_file.BID}"
             upload_file.file_id = file_id
             upload_file.save(update_fields=['file_id'])
             
-            print(f"  Created Upload_File_Borrower: {file_id}")
+            print(f"  Created Upload_File_Borrower: {file_id} (statussubmit={status_submit})")
 
-           
+            
             total_good = len(a1_good) + len(a2_good)
             if total_good > 0:
                 print(f"\n[SAVE] ບັນທຶກ {total_good:,} BorrowerGood records...")
@@ -8387,6 +8664,9 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                         id_file=upload_file,
                         LCIC_code=record.get('LCIC_code', '').strip(),
                         Customer_ID=record.get('customer_id', '').strip(),
+                        LCIC_code_brw=record.get('LCIC_code_brw', '').strip(),
+                        customer_id_brw=record.get('customer_id_brw', '').strip(),
+                        branch_id_brw=record.get('branch_id_brw', '').strip(),
                         SegmentType=record.get('segmentType', '').strip(),
                         bnk_code=record.get('bnk_code', '').strip(),
                         branch=record.get('branch_id', '').strip(),
@@ -8400,10 +8680,9 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                 BorrowerGood.objects.bulk_create(good_objects, batch_size=1000)
                 print(f"  ບັນທຶກສຳເລັດ!")
 
-         
-            all_errors = a1_error_no_lcic + a1_error_no_b1 + a2_error_no_lcic + a2_error_no_b1
-            if len(all_errors) > 0:
-                print(f"\n[SAVE] ບັນທຶກ {len(all_errors):,} BorrowerError records...")
+           
+            if total_errors > 0:
+                print(f"\n[SAVE] ບັນທຶກ {total_errors:,} BorrowerError records...")
                 error_objects = []
                 
                 for error_item in all_errors:
@@ -8413,6 +8692,9 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                         LCIC_code=record.get('LCIC_code', '').strip(),
                         Customer_ID=record.get('customer_id', '').strip(),
                         SegmentType=record.get('segmentType', '').strip(),
+                        LCIC_code_brw=record.get('LCIC_code_brw', '').strip(),
+                        customer_id_brw=record.get('customer_id_brw', '').strip(),
+                        branch_id_brw=record.get('branch_id_brw', '').strip(),
                         bnk_code=record.get('bnk_code', '').strip(),
                         branch=record.get('branch_id', '').strip(),
                         loan_id=record.get('loan_id', '').strip(),
@@ -8425,21 +8707,7 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                 BorrowerError.objects.bulk_create(error_objects, batch_size=1000)
                 print(f"  ບັນທຶກສຳເລັດ!")
 
-            #
-            total_records = len(json_data)
-            total_errors = len(all_errors)
 
-            if total_records > 0:
-                error_percentage = (total_errors / total_records) * 100
-            else:
-                error_percentage = 0.0
-
-            upload_file.percentage = round(error_percentage, 2)
-            upload_file.save(update_fields=['percentage'])
-
-            print(f"\n[PERCENTAGE] Error: {total_errors}/{total_records} = {error_percentage:.2f}%")
-
-           
             print(f"\n[DONE] ປະມວນຜົນສຳເລັດ!")
             return {
                 'file_name': file.name,
@@ -8449,6 +8717,7 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                 'good_records': total_good,
                 'error_records': total_errors,
                 'error_percentage': error_percentage,
+                'statussubmit': status_submit,  # ເພີ່ມໃນ response
                 'breakdown': {
                     'a1_good': len(a1_good),
                     'a1_error_no_lcic': len(a1_error_no_lcic),
@@ -8466,7 +8735,6 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
             'error_code': 'PROCESSING_ERROR',
             'message': f'ຜິດພາດໃນການປະມວນຜົນ: {str(e)}'
         }
-
 # views.py
 from rest_framework import generics
 from rest_framework.response import Response
@@ -12498,7 +12766,7 @@ import re
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
-from .utils import reject_individual_loan,reject_individual_collateral
+from .utils import reject_individual_loan,reject_individual_collateral,reject_borrower_loan
 
 @csrf_exempt  
 @transaction.atomic
@@ -12525,7 +12793,18 @@ def reject_individual_collateral_view(request, id_file):
             'success': False,
             'message': 'Method not allowed. Use POST.'
         }, status=405)
-
+@csrf_exempt  
+@transaction.atomic
+def reject_borrower_loan_view(request, BID):
+    if request.method == 'POST':
+        result = reject_borrower_loan(BID)
+        status_code = 200 if result['success'] else 400
+        return JsonResponse(result, status=status_code)
+    else:
+        return JsonResponse({
+            'success': False,
+            'message': 'Method not allowed. Use POST.'
+        }, status=405)
 from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
@@ -12822,7 +13101,7 @@ def confirm_upload_borrower(request):
         print(f"ເລີ່ມຕົ້ນການຢືນຢັນການອັບໂຫຼດ (Borrower): BID = {BID}")
         print(f"{'='*80}")
         
-        # 1. ແປງ BID ເປັນຕົວເລກ
+        
         try:
             BID_number = int(BID)
         except ValueError:
@@ -12831,16 +13110,16 @@ def confirm_upload_borrower(request):
         
         print(f"  BID ເປັນຕົວເລກ: {BID_number}")
         
-        # 2. ອັບເດດສະຖານະເບື້ອງຕົ້ນ
+        
         Upload_File_Borrower.objects.filter(BID=BID_number).update(statussubmit='3', dispuste='0')
         
-        # 3. ກວດໄຟລ໌ມີຢູ່ບໍ່
+        
         upload_file = Upload_File_Borrower.objects.filter(BID=BID_number).first()
         if not upload_file:
             print("  ບໍ່ພົບໄຟລ໌ → ຜິດພາດ")
             return JsonResponse({'status': 'error', 'message': 'File not found'}, status=404)
         
-        # 4. ກວດສະຖານະໄຟລ໌
+        
         if upload_file.statussubmit == '0':
             print("  ໄຟລ໌ຖືກຢືນຢັນແລ້ວ → ບໍ່ສາມາດເຮັດຊ້ຳໄດ້")
             return JsonResponse({'status': 'error', 'message': 'File already confirmed'}, status=400)
@@ -12994,6 +13273,9 @@ def confirm_upload_borrower(request):
                             id_file=upload_file,
                             EenterpriseID=item.EenterpriseID,
                             LCIC_code=item.LCIC_code,
+                            LCIC_code_brw=item.LCIC_code_brw,
+                            customer_id_brw=item.customer_id_brw,
+                            branch_id_brw=item.branch_id_brw,
                             segmentTypeBorrower=item.segmentTypeBorrower,
                             period=item.period,
                             SegmentType=item.SegmentType,
@@ -13019,6 +13301,9 @@ def confirm_upload_borrower(request):
                             id_file=upload_file,
                             EenterpriseID=item.EenterpriseID,
                             LCIC_code=item.LCIC_code,
+                            LCIC_code_brw=item.LCIC_code_brw,
+                            customer_id_brw=item.customer_id_brw,
+                            branch_id_brw=item.branch_id_brw,
                             segmentTypeBorrower=item.segmentTypeBorrower,
                             period=item.period,
                             SegmentType=item.SegmentType,
@@ -13045,6 +13330,9 @@ def confirm_upload_borrower(request):
                             EenterpriseID=item.EenterpriseID,
                             segmentTypeBorrower=item.segmentTypeBorrower,
                             LCIC_code=item.LCIC_code,
+                            LCIC_code_brw=item.LCIC_code_brw,
+                            customer_id_brw=item.customer_id_brw,
+                            branch_id_brw=item.branch_id_brw,
                             period=item.period,
                             SegmentType=item.SegmentType,
                             Customer_ID=item.Customer_ID,
@@ -13070,6 +13358,9 @@ def confirm_upload_borrower(request):
                             EenterpriseID=item.EenterpriseID,
                             segmentTypeBorrower=item.segmentTypeBorrower,
                             LCIC_code=item.LCIC_code,
+                            LCIC_code_brw=item.LCIC_code_brw,
+                            customer_id_brw=item.customer_id_brw,
+                            branch_id_brw=item.branch_id_brw,
                             period=item.period,
                             SegmentType=item.SegmentType,
                             Customer_ID=item.Customer_ID,
