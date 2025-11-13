@@ -1448,3 +1448,5 @@ class CreditScoreService:
             return breakdown
         except Exception as e:
             raise Exception(f"Error calculating score breakdown: {str(e)}")
+        
+        
