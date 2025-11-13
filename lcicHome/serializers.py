@@ -35,7 +35,32 @@ class IndividualCollatteralFileSerializer(serializers.ModelSerializer):
 from rest_framework import serializers
 from .models import EnterpriseMemberSubmit
 
+from .models import Upload_File_Borrower
 
+class BorrowerFileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Upload_File_Borrower
+        fields = [
+            'BID',
+            'SType',
+            'UType',
+            'user_id',
+            'file_id',
+            'fileName',
+            'fileUpload',
+            'progress_percentage',
+            'fileSize',
+            'path',
+            'insertDate',
+            'updateDate',
+            'period',
+            'status',
+            'statussubmit',
+            'status_upload',
+            'FileType',
+            'percentage',
+            'dispuste'
+        ]
 class EnterpriseMemberSubmitSerializer(serializers.ModelSerializer):
     """
     Serializer ສຳຫຼັບ EnterpriseMemberSubmit
@@ -1005,15 +1030,15 @@ class EDLCustomerSerializer(serializers.ModelSerializer):
         # You may have a province mapping or related model
         # For now, return the ID or map manually
         province_map = {
-            '1': 'ນະຄອນຫຼວງວຽງຈັນ',
-            '2': 'ຜົ້ງສາລີ',
-            '3': 'ຫຼວງນໍ້າທາ',
-            '4': 'ອຸດົມໄຊ',
-            '5': 'ບໍ່ແກ້ວ',
-            '6': 'ຫຼວງພະບາງ',
-            '7': 'ຫົວພັນ',
-            '8': 'ໄຊຍະບູລີ',
-            '9': 'ຊຽງຂວາງ',
+            '01': 'ນະຄອນຫຼວງວຽງຈັນ',
+            '02': 'ຜົ້ງສາລີ',
+            '03': 'ຫຼວງນໍ້າທາ',
+            '04': 'ອຸດົມໄຊ',
+            '05': 'ບໍ່ແກ້ວ',
+            '06': 'ຫຼວງພະບາງ',
+            '07': 'ຫົວພັນ',
+            '08': 'ໄຊຍະບູລີ',
+            '09': 'ຊຽງຂວາງ',
             '10': 'ວຽງຈັນ',
             '11': 'ບໍລິຄໍາໄຊ',
             '12': 'ຄໍາມ່ວນ',
