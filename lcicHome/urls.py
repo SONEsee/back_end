@@ -153,7 +153,12 @@ from .views import (
     ElectricCustomerSearchAPIView, 
     FCR_reportIndividualView,
     FileUploadViewIndividual,
-    IndividualCollateralFileListView
+    IndividualCollateralFileListView,
+    EnterpriseMemberSubmitViewSet,
+    BorrowerFileUploadView,
+    BorrowerFileListView,
+    BorrowerFilePeriodListView,
+    confirm_upload_borrower
 )
 #tik
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
@@ -173,6 +178,7 @@ router.register(r'members', MemberInfoViewSet)
 router.register(r'investorinfo', InvestorInfoViewSet)
 router.register(r'enterpriseinfo', EnterpriseInfoViewSet)
 router.register(r'user-groups', UserGroupViewSet, basename='usergroup')
+router.register(r'enterprises', EnterpriseMemberSubmitViewSet, basename='enterprise')
 @ensure_csrf_cookie
 def get_csrf_token(request):
     return JsonResponse({'csrfToken': request.META.get('CSRF_COOKIE')})
@@ -305,7 +311,7 @@ urlpatterns = [
    path('charge_report/<str:bnk_code>', charge_reportView.as_view(), name='charge_searchlog'),
    path('searchlog_chart/', SearchLogChartView.as_view(), name='searchlog_chart'),
    path('api/individual-file-periods/', IndividualFilePeriodListView.as_view(), name='individual-file-periods'),
-   
+   path('api/borrower/periods/', BorrowerFilePeriodListView.as_view(), name='borrower-period-list'),
    
    path('searchlog_chart/month/<str:month_year>', SearchLogChart_MonthView.as_view(), name='searchlog_chartbymonth'),
    path('searchlog_chart/month/', SearchLogChart_MonthView.as_view(), name='searchlog_chart_current_month'),
@@ -377,6 +383,7 @@ urlpatterns = [
     path('credit-score/calculate/', CreditScoreAPIView.as_view(), name='credit-score-calculate'),
     
     path('api/individual-files/', IndividualFileListView.as_view(), name='individual-file-list'),
+    path('api/borrwor-files/', BorrowerFileListView.as_view(), name='borrwor-file-list'),
     path('api/files-individual-collateral/', IndividualCollateralFileListView.as_view(), name='files-individual-collateral'),
   
 #    path('api/upload_files1', FileUploadView.as_view(), name='file-upload'),
@@ -410,10 +417,12 @@ urlpatterns = [
     path('confirm_upload_individual_collateral/', views.confirm_upload_individual_collateral, name='confirm_upload_individual_collateral'),
     path('confirm_uploadc/', views.confirm_uploadc, name='confirm_uploadc'),
     path('unload_uploadc/', views.unload_data, name='unload_data'),
+    path('api/borrower/confirm/', confirm_upload_borrower, name='confirm-borrower'),
     # path('check-upload-status/<str:FID>/', views.check_upload_status, name='check_upload_status'),
 
     # path('upload333/', FileUploadView3.as_view(), name='file-upload'),
     path('upload-files/', FileUploadView3.as_view(), name='upload_files_view'),
+    path('api/borrower/upload/', BorrowerFileUploadView.as_view(), name='borrower-upload'),
     path('upload-files-individual-loan/', IndividualFileUploadView.as_view(), name='upload_files_view_loan'),
     path('upload-files-individual-collateral/', FileUploadViewIndividual.as_view(), name='upload_files_view_collateral'),
     path('process-files/', upload_files, name='upload_files'),
@@ -439,6 +448,7 @@ urlpatterns = [
     path('process-multiple-disputes-collateral/', process_multiple_disputescollateral, name='process_multiple_disputescollateral'),
     path('api/dispute-loan/<int:id_disput_loan>/status/', views.update_dispute_status, name='update_dispute_status'),
     path('api/dispute-collateral/<int:id_disput_loan>/status/', views.update_dispute_status_collateral, name='update_dispute_status_collateral'),
+   
 
     path('api/enterprise-info/', views.create_enterprise_info, name='create_enterprise_info'),
     path('api/last-lcicid/', get_last_lcicid, name='get_last_lcicid'),

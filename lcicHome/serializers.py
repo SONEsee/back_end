@@ -32,7 +32,112 @@ class IndividualCollatteralFileSerializer(serializers.ModelSerializer):
         model = Upload_File_Individual_Collateral
         fields = '__all__'  
         
+from rest_framework import serializers
+from .models import EnterpriseMemberSubmit
 
+from .models import Upload_File_Borrower
+
+class BorrowerFileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Upload_File_Borrower
+        fields = [
+            'BID',
+            'SType',
+            'UType',
+            'user_id',
+            'file_id',
+            'fileName',
+            'fileUpload',
+            'progress_percentage',
+            'fileSize',
+            'path',
+            'insertDate',
+            'updateDate',
+            'period',
+            'status',
+            'statussubmit',
+            'status_upload',
+            'FileType',
+            'percentage',
+            'dispuste'
+        ]
+class EnterpriseMemberSubmitSerializer(serializers.ModelSerializer):
+    """
+    Serializer ສຳຫຼັບ EnterpriseMemberSubmit
+    """
+    
+    # Read-only fields ທີ່ສະແດງຂໍ້ມູນເພີ່ມເຕີມ
+    id_file_name = serializers.CharField(
+        source='id_file.file_name', 
+        read_only=True, 
+        allow_null=True
+    )
+    
+    class Meta:
+        model = EnterpriseMemberSubmit
+        fields = '__all__'
+        read_only_fields = [
+            'LCICID', 
+            'InsertDate', 
+            'UpdateDate', 
+            'LastUpdate',
+            'user_insert',
+            'user_update'
+        ]
+    
+    def validate_LCIC_code(self, value):
+        """
+        ກວດສອບວ່າ LCIC_code ບໍ່ຊ້ຳກັນ
+        """
+        if value:
+            instance = self.instance
+            queryset = EnterpriseMemberSubmit.objects.filter(LCIC_code=value)
+            
+            if instance:
+                queryset = queryset.exclude(pk=instance.pk)
+            
+            if queryset.exists():
+                raise serializers.ValidationError(
+                    f"LCIC_code {value} ມີຢູ່ແລ້ວໃນລະບົບ"
+                )
+        
+        return value
+    
+    def validate_investmentAmount(self, value):
+        """
+        ກວດສອບຈຳນວນເງິນລົງທຶນ
+        """
+        if value is not None and value < 0:
+            raise serializers.ValidationError(
+                "ຈຳນວນເງິນລົງທຶນຕ້ອງບໍ່ນ້ອຍກວ່າ 0"
+            )
+        return value
+    
+    def to_representation(self, instance):
+        """
+        ປັບແຕ່ງຂໍ້ມູນທີ່ສົ່ງກັບ
+        """
+        data = super().to_representation(instance)
+        
+        # ແປງວັນທີເປັນ format ທີ່ອ່ານງ່າຍ
+        date_fields = ['regisDate', 'LastUpdate', 'InsertDate', 'UpdateDate', 'CancellationDate']
+        for field in date_fields:
+            if data.get(field):
+                try:
+                    date_obj = datetime.fromisoformat(data[field].replace('Z', '+00:00'))
+                    data[f'{field}_formatted'] = date_obj.strftime('%d/%m/%Y %H:%M:%S')
+                except:
+                    pass
+        
+        # ເພີ່ມຂໍ້ມູນສະຖານະເປັນຂໍ້ຄວາມ
+        status_map = {
+            -1: 'ຖືກລຶບ',
+            0: 'ປິດໃຊ້ງານ',
+            1: 'ເປີດໃຊ້ງານ'
+        }
+        data['status_text'] = status_map.get(data.get('status'), 'ບໍ່ທຮາບ')
+        
+        return data
         
 from rest_framework import serializers
 from .models import Login
