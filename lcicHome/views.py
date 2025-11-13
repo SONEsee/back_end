@@ -31841,7 +31841,7 @@ from .models import (
     IndividualBankIbk, IndividualBankIbkInfo, IndividualIdentifier,
     MatchingCandidate, MergeHistory
 )
-from .matching_service_corrected import CustomerMatchingService
+# from .matching_service_corrected import CustomerMatchingService
 from .merge_service import CustomerMergeService
 
 
