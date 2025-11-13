@@ -1,3 +1,7 @@
+"""
+CORRECTED Customer Matching Service
+Fixed approach: Unique IDs are KEY, exact matches are critical
+"""
 from difflib import SequenceMatcher
 from datetime import datetime
 from django.db import transaction
