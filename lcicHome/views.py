@@ -16386,7 +16386,7 @@ class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
         try:
             data = request.data.copy()
 
-            # 1. ດຶງໄຟລ໌
+          
             file = request.FILES.get('file')
             if not file:
                 return Response({
@@ -16394,33 +16394,33 @@ class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
                     'message': 'ກະລຸນາອັບໂຫຼດໄຟລ໌'
                 }, status=status.HTTP_400_BAD_REQUEST)
 
-            # 2. ສ້າງ CollateralNew ກ່ອນ
+           
             collateral = CollateralNew(
                 bank_id=data.get('bank_id'),
                 branch_id=data.get('branch_id'),
                 filename=file.name,
                 image=file,
                 user=request.user.username if request.user.is_authenticated else 'anonymous',
-                status='1',  # ຫຼື 'active', 'pending' ຕາມທີ່ຕ້ອງການ
+                status='1', 
                 LCIC_reques=data.get('LCIC_reques'),
-                # pathfile ຈະໄດ້ຈາກ ImageField ອັດຕະໂນມັດ
+                
             )
-            collateral.save()  # ໄດ້ id ທັນທີ
+            collateral.save()  
 
-            # 3. ລຶບ id_file ອອກກ່ອນ validate (ປ້ອງກັນ error)
+           
             data.pop('id_file', None)
 
-            # 4. ຕັ້ງຄ່າ audit fields ຂອງ EnterpriseMemberSubmit
+           
             data['user_insert'] = request.user.username
             data['InsertDate'] = timezone.now()
             data['LastUpdate'] = timezone.now()
 
-            # 5. validate ແລະ ສ້າງ EnterpriseMemberSubmit
+            
             serializer = self.get_serializer(data=data)
             serializer.is_valid(raise_exception=True)
             instance = serializer.save()
 
-            # 6. ໃສ່ id_file ດ້ວຍ object ຂອງ CollateralNew
+            
             instance.id_file = collateral
             instance.save()
 
@@ -16431,7 +16431,7 @@ class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
                 'message': 'ສ້າງຂໍ້ມູນວິສາຫະກິດສຳເລັດ',
                 'data': self.get_serializer(instance).data,
                 'collateral_id': collateral.id,
-                'file_url': collateral.image.url  # ສົ່ງ URL ກັບຄືນ
+                'file_url': collateral.image.url 
             }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
@@ -16453,7 +16453,7 @@ class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
             
             data = request.data.copy()
             
-            # ກຳນົດຜູ້ອັບເດດ ແລະ ວັນທີອັບເດດ
+          
             data['user_update'] = request.user.username
             data['UpdateDate'] = timezone.now()
             data['LastUpdate'] = timezone.now()
@@ -16616,7 +16616,7 @@ import traceback
 
 
 def generate_lcic_code():
-    """ສ້າງ LCIC_code ແບບ YYYYMMDDXXXX"""
+  
     date_str = datetime.now().strftime('%Y%m%d')
     characters = string.ascii_uppercase + string.digits
     random_str = ''.join(random.choices(characters, k=4))
@@ -16626,7 +16626,7 @@ def generate_lcic_code():
 
 
 def generate_unique_lcic_code(max_attempts=100):
-    """ສ້າງ LCIC_code ທີ່ບໍ່ຊ້ຳກັນ"""
+   
     print(f"🔄 Generating unique LCIC_code...")
     
     for attempt in range(max_attempts):
@@ -16690,19 +16690,19 @@ def create_enterprise_info(request):
     
     print(f"✅ Validation passed!")
     
-    # 3. ບັນທຶກຂໍ້ມູນ
+   
     try:
         with transaction.atomic():
             print(f"\n[STEP 3] Saving enterprise...")
             
-            # 3.1 ບັນທຶກ Enterprise ກ່ອນ
+            
             enterprise = serializer.save()
             print(f"✅ Enterprise saved!")
             print(f"   LCICID: {enterprise.LCICID}")
             print(f"   EnterpriseID: {enterprise.EnterpriseID}")
             print(f"   LCIC_code (before): '{enterprise.LCIC_code}'")
             
-            # 3.2 ສ້າງ LCIC_code
+          
             print(f"\n[STEP 4] Generating LCIC_code...")
             try:
                 lcic_code = generate_unique_lcic_code(max_attempts=50)
@@ -16710,13 +16710,13 @@ def create_enterprise_info(request):
                 print(f"❌ Failed to generate LCIC_code: {str(e)}")
                 raise
             
-            # 3.3 ບັນທຶກ LCIC_code
+            
             print(f"\n[STEP 5] Saving LCIC_code to enterprise...")
             enterprise.LCIC_code = lcic_code
             enterprise.save(update_fields=['LCIC_code'])
             print(f"✅ LCIC_code saved!")
             
-            # 3.4 Verify
+          
             enterprise.refresh_from_db()
             print(f"   LCIC_code (after): '{enterprise.LCIC_code}'")
             
@@ -16726,7 +16726,7 @@ def create_enterprise_info(request):
                 print(f"   Got: {enterprise.LCIC_code}")
                 raise Exception("LCIC_code verification failed!")
             
-            # 3.5 ອັບເດດ Collateral
+           
             print(f"\n[STEP 6] Updating Collateral...")
             try:
                 collateral = Collateral.objects.get(id=collateral_id)
@@ -16735,11 +16735,11 @@ def create_enterprise_info(request):
                 print(f"   Filename: {collateral.filename}")
                 print(f"   LCIC_reques (before): '{collateral.LCIC_reques}'")
                 
-                # ບັນທຶກ LCIC_code ໃສ່ Collateral
+               
                 collateral.LCIC_reques = lcic_code
                 collateral.save(update_fields=['LCIC_reques'])
                 
-                # Verify
+              
                 collateral.refresh_from_db()
                 print(f"   LCIC_reques (after): '{collateral.LCIC_reques}'")
                 
@@ -16753,7 +16753,7 @@ def create_enterprise_info(request):
                 print(f"❌ ERROR: Collateral ID {collateral_id} not found!")
                 raise Exception(f'ບໍ່ພົບຂໍ້ມູນ Collateral ID: {collateral_id}')
             
-            # 3.6 Return success response
+           
             print(f"\n[STEP 7] Preparing response...")
             print("="*70)
             print("✅✅✅ SUCCESS! ✅✅✅")
