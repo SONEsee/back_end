@@ -1944,7 +1944,7 @@ class EnterpriseMemberSubmit(models.Model):
     status = models.IntegerField(default=0)
     investmentCurrency = models.CharField(max_length=50, blank=True, null=True)
     representativeNationality = models.CharField(max_length=50, blank=True, null=True)
-    id_file = models.ForeignKey('UploadFile_enterpriseinfo', on_delete=models.CASCADE, null=True, blank=True)
+    id_file = models.ForeignKey('CollateralNew', on_delete=models.CASCADE, null=True, blank=True)
     LastUpdate = models.DateTimeField(blank=True, null=True)
     user_insert = models.CharField(max_length=100, blank=True, null=True)
     user_update = models.CharField(max_length=100, blank=True, null=True)
@@ -2046,6 +2046,30 @@ class Collateral(models.Model):
         
     def __str__(self):
         return f"Collateral {self.id} - {self.filename}"
+    
+class CollateralNew(models.Model):
+  
+    bank_id = models.CharField(max_length=100, blank=True, null=True)
+    branch_id = models.CharField(max_length=100, blank=True, null=True)
+    filename = models.CharField(max_length=255)
+    image = models.ImageField(upload_to='collateral_images/')
+    user = models.CharField(max_length=100, blank=True, null=True)
+    insertdate = models.DateTimeField(auto_now_add=True)
+    updatedate = models.DateTimeField(null=True, blank=True)
+    pathfile = models.CharField(max_length=255, blank=True, null=True)
+    status = models.CharField(max_length=100)   
+    LCIC_reques = models.CharField(max_length=100, blank=True, null=True)
+    def save(self, *args, **kwargs):
+        
+        if self.pk:  
+            self.updatedate = timezone.now()
+        super().save(*args, **kwargs)
+
+    class Meta:
+        db_table = 'collateral_new'  
+        
+    def __str__(self):
+        return f"collateral_new {self.id} - {self.filename}"
 
 
 
