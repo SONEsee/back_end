@@ -16582,27 +16582,97 @@ class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
                 'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-
-# def get_collaterals(request):
-#     collaterals = Collateral.objects.exclude(status=0).values('id', 'filename', 'image', 'pathfile', 'status')
-#     return JsonResponse(list(collaterals), safe=False)
-
-
-# from rest_framework import status
-# from rest_framework.response import Response
-# from rest_framework.decorators import api_view
-# from .models import EnterpriseInfo
-# from .serializers import EnterpriseInfoSerializer
-
-# @api_view(['POST'])
-# def create_enterprise_info(request):
-#     if request.method == 'POST':
-#         serializer = EnterpriseInfoSerializer(data=request.data)
-#         if serializer.is_valid():
-#             serializer.save()
-#             return Response(serializer.data, status=status.HTTP_201_CREATED)
-#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 # views.py
+from rest_framework import generics
+from rest_framework.response import Response
+from rest_framework import status
+from .models import CollateralNew
+from .serializers import CollateralNewSerializer
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class CollateralNewListView(generics.ListAPIView):
+    serializer_class = CollateralNewSerializer
+
+    def get_queryset(self):
+        # ດຶງ bank_id ປະຈຸບັນ (required)
+        current_bank_id = self.request.query_params.get('bank_id')
+        
+        # ດຶງ filters
+        bank_id_filter = self.request.query_params.get('bank_id_filter')
+        branch_id = self.request.query_params.get('branch_id')
+        status_filter = self.request.query_params.get('status')
+        lcic_reques = self.request.query_params.get('LCIC_reques')
+
+        queryset = CollateralNew.objects.all()
+
+        # Permission-based filtering
+        if current_bank_id == '01':  # Admin (ທະນາຄານກາງ)
+            # ສາມາດເບິ່ງທຸກທະນາຄານ + filter ໄດ້
+            if bank_id_filter:
+                queryset = queryset.filter(bank_id=bank_id_filter)
+        else:  
+           
+            queryset = queryset.filter(bank_id=current_bank_id)
+        
+        
+        if branch_id:
+            queryset = queryset.filter(branch_id=branch_id)
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        if lcic_reques:
+            queryset = queryset.filter(LCIC_reques=lcic_reques)
+
+        return queryset.order_by('-insertdate')
+
+    def list(self, request, *args, **kwargs):
+        try:
+            # ກວດ bank_id required
+            current_bank_id = request.query_params.get('bank_id')
+            if not current_bank_id:
+                return Response({
+                    'status': 'error',
+                    'message': 'ກະລຸນາປ້ອນ bank_id'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            queryset = self.filter_queryset(self.get_queryset())
+            
+            
+            page = int(request.query_params.get('page', 1))
+            limit = int(request.query_params.get('limit', 20))
+            
+            offset = (page - 1) * limit
+            total_count = queryset.count()
+            paginated_queryset = queryset[offset:offset + limit]
+            
+            serializer = self.get_serializer(paginated_queryset, many=True)
+
+            return Response({
+                'status': 'success',
+                'count': total_count,
+                'page': page,
+                'limit': limit,
+                'total_pages': (total_count + limit - 1) // limit,
+                'results': serializer.data,
+                'filters_applied': {
+                    'bank_id': request.query_params.get('bank_id'),
+                    'bank_id_filter': request.query_params.get('bank_id_filter'),
+                    'branch_id': request.query_params.get('branch_id'),
+                    'status': request.query_params.get('status'),
+                    'LCIC_reques': request.query_params.get('LCIC_reques')
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"CollateralNewListView Error: {str(e)}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'message': 'Internal server error',
+                'details': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view

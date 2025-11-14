@@ -159,7 +159,8 @@ from .views import (
     BorrowerFileListView,
     BorrowerFilePeriodListView,
     confirm_upload_borrower,
-    reject_borrower_loan_view
+    reject_borrower_loan_view,
+    CollateralNewListView
 )
 #tik
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
@@ -284,6 +285,7 @@ urlpatterns = [
    path('reorder/', ReorderSidebarView.as_view(), name='reorder-sidebar'),
    path('api/searchcollateral/', SearchIndividualBankView.as_view(), name='search'),
    path('api/searchcollateral-info/', SearchIndividualBankInfoView.as_view(), name='search'),
+   path('api/collateral/', CollateralNewListView.as_view(), name='collateral-list'),
    
 
    path('userList/', ManageUserView.as_view(), name='mangeuser'),
