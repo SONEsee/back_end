@@ -65,7 +65,13 @@ class BorrowerFileSerializer(serializers.ModelSerializer):
 from rest_framework import serializers
 from .models import CollateralNew
 
+from rest_framework import serializers
+from .models import EnterpriseInfo
 
+class EnterpriseInfoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EnterpriseInfo
+        fields = '__all__'
 class CollateralNewSerializer(serializers.ModelSerializer):
     class Meta:
         model = CollateralNew

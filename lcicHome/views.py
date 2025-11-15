@@ -16326,10 +16326,7 @@ logger = logging.getLogger(__name__)
 
 
 class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet ສຳຫຼັບຈັດການຂໍ້ມູນວິສາຫະກິດທີ່ສົ່ງເຂົ້າມາ
-    ປະກອບດ້ວຍ CRUD operations ທັງໝົດ
-    """
+  
     queryset = EnterpriseMemberSubmit.objects.all()
     serializer_class = EnterpriseMemberSubmitSerializer
     permission_classes = [IsAuthenticated]
@@ -16344,6 +16341,10 @@ class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
         lcic_code = self.request.query_params.get('lcic_code', None)
         if lcic_code:
             queryset = queryset.filter(LCIC_code=lcic_code)
+        
+        id_file = self.request.query_params.get('id_file', None)
+        if id_file:
+            queryset = queryset.filter(id_file=id_file)
         
        
         enterprise_id = self.request.query_params.get('enterprise_id', None)
@@ -16581,7 +16582,52 @@ class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
                 'success': False,
                 'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import EnterpriseInfo
+from .serializers import EnterpriseInfoSerializer
+
+class CheckEnterpriseView(APIView):
+    """
+    POST API ເພື່ອກວດສອບວ່າມີ EnterpriseID ຢູ່ໃນລະບົບບໍ່
+    ຖ້າມີ - ສົ່ງຂໍ້ມູນລາຍລະອຽດກັບຄືນ
+    ຖ້າບໍ່ມີ - ແຈ້ງວ່າບໍ່ພົບຂໍ້ມູນ
+    """
+    def post(self, request):
+        enterprise_id = request.data.get('EnterpriseID')
         
+        # ກວດສອບວ່າມີການສົ່ງ EnterpriseID ມາບໍ່
+        if not enterprise_id:
+            return Response({
+                'success': False,
+                'message': 'ກະລຸນາລະບຸ EnterpriseID',
+                'exists': False,
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # ກວດສອບວ່າມີຂໍ້ມູນຢູ່ໃນຖານຂໍ້ມູນບໍ່
+            enterprise = EnterpriseInfo.objects.get(EnterpriseID=enterprise_id)
+            
+            # ດຶງລາຍລະອຽດອອກມາ
+            serializer = EnterpriseInfoSerializer(enterprise)
+            
+            return Response({
+                'success': True,
+                'message': 'ພົບຂໍ້ມູນວິສາຫະກິດໃນລະບົບແລ້ວ',
+                'exists': True,
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except EnterpriseInfo.DoesNotExist:
+            # ບໍ່ພົບຂໍ້ມູນ
+            return Response({
+                'success': True,
+                'message': 'ບໍ່ພົບຂໍ້ມູນວິສາຫະກິດໃນລະບົບ',
+                'exists': False,
+                'data': None
+            }, status=status.HTTP_200_OK)        
 # views.py
 from rest_framework import generics
 from rest_framework.response import Response
@@ -16591,8 +16637,6 @@ from .serializers import CollateralNewSerializer
 import logging
 
 logger = logging.getLogger(__name__)
-
-
 class CollateralNewListView(generics.ListAPIView):
     serializer_class = CollateralNewSerializer
 
@@ -16601,6 +16645,7 @@ class CollateralNewListView(generics.ListAPIView):
         current_bank_id = self.request.query_params.get('bank_id')
         
         # ດຶງ filters
+        id_filter = self.request.query_params.get('id')  # ✅ ເພີ່ມການດຶງຕາມ id
         bank_id_filter = self.request.query_params.get('bank_id_filter')
         branch_id = self.request.query_params.get('branch_id')
         status_filter = self.request.query_params.get('status')
@@ -16608,16 +16653,21 @@ class CollateralNewListView(generics.ListAPIView):
 
         queryset = CollateralNew.objects.all()
 
+        # ✅ ກັ່ນຕອງຕາມ id ກ່ອນ (ຖ້າມີ)
+        if id_filter:
+            queryset = queryset.filter(id=id_filter)
+            # ຖ້າດຶງຕາມ id ແລ້ວ ອາດຈະບໍ່ຕ້ອງການ permission check
+            # ແຕ່ຖ້າຕ້ອງການຄວບຄຸມ permission ກໍສາມາດເກັບໄວ້ໄດ້
+
         # Permission-based filtering
         if current_bank_id == '01':  # Admin (ທະນາຄານກາງ)
             # ສາມາດເບິ່ງທຸກທະນາຄານ + filter ໄດ້
             if bank_id_filter:
                 queryset = queryset.filter(bank_id=bank_id_filter)
-        else:  
-           
+        else:  # ທະນາຄານທົ່ວໄປ
             queryset = queryset.filter(bank_id=current_bank_id)
         
-        
+        # ກັ່ນຕອງອື່ນໆ
         if branch_id:
             queryset = queryset.filter(branch_id=branch_id)
         if status_filter:
@@ -16639,7 +16689,7 @@ class CollateralNewListView(generics.ListAPIView):
 
             queryset = self.filter_queryset(self.get_queryset())
             
-            
+            # Pagination
             page = int(request.query_params.get('page', 1))
             limit = int(request.query_params.get('limit', 20))
             
@@ -16657,6 +16707,7 @@ class CollateralNewListView(generics.ListAPIView):
                 'total_pages': (total_count + limit - 1) // limit,
                 'results': serializer.data,
                 'filters_applied': {
+                    'id': request.query_params.get('id'),  # ✅ ເພີ່ມ id ໃນ response
                     'bank_id': request.query_params.get('bank_id'),
                     'bank_id_filter': request.query_params.get('bank_id_filter'),
                     'branch_id': request.query_params.get('branch_id'),
@@ -16672,7 +16723,6 @@ class CollateralNewListView(generics.ListAPIView):
                 'message': 'Internal server error',
                 'details': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
