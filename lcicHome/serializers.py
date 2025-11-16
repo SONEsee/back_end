@@ -86,6 +86,7 @@ class CollateralNewSerializer(serializers.ModelSerializer):
             'updatedate',
             'pathfile',
             'status',
+            'decaption',
             'LCIC_reques'
         ]
 class EnterpriseMemberSubmitSerializer(serializers.ModelSerializer):
