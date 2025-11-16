@@ -2059,6 +2059,7 @@ class CollateralNew(models.Model):
     pathfile = models.CharField(max_length=255, blank=True, null=True)
     status = models.CharField(max_length=100)   
     LCIC_reques = models.CharField(max_length=100, blank=True, null=True)
+    decaption = models.TextField(null=True)
     def save(self, *args, **kwargs):
         
         if self.pk:  

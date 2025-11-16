@@ -288,6 +288,8 @@ urlpatterns = [
    path('api/searchcollateral/', SearchIndividualBankView.as_view(), name='search'),
    path('api/searchcollateral-info/', SearchIndividualBankInfoView.as_view(), name='search'),
    path('api/collateral/', CollateralNewListView.as_view(), name='collateral-list'),
+   path('api/collateral/approve/', views.approve_collateral, name='approve_collateral'),
+   path('api/collateral/reject/', views.reject_collateral, name='reject_collateral'),
    
 
    path('userList/', ManageUserView.as_view(), name='mangeuser'),
