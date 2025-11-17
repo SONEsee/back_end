@@ -1998,3 +1998,19 @@ class CreditScoreResponseSerializers(serializers.Serializer):
     # Final Credit Score
     final_credit_score = serializers.DecimalField(max_digits=10, decimal_places=2)
     credit_rating = serializers.CharField()
+    
+    
+from rest_framework import serializers
+from .models import scr_atttype_desc, scr_attribute_table
+
+class ScrAttTypeDescSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = scr_atttype_desc
+        fields = '__all__'
+
+
+class ScrAttributeTableSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = scr_attribute_table
+        fields = '__all__'
+
