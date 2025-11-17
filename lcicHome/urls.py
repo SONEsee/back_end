@@ -159,7 +159,9 @@ from .views import (
     BorrowerFileListView,
     BorrowerFilePeriodListView,
     confirm_upload_borrower,
-    reject_borrower_loan_view
+    reject_borrower_loan_view,
+    CollateralNewListView,
+    CheckEnterpriseView
 )
 #tik
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
@@ -258,6 +260,7 @@ urlpatterns = [
    path('render_pdf_view/<slug:object_id>', render_pdf_view, name='render_pdf_view'),
    path('progress/<slug:object_id>', views.progress, name='progress'),
    path('tax_invoice', views.tax, name='tax'),
+   path('check-enterprise/', CheckEnterpriseView.as_view(), name='check-enterprise'),
 
   
    
@@ -284,6 +287,9 @@ urlpatterns = [
    path('reorder/', ReorderSidebarView.as_view(), name='reorder-sidebar'),
    path('api/searchcollateral/', SearchIndividualBankView.as_view(), name='search'),
    path('api/searchcollateral-info/', SearchIndividualBankInfoView.as_view(), name='search'),
+   path('api/collateral/', CollateralNewListView.as_view(), name='collateral-list'),
+   path('api/collateral/approve/', views.approve_collateral, name='approve_collateral'),
+   path('api/collateral/reject/', views.reject_collateral, name='reject_collateral'),
    
 
    path('userList/', ManageUserView.as_view(), name='mangeuser'),

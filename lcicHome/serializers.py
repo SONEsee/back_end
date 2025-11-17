@@ -61,6 +61,34 @@ class BorrowerFileSerializer(serializers.ModelSerializer):
             'percentage',
             'dispuste'
         ]
+
+from rest_framework import serializers
+from .models import CollateralNew
+
+from rest_framework import serializers
+from .models import EnterpriseInfo
+
+class EnterpriseInfoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EnterpriseInfo
+        fields = '__all__'
+class CollateralNewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CollateralNew
+        fields = [
+            'id',
+            'bank_id',
+            'branch_id',
+            'filename',
+            'image',
+            'user',
+            'insertdate',
+            'updatedate',
+            'pathfile',
+            'status',
+            'decaption',
+            'LCIC_reques'
+        ]
 class EnterpriseMemberSubmitSerializer(serializers.ModelSerializer):
     """
     Serializer ສຳຫຼັບ EnterpriseMemberSubmit

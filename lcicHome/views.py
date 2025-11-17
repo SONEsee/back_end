@@ -16326,10 +16326,7 @@ logger = logging.getLogger(__name__)
 
 
 class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet ສຳຫຼັບຈັດການຂໍ້ມູນວິສາຫະກິດທີ່ສົ່ງເຂົ້າມາ
-    ປະກອບດ້ວຍ CRUD operations ທັງໝົດ
-    """
+  
     queryset = EnterpriseMemberSubmit.objects.all()
     serializer_class = EnterpriseMemberSubmitSerializer
     permission_classes = [IsAuthenticated]
@@ -16344,6 +16341,10 @@ class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
         lcic_code = self.request.query_params.get('lcic_code', None)
         if lcic_code:
             queryset = queryset.filter(LCIC_code=lcic_code)
+        
+        id_file = self.request.query_params.get('id_file', None)
+        if id_file:
+            queryset = queryset.filter(id_file=id_file)
         
        
         enterprise_id = self.request.query_params.get('enterprise_id', None)
@@ -16581,28 +16582,146 @@ class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
                 'success': False,
                 'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import EnterpriseInfo
+from .serializers import EnterpriseInfoSerializer
+
+class CheckEnterpriseView(APIView):
+    """
+    POST API ເພື່ອກວດສອບວ່າມີ EnterpriseID ຢູ່ໃນລະບົບບໍ່
+    ຖ້າມີ - ສົ່ງຂໍ້ມູນລາຍລະອຽດກັບຄືນ
+    ຖ້າບໍ່ມີ - ແຈ້ງວ່າບໍ່ພົບຂໍ້ມູນ
+    """
+    def post(self, request):
+        enterprise_id = request.data.get('EnterpriseID')
         
-
-# def get_collaterals(request):
-#     collaterals = Collateral.objects.exclude(status=0).values('id', 'filename', 'image', 'pathfile', 'status')
-#     return JsonResponse(list(collaterals), safe=False)
-
-
-# from rest_framework import status
-# from rest_framework.response import Response
-# from rest_framework.decorators import api_view
-# from .models import EnterpriseInfo
-# from .serializers import EnterpriseInfoSerializer
-
-# @api_view(['POST'])
-# def create_enterprise_info(request):
-#     if request.method == 'POST':
-#         serializer = EnterpriseInfoSerializer(data=request.data)
-#         if serializer.is_valid():
-#             serializer.save()
-#             return Response(serializer.data, status=status.HTTP_201_CREATED)
-#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # ກວດສອບວ່າມີການສົ່ງ EnterpriseID ມາບໍ່
+        if not enterprise_id:
+            return Response({
+                'success': False,
+                'message': 'ກະລຸນາລະບຸ EnterpriseID',
+                'exists': False,
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # ກວດສອບວ່າມີຂໍ້ມູນຢູ່ໃນຖານຂໍ້ມູນບໍ່
+            enterprise = EnterpriseInfo.objects.get(EnterpriseID=enterprise_id)
+            
+            # ດຶງລາຍລະອຽດອອກມາ
+            serializer = EnterpriseInfoSerializer(enterprise)
+            
+            return Response({
+                'success': True,
+                'message': 'ພົບຂໍ້ມູນວິສາຫະກິດໃນລະບົບແລ້ວ',
+                'exists': True,
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except EnterpriseInfo.DoesNotExist:
+            # ບໍ່ພົບຂໍ້ມູນ
+            return Response({
+                'success': True,
+                'message': 'ບໍ່ພົບຂໍ້ມູນວິສາຫະກິດໃນລະບົບ',
+                'exists': False,
+                'data': None
+            }, status=status.HTTP_200_OK)        
 # views.py
+from rest_framework import generics
+from rest_framework.response import Response
+from rest_framework import status
+from .models import CollateralNew
+from .serializers import CollateralNewSerializer
+import logging
+
+logger = logging.getLogger(__name__)
+class CollateralNewListView(generics.ListAPIView):
+    serializer_class = CollateralNewSerializer
+
+    def get_queryset(self):
+       
+        current_bank_id = self.request.query_params.get('bank_id')
+        
+        
+        id_filter = self.request.query_params.get('id')  
+        bank_id_filter = self.request.query_params.get('bank_id_filter')
+        branch_id = self.request.query_params.get('branch_id')
+        status_filter = self.request.query_params.get('status')
+        lcic_reques = self.request.query_params.get('LCIC_reques')
+
+        queryset = CollateralNew.objects.all()
+
+        
+        if id_filter:
+            queryset = queryset.filter(id=id_filter)
+           
+
+       
+        if current_bank_id == '01':  
+           
+            if bank_id_filter:
+                queryset = queryset.filter(bank_id=bank_id_filter)
+        else:  
+            queryset = queryset.filter(bank_id=current_bank_id)
+        
+       
+        if branch_id:
+            queryset = queryset.filter(branch_id=branch_id)
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        if lcic_reques:
+            queryset = queryset.filter(LCIC_reques=lcic_reques)
+
+        return queryset.order_by('-insertdate')
+
+    def list(self, request, *args, **kwargs):
+        try:
+            # ກວດ bank_id required
+            current_bank_id = request.query_params.get('bank_id')
+            if not current_bank_id:
+                return Response({
+                    'status': 'error',
+                    'message': 'ກະລຸນາປ້ອນ bank_id'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            queryset = self.filter_queryset(self.get_queryset())
+            
+            # Pagination
+            page = int(request.query_params.get('page', 1))
+            limit = int(request.query_params.get('limit', 20))
+            
+            offset = (page - 1) * limit
+            total_count = queryset.count()
+            paginated_queryset = queryset[offset:offset + limit]
+            
+            serializer = self.get_serializer(paginated_queryset, many=True)
+
+            return Response({
+                'status': 'success',
+                'count': total_count,
+                'page': page,
+                'limit': limit,
+                'total_pages': (total_count + limit - 1) // limit,
+                'results': serializer.data,
+                'filters_applied': {
+                    'id': request.query_params.get('id'),  # ✅ ເພີ່ມ id ໃນ response
+                    'bank_id': request.query_params.get('bank_id'),
+                    'bank_id_filter': request.query_params.get('bank_id_filter'),
+                    'branch_id': request.query_params.get('branch_id'),
+                    'status': request.query_params.get('status'),
+                    'LCIC_reques': request.query_params.get('LCIC_reques')
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"CollateralNewListView Error: {str(e)}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'message': 'Internal server error',
+                'details': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
@@ -31060,7 +31179,304 @@ class UserGroupList(APIView):
         serializer = UserGroupSerializers(groups, many=True)
         return Response(serializer.data)
     
+# views.py
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+from django.utils import timezone
+from datetime import datetime
+import random
+import string
+from .models import CollateralNew, EnterpriseMemberSubmit, EnterpriseInfo
+
+from django.db import transaction, IntegrityError
+from django.utils import timezone
+from datetime import datetime
+import random
+import string
+import time
+
+def generate_lcic_code():
+    """ສ້າງລະຫັດ LCIC_code ແບບບໍ່ຊໍ້າກັນ"""
+    max_attempts = 100  # ຈຳກັດຈຳນວນຄັ້ງທີ່ລອງ
     
+    for attempt in range(max_attempts):
+        # ສ້າງວັນທີປັດຈຸບັນ
+        date_part = datetime.now().strftime('%Y%m%d')
+        
+        # ສ້າງຕົວອັກສອນສຸ່ມ 3 ຕົວ (A-Z)
+        letters = ''.join(random.choices(string.ascii_uppercase, k=3))
+        
+        # ສ້າງຕົວເລກສຸ່ມ 1 ຕົວ (0-9)
+        number = random.choice(string.digits)
+        
+        # ລວມເປັນລະຫັດ
+        lcic_code = f"{date_part}{letters}{number}"
+        
+        # ກວດສອບວ່າລະຫັດນີ້ມີຢູ່ແລ້ວບໍ່
+        exists_in_submit = EnterpriseMemberSubmit.objects.filter(LCIC_code=lcic_code).exists()
+        exists_in_info = EnterpriseInfo.objects.filter(LCIC_code=lcic_code).exists()
+        
+        if not exists_in_submit and not exists_in_info:
+            return lcic_code
+        
+        # ຖ້າເຈົ້າຕ້ອງການ, ສາມາດເພີ່ມ delay ນ້ອຍໆ
+        if attempt < max_attempts - 1:
+            time.sleep(0.001)  # 1ms delay
+    
+    # ຖ້າລອງ 100 ຄັ້ງແລ້ວຍັງບໍ່ໄດ້ (ເກືອບເປັນໄປບໍ່ໄດ້)
+    raise Exception("ບໍ່ສາມາດສ້າງລະຫັດ LCIC_code ທີ່ບໍ່ຊໍ້າກັນໄດ້")
+
+
+@api_view(['POST'])
+@transaction.atomic
+def approve_collateral(request):
+    """
+    API ສຳລັບຢືນຢັນຂໍ້ມູນ CollateralNew
+    ມີການຈັດການ Race Condition
+    """
+    max_retries = 3  # ຈຳນວນຄັ້ງທີ່ລອງໃໝ່ຖ້າເກີດ IntegrityError
+    
+    for retry in range(max_retries):
+        try:
+            # ຮັບຂໍ້ມູນຈາກ request
+            collateral_id = request.data.get('collateral_id')
+            approved_by = request.data.get('approved_by', request.user.username if request.user.is_authenticated else None)
+            
+            # ກວດສອບ collateral_id
+            if not collateral_id:
+                return Response({
+                    'success': False,
+                    'message': 'ກະລຸນາລະບຸ collateral_id'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # ດຶງຂໍ້ມູນ CollateralNew
+            try:
+                collateral = CollateralNew.objects.select_for_update().get(id=collateral_id)
+            except CollateralNew.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'message': f'ບໍ່ພົບຂໍ້ມູນ CollateralNew ທີ່ມີ ID: {collateral_id}'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # ກວດສອບວ່າຖືກຢືນຢັນແລ້ວຫຼືຍັງ
+            if collateral.status == '0':
+                return Response({
+                    'success': False,
+                    'message': 'ຂໍ້ມູນນີ້ຖືກຢືນຢັນແລ້ວ',
+                    'data': {
+                        'lcic_code': collateral.LCIC_reques
+                    }
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # ຊອກຫາຂໍ້ມູນໃນ EnterpriseMemberSubmit
+            enterprise_submit = EnterpriseMemberSubmit.objects.select_for_update().filter(
+                id_file=collateral
+            ).first()
+            
+            if not enterprise_submit:
+                return Response({
+                    'success': False,
+                    'message': 'ບໍ່ພົບຂໍ້ມູນວິສາຫະກິດທີ່ເຊື່ອມໂຍງກັບໄຟລ໌ນີ້'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # ສ້າງລະຫັດ LCIC_code ໃໝ່
+            new_lcic_code = generate_lcic_code()
+            
+            # ບັນທຶກຂໍ້ມູນລົງໃນ EnterpriseInfo
+            enterprise_info = EnterpriseInfo.objects.create(
+                EnterpriseID=enterprise_submit.EnterpriseID,
+                enterpriseNameLao=enterprise_submit.enterpriseNameLao,
+                eneterpriseNameEnglish=enterprise_submit.eneterpriseNameEnglish,
+                regisCertificateNumber=enterprise_submit.regisCertificateNumber,
+                regisDate=enterprise_submit.regisDate,
+                enLocation=enterprise_submit.enLocation,
+                regisStrationOfficeType=enterprise_submit.regisStrationOfficeType,
+                regisStationOfficeCode=enterprise_submit.regisStationOfficeCode,
+                enLegalStrature=enterprise_submit.enLegalStrature,
+                foreigninvestorFlag=enterprise_submit.foreigninvestorFlag,
+                investmentAmount=enterprise_submit.investmentAmount,
+                status=enterprise_submit.status,
+                investmentCurrency=enterprise_submit.investmentCurrency,
+                representativeNationality=enterprise_submit.representativeNationality,
+                LastUpdate=timezone.now(),
+                InsertDate=timezone.now(),
+                LCIC_code=new_lcic_code
+            )
+            
+            # ອັບເດດ LCIC_code ໃນ EnterpriseMemberSubmit
+            enterprise_submit.LCIC_code = new_lcic_code
+            enterprise_submit.UpdateDate = timezone.now()
+            if approved_by:
+                enterprise_submit.user_update = approved_by
+            enterprise_submit.save()
+            
+            # ອັບເດດ CollateralNew
+            collateral.LCIC_reques = new_lcic_code
+            collateral.status = '0'
+            collateral.updatedate = timezone.now()
+            collateral.save()
+            
+            return Response({
+                'success': True,
+                'message': 'ຢືນຢັນຂໍ້ມູນສຳເລັດ',
+                'data': {
+                    'lcic_code': new_lcic_code,
+                    'collateral_id': collateral.id,
+                    'enterprise_info_id': enterprise_info.LCICID,
+                    'enterprise_submit_id': enterprise_submit.LCICID,
+                    'collateral_status': collateral.status,
+                    'approved_by': approved_by,
+                    'approved_date': timezone.now().isoformat()
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except IntegrityError as e:
+            # ຖ້າເກີດຄວາມຊໍ້າກັນ (UNIQUE constraint failed)
+            if retry < max_retries - 1:
+                # ລອງໃໝ່ດ້ວຍລະຫັດອື່ນ
+                time.sleep(0.01 * (retry + 1))  # Exponential backoff
+                continue
+            else:
+                # ຖ້າລອງ 3 ຄັ້ງແລ້ວຍັງບໍ່ໄດ້
+                return Response({
+                    'success': False,
+                    'message': 'ເກີດຂໍ້ຜິດພາດ: ບໍ່ສາມາດສ້າງລະຫັດທີ່ບໍ່ຊໍ້າກັນໄດ້',
+                    'error': str(e)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    # ຖ້າ loop ຈົບແລ້ວຍັງບໍ່ໄດ້ຜົນ
+    return Response({
+        'success': False,
+        'message': 'ບໍ່ສາມາດດຳເນີນການໄດ້ຫຼັງຈາກລອງຫຼາຍຄັ້ງ'
+    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@transaction.atomic
+def reject_collateral(request):
+    """
+    API ສຳລັບປະຕິເສດຂໍ້ມູນ CollateralNew
+    
+    POST /api/collateral/reject/
+    Body: {
+        "collateral_id": 123,
+        "rejected_by": "admin_user",
+        "reason": "ເອກະສານບໍ່ຄົບຖ້ວນ"
+    }
+    """
+    try:
+        # ຮັບຂໍ້ມູນຈາກ request
+        collateral_id = request.data.get('collateral_id')
+        rejected_by = request.data.get('rejected_by', request.user.username if request.user.is_authenticated else None)
+        reason = request.data.get('reason', '')
+        
+        # ກວດສອບ collateral_id
+        if not collateral_id:
+            return Response({
+                'success': False,
+                'message': 'ກະລຸນາລະບຸ collateral_id'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # ດຶງຂໍ້ມູນ CollateralNew
+        try:
+            collateral = CollateralNew.objects.get(id=collateral_id)
+        except CollateralNew.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': f'ບໍ່ພົບຂໍ້ມູນ CollateralNew ທີ່ມີ ID: {collateral_id}'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # ອັບເດດສະຖານະເປັນ 3 (ປະຕິເສດ)
+        collateral.status = '3'
+        collateral.updatedate = timezone.now()
+        
+        # ບັນທຶກເຫດຜົນການປະຕິເສດ
+        if reason:
+            collateral.decaption = reason
+        
+        collateral.save()
+        
+        return Response({
+            'success': True,
+            'message': 'ປະຕິເສດຂໍ້ມູນສຳເລັດ',
+            'data': {
+                'collateral_id': collateral.id,
+                'collateral_status': collateral.status,
+                'reason': reason,
+                'rejected_by': rejected_by,
+                'rejected_date': timezone.now().isoformat()
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def get_collateral_status(request, collateral_id):
+    """
+    API ສຳລັບເບິ່ງສະຖານະຂອງ CollateralNew
+    
+    GET /api/collateral/status/{collateral_id}/
+    """
+    try:
+        collateral = CollateralNew.objects.get(id=collateral_id)
+        
+        # ຊອກຫາຂໍ້ມູນທີ່ເຊື່ອມໂຍງ
+        enterprise_submit = EnterpriseMemberSubmit.objects.filter(id_file=collateral).first()
+        enterprise_info = None
+        
+        if collateral.LCIC_reques:
+            enterprise_info = EnterpriseInfo.objects.filter(LCIC_code=collateral.LCIC_reques).first()
+        
+        return Response({
+            'success': True,
+            'data': {
+                'collateral': {
+                    'id': collateral.id,
+                    'filename': collateral.filename,
+                    'status': collateral.status,
+                    'LCIC_reques': collateral.LCIC_reques,
+                    'bank_id': collateral.bank_id,
+                    'branch_id': collateral.branch_id,
+                    'insertdate': collateral.insertdate,
+                    'updatedate': collateral.updatedate,
+                    'decaption': collateral.decaption
+                },
+                'enterprise_submit': {
+                    'id': enterprise_submit.LCICID if enterprise_submit else None,
+                    'enterpriseNameLao': enterprise_submit.enterpriseNameLao if enterprise_submit else None,
+                    'LCIC_code': enterprise_submit.LCIC_code if enterprise_submit else None
+                } if enterprise_submit else None,
+                'enterprise_info': {
+                    'id': enterprise_info.LCICID if enterprise_info else None,
+                    'enterpriseNameLao': enterprise_info.enterpriseNameLao if enterprise_info else None,
+                    'LCIC_code': enterprise_info.LCIC_code if enterprise_info else None
+                } if enterprise_info else None
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except CollateralNew.DoesNotExist:
+        return Response({
+            'success': False,
+            'message': f'ບໍ່ພົບຂໍ້ມູນ CollateralNew ທີ່ມີ ID: {collateral_id}'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)    
 # views.py
 from django.db.models import Q
 from rest_framework import generics
