@@ -172,6 +172,7 @@ from .views import (
     CustomerBatchRegisterAPIView,
     CustomerBatchFinalizeAPIView,
     MyUploadsListAPIView,
+    CustomerAllUploadsAPIView,
     
 
     reject_borrower_loan_view,
@@ -659,10 +660,10 @@ urlpatterns = [
     path('customer/register/batch/', RegisterCustomerBatchAPIView.as_view(), name="register_customer_batch"),
     # Main endpoints
     path('register/customer/my-uploads/', MyUploadsListAPIView.as_view(), name='my-uploads'),
-    path('register/customer/all-uploads/', AllUploadsListAPIView.as_view(), name='all-uploads'),
+    # path('register/customer/all-uploads/', AllUploadsListAPIView.as_view(), name='all-uploads'),
     # Optional: More powerful filtering
     path('register/customer/uploads/', AllUploadsFilteredAPIView.as_view(), name='uploads-filtered'),
-    path('register/customer/confirm/', CustomerConfirmAPIView.as_view(), name='customer-confirm'),
+    # path('register/customer/confirm/', CustomerConfirmAPIView.as_view(), name='customer-confirm'),
     
         # Manual customer registration
     path('register/customer/manual/', 
@@ -681,7 +682,15 @@ urlpatterns = [
     path('register/customer/my-uploads/', 
          MyUploadsListAPIView.as_view(), 
          name='my-uploads'),
+        # Get all uploaded customers (Admin)
+    path('register/customer/all-uploads/', 
+         CustomerAllUploadsAPIView.as_view(), 
+         name='customer-all-uploads'),
     
+    # Confirm customers with matching
+    path('register/customer/confirm/', 
+         CustomerConfirmAPIView.as_view(), 
+         name='customer-confirm'),
     #---------------------------------------------
     #----- END POINTS -----------------------------
     
