@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Customer_Info_IND
+from .models import Customer_Info_IND, catalog_type_cat
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import check_password
@@ -1942,6 +1942,35 @@ class UserAccessLogSerializer(serializers.ModelSerializer):
             'ip_address', 'user_agent', 'remarks'
         ]
 
+from collections import OrderedDict
+class SubCatalogCatSerializer(serializers.ModelSerializer):
+    catalog_items = serializers.SerializerMethodField()
+
+    class Meta:
+        model = catalog_type_cat
+        fields = "__all__"
+
+    def get_catalog_items(self, obj):
+        try:
+            # JOIN main catalog where ct_type = cat_type
+            items = Main_catalog_cat.objects.filter(ct_type=obj.cat_type)
+            return MainCatalogCatSerializer(items, many=True).data
+        except Main_catalog_cat.DoesNotExist:
+            return None
+    def to_representation(self, instance):
+        # ดึงข้อมูลพื้นฐานทั้งหมด
+        data = super().to_representation(instance)
+        # จัดลำดับ key ใหม่ให้ catalog_items อยู่ท้าย
+        ordered = OrderedDict()
+        ordered["cat_id"] = data.get("cat_id")
+        ordered["cat_type"] = data.get("cat_type")
+        ordered["cat_name"] = data.get("cat_name")
+        ordered["cat_lao_name"] = data.get("cat_lao_name")
+        ordered["cat_status"] = data.get("cat_status")
+        ordered["cat_detail"] = data.get("cat_detail")
+        ordered["catalog_items"] = data.get("catalog_items")  # ต้องอยู่ท้ายสุด
+
+        return ordered
 # serializers.py
 from rest_framework import serializers
 from .models import (
