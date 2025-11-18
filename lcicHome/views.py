@@ -31304,29 +31304,156 @@ def generate_lcic_code():
     raise Exception("ບໍ່ສາມາດສ້າງລະຫັດ LCIC_code ທີ່ບໍ່ຊໍ້າກັນໄດ້")
 
 
+# @api_view(['POST'])
+# @transaction.atomic
+# def approve_collateral(request):
+#     """
+#     API ສຳລັບຢືນຢັນຂໍ້ມູນ CollateralNew
+#     ມີການຈັດການ Race Condition
+#     """
+#     max_retries = 3  
+    
+#     for retry in range(max_retries):
+#         try:
+            
+#             collateral_id = request.data.get('collateral_id')
+#             approved_by = request.data.get('approved_by', request.user.username if request.user.is_authenticated else None)
+            
+           
+#             if not collateral_id:
+#                 return Response({
+#                     'success': False,
+#                     'message': 'ກະລຸນາລະບຸ collateral_id'
+#                 }, status=status.HTTP_400_BAD_REQUEST)
+            
+           
+#             try:
+#                 collateral = CollateralNew.objects.select_for_update().get(id=collateral_id)
+#             except CollateralNew.DoesNotExist:
+#                 return Response({
+#                     'success': False,
+#                     'message': f'ບໍ່ພົບຂໍ້ມູນ CollateralNew ທີ່ມີ ID: {collateral_id}'
+#                 }, status=status.HTTP_404_NOT_FOUND)
+            
+           
+#             if collateral.status == '0':
+#                 return Response({
+#                     'success': False,
+#                     'message': 'ຂໍ້ມູນນີ້ຖືກຢືນຢັນແລ້ວ',
+#                     'data': {
+#                         'lcic_code': collateral.LCIC_reques
+#                     }
+#                 }, status=status.HTTP_400_BAD_REQUEST)
+            
+           
+#             enterprise_submit = EnterpriseMemberSubmit.objects.select_for_update().filter(
+#                 id_file=collateral
+#             ).first()
+            
+#             if not enterprise_submit:
+#                 return Response({
+#                     'success': False,
+#                     'message': 'ບໍ່ພົບຂໍ້ມູນວິສາຫະກິດທີ່ເຊື່ອມໂຍງກັບໄຟລ໌ນີ້'
+#                 }, status=status.HTTP_404_NOT_FOUND)
+            
+          
+#             new_lcic_code = generate_lcic_code()
+            
+          
+#             enterprise_info = EnterpriseInfo.objects.create(
+#                 EnterpriseID=enterprise_submit.EnterpriseID,
+#                 enterpriseNameLao=enterprise_submit.enterpriseNameLao,
+#                 eneterpriseNameEnglish=enterprise_submit.eneterpriseNameEnglish,
+#                 regisCertificateNumber=enterprise_submit.regisCertificateNumber,
+#                 regisDate=enterprise_submit.regisDate,
+#                 enLocation=enterprise_submit.enLocation,
+#                 regisStrationOfficeType=enterprise_submit.regisStrationOfficeType,
+#                 regisStationOfficeCode=enterprise_submit.regisStationOfficeCode,
+#                 enLegalStrature=enterprise_submit.enLegalStrature,
+#                 foreigninvestorFlag=enterprise_submit.foreigninvestorFlag,
+#                 investmentAmount=enterprise_submit.investmentAmount,
+#                 status=enterprise_submit.status,
+#                 investmentCurrency=enterprise_submit.investmentCurrency,
+#                 representativeNationality=enterprise_submit.representativeNationality,
+#                 LastUpdate=timezone.now(),
+#                 InsertDate=timezone.now(),
+#                 LCIC_code=new_lcic_code
+#             )
+            
+           
+#             enterprise_submit.LCIC_code = new_lcic_code
+#             enterprise_submit.UpdateDate = timezone.now()
+#             if approved_by:
+#                 enterprise_submit.user_update = approved_by
+#             enterprise_submit.save()
+            
+           
+#             collateral.LCIC_reques = new_lcic_code
+#             collateral.status = '0'
+#             collateral.updatedate = timezone.now()
+#             collateral.save()
+            
+#             return Response({
+#                 'success': True,
+#                 'message': 'ຢືນຢັນຂໍ້ມູນສຳເລັດ',
+#                 'data': {
+#                     'lcic_code': new_lcic_code,
+#                     'collateral_id': collateral.id,
+#                     'enterprise_info_id': enterprise_info.LCICID,
+#                     'enterprise_submit_id': enterprise_submit.LCICID,
+#                     'collateral_status': collateral.status,
+#                     'approved_by': approved_by,
+#                     'approved_date': timezone.now().isoformat()
+#                 }
+#             }, status=status.HTTP_200_OK)
+            
+#         except IntegrityError as e:
+            
+#             if retry < max_retries - 1:
+               
+#                 time.sleep(0.01 * (retry + 1))  
+#                 continue
+#             else:
+               
+#                 return Response({
+#                     'success': False,
+#                     'message': 'ເກີດຂໍ້ຜິດພາດ: ບໍ່ສາມາດສ້າງລະຫັດທີ່ບໍ່ຊໍ້າກັນໄດ້',
+#                     'error': str(e)
+#                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+#         except Exception as e:
+#             return Response({
+#                 'success': False,
+#                 'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+#             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+   
+#     return Response({
+#         'success': False,
+#         'message': 'ບໍ່ສາມາດດຳເນີນການໄດ້ຫຼັງຈາກລອງຫຼາຍຄັ້ງ'
+#     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['POST'])
 @transaction.atomic
 def approve_collateral(request):
     """
     API ສຳລັບຢືນຢັນຂໍ້ມູນ CollateralNew
-    ມີການຈັດການ Race Condition
+    ມີການຈັດການ Race Condition ແລະກວດສອບວ່າມີ EnterpriseID ໃນຖານຂໍ້ມູນແລ້ວບໍ່
     """
-    max_retries = 3  # ຈຳນວນຄັ້ງທີ່ລອງໃໝ່ຖ້າເກີດ IntegrityError
+    max_retries = 3  
     
     for retry in range(max_retries):
         try:
-            # ຮັບຂໍ້ມູນຈາກ request
             collateral_id = request.data.get('collateral_id')
             approved_by = request.data.get('approved_by', request.user.username if request.user.is_authenticated else None)
             
-            # ກວດສອບ collateral_id
             if not collateral_id:
                 return Response({
                     'success': False,
                     'message': 'ກະລຸນາລະບຸ collateral_id'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # ດຶງຂໍ້ມູນ CollateralNew
             try:
                 collateral = CollateralNew.objects.select_for_update().get(id=collateral_id)
             except CollateralNew.DoesNotExist:
@@ -31335,7 +31462,6 @@ def approve_collateral(request):
                     'message': f'ບໍ່ພົບຂໍ້ມູນ CollateralNew ທີ່ມີ ID: {collateral_id}'
                 }, status=status.HTTP_404_NOT_FOUND)
             
-            # ກວດສອບວ່າຖືກຢືນຢັນແລ້ວຫຼືຍັງ
             if collateral.status == '0':
                 return Response({
                     'success': False,
@@ -31345,7 +31471,6 @@ def approve_collateral(request):
                     }
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # ຊອກຫາຂໍ້ມູນໃນ EnterpriseMemberSubmit
             enterprise_submit = EnterpriseMemberSubmit.objects.select_for_update().filter(
                 id_file=collateral
             ).first()
@@ -31356,65 +31481,97 @@ def approve_collateral(request):
                     'message': 'ບໍ່ພົບຂໍ້ມູນວິສາຫະກິດທີ່ເຊື່ອມໂຍງກັບໄຟລ໌ນີ້'
                 }, status=status.HTTP_404_NOT_FOUND)
             
-            # ສ້າງລະຫັດ LCIC_code ໃໝ່
-            new_lcic_code = generate_lcic_code()
             
-            # ບັນທຶກຂໍ້ມູນລົງໃນ EnterpriseInfo
-            enterprise_info = EnterpriseInfo.objects.create(
-                EnterpriseID=enterprise_submit.EnterpriseID,
-                enterpriseNameLao=enterprise_submit.enterpriseNameLao,
-                eneterpriseNameEnglish=enterprise_submit.eneterpriseNameEnglish,
-                regisCertificateNumber=enterprise_submit.regisCertificateNumber,
-                regisDate=enterprise_submit.regisDate,
-                enLocation=enterprise_submit.enLocation,
-                regisStrationOfficeType=enterprise_submit.regisStrationOfficeType,
-                regisStationOfficeCode=enterprise_submit.regisStationOfficeCode,
-                enLegalStrature=enterprise_submit.enLegalStrature,
-                foreigninvestorFlag=enterprise_submit.foreigninvestorFlag,
-                investmentAmount=enterprise_submit.investmentAmount,
-                status=enterprise_submit.status,
-                investmentCurrency=enterprise_submit.investmentCurrency,
-                representativeNationality=enterprise_submit.representativeNationality,
-                LastUpdate=timezone.now(),
-                InsertDate=timezone.now(),
-                LCIC_code=new_lcic_code
-            )
+            existing_enterprise = EnterpriseInfo.objects.filter(
+                EnterpriseID=enterprise_submit.EnterpriseID
+            ).first()
             
-            # ອັບເດດ LCIC_code ໃນ EnterpriseMemberSubmit
-            enterprise_submit.LCIC_code = new_lcic_code
-            enterprise_submit.UpdateDate = timezone.now()
-            if approved_by:
-                enterprise_submit.user_update = approved_by
-            enterprise_submit.save()
+            if existing_enterprise:
             
-            # ອັບເດດ CollateralNew
-            collateral.LCIC_reques = new_lcic_code
-            collateral.status = '0'
-            collateral.updatedate = timezone.now()
-            collateral.save()
+                lcic_code_to_use = existing_enterprise.LCIC_code
+                
+         
+                enterprise_submit.LCIC_code = lcic_code_to_use
+                enterprise_submit.UpdateDate = timezone.now()
+                if approved_by:
+                    enterprise_submit.user_update = approved_by
+                enterprise_submit.save()
+                
+                
+                collateral.LCIC_reques = lcic_code_to_use
+                collateral.status = '4'
+                collateral.decaption = f'ພົບລະຫັດ ຂສລ ນີ້ແລ້ວໃນຖານຂໍ້ມູນ ສຳຫຼັບລະຫັດວິສາຫະກິດນີ້'
+                collateral.updatedate = timezone.now()
+                collateral.save()
+                
+                return Response({
+                    'success': True,
+                    'message': 'ພົບລະຫັດ ຂສລ ນີ້ແລ້ວໃນຖານຂໍ້ມູນ, ອັບເດດຂໍ້ມູນສຳເລັດ',
+                    'data': {
+                        'lcic_code': lcic_code_to_use,
+                        'collateral_id': collateral.id,
+                        'enterprise_submit_id': enterprise_submit.LCICID,
+                        'collateral_status': collateral.status,
+                        'approved_by': approved_by,
+                        'approved_date': timezone.now().isoformat(),
+                        'note': 'ໃຊ້ລະຫັດ ຂສລ ທີ່ມີຢູ່ແລ້ວ'
+                    }
+                }, status=status.HTTP_200_OK)
             
-            return Response({
-                'success': True,
-                'message': 'ຢືນຢັນຂໍ້ມູນສຳເລັດ',
-                'data': {
-                    'lcic_code': new_lcic_code,
-                    'collateral_id': collateral.id,
-                    'enterprise_info_id': enterprise_info.LCICID,
-                    'enterprise_submit_id': enterprise_submit.LCICID,
-                    'collateral_status': collateral.status,
-                    'approved_by': approved_by,
-                    'approved_date': timezone.now().isoformat()
-                }
-            }, status=status.HTTP_200_OK)
+            else:
+                
+                new_lcic_code = generate_lcic_code()
+                
+                enterprise_info = EnterpriseInfo.objects.create(
+                    EnterpriseID=enterprise_submit.EnterpriseID,
+                    enterpriseNameLao=enterprise_submit.enterpriseNameLao,
+                    eneterpriseNameEnglish=enterprise_submit.eneterpriseNameEnglish,
+                    regisCertificateNumber=enterprise_submit.regisCertificateNumber,
+                    regisDate=enterprise_submit.regisDate,
+                    enLocation=enterprise_submit.enLocation,
+                    regisStrationOfficeType=enterprise_submit.regisStrationOfficeType,
+                    regisStationOfficeCode=enterprise_submit.regisStationOfficeCode,
+                    enLegalStrature=enterprise_submit.enLegalStrature,
+                    foreigninvestorFlag=enterprise_submit.foreigninvestorFlag,
+                    investmentAmount=enterprise_submit.investmentAmount,
+                    status=enterprise_submit.status,
+                    investmentCurrency=enterprise_submit.investmentCurrency,
+                    representativeNationality=enterprise_submit.representativeNationality,
+                    LastUpdate=timezone.now(),
+                    InsertDate=timezone.now(),
+                    LCIC_code=new_lcic_code
+                )
+                
+                enterprise_submit.LCIC_code = new_lcic_code
+                enterprise_submit.UpdateDate = timezone.now()
+                if approved_by:
+                    enterprise_submit.user_update = approved_by
+                enterprise_submit.save()
+                
+                collateral.LCIC_reques = new_lcic_code
+                collateral.status = '0'
+                collateral.updatedate = timezone.now()
+                collateral.save()
+                
+                return Response({
+                    'success': True,
+                    'message': 'ຢືນຢັນຂໍ້ມູນສຳເລັດ',
+                    'data': {
+                        'lcic_code': new_lcic_code,
+                        'collateral_id': collateral.id,
+                        'enterprise_info_id': enterprise_info.LCICID,
+                        'enterprise_submit_id': enterprise_submit.LCICID,
+                        'collateral_status': collateral.status,
+                        'approved_by': approved_by,
+                        'approved_date': timezone.now().isoformat()
+                    }
+                }, status=status.HTTP_200_OK)
             
         except IntegrityError as e:
-            # ຖ້າເກີດຄວາມຊໍ້າກັນ (UNIQUE constraint failed)
             if retry < max_retries - 1:
-                # ລອງໃໝ່ດ້ວຍລະຫັດອື່ນ
-                time.sleep(0.01 * (retry + 1))  # Exponential backoff
+                time.sleep(0.01 * (retry + 1))
                 continue
             else:
-                # ຖ້າລອງ 3 ຄັ້ງແລ້ວຍັງບໍ່ໄດ້
                 return Response({
                     'success': False,
                     'message': 'ເກີດຂໍ້ຜິດພາດ: ບໍ່ສາມາດສ້າງລະຫັດທີ່ບໍ່ຊໍ້າກັນໄດ້',
@@ -31427,12 +31584,10 @@ def approve_collateral(request):
                 'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-    # ຖ້າ loop ຈົບແລ້ວຍັງບໍ່ໄດ້ຜົນ
     return Response({
         'success': False,
         'message': 'ບໍ່ສາມາດດຳເນີນການໄດ້ຫຼັງຈາກລອງຫຼາຍຄັ້ງ'
     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 @api_view(['POST'])
 @transaction.atomic
