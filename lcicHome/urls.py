@@ -290,6 +290,7 @@ urlpatterns = [
    path('api/collateral/', CollateralNewListView.as_view(), name='collateral-list'),
    path('api/collateral/approve/', views.approve_collateral, name='approve_collateral'),
    path('api/collateral/reject/', views.reject_collateral, name='reject_collateral'),
+   path('api/enterprises_list/', views.get_enterprises, name='get_enterprises'),
    
 
    path('userList/', ManageUserView.as_view(), name='mangeuser'),

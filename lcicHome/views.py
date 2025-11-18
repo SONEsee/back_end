@@ -16627,7 +16627,82 @@ class CheckEnterpriseView(APIView):
                 'message': 'ບໍ່ພົບຂໍ້ມູນວິສາຫະກິດໃນລະບົບ',
                 'exists': False,
                 'data': None
-            }, status=status.HTTP_200_OK)        
+            }, status=status.HTTP_200_OK)     
+
+# views.py
+from django.http import JsonResponse
+from django.core.paginator import Paginator
+from django.db.models import Q
+from .models import EnterpriseInfo
+
+def get_enterprises(request):
+    # ຮັບຄ່າ parameters
+    page = request.GET.get('page', 1)
+    limit = request.GET.get('limit', 10)
+    enterprise_id = request.GET.get('EnterpriseID', None)
+    legal_structure = request.GET.get('enLegalStrature', None)
+    
+    # Query ຂໍ້ມູນ
+    queryset = EnterpriseInfo.objects.all()
+    
+    # Filter ຖ້າມີການສົ່ງ parameters ມາ
+    if enterprise_id:
+        queryset = queryset.filter(EnterpriseID=enterprise_id)
+    
+    if legal_structure:
+        queryset = queryset.filter(enLegalStrature__icontains=legal_structure)
+    
+    # ຮຽງລຳດັບ
+    queryset = queryset.order_by('-LCICID')
+    
+    # Pagination
+    paginator = Paginator(queryset, limit)
+    page_obj = paginator.get_page(page)
+    
+    # ແປງຂໍ້ມູນເປັນ list
+    data = []
+    for item in page_obj:
+        data.append({
+            'LCICID': item.LCICID,
+            'EnterpriseID': item.EnterpriseID,
+            'enterpriseNameLao': item.enterpriseNameLao,
+            'eneterpriseNameEnglish': item.eneterpriseNameEnglish,
+            'regisCertificateNumber': item.regisCertificateNumber,
+            'regisDate': item.regisDate,
+            'enLocation': item.enLocation,
+            'regisStrationOfficeType': item.regisStrationOfficeType,
+            'regisStationOfficeCode': item.regisStationOfficeCode,
+            'enLegalStrature': item.enLegalStrature,
+            'foreigninvestorFlag': item.foreigninvestorFlag,
+            'investmentAmount': item.investmentAmount,
+            'status': item.status,
+            'investmentCurrency': item.investmentCurrency,
+            'representativeNationality': item.representativeNationality,
+            'LastUpdate': item.LastUpdate,
+            'CancellationDate': item.CancellationDate,
+            'InsertDate': item.InsertDate,
+            'UpdateDate': item.UpdateDate,
+            'LCIC_code': item.LCIC_code,
+        })
+    
+    # Response
+    response = {
+        'success': True,
+        'message': 'ດຶງຂໍ້ມູນສຳເລັດ',
+        'data': data,
+        'pagination': {
+            'current_page': page_obj.number,
+            'total_pages': paginator.num_pages,
+            'total_items': paginator.count,
+            'per_page': int(limit),
+            'has_next': page_obj.has_next(),
+            'has_previous': page_obj.has_previous(),
+        }
+    }
+    
+    return JsonResponse(response, safe=False)
+
+   
 # views.py
 from rest_framework import generics
 from rest_framework.response import Response

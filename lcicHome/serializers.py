@@ -67,6 +67,9 @@ from .models import CollateralNew
 
 from rest_framework import serializers
 from .models import EnterpriseInfo
+from rest_framework import serializers
+from .models import EnterpriseInfo
+
 
 class EnterpriseInfoSerializer(serializers.ModelSerializer):
     class Meta:
