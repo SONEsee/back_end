@@ -436,7 +436,7 @@ class CustomerWater(models.Model):
     #     return CustomerWater
     class Meta:
         verbose_name_plural='CustomerWater'
-    def _str_(seft):
+    def _str_(seft): 
         return seft.Name
     
     

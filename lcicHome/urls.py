@@ -231,7 +231,7 @@ water_summary_patterns = [
 
 urlpatterns = [
    path('', include(router.urls)),
-   path('',views.index, name='index'),
+   path('',views.index, name='index'), 
    #path('',views.newsinfo_listview.as_view(), name='index'),
    path('newsdetail/',views.hnewsDetail, name='newsdetail'),
    path('newsInfo/',views.hnews, name='newsInfo'),
