@@ -36,7 +36,7 @@ class Test(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'test'
+        db_table = 'test' 
         
 class FileDetail(models.Model):
     name = models.CharField(max_length=255)
@@ -119,7 +119,7 @@ class Electric_Bill(models.Model):
     PaymentType = models.TextField()
     Payment_Date = models.TextField()
     InvoiceMonth = models.CharField(max_length=50)
-    InvoiceDate = models.CharField(max_length=100)
+    InvoiceDate = models.CharField(max_length=100) 
     DisID = models.CharField(max_length=100)
     ProID = models.CharField(max_length=100)
     InsertDate = models.DateTimeField(auto_now_add=True)
@@ -495,3 +495,89 @@ class WaterSupplyAPIConfig(models.Model):
     def get_api_url(self, month):
         """Get full API URL for a given month"""
         return f"{self.api_base_url.rstrip('/')}/{self.api_endpoint_template.format(month=month)}"
+    
+class SType(models.Model):
+    SType = models.CharField(max_length=150, null=False)
+    nameL = models.CharField(max_length=150, null=False, blank=True)
+    nameE = models.CharField(max_length=150, null=False, blank=True)
+    class Meta:
+        ordering=['SType']
+        verbose_name_plural ='SegmentType'
+
+    def __str__(self):
+        return self.nameL
+   
+class UploadFileTelecom(models.Model):
+    TID = models.AutoField(primary_key=True)
+    SType = models.ForeignKey(SType, null=True, blank=True, on_delete=models.CASCADE)
+    user_id = models.CharField(max_length=255)     
+    file_id = models.CharField(max_length=255)
+    fileName = models.CharField(max_length=255)
+    fileUpload = models.FileField(upload_to="uploadTelecom/")
+    progress_percentage = models.IntegerField(default=0)
+    telecomType = models.CharField(max_length=255)
+    fileSize = models.CharField(max_length=255)
+    path = models.CharField(max_length=255)
+    insertDate = models.DateTimeField(auto_now_add=True, blank=True)
+    updateDate = models.DateTimeField(auto_now_add=True, blank=True)
+    period = models.CharField(max_length=150)
+    status = models.CharField(max_length=150)
+    status_upload = models.CharField(max_length=150)
+    FileType = models.CharField(max_length=10)
+    percentage = models.FloatField(default=0.0)
+ 
+    def __str__(self):
+        return self.fileName
+
+class TelecomCustomer(models.Model):
+    TC_ID = models.AutoField(primary_key=True)
+    No = models.CharField(max_length=100, blank=True, default='')
+    Customer_ID = models.CharField(max_length=100, db_index=True, unique=True)
+    Company_name = models.CharField(max_length=500, db_index=True, blank=True, default='')
+    Name = models.CharField(max_length=500, db_index=True, blank=True, default='')
+    Surname = models.CharField(max_length=500, db_index=True, blank=True, default='')
+    National_ID = models.CharField(max_length=100, blank=True, default='')
+    Passport = models.CharField(max_length=100, blank=True, default='')
+    Address = models.TextField(blank=True, default='')
+    Dustrict_ID = models.CharField(max_length=100, db_index=True, blank=True, default='')
+    Province_ID = models.CharField(max_length=100, db_index=True, blank=True, null=True, default='')
+    Tel = models.CharField(max_length=100, blank=True, default='')
+    Email = models.CharField(max_length=100, blank=True, default='')
+    Cus_type = models.CharField(max_length=100, blank=True, default='')
+    Regis_date = models.CharField(max_length=100, blank=True, default='')
+    InsertDate = models.CharField(max_length=50, null=True, blank=True)
+    UpdateDate = models.CharField(max_length=50, null=True, blank=True)
+
+    # class Meta:
+    #     indexes = [
+    #         models.Index(fields=['Company_name', 'Province_ID'], name='telecom_company_province_idx'),
+    #         models.Index(fields=['Name', 'Province_ID'], name='telecom_name_province_idx'),
+    #         models.Index(fields=['Surname', 'Province_ID'], name='telecom_surname_province_idx'),
+    #     ]
+
+    # def __str__(self):
+    #     return f"{self.Customer_ID} - {self.Name} {self.Surname}"
+
+class Telecom_Bill(models.Model):
+    TB_ID = models.AutoField(primary_key=True,)
+    BillID = models.CharField(max_length=100, null=True, blank=True)
+    Customer_ID = models.CharField(max_length=100, null=True, blank=True)
+    InvoiceNo = models.CharField(max_length=100, null=True, blank=True)
+    TypeOfPro = models.CharField(max_length=100, null=True, blank=True)
+    Outstanding = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    Basic_Tax = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    Bill_Amount = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    Debt_Amount = models.DecimalField(max_digits=100, decimal_places=2, null=True, blank=True)
+    Payment_ID = models.CharField(max_length=100, null=True, blank=True)
+    PaymentType = models.CharField(max_length=100, null=True, blank=True)
+    Payment_Date = models.CharField(max_length=100, null=True, blank=True)
+    InvoiceMonth = models.CharField(max_length=50, null=True, blank=True)
+    InvoiceDate = models.CharField(max_length=100, null=True, blank=True)
+    DisID = models.CharField(max_length=100, null=True, blank=True)
+    ProID = models.CharField(max_length=100, null=True, blank=True)
+    InsertDate = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    UpdateDate = models.DateTimeField(auto_now=True, null=True, blank=True)
+    UserID = models.CharField(max_length=100, null=True, blank=True)
+
+    def __str__(self):
+        return str(self.InvoiceNo or "No Invoice")

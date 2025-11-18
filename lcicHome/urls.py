@@ -170,7 +170,7 @@ from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListV
 
 from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView,process_dispute_notification, process_multiple_disputes,process_multiple_disputescollateral
 from .views import upload_json,MemberInfoViewSet
-from .views import SearchBatfileAPIView
+from .views import SearchBatfileAPIView,MainCatalogCatViewSet,SubCatalogCatViewSet,CompareJsonWithDBAPIView
 # from .views import FileUploadView, FileDeleteView
 # from .views import upload_files
 # from .views import enterprise_info_search
@@ -182,6 +182,8 @@ router.register(r'members', MemberInfoViewSet)
 router.register(r'investorinfo', InvestorInfoViewSet)
 router.register(r'enterpriseinfo', EnterpriseInfoViewSet)
 router.register(r'user-groups', UserGroupViewSet, basename='usergroup')
+router.register(r'maincatalog', SubCatalogCatViewSet, basename='categorymain')
+router.register(r'subcatalog', MainCatalogCatViewSet, basename='categorysub')
 router.register(r'enterprises', EnterpriseMemberSubmitViewSet, basename='enterprise')
 @ensure_csrf_cookie
 def get_csrf_token(request):
@@ -229,7 +231,7 @@ water_summary_patterns = [
 
 urlpatterns = [
    path('', include(router.urls)),
-   path('',views.index, name='index'),
+   path('',views.index, name='index'), 
    #path('',views.newsinfo_listview.as_view(), name='index'),
    path('newsdetail/',views.hnewsDetail, name='newsdetail'),
    path('newsInfo/',views.hnews, name='newsInfo'),
@@ -634,6 +636,8 @@ urlpatterns = [
     path('api/investors/statistics/', views.get_investor_statistics_api, name='investor_statistics'),
     path('api/investors/enterprise/<str:enterprise_id>/', views.get_investors_by_enterprise_api, name='get_investors_by_enterprise'),
     path('api/investors/nationality/<str:nationality>/', views.get_investors_by_nationality_api, name='get_investors_by_nationality'),
+    path('match/', CompareJsonWithDBAPIView.as_view(), name='compare_json_with_db'),
+
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

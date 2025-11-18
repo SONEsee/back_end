@@ -436,7 +436,7 @@ class CustomerWater(models.Model):
     #     return CustomerWater
     class Meta:
         verbose_name_plural='CustomerWater'
-    def _str_(seft):
+    def _str_(seft): 
         return seft.Name
     
     
@@ -2208,10 +2208,10 @@ class ChargeMatrix(models.Model):
 
 class Main_catalog_cat(models.Model):
     cat_sys_id = models.BigAutoField(auto_created=True, primary_key=True, null=False)
-    ct_type = models.CharField(max_length=30)
-    cat_name = models.CharField(max_length=100)
-    cat_lao_name = models.CharField(max_length=100)
-    cat_value = models.CharField(max_length=100)
+    ct_type = models.CharField(max_length=30,blank=False, null=False)
+    cat_name = models.CharField(max_length=100, blank=True, null=True)
+    cat_lao_name = models.CharField(max_length=100,blank=True, null=True)
+    cat_value = models.CharField(max_length=100, blank=True, null=True)
     cat_is_default = models.IntegerField(null=False)
     cat_sort_order = models.IntegerField(null=False)
     cat_group = models.IntegerField(null=True)
@@ -2641,6 +2641,13 @@ class UserAccessLog(models.Model):
     def __str__(self):
         return f"{self.user.username} logged in at {self.login_time}"
 
+class catalog_type_cat(models.Model):
+    cat_id = models.BigAutoField(primary_key=True)
+    cat_type = models.CharField(max_length=30,unique=True)
+    cat_name = models.CharField(max_length=100)
+    cat_lao_name = models.CharField(max_length=100)
+    cat_status = models.IntegerField()
+    cat_detail = models.CharField(max_length=500, null=True, blank=True)
 #Pherm Karn Merge and Matching Models
 class IndividualIdentifier(models.Model):
     """
