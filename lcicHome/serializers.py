@@ -1,10 +1,13 @@
 from rest_framework import serializers
-from .models import Customer_Info_IND
+from .models import Customer_Info_IND, catalog_type_cat
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import check_password
 from .models import Login, memberInfo, User_Group
 from django.core.validators import MaxValueValidator, MinLengthValidator
+
+
+
 
 
 
@@ -1942,6 +1945,35 @@ class UserAccessLogSerializer(serializers.ModelSerializer):
             'ip_address', 'user_agent', 'remarks'
         ]
 
+from collections import OrderedDict
+class SubCatalogCatSerializer(serializers.ModelSerializer):
+    catalog_items = serializers.SerializerMethodField()
+
+    class Meta:
+        model = catalog_type_cat
+        fields = "__all__"
+
+    def get_catalog_items(self, obj):
+        try:
+            # JOIN main catalog where ct_type = cat_type
+            items = Main_catalog_cat.objects.filter(ct_type=obj.cat_type)
+            return MainCatalogCatSerializer(items, many=True).data
+        except Main_catalog_cat.DoesNotExist:
+            return None
+    def to_representation(self, instance):
+        # ดึงข้อมูลพื้นฐานทั้งหมด
+        data = super().to_representation(instance)
+        # จัดลำดับ key ใหม่ให้ catalog_items อยู่ท้าย
+        ordered = OrderedDict()
+        ordered["cat_id"] = data.get("cat_id")
+        ordered["cat_type"] = data.get("cat_type")
+        ordered["cat_name"] = data.get("cat_name")
+        ordered["cat_lao_name"] = data.get("cat_lao_name")
+        ordered["cat_status"] = data.get("cat_status")
+        ordered["cat_detail"] = data.get("cat_detail")
+        ordered["catalog_items"] = data.get("catalog_items")  # ต้องอยู่ท้ายสุด
+
+        return ordered
 # serializers.py
 from rest_framework import serializers
 from .models import (
@@ -2001,7 +2033,273 @@ class CreditScoreResponseSerializers(serializers.Serializer):
     # Final Credit Score
     final_credit_score = serializers.DecimalField(max_digits=10, decimal_places=2)
     credit_rating = serializers.CharField()
+
+
+from rest_framework import serializers
+from .models import IndividualBankIbkInfo_Register, IndividualBankIbkInfo_CreateLog
+
+
+class CustomerRegistrationSerializer(serializers.Serializer):
+    Custype = serializers.CharField(max_length=10)
+    segment = serializers.CharField(max_length=10)
+    bnk_code = serializers.CharField(max_length=150)
+    customer_ID = serializers.CharField(max_length=150)
+    branch_id_code = serializers.CharField(max_length=150)
+    ind_national_id = serializers.CharField(max_length=150, required=False, allow_null=True, allow_blank=True)
+    ind_national_id_date = serializers.DateTimeField(required=False, allow_null=True)
+    ind_passport = serializers.CharField(max_length=150, required=False, allow_null=True, allow_blank=True)
+    ind_passport_date = serializers.DateTimeField(required=False, allow_null=True)
+    ind_familybook = serializers.CharField(max_length=150, required=False, allow_null=True, allow_blank=True)
+    ind_familybook_prov_code = serializers.CharField(max_length=150, required=False, allow_null=True, allow_blank=True)
+    ind_familybook_date = serializers.DateTimeField(required=False, allow_null=True)
+    ind_birth_date = serializers.DateTimeField(required=False, allow_null=True)
+    ind_name = serializers.CharField(max_length=150, required=False, allow_null=True, allow_blank=True)
+    ind_surname = serializers.CharField(max_length=150, required=False, allow_null=True, allow_blank=True)
+    ind_lao_name = serializers.CharField(max_length=150, required=False, allow_null=True, allow_blank=True)
+    ind_lao_surname = serializers.CharField(max_length=150, required=False, allow_null=True, allow_blank=True)
+    verify_document = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+
+
+class RegisterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IndividualBankIbkInfo_Register
+        fields = '__all__'
+        read_only_fields = ['ind_sys_id', 'insert_date', 'update_date']
+
+
+class CreateLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IndividualBankIbkInfo_CreateLog
+        fields = '__all__'
+        read_only_fields = ['ind_sys_id', 'insert_date', 'update_date']
+        
+        
+from rest_framework import serializers
+from .models import IndividualBankIbkInfo_Register
+
+class CustomerUploadListSerializer(serializers.ModelSerializer):
+    upload_date = serializers.DateTimeField(source='insert_date', format="%Y-%m-%d %H:%M:%S")
+    uploaded_by = serializers.CharField(source='insert_by')
+    full_name_en = serializers.SerializerMethodField()
+    full_name_la = serializers.SerializerMethodField()
+
+    class Meta:
+        model = IndividualBankIbkInfo_Register
+        fields = [
+            'ind_sys_id',
+            'lcic_id',
+            'customer_id',
+            'bnk_code',
+            'bank_branch',
+            'ind_national_id',
+            'ind_passport',
+            'ind_birth_date',
+            'full_name_en',
+            'full_name_la',
+            'status',
+            'upload_date',
+            'uploaded_by',
+            'document_file'
+        ]
+
+    def get_full_name_en(self, obj):
+        name = obj.ind_name or ""
+        surname = obj.ind_surname or ""
+        return f"{name} {surname}".strip() or "-"
+
+    def get_full_name_la(self, obj):
+        name = obj.ind_lao_name or ""
+        surname = obj.ind_lao_surname or ""
+        return f"{name} {surname}".strip() or "-"
     
+
+class CustomerConfirmSerializer(serializers.Serializer):
+    """Validates customer confirmation request"""
+    ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+        max_length=100  # Prevent DOS with huge lists
+    )
+    
+    
+# # customer_registration_serializers.py
+# from rest_framework import serializers
+# from .models import IndividualBankIbkInfo_Register
+
+
+# class CustomerManualRegisterSerializer(serializers.ModelSerializer):
+#     """Serializer for manual customer registration with document upload"""
+    
+#     class Meta:
+#         model = IndividualBankIbkInfo_Register
+#         fields = [
+#             'ind_national_id', 'ind_national_id_date', 'ind_passport', 
+#             'ind_passport_date', 'ind_familybook', 'ind_familybook_prov_code',
+#             'ind_familybook_date', 'ind_birth_date', 'ind_name', 'ind_surname',
+#             'ind_lao_name', 'ind_lao_surname', 'bnk_code', 'bank_branch',
+#             'description', 'document_file'
+#         ]
+#         extra_kwargs = {
+#             'document_file': {'required': False}
+#         }
+
+#     def validate(self, data):
+#         """Validate required fields"""
+#         if not data.get('ind_national_id'):
+#             raise serializers.ValidationError({'ind_national_id': 'This field is required.'})
+#         if not data.get('ind_name'):
+#             raise serializers.ValidationError({'ind_name': 'This field is required.'})
+#         if not data.get('ind_surname'):
+#             raise serializers.ValidationError({'ind_surname': 'This field is required.'})
+#         return data
+
+# class CustomerBatchRegisterSerializer(serializers.Serializer):
+#     """Serializer for batch customer registration"""
+    
+#     json_file = serializers.FileField(required=True)
+#     document_file = serializers.FileField(required=False)
+#     bnk_code = serializers.CharField(max_length=150, required=True)
+
+#     def validate_json_file(self, value):
+#         """Validate JSON file format"""
+#         if not value.name.endswith('.json'):
+#             raise serializers.ValidationError('File must be a JSON file.')
+#         return value
+
+
+# class CustomerUploadListSerializer(serializers.ModelSerializer):
+#     """Serializer for listing customer uploads"""
+    
+#     status_display = serializers.SerializerMethodField()
+    
+#     class Meta:
+#         model = IndividualBankIbkInfo_Register
+#         fields = [
+#             'ind_sys_id', 'lcic_id', 'customer_id', 'ind_national_id',
+#             'ind_passport', 'ind_name', 'ind_surname', 'ind_lao_name',
+#             'ind_lao_surname', 'bnk_code', 'bank_branch', 'status',
+#             'status_display', 'is_confirmed', 'confirmed_at', 'confirmed_by',
+#             'insert_date', 'insert_by', 'description', 'document_file'
+#         ]
+#         read_only_fields = ['ind_sys_id', 'insert_date', 'insert_by']
+
+#     def get_status_display(self, obj):
+#         """Return human-readable status"""
+#         status_map = {
+#             'pending': 'Pending Approval',
+#             'approved': 'Approved',
+#             'rejected': 'Rejected',
+#         }
+#         return status_map.get(obj.status, obj.status)
+# serializers.py - Updated to match your model
+
+from rest_framework import serializers
+from .models import IndividualBankIbkInfo_Register
+
+class CustomerManualRegisterSerializer(serializers.ModelSerializer):
+    # Accept multiple document types from frontend
+    document_national_id = serializers.FileField(required=False, write_only=True)
+    document_passport = serializers.FileField(required=False, write_only=True)
+    document_familybook = serializers.FileField(required=False, write_only=True)
+    
+    class Meta:
+        model = IndividualBankIbkInfo_Register
+        fields = [
+            # Required fields
+            'custype',
+            'segment',
+            'bnk_code',
+            'bank_branch',
+            'customer_id',
+            
+            # National ID
+            'ind_national_id',
+            'ind_national_id_date',
+            
+            # Passport
+            'ind_passport',
+            'ind_passport_date',
+            
+            # Family Book
+            'ind_familybook',
+            'ind_familybook_prov_code',
+            'ind_familybook_date',
+            
+            # Personal Info
+            'ind_birth_date',
+            'ind_name',
+            'ind_surname',
+            'ind_lao_name',
+            'ind_lao_surname',
+            
+            # Other
+            'description',
+            
+            # Documents
+            'document_national_id',
+            'document_passport',
+            'document_familybook',
+        ]
+    
+    def validate(self, data):
+        # At least one document must be provided
+        has_doc = any([
+            data.get('document_national_id'),
+            data.get('document_passport'),
+            data.get('document_familybook')
+        ])
+        
+        if not has_doc:
+            raise serializers.ValidationError("At least one document is required")
+        
+        return data
+    
+    def create(self, validated_data):
+        # Extract document files
+        doc_national_id = validated_data.pop('document_national_id', None)
+        doc_passport = validated_data.pop('document_passport', None)
+        doc_familybook = validated_data.pop('document_familybook', None)
+        
+        # Create customer
+        customer = IndividualBankIbkInfo_Register.objects.create(**validated_data)
+        
+        # Save first available document to document_file field
+        if doc_national_id:
+            customer.document_file = doc_national_id
+        elif doc_passport:
+            customer.document_file = doc_passport
+        elif doc_familybook:
+            customer.document_file = doc_familybook
+        
+        customer.save()
+        return customer
+
+
+class CustomerBatchRegisterSerializer(serializers.Serializer):
+    json_file = serializers.FileField(required=True)
+    bnk_code = serializers.CharField(max_length=150, required=True)
+    document_file = serializers.FileField(required=False)
+
+
+class CustomerUploadListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IndividualBankIbkInfo_Register
+        fields = [
+            'ind_sys_id',
+            'lcic_id',
+            'customer_id',
+            'custype',
+            'segment',
+            'bnk_code',
+            'bank_branch',
+            'ind_national_id',
+            'ind_name',
+            'ind_surname',
+            'status',
+            'insert_date',
+            'document_file',
+            'is_confirmed',
+        ]
     
 from rest_framework import serializers
 from .models import scr_atttype_desc, scr_attribute_table

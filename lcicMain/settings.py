@@ -259,7 +259,7 @@ STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
     "http://192.168.45.56:3000",
-    "http://192.168.45.56:3000",
+    "http://192.168.45.52:3000",
     "http://localhost:3001",
 ]
 
@@ -271,10 +271,11 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
 
 AUTH_USER_MODEL = 'lcicHome.Login'
 
-CSRF_TRUSTED_ORIGINS = ['http://localhost:3000','http://192.168.45.56:3000']
+CSRF_TRUSTED_ORIGINS = ['http://localhost:3000','http://192.168.45.56:3000','http://192.168.45.52:3000']
 
 CORS_ALLOWED_ORIGINS = [
     "http://192.168.45.56:35729",
+    "http://192.168.45.53:3000",
     "http://localhost:3001",
     # origins ອື່ນໆທີ່ມີຢູ່ແລ້ວ...
 ]
