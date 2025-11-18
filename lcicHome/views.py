@@ -32529,7 +32529,6 @@ class ScoringIndividualInfoSearchView(APIView):
                 'details': traceback.format_exc()
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-<<<<<<< HEAD
 
 
 class MainCatalogCatViewSet(viewsets.ModelViewSet):
@@ -32711,7 +32710,6 @@ class CompareJsonWithDBAPIView(APIView):
             # "summary": results,
             "details": details
         }, status=status.HTTP_200_OK)
-=======
 # views.py
 # views.py
 from rest_framework import viewsets, status
@@ -33530,4 +33528,3 @@ class ScrAttributeTableRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAP
     queryset = scr_attribute_table.objects.all()
     serializer_class = ScrAttributeTableSerializer
     lookup_field = 'att_id'
->>>>>>> ade4201346e04bc4b5b2f69d5e6120f6e4d0211f

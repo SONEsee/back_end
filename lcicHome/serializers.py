@@ -1942,7 +1942,6 @@ class UserAccessLogSerializer(serializers.ModelSerializer):
             'ip_address', 'user_agent', 'remarks'
         ]
 
-<<<<<<< HEAD
 from collections import OrderedDict
 class SubCatalogCatSerializer(serializers.ModelSerializer):
     catalog_items = serializers.SerializerMethodField()
@@ -1972,7 +1971,6 @@ class SubCatalogCatSerializer(serializers.ModelSerializer):
         ordered["catalog_items"] = data.get("catalog_items")  # ต้องอยู่ท้ายสุด
 
         return ordered
-=======
 # serializers.py
 from rest_framework import serializers
 from .models import (
@@ -2048,4 +2046,3 @@ class ScrAttributeTableSerializer(serializers.ModelSerializer):
         model = scr_attribute_table
         fields = '__all__'
 
->>>>>>> ade4201346e04bc4b5b2f69d5e6120f6e4d0211f

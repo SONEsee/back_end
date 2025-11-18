@@ -2641,7 +2641,6 @@ class UserAccessLog(models.Model):
     def __str__(self):
         return f"{self.user.username} logged in at {self.login_time}"
 
-<<<<<<< HEAD
 class catalog_type_cat(models.Model):
     cat_id = models.BigAutoField(primary_key=True)
     cat_type = models.CharField(max_length=30,unique=True)
@@ -2649,7 +2648,6 @@ class catalog_type_cat(models.Model):
     cat_lao_name = models.CharField(max_length=100)
     cat_status = models.IntegerField()
     cat_detail = models.CharField(max_length=500, null=True, blank=True)
-=======
 #Pherm Karn Merge and Matching Models
 class IndividualIdentifier(models.Model):
     """
@@ -2759,7 +2757,6 @@ class scr_attribute_table(models.Model):
 
     def __str__(self):
         return f"{self.att_name} ({self.att_code})"
->>>>>>> ade4201346e04bc4b5b2f69d5e6120f6e4d0211f
 
 
 

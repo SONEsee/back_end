@@ -182,12 +182,9 @@ router.register(r'members', MemberInfoViewSet)
 router.register(r'investorinfo', InvestorInfoViewSet)
 router.register(r'enterpriseinfo', EnterpriseInfoViewSet)
 router.register(r'user-groups', UserGroupViewSet, basename='usergroup')
-<<<<<<< HEAD
 router.register(r'maincatalog', SubCatalogCatViewSet, basename='categorymain')
 router.register(r'subcatalog', MainCatalogCatViewSet, basename='categorysub')
-=======
 router.register(r'enterprises', EnterpriseMemberSubmitViewSet, basename='enterprise')
->>>>>>> ade4201346e04bc4b5b2f69d5e6120f6e4d0211f
 @ensure_csrf_cookie
 def get_csrf_token(request):
     return JsonResponse({'csrfToken': request.META.get('CSRF_COOKIE')})
