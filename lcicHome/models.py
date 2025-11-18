@@ -2613,6 +2613,8 @@ class IndividualBankIbkInfo_Register(models.Model):
     bnk_code = models.CharField(max_length=150, blank=True, null=True)
     bank_branch = models.CharField(max_length=150, blank=True, null=True)
     customer_id = models.CharField(max_length=150, blank=True, null=True)
+    custype = models.CharField(max_length=150, blank=True, null=True)
+    segment = models.CharField(max_length=150, blank=True, null=True)
     insert_by = models.CharField(max_length=150, blank=True, null=True)
     update_by = models.CharField(max_length=150, blank=True, null=True)
     status = models.CharField(max_length=150, blank=True, null=True)

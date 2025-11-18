@@ -35261,10 +35261,9 @@ class CustomerManualRegisterAPIView(APIView):
                 'error': f'Failed to register customer: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
 class CustomerBatchRegisterAPIView(APIView):
     """
-    API for batch customer registration from JSON file
+    STEP 1: Upload JSON file only, validate and return customer list
     POST /api/register/customer/batch/
     """
     permission_classes = [IsAuthenticated]
@@ -35272,19 +35271,20 @@ class CustomerBatchRegisterAPIView(APIView):
 
     def post(self, request):
         try:
-            serializer = CustomerBatchRegisterSerializer(data=request.data)
+            json_file = request.FILES.get('json_file')
+            bnk_code = request.data.get('bnk_code')
             
-            if not serializer.is_valid():
+            if not json_file:
                 return Response({
                     'success': False,
-                    'error': 'Validation failed',
-                    'errors': serializer.errors
+                    'error': 'JSON file is required'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # Read JSON file
-            json_file = serializer.validated_data['json_file']
-            bnk_code = serializer.validated_data['bnk_code']
-            document_file = serializer.validated_data.get('document_file')
+            if not bnk_code:
+                return Response({
+                    'success': False,
+                    'error': 'Bank code is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
             
             # Parse JSON content
             try:
@@ -35303,24 +35303,115 @@ class CustomerBatchRegisterAPIView(APIView):
                     'error': f'Invalid JSON format: {str(e)}'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # Batch insert customers
+            # Validate and prepare response data
+            validated_customers = []
+            errors = []
+            
+            for idx, customer_data in enumerate(customers_data):
+                try:
+                    # Validate required fields
+                    if not customer_data.get('ind_name'):
+                        errors.append(f"Row {idx + 1}: Missing ind_name")
+                        continue
+                    
+                    if not customer_data.get('ind_surname'):
+                        errors.append(f"Row {idx + 1}: Missing ind_surname")
+                        continue
+                    
+                    # Check which ID documents are available
+                    available_docs = []
+                    if customer_data.get('ind_national_id'):
+                        available_docs.append('national_id')
+                    if customer_data.get('ind_passport'):
+                        available_docs.append('passport')
+                    if customer_data.get('ind_familybook'):
+                        available_docs.append('familybook')
+                    
+                    if not available_docs:
+                        errors.append(f"Row {idx + 1}: At least one ID document required")
+                        continue
+                    
+                    # Add to validated list
+                    validated_customers.append({
+                        'index': idx,
+                        'customer_data': customer_data,
+                        'available_docs': available_docs,
+                        'bnk_code': bnk_code
+                    })
+                    
+                except Exception as e:
+                    errors.append(f"Row {idx + 1}: {str(e)}")
+            
+            if not validated_customers:
+                return Response({
+                    'success': False,
+                    'error': 'No valid customers found in JSON file',
+                    'errors': errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Store in session or cache for later submission
+            # For now, just return the validated data
+            return Response({
+                'success': True,
+                'message': f'Successfully validated {len(validated_customers)} customers',
+                'total_processed': len(customers_data),
+                'valid_count': len(validated_customers),
+                'error_count': len(errors),
+                'customers': validated_customers,
+                'errors': errors if errors else None
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': f'Failed to process batch upload: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CustomerBatchFinalizeAPIView(APIView):
+    """
+    STEP 2: Submit all customers with their documents
+    POST /api/register/customer/batch/finalize/
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        try:
+            # Get customer data from request
+            customers_json = request.data.get('customers_data')
+            
+            if not customers_json:
+                return Response({
+                    'success': False,
+                    'error': 'Customer data is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Parse customer data
+            try:
+                customers_data = json.loads(customers_json)
+            except json.JSONDecodeError:
+                return Response({
+                    'success': False,
+                    'error': 'Invalid customer data format'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Process each customer with their document
             created_count = 0
             errors = []
             
             with transaction.atomic():
-                for idx, customer_data in enumerate(customers_data):
+                for customer_info in customers_data:
                     try:
-                        # Validate required fields
-                        if not customer_data.get('ind_national_id'):
-                            errors.append(f"Row {idx + 1}: Missing ind_national_id")
-                            continue
+                        idx = customer_info.get('index')
+                        customer_data = customer_info.get('customer_data')
+                        bnk_code = customer_info.get('bnk_code')
                         
-                        if not customer_data.get('ind_name'):
-                            errors.append(f"Row {idx + 1}: Missing ind_name")
-                            continue
+                        # Get document file for this customer
+                        doc_file = request.FILES.get(f'document_{idx}')
                         
-                        if not customer_data.get('ind_surname'):
-                            errors.append(f"Row {idx + 1}: Missing ind_surname")
+                        if not doc_file:
+                            errors.append(f"Customer {idx + 1}: Document file missing")
                             continue
                         
                         # Create customer record
@@ -35339,8 +35430,10 @@ class CustomerBatchRegisterAPIView(APIView):
                             ind_lao_surname=customer_data.get('ind_lao_surname'),
                             bnk_code=bnk_code,
                             bank_branch=customer_data.get('bank_branch'),
+                            custype=customer_data.get('custype'),
+                            segment=customer_data.get('segment'),
                             description=customer_data.get('description'),
-                            document_file=document_file,
+                            document_file=doc_file,
                             insert_by=request.user.username,
                             insert_date=timezone.now(),
                             status='pending',
@@ -35349,25 +35442,20 @@ class CustomerBatchRegisterAPIView(APIView):
                         created_count += 1
                         
                     except Exception as e:
-                        errors.append(f"Row {idx + 1}: {str(e)}")
+                        errors.append(f"Customer {idx + 1}: {str(e)}")
             
-            response_data = {
+            return Response({
                 'success': True,
-                'message': f'Successfully uploaded {created_count} customer records',
-                'count': created_count
-            }
-            
-            if errors:
-                response_data['warnings'] = errors
-            
-            return Response(response_data, status=status.HTTP_201_CREATED)
+                'message': f'Successfully registered {created_count} customers',
+                'created_count': created_count,
+                'errors': errors if errors else None
+            }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
             return Response({
                 'success': False,
-                'error': f'Failed to process batch upload: {str(e)}'
+                'error': f'Failed to finalize batch upload: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 class MyUploadsListAPIView(generics.ListAPIView):
     """

@@ -170,6 +170,7 @@ from .views import (
     
     CustomerManualRegisterAPIView,
     CustomerBatchRegisterAPIView,
+    CustomerBatchFinalizeAPIView,
     MyUploadsListAPIView,
     
 
@@ -672,6 +673,9 @@ urlpatterns = [
     path('register/customer/batch/', 
          CustomerBatchRegisterAPIView.as_view(), 
          name='customer-batch-register'),
+    path('register/customer/batch/finalize/', 
+         CustomerBatchFinalizeAPIView.as_view(), 
+         name='customer-batch-finalize'),
     
     # My uploads list
     path('register/customer/my-uploads/', 
