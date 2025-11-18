@@ -8207,11 +8207,267 @@ class BorrowerFileUploadView(generics.CreateAPIView):
                 'uploaded': success
             }, status=201)
 
+# def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
+#     """
+#     ປະມວນຜົນໄຟລ໌ Borrower ແລະແຍກປະເພດເຂົ້າ BorrowerGood ແລະ BorrowerError
+#     (ປັບປຸງສຳລັບຂໍ້ມູນຂະໜາດໃຫຍ່)
+#     """
+#     try:
+#         with transaction.atomic():
+            
+#             file_content = file.read().decode('utf-8')
+#             json_data = json.loads(file_content)
+            
+#             print(f"\n[PROCESS] ເລີ່ມປະມວນຜົນ {len(json_data):,} records...")
+
+        
+#             a1_records = []  
+#             a2_records = []  
+#             other_records = []
+
+#             for record in json_data:
+#                 seg_type_borrower = record.get('segmentTypeBorrower', '').strip()
+#                 if seg_type_borrower == 'A1':
+#                     a1_records.append(record)
+#                 elif seg_type_borrower == 'A2':
+#                     a2_records.append(record)
+#                 else:
+#                     other_records.append(record)
+
+#             print(f"  A1 (Individual): {len(a1_records):,}")
+#             print(f"  A2 (Enterprise): {len(a2_records):,}")
+#             print(f"  Other: {len(other_records):,}")
+
+          
+#             a1_lcic_codes = {r.get('LCIC_code', '').strip() for r in a1_records if r.get('LCIC_code')}
+#             a2_lcic_codes = {r.get('LCIC_code', '').strip() for r in a2_records if r.get('LCIC_code')}
+#             all_lcic_codes = a1_lcic_codes | a2_lcic_codes
+            
+#             print(f"\n[OPTIMIZATION] Unique LCIC codes to check: {len(all_lcic_codes):,}")
+
+           
+#             print(f"\n[CACHE] ດຶງຂໍ້ມູນອ້າງອີງ...")
+            
+            
+#             if a2_lcic_codes:
+#                 enterprise_lcic_codes = set(
+#                     EnterpriseInfo.objects
+#                     .filter(LCIC_code__in=a2_lcic_codes)
+#                     .values_list('LCIC_code', flat=True)
+#                 )
+#             else:
+#                 enterprise_lcic_codes = set()
+#             print(f"  EnterpriseInfo LCIC found: {len(enterprise_lcic_codes):,} / {len(a2_lcic_codes):,}")
+
+           
+#             if a1_lcic_codes:
+#                 individual_lcic_ids = set(
+#                     IndividualBankIbk.objects
+#                     .filter(
+#                         bnk_code=bnk_code,
+#                         lcic_id__in=a1_lcic_codes
+#                     )
+#                     .values_list('lcic_id', flat=True)
+#                 )
+#             else:
+#                 individual_lcic_ids = set()
+#             print(f"  IndividualBankIbk LCIC found: {len(individual_lcic_ids):,} / {len(a1_lcic_codes):,}")
+
+            
+#             if all_lcic_codes:
+#                 b1_tuples = set(
+#                     B1.objects
+#                     .filter(
+#                         bnk_code=bnk_code,
+#                         LCIC_code__in=all_lcic_codes
+#                     )
+#                     .values_list('LCIC_code', 'bnk_code', 'customer_id', 'loan_id', 'segmentType')
+#                 )
+#             else:
+#                 b1_tuples = set()
+#             print(f"  B1 tuples found: {len(b1_tuples):,}")
+
+         
+#             print(f"\n[A2] ປະມວນຜົນ Enterprise records...")
+#             a2_good = []
+#             a2_error_no_lcic = []  
+#             a2_error_no_b1 = []    
+
+#             for record in a2_records:
+#                 lcic_code = record.get('LCIC_code', '').strip()
+#                 customer_id = record.get('customer_id', '').strip()
+#                 loan_id = record.get('loan_id', '').strip()
+#                 seg_type_borrower = record.get('segmentTypeBorrower', '').strip()
+                
+                
+#                 if lcic_code not in enterprise_lcic_codes:
+#                     a2_error_no_lcic.append({
+#                         'record': record,
+#                         'status': 1
+#                     })
+#                     continue
+                
+              
+#                 b1_key = (lcic_code, bnk_code, customer_id, loan_id, seg_type_borrower)
+#                 if b1_key in b1_tuples:
+#                     a2_good.append(record)
+#                 else:
+#                     a2_error_no_b1.append({
+#                         'record': record,
+#                         'status': 2
+#                     })
+
+#             print(f"  A2 Good: {len(a2_good):,}")
+#             print(f"  A2 Error (no LCIC): {len(a2_error_no_lcic):,}")
+#             print(f"  A2 Error (no B1): {len(a2_error_no_b1):,}")
+
+            
+#             print(f"\n[A1] ປະມວນຜົນ Individual records...")
+#             a1_good = []
+#             a1_error_no_lcic = []  
+#             a1_error_no_b1 = []    
+
+#             for record in a1_records:
+#                 lcic_code = record.get('LCIC_code', '').strip()
+#                 customer_id = record.get('customer_id', '').strip()
+#                 loan_id = record.get('loan_id', '').strip()
+#                 seg_type_borrower = record.get('segmentTypeBorrower', '').strip()
+                
+               
+#                 if lcic_code not in individual_lcic_ids:
+#                     a1_error_no_lcic.append({
+#                         'record': record,
+#                         'status': 1
+#                     })
+#                     continue
+                
+                
+#                 b1_key = (lcic_code, bnk_code, customer_id, loan_id, seg_type_borrower)
+#                 if b1_key in b1_tuples:
+#                     a1_good.append(record)
+#                 else:
+#                     a1_error_no_b1.append({
+#                         'record': record,
+#                         'status': 2
+#                     })
+
+#             print(f"  A1 Good: {len(a1_good):,}")
+#             print(f"  A1 Error (no LCIC): {len(a1_error_no_lcic):,}")
+#             print(f"  A1 Error (no B1): {len(a1_error_no_b1):,}")
+
+            
+#             print(f"\n[SAVE] ສ້າງ Upload_File_Borrower...")
+#             upload_file = Upload_File_Borrower.objects.create(
+#                 user_id=user_id,
+#                 fileName=file.name,
+#                 fileUpload=file,
+#                 period=period_value,
+#                 status='1',
+#                 statussubmit='1',
+#                 status_upload='success',
+#                 fileSize=str(file.size),
+#                 path=f"borrower/{file.name}"
+#             )
+            
+          
+#             file_id = f"b-{upload_file.BID}"
+#             upload_file.file_id = file_id
+#             upload_file.save(update_fields=['file_id'])
+            
+#             print(f"  Created Upload_File_Borrower: {file_id}")
+
+           
+#             total_good = len(a1_good) + len(a2_good)
+#             if total_good > 0:
+#                 print(f"\n[SAVE] ບັນທຶກ {total_good:,} BorrowerGood records...")
+#                 good_objects = []
+                
+#                 for record in a1_good + a2_good:
+#                     good_objects.append(BorrowerGood(
+#                         id_file=upload_file,
+#                         LCIC_code=record.get('LCIC_code', '').strip(),
+#                         Customer_ID=record.get('customer_id', '').strip(),
+#                         SegmentType=record.get('segmentType', '').strip(),
+#                         bnk_code=record.get('bnk_code', '').strip(),
+#                         branch=record.get('branch_id', '').strip(),
+#                         loan_id=record.get('loan_id', '').strip(),
+#                         segmentTypeBorrower=record.get('segmentTypeBorrower', '').strip(),
+#                         period=period_value,
+#                         status=0,
+#                         user_insert=user_id
+#                     ))
+                
+#                 BorrowerGood.objects.bulk_create(good_objects, batch_size=1000)
+#                 print(f"  ບັນທຶກສຳເລັດ!")
+
+         
+#             all_errors = a1_error_no_lcic + a1_error_no_b1 + a2_error_no_lcic + a2_error_no_b1
+#             if len(all_errors) > 0:
+#                 print(f"\n[SAVE] ບັນທຶກ {len(all_errors):,} BorrowerError records...")
+#                 error_objects = []
+                
+#                 for error_item in all_errors:
+#                     record = error_item['record']
+#                     error_objects.append(BorrowerError(
+#                         id_file=upload_file,
+#                         LCIC_code=record.get('LCIC_code', '').strip(),
+#                         Customer_ID=record.get('customer_id', '').strip(),
+#                         SegmentType=record.get('segmentType', '').strip(),
+#                         bnk_code=record.get('bnk_code', '').strip(),
+#                         branch=record.get('branch_id', '').strip(),
+#                         loan_id=record.get('loan_id', '').strip(),
+#                         segmentTypeBorrower=record.get('segmentTypeBorrower', '').strip(),
+#                         period=period_value,
+#                         status=error_item['status'],
+#                         user_insert=user_id
+#                     ))
+                
+#                 BorrowerError.objects.bulk_create(error_objects, batch_size=1000)
+#                 print(f"  ບັນທຶກສຳເລັດ!")
+
+#             #
+#             total_records = len(json_data)
+#             total_errors = len(all_errors)
+
+#             if total_records > 0:
+#                 error_percentage = (total_errors / total_records) * 100
+#             else:
+#                 error_percentage = 0.0
+
+#             upload_file.percentage = round(error_percentage, 2)
+#             upload_file.save(update_fields=['percentage'])
+
+#             print(f"\n[PERCENTAGE] Error: {total_errors}/{total_records} = {error_percentage:.2f}%")
+
+           
+#             print(f"\n[DONE] ປະມວນຜົນສຳເລັດ!")
+#             return {
+#                 'file_name': file.name,
+#                 'file_id': file_id,
+#                 'period': period_value,
+#                 'total_records': total_records,
+#                 'good_records': total_good,
+#                 'error_records': total_errors,
+#                 'error_percentage': error_percentage,
+#                 'breakdown': {
+#                     'a1_good': len(a1_good),
+#                     'a1_error_no_lcic': len(a1_error_no_lcic),
+#                     'a1_error_no_b1': len(a1_error_no_b1),
+#                     'a2_good': len(a2_good),
+#                     'a2_error_no_lcic': len(a2_error_no_lcic),
+#                     'a2_error_no_b1': len(a2_error_no_b1)
+#                 }
+#             }
+
+#     except Exception as e:
+#         logger.error(f"Error processing file: {str(e)}", exc_info=True)
+#         return {
+#             'file_name': file.name,
+#             'error_code': 'PROCESSING_ERROR',
+#             'message': f'ຜິດພາດໃນການປະມວນຜົນ: {str(e)}'
+#         }
 def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
-    """
-    ປະມວນຜົນໄຟລ໌ Borrower ແລະແຍກປະເພດເຂົ້າ BorrowerGood ແລະ BorrowerError
-    (ປັບປຸງສຳລັບຂໍ້ມູນຂະໜາດໃຫຍ່)
-    """
+   
     try:
         with transaction.atomic():
             
@@ -8220,7 +8476,7 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
             
             print(f"\n[PROCESS] ເລີ່ມປະມວນຜົນ {len(json_data):,} records...")
 
-        
+           
             a1_records = []  
             a2_records = []  
             other_records = []
@@ -8238,17 +8494,17 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
             print(f"  A2 (Enterprise): {len(a2_records):,}")
             print(f"  Other: {len(other_records):,}")
 
-          
+            
             a1_lcic_codes = {r.get('LCIC_code', '').strip() for r in a1_records if r.get('LCIC_code')}
             a2_lcic_codes = {r.get('LCIC_code', '').strip() for r in a2_records if r.get('LCIC_code')}
             all_lcic_codes = a1_lcic_codes | a2_lcic_codes
             
             print(f"\n[OPTIMIZATION] Unique LCIC codes to check: {len(all_lcic_codes):,}")
 
-           
+            
             print(f"\n[CACHE] ດຶງຂໍ້ມູນອ້າງອີງ...")
             
-            
+           
             if a2_lcic_codes:
                 enterprise_lcic_codes = set(
                     EnterpriseInfo.objects
@@ -8259,7 +8515,7 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                 enterprise_lcic_codes = set()
             print(f"  EnterpriseInfo LCIC found: {len(enterprise_lcic_codes):,} / {len(a2_lcic_codes):,}")
 
-           
+            
             if a1_lcic_codes:
                 individual_lcic_ids = set(
                     IndividualBankIbk.objects
@@ -8287,7 +8543,7 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                 b1_tuples = set()
             print(f"  B1 tuples found: {len(b1_tuples):,}")
 
-         
+            
             print(f"\n[A2] ປະມວນຜົນ Enterprise records...")
             a2_good = []
             a2_error_no_lcic = []  
@@ -8307,7 +8563,7 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                     })
                     continue
                 
-              
+                
                 b1_key = (lcic_code, bnk_code, customer_id, loan_id, seg_type_borrower)
                 if b1_key in b1_tuples:
                     a2_good.append(record)
@@ -8355,7 +8611,27 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
             print(f"  A1 Error (no LCIC): {len(a1_error_no_lcic):,}")
             print(f"  A1 Error (no B1): {len(a1_error_no_b1):,}")
 
-            
+           
+            total_records = len(json_data)
+            all_errors = a1_error_no_lcic + a1_error_no_b1 + a2_error_no_lcic + a2_error_no_b1
+            total_errors = len(all_errors)
+
+            if total_records > 0:
+                error_percentage = (total_errors / total_records) * 100
+            else:
+                error_percentage = 0.0
+
+            print(f"\n[PERCENTAGE] Error: {total_errors}/{total_records} = {error_percentage:.2f}%")
+
+          
+            if error_percentage >= 15:
+                status_submit = '2'  
+                print(f"  ⚠️ Error percentage >= 15% → statussubmit='2'")
+            else:
+                status_submit = '1' 
+                print(f"  ✅ Error percentage < 15% → statussubmit='1'")
+
+           
             print(f"\n[SAVE] ສ້າງ Upload_File_Borrower...")
             upload_file = Upload_File_Borrower.objects.create(
                 user_id=user_id,
@@ -8363,20 +8639,21 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                 fileUpload=file,
                 period=period_value,
                 status='1',
-                statussubmit='1',
+                statussubmit=status_submit,  
                 status_upload='success',
                 fileSize=str(file.size),
-                path=f"borrower/{file.name}"
+                path=f"borrower/{file.name}",
+                percentage=round(error_percentage, 2)  
             )
             
-          
+            
             file_id = f"b-{upload_file.BID}"
             upload_file.file_id = file_id
             upload_file.save(update_fields=['file_id'])
             
-            print(f"  Created Upload_File_Borrower: {file_id}")
+            print(f"  Created Upload_File_Borrower: {file_id} (statussubmit={status_submit})")
 
-           
+            
             total_good = len(a1_good) + len(a2_good)
             if total_good > 0:
                 print(f"\n[SAVE] ບັນທຶກ {total_good:,} BorrowerGood records...")
@@ -8387,6 +8664,9 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                         id_file=upload_file,
                         LCIC_code=record.get('LCIC_code', '').strip(),
                         Customer_ID=record.get('customer_id', '').strip(),
+                        LCIC_code_brw=record.get('LCIC_code_brw', '').strip(),
+                        customer_id_brw=record.get('customer_id_brw', '').strip(),
+                        branch_id_brw=record.get('branch_id_brw', '').strip(),
                         SegmentType=record.get('segmentType', '').strip(),
                         bnk_code=record.get('bnk_code', '').strip(),
                         branch=record.get('branch_id', '').strip(),
@@ -8400,10 +8680,9 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                 BorrowerGood.objects.bulk_create(good_objects, batch_size=1000)
                 print(f"  ບັນທຶກສຳເລັດ!")
 
-         
-            all_errors = a1_error_no_lcic + a1_error_no_b1 + a2_error_no_lcic + a2_error_no_b1
-            if len(all_errors) > 0:
-                print(f"\n[SAVE] ບັນທຶກ {len(all_errors):,} BorrowerError records...")
+           
+            if total_errors > 0:
+                print(f"\n[SAVE] ບັນທຶກ {total_errors:,} BorrowerError records...")
                 error_objects = []
                 
                 for error_item in all_errors:
@@ -8413,6 +8692,9 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                         LCIC_code=record.get('LCIC_code', '').strip(),
                         Customer_ID=record.get('customer_id', '').strip(),
                         SegmentType=record.get('segmentType', '').strip(),
+                        LCIC_code_brw=record.get('LCIC_code_brw', '').strip(),
+                        customer_id_brw=record.get('customer_id_brw', '').strip(),
+                        branch_id_brw=record.get('branch_id_brw', '').strip(),
                         bnk_code=record.get('bnk_code', '').strip(),
                         branch=record.get('branch_id', '').strip(),
                         loan_id=record.get('loan_id', '').strip(),
@@ -8425,21 +8707,7 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                 BorrowerError.objects.bulk_create(error_objects, batch_size=1000)
                 print(f"  ບັນທຶກສຳເລັດ!")
 
-            #
-            total_records = len(json_data)
-            total_errors = len(all_errors)
 
-            if total_records > 0:
-                error_percentage = (total_errors / total_records) * 100
-            else:
-                error_percentage = 0.0
-
-            upload_file.percentage = round(error_percentage, 2)
-            upload_file.save(update_fields=['percentage'])
-
-            print(f"\n[PERCENTAGE] Error: {total_errors}/{total_records} = {error_percentage:.2f}%")
-
-           
             print(f"\n[DONE] ປະມວນຜົນສຳເລັດ!")
             return {
                 'file_name': file.name,
@@ -8449,6 +8717,7 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
                 'good_records': total_good,
                 'error_records': total_errors,
                 'error_percentage': error_percentage,
+                'statussubmit': status_submit,  # ເພີ່ມໃນ response
                 'breakdown': {
                     'a1_good': len(a1_good),
                     'a1_error_no_lcic': len(a1_error_no_lcic),
@@ -8466,7 +8735,6 @@ def process_borrower_file(file, user_id, period_value, bnk_code, segment_type):
             'error_code': 'PROCESSING_ERROR',
             'message': f'ຜິດພາດໃນການປະມວນຜົນ: {str(e)}'
         }
-
 # views.py
 from rest_framework import generics
 from rest_framework.response import Response
@@ -12498,7 +12766,7 @@ import re
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
-from .utils import reject_individual_loan,reject_individual_collateral
+from .utils import reject_individual_loan,reject_individual_collateral,reject_borrower_loan
 
 @csrf_exempt  
 @transaction.atomic
@@ -12525,7 +12793,18 @@ def reject_individual_collateral_view(request, id_file):
             'success': False,
             'message': 'Method not allowed. Use POST.'
         }, status=405)
-
+@csrf_exempt  
+@transaction.atomic
+def reject_borrower_loan_view(request, BID):
+    if request.method == 'POST':
+        result = reject_borrower_loan(BID)
+        status_code = 200 if result['success'] else 400
+        return JsonResponse(result, status=status_code)
+    else:
+        return JsonResponse({
+            'success': False,
+            'message': 'Method not allowed. Use POST.'
+        }, status=405)
 from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
@@ -12822,7 +13101,7 @@ def confirm_upload_borrower(request):
         print(f"ເລີ່ມຕົ້ນການຢືນຢັນການອັບໂຫຼດ (Borrower): BID = {BID}")
         print(f"{'='*80}")
         
-        # 1. ແປງ BID ເປັນຕົວເລກ
+        
         try:
             BID_number = int(BID)
         except ValueError:
@@ -12831,16 +13110,16 @@ def confirm_upload_borrower(request):
         
         print(f"  BID ເປັນຕົວເລກ: {BID_number}")
         
-        # 2. ອັບເດດສະຖານະເບື້ອງຕົ້ນ
+        
         Upload_File_Borrower.objects.filter(BID=BID_number).update(statussubmit='3', dispuste='0')
         
-        # 3. ກວດໄຟລ໌ມີຢູ່ບໍ່
+        
         upload_file = Upload_File_Borrower.objects.filter(BID=BID_number).first()
         if not upload_file:
             print("  ບໍ່ພົບໄຟລ໌ → ຜິດພາດ")
             return JsonResponse({'status': 'error', 'message': 'File not found'}, status=404)
         
-        # 4. ກວດສະຖານະໄຟລ໌
+        
         if upload_file.statussubmit == '0':
             print("  ໄຟລ໌ຖືກຢືນຢັນແລ້ວ → ບໍ່ສາມາດເຮັດຊ້ຳໄດ້")
             return JsonResponse({'status': 'error', 'message': 'File already confirmed'}, status=400)
@@ -12994,6 +13273,9 @@ def confirm_upload_borrower(request):
                             id_file=upload_file,
                             EenterpriseID=item.EenterpriseID,
                             LCIC_code=item.LCIC_code,
+                            LCIC_code_brw=item.LCIC_code_brw,
+                            customer_id_brw=item.customer_id_brw,
+                            branch_id_brw=item.branch_id_brw,
                             segmentTypeBorrower=item.segmentTypeBorrower,
                             period=item.period,
                             SegmentType=item.SegmentType,
@@ -13019,6 +13301,9 @@ def confirm_upload_borrower(request):
                             id_file=upload_file,
                             EenterpriseID=item.EenterpriseID,
                             LCIC_code=item.LCIC_code,
+                            LCIC_code_brw=item.LCIC_code_brw,
+                            customer_id_brw=item.customer_id_brw,
+                            branch_id_brw=item.branch_id_brw,
                             segmentTypeBorrower=item.segmentTypeBorrower,
                             period=item.period,
                             SegmentType=item.SegmentType,
@@ -13045,6 +13330,9 @@ def confirm_upload_borrower(request):
                             EenterpriseID=item.EenterpriseID,
                             segmentTypeBorrower=item.segmentTypeBorrower,
                             LCIC_code=item.LCIC_code,
+                            LCIC_code_brw=item.LCIC_code_brw,
+                            customer_id_brw=item.customer_id_brw,
+                            branch_id_brw=item.branch_id_brw,
                             period=item.period,
                             SegmentType=item.SegmentType,
                             Customer_ID=item.Customer_ID,
@@ -13070,6 +13358,9 @@ def confirm_upload_borrower(request):
                             EenterpriseID=item.EenterpriseID,
                             segmentTypeBorrower=item.segmentTypeBorrower,
                             LCIC_code=item.LCIC_code,
+                            LCIC_code_brw=item.LCIC_code_brw,
+                            customer_id_brw=item.customer_id_brw,
+                            branch_id_brw=item.branch_id_brw,
                             period=item.period,
                             SegmentType=item.SegmentType,
                             Customer_ID=item.Customer_ID,
@@ -16018,6 +16309,9 @@ def get_collaterals(request):
     result = collaterals.values()
     return JsonResponse(list(result), safe=False)
 
+from .models import CollateralNew
+
+from .models import UploadFile_enterpriseinfo
 
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -16032,10 +16326,7 @@ logger = logging.getLogger(__name__)
 
 
 class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet ສຳຫຼັບຈັດການຂໍ້ມູນວິສາຫະກິດທີ່ສົ່ງເຂົ້າມາ
-    ປະກອບດ້ວຍ CRUD operations ທັງໝົດ
-    """
+  
     queryset = EnterpriseMemberSubmit.objects.all()
     serializer_class = EnterpriseMemberSubmitSerializer
     permission_classes = [IsAuthenticated]
@@ -16051,12 +16342,16 @@ class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
         if lcic_code:
             queryset = queryset.filter(LCIC_code=lcic_code)
         
-        # ຄົ້ນຫາຕາມ EnterpriseID
+        id_file = self.request.query_params.get('id_file', None)
+        if id_file:
+            queryset = queryset.filter(id_file=id_file)
+        
+       
         enterprise_id = self.request.query_params.get('enterprise_id', None)
         if enterprise_id:
             queryset = queryset.filter(EnterpriseID=enterprise_id)
         
-        # ຄົ້ນຫາຕາມຊື່ວິສາຫະກິດ (ລາວ ຫຼື ອັງກິດ)
+       
         search = self.request.query_params.get('search', None)
         if search:
             queryset = queryset.filter(
@@ -16065,12 +16360,12 @@ class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
                 Q(regisCertificateNumber__icontains=search)
             )
         
-        # ກັ່ນຕອງຕາມສະຖານະ
+       
         status_filter = self.request.query_params.get('status', None)
         if status_filter is not None:
             queryset = queryset.filter(status=status_filter)
         
-        # ກັ່ນຕອງຕາມວັນທີລົງທະບຽນ
+      
         start_date = self.request.query_params.get('start_date', None)
         end_date = self.request.query_params.get('end_date', None)
         if start_date:
@@ -16078,39 +16373,76 @@ class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
         if end_date:
             queryset = queryset.filter(regisDate__lte=end_date)
         
-        # ຈັດລຽງຕາມວັນທີອັບເດດລ່າສຸດ
+       
         return queryset.order_by('-LastUpdate', '-InsertDate')
     
+
+
+
+
     def create(self, request, *args, **kwargs):
         """
-        ສ້າງຂໍ້ມູນວິສາຫະກິດໃໝ່
+        ສ້າງ EnterpriseMemberSubmit + ສ້າງ CollateralNew ກ່ອນ
         """
         try:
             data = request.data.copy()
-            
-            # ກຳນົດຜູ້ສ້າງ ແລະ ວັນທີສ້າງ
+
+          
+            file = request.FILES.get('file')
+            if not file:
+                return Response({
+                    'success': False,
+                    'message': 'ກະລຸນາອັບໂຫຼດໄຟລ໌'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+           
+            collateral = CollateralNew(
+                bank_id=data.get('bank_id'),
+                branch_id=data.get('branch_id'),
+                filename=file.name,
+                image=file,
+                user=request.user.username if request.user.is_authenticated else 'anonymous',
+                status='1', 
+                LCIC_reques=data.get('LCIC_reques'),
+                
+            )
+            collateral.save()  
+
+           
+            data.pop('id_file', None)
+
+           
             data['user_insert'] = request.user.username
             data['InsertDate'] = timezone.now()
             data['LastUpdate'] = timezone.now()
+
             
             serializer = self.get_serializer(data=data)
             serializer.is_valid(raise_exception=True)
-            self.perform_create(serializer)
+            instance = serializer.save()
+
             
-            logger.info(f"ສ້າງວິສາຫະກິດສຳເລັດ: {serializer.data.get('LCICID')} ໂດຍ {request.user.username}")
-            
+            instance.id_file = collateral
+            instance.save()
+
+            logger.info(f"ສ້າງວິສາຫະກິດສຳເລັດ: {instance.LCICID} ດ້ວຍ id_file (CollateralNew): {collateral.id}")
+
             return Response({
                 'success': True,
                 'message': 'ສ້າງຂໍ້ມູນວິສາຫະກິດສຳເລັດ',
-                'data': serializer.data
+                'data': self.get_serializer(instance).data,
+                'collateral_id': collateral.id,
+                'file_url': collateral.image.url 
             }, status=status.HTTP_201_CREATED)
-            
+
         except Exception as e:
             logger.error(f"ເກີດຂໍ້ຜິດພາດໃນການສ້າງວິສາຫະກິດ: {str(e)}")
             return Response({
                 'success': False,
                 'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            }, status=status.HTTP_400_BAD_REQUEST)         
+        
+        
     
     def update(self, request, *args, **kwargs):
         """
@@ -16122,7 +16454,7 @@ class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
             
             data = request.data.copy()
             
-            # ກຳນົດຜູ້ອັບເດດ ແລະ ວັນທີອັບເດດ
+          
             data['user_update'] = request.user.username
             data['UpdateDate'] = timezone.now()
             data['LastUpdate'] = timezone.now()
@@ -16160,7 +16492,7 @@ class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
         try:
             instance = self.get_object()
             
-            # Soft delete - ປ່ຽນສະຖານະເປັນ -1 ແທນການລຶບຕົວຈິງ
+           
             instance.status = -1
             instance.CancellationDate = timezone.now()
             instance.user_update = request.user.username
@@ -16229,86 +16561,7 @@ class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
                 'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)
     
-    @action(detail=False, methods=['get'])
-    def statistics(self, request):
-        """
-        ສະຖິຕິຂໍ້ມູນວິສາຫະກິດ
-        """
-        try:
-            total = EnterpriseMemberSubmit.objects.count()
-            active = EnterpriseMemberSubmit.objects.filter(status=1).count()
-            inactive = EnterpriseMemberSubmit.objects.filter(status=0).count()
-            deleted = EnterpriseMemberSubmit.objects.filter(status=-1).count()
-            
-            return Response({
-                'success': True,
-                'data': {
-                    'total': total,
-                    'active': active,
-                    'inactive': inactive,
-                    'deleted': deleted
-                }
-            }, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            return Response({
-                'success': False,
-                'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
-            }, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=False, methods=['post'])
-    def bulk_create(self, request):
-        """
-        ສ້າງຂໍ້ມູນວິສາຫະກິດຫຼາຍລາຍການພ້ອມກັນ
-        """
-        try:
-            enterprises_data = request.data.get('enterprises', [])
-            
-            if not enterprises_data:
-                return Response({
-                    'success': False,
-                    'message': 'ກະລຸນາໃສ່ຂໍ້ມູນວິສາຫະກິດ'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            created_enterprises = []
-            errors = []
-            
-            for idx, enterprise_data in enumerate(enterprises_data):
-                try:
-                    enterprise_data['user_insert'] = request.user.username
-                    enterprise_data['InsertDate'] = timezone.now()
-                    enterprise_data['LastUpdate'] = timezone.now()
-                    
-                    serializer = self.get_serializer(data=enterprise_data)
-                    serializer.is_valid(raise_exception=True)
-                    serializer.save()
-                    created_enterprises.append(serializer.data)
-                    
-                except Exception as e:
-                    errors.append({
-                        'index': idx,
-                        'error': str(e),
-                        'data': enterprise_data
-                    })
-            
-            logger.info(f"ສ້າງວິສາຫະກິດຫຼາຍລາຍການ: ສຳເລັດ {len(created_enterprises)}, ຜິດພາດ {len(errors)}")
-            
-            return Response({
-                'success': True,
-                'message': f'ສ້າງສຳເລັດ {len(created_enterprises)} ລາຍການ',
-                'created': created_enterprises,
-                'errors': errors,
-                'total_success': len(created_enterprises),
-                'total_errors': len(errors)
-            }, status=status.HTTP_201_CREATED)
-            
-        except Exception as e:
-            logger.error(f"ເກີດຂໍ້ຜິດພາດໃນການສ້າງຫຼາຍລາຍການ: {str(e)}")
-            return Response({
-                'success': False,
-                'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
-            }, status=status.HTTP_400_BAD_REQUEST)
-    
+
     @action(detail=False, methods=['get'])
     def export(self, request):
         """
@@ -16329,28 +16582,221 @@ class EnterpriseMemberSubmitViewSet(viewsets.ModelViewSet):
                 'success': False,
                 'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .models import EnterpriseInfo
+from .serializers import EnterpriseInfoSerializer
+
+class CheckEnterpriseView(APIView):
+    """
+    POST API ເພື່ອກວດສອບວ່າມີ EnterpriseID ຢູ່ໃນລະບົບບໍ່
+    ຖ້າມີ - ສົ່ງຂໍ້ມູນລາຍລະອຽດກັບຄືນ
+    ຖ້າບໍ່ມີ - ແຈ້ງວ່າບໍ່ພົບຂໍ້ມູນ
+    """
+    def post(self, request):
+        enterprise_id = request.data.get('EnterpriseID')
         
+        # ກວດສອບວ່າມີການສົ່ງ EnterpriseID ມາບໍ່
+        if not enterprise_id:
+            return Response({
+                'success': False,
+                'message': 'ກະລຸນາລະບຸ EnterpriseID',
+                'exists': False,
+                'data': None
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # ກວດສອບວ່າມີຂໍ້ມູນຢູ່ໃນຖານຂໍ້ມູນບໍ່
+            enterprise = EnterpriseInfo.objects.get(EnterpriseID=enterprise_id)
+            
+            # ດຶງລາຍລະອຽດອອກມາ
+            serializer = EnterpriseInfoSerializer(enterprise)
+            
+            return Response({
+                'success': True,
+                'message': 'ພົບຂໍ້ມູນວິສາຫະກິດໃນລະບົບແລ້ວ',
+                'exists': True,
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except EnterpriseInfo.DoesNotExist:
+            # ບໍ່ພົບຂໍ້ມູນ
+            return Response({
+                'success': True,
+                'message': 'ບໍ່ພົບຂໍ້ມູນວິສາຫະກິດໃນລະບົບ',
+                'exists': False,
+                'data': None
+            }, status=status.HTTP_200_OK)     
 
-# def get_collaterals(request):
-#     collaterals = Collateral.objects.exclude(status=0).values('id', 'filename', 'image', 'pathfile', 'status')
-#     return JsonResponse(list(collaterals), safe=False)
-
-
-# from rest_framework import status
-# from rest_framework.response import Response
-# from rest_framework.decorators import api_view
-# from .models import EnterpriseInfo
-# from .serializers import EnterpriseInfoSerializer
-
-# @api_view(['POST'])
-# def create_enterprise_info(request):
-#     if request.method == 'POST':
-#         serializer = EnterpriseInfoSerializer(data=request.data)
-#         if serializer.is_valid():
-#             serializer.save()
-#             return Response(serializer.data, status=status.HTTP_201_CREATED)
-#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 # views.py
+from django.http import JsonResponse
+from django.core.paginator import Paginator
+from django.db.models import Q
+from .models import EnterpriseInfo
+
+def get_enterprises(request):
+    # ຮັບຄ່າ parameters
+    page = request.GET.get('page', 1)
+    limit = request.GET.get('limit', 10)
+    enterprise_id = request.GET.get('EnterpriseID', None)
+    legal_structure = request.GET.get('enLegalStrature', None)
+    
+    # Query ຂໍ້ມູນ
+    queryset = EnterpriseInfo.objects.all()
+    
+    # Filter ຖ້າມີການສົ່ງ parameters ມາ
+    if enterprise_id:
+        queryset = queryset.filter(EnterpriseID=enterprise_id)
+    
+    if legal_structure:
+        queryset = queryset.filter(enLegalStrature__icontains=legal_structure)
+    
+    # ຮຽງລຳດັບ
+    queryset = queryset.order_by('-LCICID')
+    
+    # Pagination
+    paginator = Paginator(queryset, limit)
+    page_obj = paginator.get_page(page)
+    
+    # ແປງຂໍ້ມູນເປັນ list
+    data = []
+    for item in page_obj:
+        data.append({
+            'LCICID': item.LCICID,
+            'EnterpriseID': item.EnterpriseID,
+            'enterpriseNameLao': item.enterpriseNameLao,
+            'eneterpriseNameEnglish': item.eneterpriseNameEnglish,
+            'regisCertificateNumber': item.regisCertificateNumber,
+            'regisDate': item.regisDate,
+            'enLocation': item.enLocation,
+            'regisStrationOfficeType': item.regisStrationOfficeType,
+            'regisStationOfficeCode': item.regisStationOfficeCode,
+            'enLegalStrature': item.enLegalStrature,
+            'foreigninvestorFlag': item.foreigninvestorFlag,
+            'investmentAmount': item.investmentAmount,
+            'status': item.status,
+            'investmentCurrency': item.investmentCurrency,
+            'representativeNationality': item.representativeNationality,
+            'LastUpdate': item.LastUpdate,
+            'CancellationDate': item.CancellationDate,
+            'InsertDate': item.InsertDate,
+            'UpdateDate': item.UpdateDate,
+            'LCIC_code': item.LCIC_code,
+        })
+    
+    # Response
+    response = {
+        'success': True,
+        'message': 'ດຶງຂໍ້ມູນສຳເລັດ',
+        'data': data,
+        'pagination': {
+            'current_page': page_obj.number,
+            'total_pages': paginator.num_pages,
+            'total_items': paginator.count,
+            'per_page': int(limit),
+            'has_next': page_obj.has_next(),
+            'has_previous': page_obj.has_previous(),
+        }
+    }
+    
+    return JsonResponse(response, safe=False)
+
+   
+# views.py
+from rest_framework import generics
+from rest_framework.response import Response
+from rest_framework import status
+from .models import CollateralNew
+from .serializers import CollateralNewSerializer
+import logging
+
+logger = logging.getLogger(__name__)
+class CollateralNewListView(generics.ListAPIView):
+    serializer_class = CollateralNewSerializer
+
+    def get_queryset(self):
+       
+        current_bank_id = self.request.query_params.get('bank_id')
+        
+        
+        id_filter = self.request.query_params.get('id')  
+        bank_id_filter = self.request.query_params.get('bank_id_filter')
+        branch_id = self.request.query_params.get('branch_id')
+        status_filter = self.request.query_params.get('status')
+        lcic_reques = self.request.query_params.get('LCIC_reques')
+
+        queryset = CollateralNew.objects.all()
+
+        
+        if id_filter:
+            queryset = queryset.filter(id=id_filter)
+           
+
+       
+        if current_bank_id == '01':  
+           
+            if bank_id_filter:
+                queryset = queryset.filter(bank_id=bank_id_filter)
+        else:  
+            queryset = queryset.filter(bank_id=current_bank_id)
+        
+       
+        if branch_id:
+            queryset = queryset.filter(branch_id=branch_id)
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        if lcic_reques:
+            queryset = queryset.filter(LCIC_reques=lcic_reques)
+
+        return queryset.order_by('-insertdate')
+
+    def list(self, request, *args, **kwargs):
+        try:
+            # ກວດ bank_id required
+            current_bank_id = request.query_params.get('bank_id')
+            if not current_bank_id:
+                return Response({
+                    'status': 'error',
+                    'message': 'ກະລຸນາປ້ອນ bank_id'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            queryset = self.filter_queryset(self.get_queryset())
+            
+            # Pagination
+            page = int(request.query_params.get('page', 1))
+            limit = int(request.query_params.get('limit', 20))
+            
+            offset = (page - 1) * limit
+            total_count = queryset.count()
+            paginated_queryset = queryset[offset:offset + limit]
+            
+            serializer = self.get_serializer(paginated_queryset, many=True)
+
+            return Response({
+                'status': 'success',
+                'count': total_count,
+                'page': page,
+                'limit': limit,
+                'total_pages': (total_count + limit - 1) // limit,
+                'results': serializer.data,
+                'filters_applied': {
+                    'id': request.query_params.get('id'),  # ✅ ເພີ່ມ id ໃນ response
+                    'bank_id': request.query_params.get('bank_id'),
+                    'bank_id_filter': request.query_params.get('bank_id_filter'),
+                    'branch_id': request.query_params.get('branch_id'),
+                    'status': request.query_params.get('status'),
+                    'LCIC_reques': request.query_params.get('LCIC_reques')
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"CollateralNewListView Error: {str(e)}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'message': 'Internal server error',
+                'details': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
@@ -16364,7 +16810,7 @@ import traceback
 
 
 def generate_lcic_code():
-    """ສ້າງ LCIC_code ແບບ YYYYMMDDXXXX"""
+  
     date_str = datetime.now().strftime('%Y%m%d')
     characters = string.ascii_uppercase + string.digits
     random_str = ''.join(random.choices(characters, k=4))
@@ -16374,7 +16820,7 @@ def generate_lcic_code():
 
 
 def generate_unique_lcic_code(max_attempts=100):
-    """ສ້າງ LCIC_code ທີ່ບໍ່ຊ້ຳກັນ"""
+   
     print(f"🔄 Generating unique LCIC_code...")
     
     for attempt in range(max_attempts):
@@ -16438,19 +16884,19 @@ def create_enterprise_info(request):
     
     print(f"✅ Validation passed!")
     
-    # 3. ບັນທຶກຂໍ້ມູນ
+   
     try:
         with transaction.atomic():
             print(f"\n[STEP 3] Saving enterprise...")
             
-            # 3.1 ບັນທຶກ Enterprise ກ່ອນ
+            
             enterprise = serializer.save()
             print(f"✅ Enterprise saved!")
             print(f"   LCICID: {enterprise.LCICID}")
             print(f"   EnterpriseID: {enterprise.EnterpriseID}")
             print(f"   LCIC_code (before): '{enterprise.LCIC_code}'")
             
-            # 3.2 ສ້າງ LCIC_code
+          
             print(f"\n[STEP 4] Generating LCIC_code...")
             try:
                 lcic_code = generate_unique_lcic_code(max_attempts=50)
@@ -16458,13 +16904,13 @@ def create_enterprise_info(request):
                 print(f"❌ Failed to generate LCIC_code: {str(e)}")
                 raise
             
-            # 3.3 ບັນທຶກ LCIC_code
+            
             print(f"\n[STEP 5] Saving LCIC_code to enterprise...")
             enterprise.LCIC_code = lcic_code
             enterprise.save(update_fields=['LCIC_code'])
             print(f"✅ LCIC_code saved!")
             
-            # 3.4 Verify
+          
             enterprise.refresh_from_db()
             print(f"   LCIC_code (after): '{enterprise.LCIC_code}'")
             
@@ -16474,7 +16920,7 @@ def create_enterprise_info(request):
                 print(f"   Got: {enterprise.LCIC_code}")
                 raise Exception("LCIC_code verification failed!")
             
-            # 3.5 ອັບເດດ Collateral
+           
             print(f"\n[STEP 6] Updating Collateral...")
             try:
                 collateral = Collateral.objects.get(id=collateral_id)
@@ -16483,11 +16929,11 @@ def create_enterprise_info(request):
                 print(f"   Filename: {collateral.filename}")
                 print(f"   LCIC_reques (before): '{collateral.LCIC_reques}'")
                 
-                # ບັນທຶກ LCIC_code ໃສ່ Collateral
+               
                 collateral.LCIC_reques = lcic_code
                 collateral.save(update_fields=['LCIC_reques'])
                 
-                # Verify
+              
                 collateral.refresh_from_db()
                 print(f"   LCIC_reques (after): '{collateral.LCIC_reques}'")
                 
@@ -16501,7 +16947,7 @@ def create_enterprise_info(request):
                 print(f"❌ ERROR: Collateral ID {collateral_id} not found!")
                 raise Exception(f'ບໍ່ພົບຂໍ້ມູນ Collateral ID: {collateral_id}')
             
-            # 3.6 Return success response
+           
             print(f"\n[STEP 7] Preparing response...")
             print("="*70)
             print("✅✅✅ SUCCESS! ✅✅✅")
@@ -30808,7 +31254,304 @@ class UserGroupList(APIView):
         serializer = UserGroupSerializers(groups, many=True)
         return Response(serializer.data)
     
+# views.py
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+from django.utils import timezone
+from datetime import datetime
+import random
+import string
+from .models import CollateralNew, EnterpriseMemberSubmit, EnterpriseInfo
+
+from django.db import transaction, IntegrityError
+from django.utils import timezone
+from datetime import datetime
+import random
+import string
+import time
+
+def generate_lcic_code():
+    """ສ້າງລະຫັດ LCIC_code ແບບບໍ່ຊໍ້າກັນ"""
+    max_attempts = 100  # ຈຳກັດຈຳນວນຄັ້ງທີ່ລອງ
     
+    for attempt in range(max_attempts):
+        # ສ້າງວັນທີປັດຈຸບັນ
+        date_part = datetime.now().strftime('%Y%m%d')
+        
+        # ສ້າງຕົວອັກສອນສຸ່ມ 3 ຕົວ (A-Z)
+        letters = ''.join(random.choices(string.ascii_uppercase, k=3))
+        
+        # ສ້າງຕົວເລກສຸ່ມ 1 ຕົວ (0-9)
+        number = random.choice(string.digits)
+        
+        # ລວມເປັນລະຫັດ
+        lcic_code = f"{date_part}{letters}{number}"
+        
+        # ກວດສອບວ່າລະຫັດນີ້ມີຢູ່ແລ້ວບໍ່
+        exists_in_submit = EnterpriseMemberSubmit.objects.filter(LCIC_code=lcic_code).exists()
+        exists_in_info = EnterpriseInfo.objects.filter(LCIC_code=lcic_code).exists()
+        
+        if not exists_in_submit and not exists_in_info:
+            return lcic_code
+        
+        # ຖ້າເຈົ້າຕ້ອງການ, ສາມາດເພີ່ມ delay ນ້ອຍໆ
+        if attempt < max_attempts - 1:
+            time.sleep(0.001)  # 1ms delay
+    
+    # ຖ້າລອງ 100 ຄັ້ງແລ້ວຍັງບໍ່ໄດ້ (ເກືອບເປັນໄປບໍ່ໄດ້)
+    raise Exception("ບໍ່ສາມາດສ້າງລະຫັດ LCIC_code ທີ່ບໍ່ຊໍ້າກັນໄດ້")
+
+
+@api_view(['POST'])
+@transaction.atomic
+def approve_collateral(request):
+    """
+    API ສຳລັບຢືນຢັນຂໍ້ມູນ CollateralNew
+    ມີການຈັດການ Race Condition
+    """
+    max_retries = 3  # ຈຳນວນຄັ້ງທີ່ລອງໃໝ່ຖ້າເກີດ IntegrityError
+    
+    for retry in range(max_retries):
+        try:
+            # ຮັບຂໍ້ມູນຈາກ request
+            collateral_id = request.data.get('collateral_id')
+            approved_by = request.data.get('approved_by', request.user.username if request.user.is_authenticated else None)
+            
+            # ກວດສອບ collateral_id
+            if not collateral_id:
+                return Response({
+                    'success': False,
+                    'message': 'ກະລຸນາລະບຸ collateral_id'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # ດຶງຂໍ້ມູນ CollateralNew
+            try:
+                collateral = CollateralNew.objects.select_for_update().get(id=collateral_id)
+            except CollateralNew.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'message': f'ບໍ່ພົບຂໍ້ມູນ CollateralNew ທີ່ມີ ID: {collateral_id}'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # ກວດສອບວ່າຖືກຢືນຢັນແລ້ວຫຼືຍັງ
+            if collateral.status == '0':
+                return Response({
+                    'success': False,
+                    'message': 'ຂໍ້ມູນນີ້ຖືກຢືນຢັນແລ້ວ',
+                    'data': {
+                        'lcic_code': collateral.LCIC_reques
+                    }
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # ຊອກຫາຂໍ້ມູນໃນ EnterpriseMemberSubmit
+            enterprise_submit = EnterpriseMemberSubmit.objects.select_for_update().filter(
+                id_file=collateral
+            ).first()
+            
+            if not enterprise_submit:
+                return Response({
+                    'success': False,
+                    'message': 'ບໍ່ພົບຂໍ້ມູນວິສາຫະກິດທີ່ເຊື່ອມໂຍງກັບໄຟລ໌ນີ້'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # ສ້າງລະຫັດ LCIC_code ໃໝ່
+            new_lcic_code = generate_lcic_code()
+            
+            # ບັນທຶກຂໍ້ມູນລົງໃນ EnterpriseInfo
+            enterprise_info = EnterpriseInfo.objects.create(
+                EnterpriseID=enterprise_submit.EnterpriseID,
+                enterpriseNameLao=enterprise_submit.enterpriseNameLao,
+                eneterpriseNameEnglish=enterprise_submit.eneterpriseNameEnglish,
+                regisCertificateNumber=enterprise_submit.regisCertificateNumber,
+                regisDate=enterprise_submit.regisDate,
+                enLocation=enterprise_submit.enLocation,
+                regisStrationOfficeType=enterprise_submit.regisStrationOfficeType,
+                regisStationOfficeCode=enterprise_submit.regisStationOfficeCode,
+                enLegalStrature=enterprise_submit.enLegalStrature,
+                foreigninvestorFlag=enterprise_submit.foreigninvestorFlag,
+                investmentAmount=enterprise_submit.investmentAmount,
+                status=enterprise_submit.status,
+                investmentCurrency=enterprise_submit.investmentCurrency,
+                representativeNationality=enterprise_submit.representativeNationality,
+                LastUpdate=timezone.now(),
+                InsertDate=timezone.now(),
+                LCIC_code=new_lcic_code
+            )
+            
+            # ອັບເດດ LCIC_code ໃນ EnterpriseMemberSubmit
+            enterprise_submit.LCIC_code = new_lcic_code
+            enterprise_submit.UpdateDate = timezone.now()
+            if approved_by:
+                enterprise_submit.user_update = approved_by
+            enterprise_submit.save()
+            
+            # ອັບເດດ CollateralNew
+            collateral.LCIC_reques = new_lcic_code
+            collateral.status = '0'
+            collateral.updatedate = timezone.now()
+            collateral.save()
+            
+            return Response({
+                'success': True,
+                'message': 'ຢືນຢັນຂໍ້ມູນສຳເລັດ',
+                'data': {
+                    'lcic_code': new_lcic_code,
+                    'collateral_id': collateral.id,
+                    'enterprise_info_id': enterprise_info.LCICID,
+                    'enterprise_submit_id': enterprise_submit.LCICID,
+                    'collateral_status': collateral.status,
+                    'approved_by': approved_by,
+                    'approved_date': timezone.now().isoformat()
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except IntegrityError as e:
+            # ຖ້າເກີດຄວາມຊໍ້າກັນ (UNIQUE constraint failed)
+            if retry < max_retries - 1:
+                # ລອງໃໝ່ດ້ວຍລະຫັດອື່ນ
+                time.sleep(0.01 * (retry + 1))  # Exponential backoff
+                continue
+            else:
+                # ຖ້າລອງ 3 ຄັ້ງແລ້ວຍັງບໍ່ໄດ້
+                return Response({
+                    'success': False,
+                    'message': 'ເກີດຂໍ້ຜິດພາດ: ບໍ່ສາມາດສ້າງລະຫັດທີ່ບໍ່ຊໍ້າກັນໄດ້',
+                    'error': str(e)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    # ຖ້າ loop ຈົບແລ້ວຍັງບໍ່ໄດ້ຜົນ
+    return Response({
+        'success': False,
+        'message': 'ບໍ່ສາມາດດຳເນີນການໄດ້ຫຼັງຈາກລອງຫຼາຍຄັ້ງ'
+    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@transaction.atomic
+def reject_collateral(request):
+    """
+    API ສຳລັບປະຕິເສດຂໍ້ມູນ CollateralNew
+    
+    POST /api/collateral/reject/
+    Body: {
+        "collateral_id": 123,
+        "rejected_by": "admin_user",
+        "reason": "ເອກະສານບໍ່ຄົບຖ້ວນ"
+    }
+    """
+    try:
+        # ຮັບຂໍ້ມູນຈາກ request
+        collateral_id = request.data.get('collateral_id')
+        rejected_by = request.data.get('rejected_by', request.user.username if request.user.is_authenticated else None)
+        reason = request.data.get('reason', '')
+        
+        # ກວດສອບ collateral_id
+        if not collateral_id:
+            return Response({
+                'success': False,
+                'message': 'ກະລຸນາລະບຸ collateral_id'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # ດຶງຂໍ້ມູນ CollateralNew
+        try:
+            collateral = CollateralNew.objects.get(id=collateral_id)
+        except CollateralNew.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': f'ບໍ່ພົບຂໍ້ມູນ CollateralNew ທີ່ມີ ID: {collateral_id}'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # ອັບເດດສະຖານະເປັນ 3 (ປະຕິເສດ)
+        collateral.status = '3'
+        collateral.updatedate = timezone.now()
+        
+        # ບັນທຶກເຫດຜົນການປະຕິເສດ
+        if reason:
+            collateral.decaption = reason
+        
+        collateral.save()
+        
+        return Response({
+            'success': True,
+            'message': 'ປະຕິເສດຂໍ້ມູນສຳເລັດ',
+            'data': {
+                'collateral_id': collateral.id,
+                'collateral_status': collateral.status,
+                'reason': reason,
+                'rejected_by': rejected_by,
+                'rejected_date': timezone.now().isoformat()
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def get_collateral_status(request, collateral_id):
+    """
+    API ສຳລັບເບິ່ງສະຖານະຂອງ CollateralNew
+    
+    GET /api/collateral/status/{collateral_id}/
+    """
+    try:
+        collateral = CollateralNew.objects.get(id=collateral_id)
+        
+        # ຊອກຫາຂໍ້ມູນທີ່ເຊື່ອມໂຍງ
+        enterprise_submit = EnterpriseMemberSubmit.objects.filter(id_file=collateral).first()
+        enterprise_info = None
+        
+        if collateral.LCIC_reques:
+            enterprise_info = EnterpriseInfo.objects.filter(LCIC_code=collateral.LCIC_reques).first()
+        
+        return Response({
+            'success': True,
+            'data': {
+                'collateral': {
+                    'id': collateral.id,
+                    'filename': collateral.filename,
+                    'status': collateral.status,
+                    'LCIC_reques': collateral.LCIC_reques,
+                    'bank_id': collateral.bank_id,
+                    'branch_id': collateral.branch_id,
+                    'insertdate': collateral.insertdate,
+                    'updatedate': collateral.updatedate,
+                    'decaption': collateral.decaption
+                },
+                'enterprise_submit': {
+                    'id': enterprise_submit.LCICID if enterprise_submit else None,
+                    'enterpriseNameLao': enterprise_submit.enterpriseNameLao if enterprise_submit else None,
+                    'LCIC_code': enterprise_submit.LCIC_code if enterprise_submit else None
+                } if enterprise_submit else None,
+                'enterprise_info': {
+                    'id': enterprise_info.LCICID if enterprise_info else None,
+                    'enterpriseNameLao': enterprise_info.enterpriseNameLao if enterprise_info else None,
+                    'LCIC_code': enterprise_info.LCIC_code if enterprise_info else None
+                } if enterprise_info else None
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except CollateralNew.DoesNotExist:
+        return Response({
+            'success': False,
+            'message': f'ບໍ່ພົບຂໍ້ມູນ CollateralNew ທີ່ມີ ID: {collateral_id}'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)    
 # views.py
 from django.db.models import Q
 from rest_framework import generics
@@ -31620,6 +32363,21 @@ class UserAccessLogListView(APIView):
         serializer = UserAccessLogSerializer(logs, many=True)
         return Response(serializer.data)
 
+#tik
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from .models import UserAccessLog
+from .serializers import UserAccessLogSerializer
+
+
+class UserAccessLogListView(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        logs = UserAccessLog.objects.select_related('user').order_by('-login_time')
+        serializer = UserAccessLogSerializer(logs, many=True)
+        return Response(serializer.data)
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -31647,7 +32405,6 @@ class ScoringIndividualInfoSearchView(APIView):
                 return Response({'error': 'Invalid bank info'}, status=status.HTTP_400_BAD_REQUEST)
 
             bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
-
             
             lcic_id = request.data.get('lcic_id', '').strip()
             loan_purpose = request.data.get('CatalogID', '')
@@ -31655,7 +32412,6 @@ class ScoringIndividualInfoSearchView(APIView):
             if not lcic_id:
                 return Response({'error': 'lcic_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-           
             all_individual_info = IndividualBankIbkInfo.objects.filter(
                 lcic_id=lcic_id
             ).order_by('mm_ind_sys_id')
@@ -31663,7 +32419,6 @@ class ScoringIndividualInfoSearchView(APIView):
             if not all_individual_info.exists():
                 return Response({'error': 'Individual info not found'}, status=status.HTTP_404_NOT_FOUND)
 
-            
             unique_individuals = []
             seen_mm_ids = set()
             for info in all_individual_info:
@@ -31671,7 +32426,6 @@ class ScoringIndividualInfoSearchView(APIView):
                     unique_individuals.append(info)
                     seen_mm_ids.add(info.mm_ind_sys_id)
 
-           
             mm_ids = [info.mm_ind_sys_id for info in unique_individuals if info.mm_ind_sys_id]
             bank_records = {}
             if mm_ids:
@@ -31680,14 +32434,12 @@ class ScoringIndividualInfoSearchView(APIView):
                     for rec in IndividualBankIbk.objects.filter(ind_sys_id__in=mm_ids)
                 }
 
-           
             charge_sys_id = 7 if bank_info.bnk_type == 1 else 8
             try:
                 chargeType = ChargeMatrix.objects.get(chg_sys_id=charge_sys_id)
             except ChargeMatrix.DoesNotExist:
                 return Response({'error': 'Charge type not found'}, status=status.HTTP_404_NOT_FOUND)
 
-           
             now = timezone.now()
             inquiry_month_charge = now.strftime('%d%m%Y')
             sys_usr = f"{UID}-{bank.bnk_code}"
@@ -31699,7 +32451,7 @@ class ScoringIndividualInfoSearchView(APIView):
                 customerid = bank_record.customerid if bank_record else ''
                 branch_code = bank_record.branchcode if bank_record else ''
 
-                
+                # สร้าง search_log
                 search_log = searchLog.objects.create(
                     enterprise_ID='',
                     LCIC_ID=lcic_id,
@@ -31710,7 +32462,7 @@ class ScoringIndividualInfoSearchView(APIView):
                     cus_ID=customerid,
                     cusType='A1',
                     credit_type=chargeType.chg_code,
-                    inquiry_month=now.strftime('%Y-%m'),  
+                    inquiry_month=now.strftime('%Y-%m'),
                     com_tel='',
                     com_location='',
                     rec_loan_amount=0.0,
@@ -31720,7 +32472,7 @@ class ScoringIndividualInfoSearchView(APIView):
                     sys_usr=sys_usr
                 )
 
-                
+                # สร้าง charge
                 charge = request_charge.objects.create(
                     bnk_code=bank_info.bnk_code,
                     bnk_type=bank_info.bnk_type,
@@ -31737,24 +32489,31 @@ class ScoringIndividualInfoSearchView(APIView):
                     rec_reference_code='',
                     search_log=search_log
                 )
+                
+                # สร้าง rec_reference_code
                 charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
                 charge.save()
 
+                # ⭐ เพิ่มข้อมูลให้ครบถ้วน
                 created_logs.append({
-                    'search_log_id': search_log.search_ID,   
+                    'search_log_id': search_log.search_ID,
                     'charge_id': charge.rec_charge_ID,
-                    'customerid': customerid
+                    'rec_reference_code': charge.rec_reference_code,  # ⭐ ส่งค่านี้
+                    'rec_sys_id': charge.rec_charge_ID,  # ⭐ ส่งค่านี้
+                    'customerid': customerid,
+                    'lcic_id': lcic_id,
+                    'rec_insert_date': charge.rec_insert_date.strftime('%d/%m/%Y') if hasattr(charge, 'rec_insert_date') and charge.rec_insert_date else now.strftime('%d/%m/%Y')
                 })
 
-           
             serializer = IndividualBankIbkInfoSerializer(unique_individuals, many=True)
 
-          
+            # ⭐ Return ข้อมูลให้ครบถ้วน
             return Response({
+                'success': True,  # ⭐ เพิ่ม flag นี้
                 'individual_info': serializer.data,
                 'total_found': len(unique_individuals),
                 'log_created': len(created_logs),
-                'created_logs': created_logs,
+                'created_logs': created_logs,  # ⭐ ส่ง array นี้กลับไป
                 'debug_info': {
                     'total_raw_records': all_individual_info.count(),
                     'unique_records': len(unique_individuals),
@@ -31770,6 +32529,8 @@ class ScoringIndividualInfoSearchView(APIView):
                 'details': traceback.format_exc()
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+# views.py
+# views.py
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -32557,17 +33318,18 @@ def get_statistics(request):
             'success': False,
             'error': str(e)
         }, status=status.HTTP_400_BAD_REQUEST)
+        
 
-# views.py
-# views.py
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from django.shortcuts import get_object_or_404
+from rest_framework import generics
+from .models import scr_atttype_desc, scr_attribute_table
+from .serializers import ScrAttTypeDescSerializer, ScrAttributeTableSerializer
 
-from .credit_score_service import CreditScoreService
-from .serializers import CreditScoreResponseSerializers
+# =======================
+# CRUD สำหรับ scr_atttype_desc
+# =======================
+class ScrAttTypeDescListCreateView(generics.ListCreateAPIView):
+    queryset = scr_atttype_desc.objects.all()
+    serializer_class = ScrAttTypeDescSerializer
 
 class CreditScoreAPIView(APIView):
     """
@@ -34651,3 +35413,19 @@ class MyUploadsListAPIView(generics.ListAPIView):
                 'rejected': rejected_count
             }
         })
+class ScrAttTypeDescRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = scr_atttype_desc.objects.all()
+    serializer_class = ScrAttTypeDescSerializer
+    lookup_field = 'id_desc'
+
+# =======================
+# CRUD สำหรับ scr_attribute_table
+# =======================
+class ScrAttributeTableListCreateView(generics.ListCreateAPIView):
+    queryset = scr_attribute_table.objects.all()
+    serializer_class = ScrAttributeTableSerializer
+
+class ScrAttributeTableRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = scr_attribute_table.objects.all()
+    serializer_class = ScrAttributeTableSerializer
+    lookup_field = 'att_id'

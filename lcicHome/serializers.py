@@ -61,6 +61,37 @@ class BorrowerFileSerializer(serializers.ModelSerializer):
             'percentage',
             'dispuste'
         ]
+
+from rest_framework import serializers
+from .models import CollateralNew
+
+from rest_framework import serializers
+from .models import EnterpriseInfo
+from rest_framework import serializers
+from .models import EnterpriseInfo
+
+
+class EnterpriseInfoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EnterpriseInfo
+        fields = '__all__'
+class CollateralNewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CollateralNew
+        fields = [
+            'id',
+            'bank_id',
+            'branch_id',
+            'filename',
+            'image',
+            'user',
+            'insertdate',
+            'updatedate',
+            'pathfile',
+            'status',
+            'decaption',
+            'LCIC_reques'
+        ]
 class EnterpriseMemberSubmitSerializer(serializers.ModelSerializer):
     """
     Serializer ສຳຫຼັບ EnterpriseMemberSubmit
@@ -2129,3 +2160,19 @@ class CustomerUploadListSerializer(serializers.ModelSerializer):
             'rejected': 'Rejected',
         }
         return status_map.get(obj.status, obj.status)
+    
+    
+from rest_framework import serializers
+from .models import scr_atttype_desc, scr_attribute_table
+
+class ScrAttTypeDescSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = scr_atttype_desc
+        fields = '__all__'
+
+
+class ScrAttributeTableSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = scr_attribute_table
+        fields = '__all__'
+

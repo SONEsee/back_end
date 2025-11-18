@@ -173,10 +173,14 @@ from .views import (
     MyUploadsListAPIView,
     
 
+    reject_borrower_loan_view,
+    CollateralNewListView,
+    CheckEnterpriseView
 )
 #tik
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
-                    ,RequestChargeSummaryAPIView,RequestChargeReportAllAPIView,UserLogoutView,UserAccessLogListView,ScoringIndividualInfoSearchView,CreditScoreAPIView)
+                    ,RequestChargeSummaryAPIView,RequestChargeReportAllAPIView,UserLogoutView,UserAccessLogListView,ScoringIndividualInfoSearchView,CreditScoreAPIView,ScrAttTypeDescListCreateView, ScrAttTypeDescRetrieveUpdateDeleteView,ScrAttributeTableListCreateView
+                    ,ScrAttributeTableRetrieveUpdateDeleteView)
 
 from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView,process_dispute_notification, process_multiple_disputes,process_multiple_disputescollateral
 from .views import upload_json,MemberInfoViewSet
@@ -272,6 +276,7 @@ urlpatterns = [
    path('render_pdf_view/<slug:object_id>', render_pdf_view, name='render_pdf_view'),
    path('progress/<slug:object_id>', views.progress, name='progress'),
    path('tax_invoice', views.tax, name='tax'),
+   path('check-enterprise/', CheckEnterpriseView.as_view(), name='check-enterprise'),
 
   
    
@@ -298,6 +303,10 @@ urlpatterns = [
    path('reorder/', ReorderSidebarView.as_view(), name='reorder-sidebar'),
    path('api/searchcollateral/', SearchIndividualBankView.as_view(), name='search'),
    path('api/searchcollateral-info/', SearchIndividualBankInfoView.as_view(), name='search'),
+   path('api/collateral/', CollateralNewListView.as_view(), name='collateral-list'),
+   path('api/collateral/approve/', views.approve_collateral, name='approve_collateral'),
+   path('api/collateral/reject/', views.reject_collateral, name='reject_collateral'),
+   path('api/enterprises_list/', views.get_enterprises, name='get_enterprises'),
    
 
    path('userList/', ManageUserView.as_view(), name='mangeuser'),
@@ -396,6 +405,10 @@ urlpatterns = [
     path('access-logs/', UserAccessLogListView.as_view(), name='access-logs'),
     path('api/scoring-individual/', ScoringIndividualInfoSearchView.as_view(), name='scoring-individual'),
     path('credit-score/calculate/', CreditScoreAPIView.as_view(), name='credit-score-calculate'),
+    path('att-types/', ScrAttTypeDescListCreateView.as_view(), name='atttype-list-create'),
+    path('att-types/<int:id_desc>/', ScrAttTypeDescRetrieveUpdateDeleteView.as_view(), name='atttype-detail'),
+    path('attributes/', ScrAttributeTableListCreateView.as_view(), name='attribute-list-create'),
+    path('attributes/<int:att_id>/', ScrAttributeTableRetrieveUpdateDeleteView.as_view(), name='attribute-detail'),
     
     path('api/individual-files/', IndividualFileListView.as_view(), name='individual-file-list'),
     path('api/borrwor-files/', BorrowerFileListView.as_view(), name='borrwor-file-list'),
@@ -416,6 +429,7 @@ urlpatterns = [
     path('api/disputes/confirmc/', views.confirm_dispute_colatteral, name='confirm_dispute_colatteral'),
     path('api/reject_individual_loan/<str:id_file>/', views.reject_individual_loan_view, name='reject_individual_loan'),
     path('api/reject_individual_collateral/<str:id_file>/', views.reject_individual_collateral_view, name='reject_individual_loan'),
+    path('api/borrower/reject/<str:BID>/', reject_borrower_loan_view, name='reject-borrower'),
 
     
     path('api/rollback_reconfirm/', views.rollback_and_reconfirm_individual, name='rollback_reconfirm'),
