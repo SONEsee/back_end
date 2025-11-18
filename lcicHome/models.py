@@ -1826,7 +1826,178 @@ class request_charge(models.Model):
 #     uploaded_at = models.DateTimeField(auto_now_add=True)
 
 
+class Borrower(models.Model):
+    id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+    id_file = models.ForeignKey('Upload_File_Borrower', on_delete=models.CASCADE, null=True, blank=True)
+    EenterpriseID = models.CharField(max_length=50, blank=True, null=True)
+    loan_id = models.CharField(max_length=255)
+    segmentTypeBorrower = models.CharField(max_length=50, blank=True, null=True)
+    LCIC_code_brw = models.CharField(max_length=50, blank=True, null=True)
+    customer_id_brw = models.CharField(max_length=50, blank=True, null=True)
+    branch_id_brw = models.CharField(max_length=50, blank=True, null=True)
+    LCIC_code = models.CharField(max_length=100, blank=True, null=True)
+    period = models.CharField(max_length=50, blank=True, null=True)
+    SegmentType = models.CharField(max_length=50, blank=True, null=True)
+    Customer_ID = models.CharField(max_length=50, blank=True, null=True)
+    bnk_code = models.CharField(max_length=50, blank=True, null=True)
+    branch = models.CharField(max_length=100, blank=True, null=True)
+    status = models.IntegerField(default=0)
+    user_insert = models.CharField(max_length=100, blank=True, null=True)
+    user_update = models.CharField(max_length=100, blank=True, null=True)
+    InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
+    UpdateDate = models.DateTimeField(blank=True, null=True)
+    DeleteDate = models.DateTimeField(blank=True, null=True)
+    class Meta:
+        indexes = [
+            models.Index(fields=['bnk_code', 'SegmentType']),
+            models.Index(fields=['period']),
+        ]
 
+class BorrowerMonhtly(models.Model):
+    id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+    id_file = models.ForeignKey('Upload_File_Borrower', on_delete=models.CASCADE, null=True, blank=True)
+    EenterpriseID = models.CharField(max_length=50, blank=True, null=True)
+    loan_id = models.CharField(max_length=255)
+    LCIC_code = models.CharField(max_length=100, blank=True, null=True)
+    LCIC_code_brw = models.CharField(max_length=50, blank=True, null=True)
+    customer_id_brw = models.CharField(max_length=50, blank=True, null=True)
+    branch_id_brw = models.CharField(max_length=50, blank=True, null=True)
+    segmentTypeBorrower = models.CharField(max_length=50, blank=True, null=True)
+    period = models.CharField(max_length=50, blank=True, null=True)
+    SegmentType = models.CharField(max_length=50, blank=True, null=True)
+    Customer_ID = models.CharField(max_length=50, blank=True, null=True)
+    bnk_code = models.CharField(max_length=50, blank=True, null=True)
+    branch = models.CharField(max_length=100, blank=True, null=True)
+    status = models.IntegerField(default=0)
+    user_insert = models.CharField(max_length=100, blank=True, null=True)
+    user_update = models.CharField(max_length=100, blank=True, null=True)
+    InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
+    UpdateDate = models.DateTimeField(blank=True, null=True)
+    DeleteDate = models.DateTimeField(blank=True, null=True)
+
+
+class BorrowerError(models.Model):
+    id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+    id_file = models.ForeignKey('Upload_File_Borrower', on_delete=models.CASCADE, null=True, blank=True)
+    EenterpriseID = models.CharField(max_length=50, blank=True, null=True)
+    LCIC_code_brw = models.CharField(max_length=50, blank=True, null=True)
+    customer_id_brw = models.CharField(max_length=50, blank=True, null=True)
+    branch_id_brw = models.CharField(max_length=50, blank=True, null=True)
+    loan_id = models.CharField(max_length=255)
+    CodeError = models.CharField(max_length=10, blank=True, null=True)
+    segmentTypeBorrower = models.CharField(max_length=50, blank=True, null=True)
+    LCIC_code = models.CharField(max_length=100, blank=True, null=True)
+    period = models.CharField(max_length=50, blank=True, null=True)
+    SegmentType = models.CharField(max_length=50, blank=True, null=True)
+    Customer_ID = models.CharField(max_length=50, blank=True, null=True)
+    bnk_code = models.CharField(max_length=50, blank=True, null=True)
+    branch = models.CharField(max_length=100, blank=True, null=True)
+    status = models.IntegerField(default=0)
+    user_insert = models.CharField(max_length=100, blank=True, null=True)
+    user_update = models.CharField(max_length=100, blank=True, null=True)
+    InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
+    UpdateDate = models.DateTimeField(blank=True, null=True)
+    DeleteDate = models.DateTimeField(blank=True, null=True)
+
+
+class BorrowerGood(models.Model):
+    id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+    id_file = models.ForeignKey('Upload_File_Borrower', on_delete=models.CASCADE, null=True, blank=True)
+    EenterpriseID = models.CharField(max_length=50, blank=True, null=True)
+    loan_id = models.CharField(max_length=255)
+    LCIC_code = models.CharField(max_length=100, blank=True, null=True)
+    LCIC_code_brw = models.CharField(max_length=50, blank=True, null=True)
+    customer_id_brw = models.CharField(max_length=50, blank=True, null=True)
+    branch_id_brw = models.CharField(max_length=50, blank=True, null=True)
+    segmentTypeBorrower = models.CharField(max_length=50, blank=True, null=True)
+    period = models.CharField(max_length=50, blank=True, null=True)
+    SegmentType = models.CharField(max_length=50, blank=True, null=True)
+    Customer_ID = models.CharField(max_length=50, blank=True, null=True)
+    bnk_code = models.CharField(max_length=50, blank=True, null=True)
+    branch = models.CharField(max_length=100, blank=True, null=True)
+    status = models.IntegerField(default=0)
+    user_insert = models.CharField(max_length=100, blank=True, null=True)
+    user_update = models.CharField(max_length=100, blank=True, null=True)
+    InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
+    UpdateDate = models.DateTimeField(blank=True, null=True)
+    DeleteDate = models.DateTimeField(blank=True, null=True)
+
+
+
+
+
+
+
+class EnterpriseMemberSubmit(models.Model):
+    LCICID = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+    EnterpriseID = models.CharField(max_length=50, blank=True, null=True)
+    enterpriseNameLao = models.CharField(max_length=255, blank=True, null=True)
+    eneterpriseNameEnglish = models.CharField(max_length=255, blank=True, null=True)
+    regisCertificateNumber = models.CharField(max_length=50, blank=True, null=True)
+    regisDate = models.DateTimeField(blank=True, null=True)
+    enLocation = models.CharField(max_length=50, blank=True, null=True)
+    regisStrationOfficeType = models.CharField(max_length=50, blank=True, null=True)
+    regisStationOfficeCode = models.CharField(max_length=50, blank=True, null=True)
+    enLegalStrature = models.CharField(max_length=500, blank=True, null=True)
+    foreigninvestorFlag = models.CharField(max_length=500, blank=True, null=True)
+    investmentAmount = models.FloatField(null=True, blank=True)
+    status = models.IntegerField(default=0)
+    investmentCurrency = models.CharField(max_length=50, blank=True, null=True)
+    representativeNationality = models.CharField(max_length=50, blank=True, null=True)
+    id_file = models.ForeignKey('CollateralNew', on_delete=models.CASCADE, null=True, blank=True)
+    LastUpdate = models.DateTimeField(blank=True, null=True)
+    user_insert = models.CharField(max_length=100, blank=True, null=True)
+    user_update = models.CharField(max_length=100, blank=True, null=True)
+    CancellationDate = models.DateTimeField(blank=True, null=True)
+    InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
+    UpdateDate = models.DateTimeField(blank=True, null=True)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True, unique=True,  db_index=True )
+    
+    class Meta:
+        db_table = 'enterprisemember_submit'  
+        indexes = [
+            models.Index(fields=['LCIC_code']), 
+        ]
+
+    def __str__(self):
+        return f"EnterpriseInfo {self.LCICID} - {self.enterpriseNameLao}"
+    
+class RegisterCustomerWhitEnterprise(models.Model):
+    id = models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')
+    EnterpriseID = models.CharField(max_length=50, blank=True, null=True)
+    customerID = models.CharField(max_length=50, blank=True, null=True)
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True)
+    bnk_code = models.CharField(max_length=50, blank=True, null=True)
+    branch= models.CharField(max_length=100, blank=True, null=True)
+    status = models.IntegerField(default=0)
+    user_insert = models.CharField(max_length=100, blank=True, null=True)
+    user_update = models.CharField(max_length=100, blank=True, null=True)
+    InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
+    UpdateDate = models.DateTimeField(blank=True, null=True)
+
+class Upload_File_Borrower(models.Model):
+    BID = models.AutoField(primary_key=True)
+    SType = models.ForeignKey(SType, null=True, blank=True, on_delete=models.CASCADE)
+    UType = models.ForeignKey(Upload_Type, null=True, blank=True, on_delete=models.CASCADE)
+    user_id = models.CharField(max_length=255)  
+    file_id = models.CharField(max_length=255)
+    fileName = models.CharField(max_length=255)
+    fileUpload = models.FileField(upload_to="borrower/")
+    progress_percentage = models.IntegerField(default=0)
+    fileSize = models.CharField(max_length=255)
+    path = models.CharField(max_length=255)
+    insertDate = models.DateTimeField(auto_now_add=True, blank=True)
+    updateDate = models.DateTimeField(auto_now_add=True, blank=True)
+    period = models.CharField(max_length=150)
+    status = models.CharField(max_length=150)
+    statussubmit = models.CharField(max_length=150)
+    status_upload = models.CharField(max_length=150)
+    FileType = models.CharField(max_length=10)
+    percentage = models.FloatField(default=0.0)
+    dispuste = models.CharField(max_length=255, null=True, blank=True)
+
+    def __str__(self):
+        return self.title  
    
 from django.db import models
 
@@ -1875,6 +2046,31 @@ class Collateral(models.Model):
         
     def __str__(self):
         return f"Collateral {self.id} - {self.filename}"
+    
+class CollateralNew(models.Model):
+  
+    bank_id = models.CharField(max_length=100, blank=True, null=True)
+    branch_id = models.CharField(max_length=100, blank=True, null=True)
+    filename = models.CharField(max_length=255)
+    image = models.ImageField(upload_to='collateral_images/')
+    user = models.CharField(max_length=100, blank=True, null=True)
+    insertdate = models.DateTimeField(auto_now_add=True)
+    updatedate = models.DateTimeField(null=True, blank=True)
+    pathfile = models.CharField(max_length=255, blank=True, null=True)
+    status = models.CharField(max_length=100)   
+    LCIC_reques = models.CharField(max_length=100, blank=True, null=True)
+    decaption = models.TextField(null=True)
+    def save(self, *args, **kwargs):
+        
+        if self.pk:  
+            self.updatedate = timezone.now()
+        super().save(*args, **kwargs)
+
+    class Meta:
+        db_table = 'collateral_new'  
+        
+    def __str__(self):
+        return f"collateral_new {self.id} - {self.filename}"
 
 
 
@@ -2333,7 +2529,70 @@ class IndividualBankIbkInfo(models.Model):
     class Meta:
         
         db_table = 'individual_bank_ibk_info'
+        
+class IndividualBankIbk_MapLog(models.Model):
+    ind_sys_id = models.AutoField(primary_key=True)
+    lcic_id = models.CharField(max_length=150, blank=True, null=True)
+    segment = models.CharField(max_length=150, blank=True, null=True)
+    mm_ind_sys_id = models.CharField(max_length=150, blank=True, null=True)
+    bnk_code = models.CharField(max_length=150, blank=True, null=True)
+    branchcode = models.CharField(max_length=150, blank=True, null=True)
+    customerid = models.CharField(max_length=150, blank=True, null=True)
+    ind_national_id = models.CharField(max_length=150, blank=True, null=True)
+    ind_national_id_date = models.DateField(blank=True, null=True)
+    ind_passport = models.CharField(max_length=150, blank=True, null=True)
+    ind_passport_date = models.DateField(blank=True, null=True)
+    ind_familybook = models.CharField(max_length=150, blank=True, null=True)
+    ind_familybook_prov_code = models.CharField(max_length=150, blank=True, null=True)
+    ind_familybook_date = models.DateField(blank=True, null=True)
+    ind_birth_date = models.DateField(blank=True, null=True)
+    ind_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_second_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_surname = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_surname = models.CharField(max_length=150, blank=True, null=True)
+    ind_old_surname = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_old_surname = models.CharField(max_length=150, blank=True, null=True)
+    ind_nationality = models.CharField(max_length=150, blank=True, null=True)
+    ind_gender = models.CharField(max_length=10, blank=True, null=True)
+    ind_civil_status = models.CharField(max_length=150, blank=True, null=True)
+    ind_insert_date = models.DateTimeField(blank=True, null=True)
+    ind_update_date = models.DateTimeField(blank=True, null=True)
+    mm_action_date = models.DateTimeField(blank=True, null=True)
+    mm_log = models.TextField(blank=True, null=True)
+    mm_comment = models.TextField(blank=True, null=True)
+    mm_by = models.CharField(max_length=150, blank=True, null=True)
+    blk_sys_id = models.CharField(max_length=150, blank=True, null=True)
+    mm_status = models.CharField(max_length=150, blank=True, null=True)
+    is_manual = models.BooleanField(blank=True, null=True)
+    ind_lao_name_code = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_surname_code = models.CharField(max_length=150, blank=True, null=True)
 
+class IndividualBankIbkInfo_CreateLog(models.Model):
+    ind_sys_id = models.AutoField(primary_key=True)
+    mm_ind_sys_id = models.CharField(max_length=150, blank=True, null=True)
+    lcic_id = models.CharField(max_length=150, blank=True, null=True)
+    ind_national_id = models.CharField(max_length=150, blank=True, null=True)
+    ind_national_id_date = models.DateField(blank=True, null=True)
+    ind_passport = models.CharField(max_length=150, blank=True, null=True)
+    ind_passport_date = models.DateField(blank=True, null=True)
+    ind_familybook = models.CharField(max_length=150, blank=True, null=True)
+    ind_familybook_prov_code = models.CharField(max_length=150, blank=True, null=True)
+    ind_familybook_date = models.DateField(blank=True, null=True)
+    ind_birth_date = models.DateField(blank=True, null=True)
+    ind_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_surname = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_surname = models.CharField(max_length=150, blank=True, null=True)
+    insert_by = models.CharField(max_length=150, blank=True, null=True)
+    update_by = models.CharField(max_length=150, blank=True, null=True)
+    status = models.CharField(max_length=150, blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    insert_date = models.DateTimeField(blank=True, null=True)
+    update_date = models.DateTimeField(blank=True, null=True)
+    document_file = models.FileField(upload_to='individual_documents/', blank=True, null=True)
+    
+    
 from django.db import models
 
 class CompanyInfoMapping(models.Model):
@@ -2382,6 +2641,7 @@ class UserAccessLog(models.Model):
     def __str__(self):
         return f"{self.user.username} logged in at {self.login_time}"
 
+<<<<<<< HEAD
 class catalog_type_cat(models.Model):
     cat_id = models.BigAutoField(primary_key=True)
     cat_type = models.CharField(max_length=30,unique=True)
@@ -2389,6 +2649,117 @@ class catalog_type_cat(models.Model):
     cat_lao_name = models.CharField(max_length=100)
     cat_status = models.IntegerField()
     cat_detail = models.CharField(max_length=500, null=True, blank=True)
+=======
+#Pherm Karn Merge and Matching Models
+class IndividualIdentifier(models.Model):
+    """
+    One-to-many relationship: One LCIC_ID can have multiple identification documents
+    """
+    IDENTIFIER_TYPES = [
+        ('NATIONAL_ID', 'National ID'),
+        ('PASSPORT', 'Passport'),
+        ('FAMILY_BOOK', 'Family Book'),
+    ]
+    
+    id = models.AutoField(primary_key=True)
+    lcic_id = models.CharField(max_length=150, db_index=True)
+    identifier_type = models.CharField(max_length=20, choices=IDENTIFIER_TYPES)
+    identifier_value = models.CharField(max_length=150)
+    identifier_date = models.DateField(blank=True, null=True)
+    province_code = models.CharField(max_length=150, blank=True, null=True)  # For family book
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.CharField(max_length=150)
+    deactivated_at = models.DateTimeField(blank=True, null=True)
+    deactivated_by = models.CharField(max_length=150, blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['lcic_id', 'is_active']),
+            models.Index(fields=['identifier_type', 'identifier_value']),
+        ]
+        unique_together = [['identifier_type', 'identifier_value', 'is_active']]
+
+
+class MatchingCandidate(models.Model):
+    """
+    Stores potential matches for manual review
+    """
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending Review'),
+        ('APPROVED', 'Approved/Merged'),
+        ('REJECTED', 'Rejected'),
+        ('AUTO_MATCHED', 'Auto Matched'),
+    ]
+    
+    id = models.AutoField(primary_key=True)
+    source_ind_sys_id = models.IntegerField()
+    target_ind_sys_id = models.IntegerField()
+    source_lcic_id = models.CharField(max_length=150, blank=True, null=True)
+    target_lcic_id = models.CharField(max_length=150, blank=True, null=True)
+    similarity_score = models.DecimalField(max_digits=5, decimal_places=2)
+    match_details = models.JSONField(default=dict)  # Store detailed matching breakdown
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    reviewed_by = models.CharField(max_length=150, blank=True, null=True)
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+
+        indexes = [
+            models.Index(fields=['status', 'similarity_score']),
+            models.Index(fields=['source_lcic_id']),
+            models.Index(fields=['target_lcic_id']),
+        ]
+
+
+class MergeHistory(models.Model):
+    """
+    Track all merge/unmerge operations for audit trail
+    """
+    ACTION_CHOICES = [
+        ('MERGE', 'Merge'),
+        ('UNMERGE', 'Unmerge'),
+    ]
+    
+    id = models.AutoField(primary_key=True)
+    action = models.CharField(max_length=10, choices=ACTION_CHOICES)
+    master_lcic_id = models.CharField(max_length=150)
+    merged_ind_sys_ids = models.JSONField()  # List of merged ind_sys_ids
+    merged_data = models.JSONField()  # Store snapshot of merged records
+    performed_by = models.CharField(max_length=150)
+    performed_at = models.DateTimeField(auto_now_add=True)
+    reason = models.TextField(blank=True, null=True)
+    
+    class Meta:
+
+        indexes = [
+            models.Index(fields=['master_lcic_id']),
+            models.Index(fields=['performed_at']),
+        ]
+    
+class scr_atttype_desc(models.Model):
+    id_desc = models.AutoField(primary_key=True) 
+    att_type = models.CharField(max_length=50, blank=False, null=False)
+    att_type_desc = models.CharField(max_length=100, blank=False, null=False)
+    att_type_lao_desc = models.CharField(max_length=100, blank=False, null=False)
+    att_weight = models.IntegerField() 
+
+    def __str__(self):
+        return f"{self.att_type_desc} ({self.att_type})"
+
+class scr_attribute_table(models.Model):
+    att_id = models.AutoField(primary_key=True) 
+    att_type = models.CharField(max_length=50, blank=False, null=False)
+    att_name = models.CharField(max_length=50, blank=False, null=False)
+    att_code = models.CharField(max_length=50, blank=False, null=False)
+    att_value = models.IntegerField()
+
+    def __str__(self):
+        return f"{self.att_name} ({self.att_code})"
+>>>>>>> ade4201346e04bc4b5b2f69d5e6120f6e4d0211f
 
 
 
