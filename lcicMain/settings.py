@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     "crispy_forms",
     # "crispy_bootstrap5",
     'rest_framework_simplejwt',
+    
     'rest_framework',
     'rest_framework.authtoken',
     'django_celery_beat',      # ✅ ADD

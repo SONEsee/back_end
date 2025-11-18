@@ -153,11 +153,20 @@ from .views import (
     ElectricCustomerSearchAPIView, 
     FCR_reportIndividualView,
     FileUploadViewIndividual,
-    IndividualCollateralFileListView
+    IndividualCollateralFileListView,
+    EnterpriseMemberSubmitViewSet,
+    BorrowerFileUploadView,
+    BorrowerFileListView,
+    BorrowerFilePeriodListView,
+    confirm_upload_borrower,
+    reject_borrower_loan_view,
+    CollateralNewListView,
+    CheckEnterpriseView
 )
 #tik
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
-                    ,RequestChargeSummaryAPIView,RequestChargeReportAllAPIView,UserLogoutView,UserAccessLogListView)
+                    ,RequestChargeSummaryAPIView,RequestChargeReportAllAPIView,UserLogoutView,UserAccessLogListView,ScoringIndividualInfoSearchView,CreditScoreAPIView,ScrAttTypeDescListCreateView, ScrAttTypeDescRetrieveUpdateDeleteView,ScrAttributeTableListCreateView
+                    ,ScrAttributeTableRetrieveUpdateDeleteView)
 
 from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView,process_dispute_notification, process_multiple_disputes,process_multiple_disputescollateral
 from .views import upload_json,MemberInfoViewSet
@@ -173,6 +182,7 @@ router.register(r'members', MemberInfoViewSet)
 router.register(r'investorinfo', InvestorInfoViewSet)
 router.register(r'enterpriseinfo', EnterpriseInfoViewSet)
 router.register(r'user-groups', UserGroupViewSet, basename='usergroup')
+router.register(r'enterprises', EnterpriseMemberSubmitViewSet, basename='enterprise')
 @ensure_csrf_cookie
 def get_csrf_token(request):
     return JsonResponse({'csrfToken': request.META.get('CSRF_COOKIE')})
@@ -251,6 +261,7 @@ urlpatterns = [
    path('render_pdf_view/<slug:object_id>', render_pdf_view, name='render_pdf_view'),
    path('progress/<slug:object_id>', views.progress, name='progress'),
    path('tax_invoice', views.tax, name='tax'),
+   path('check-enterprise/', CheckEnterpriseView.as_view(), name='check-enterprise'),
 
   
    
@@ -277,6 +288,10 @@ urlpatterns = [
    path('reorder/', ReorderSidebarView.as_view(), name='reorder-sidebar'),
    path('api/searchcollateral/', SearchIndividualBankView.as_view(), name='search'),
    path('api/searchcollateral-info/', SearchIndividualBankInfoView.as_view(), name='search'),
+   path('api/collateral/', CollateralNewListView.as_view(), name='collateral-list'),
+   path('api/collateral/approve/', views.approve_collateral, name='approve_collateral'),
+   path('api/collateral/reject/', views.reject_collateral, name='reject_collateral'),
+   path('api/enterprises_list/', views.get_enterprises, name='get_enterprises'),
    
 
    path('userList/', ManageUserView.as_view(), name='mangeuser'),
@@ -305,7 +320,7 @@ urlpatterns = [
    path('charge_report/<str:bnk_code>', charge_reportView.as_view(), name='charge_searchlog'),
    path('searchlog_chart/', SearchLogChartView.as_view(), name='searchlog_chart'),
    path('api/individual-file-periods/', IndividualFilePeriodListView.as_view(), name='individual-file-periods'),
-   
+   path('api/borrower/periods/', BorrowerFilePeriodListView.as_view(), name='borrower-period-list'),
    
    path('searchlog_chart/month/<str:month_year>', SearchLogChart_MonthView.as_view(), name='searchlog_chartbymonth'),
    path('searchlog_chart/month/', SearchLogChart_MonthView.as_view(), name='searchlog_chart_current_month'),
@@ -373,8 +388,15 @@ urlpatterns = [
     path('request-charge-report-all/', RequestChargeReportAllAPIView.as_view(), name='request-charge-report-all'),
     path('logout_update/', UserLogoutView.as_view(), name='logout_new'),
     path('access-logs/', UserAccessLogListView.as_view(), name='access-logs'),
+    path('api/scoring-individual/', ScoringIndividualInfoSearchView.as_view(), name='scoring-individual'),
+    path('credit-score/calculate/', CreditScoreAPIView.as_view(), name='credit-score-calculate'),
+    path('att-types/', ScrAttTypeDescListCreateView.as_view(), name='atttype-list-create'),
+    path('att-types/<int:id_desc>/', ScrAttTypeDescRetrieveUpdateDeleteView.as_view(), name='atttype-detail'),
+    path('attributes/', ScrAttributeTableListCreateView.as_view(), name='attribute-list-create'),
+    path('attributes/<int:att_id>/', ScrAttributeTableRetrieveUpdateDeleteView.as_view(), name='attribute-detail'),
     
     path('api/individual-files/', IndividualFileListView.as_view(), name='individual-file-list'),
+    path('api/borrwor-files/', BorrowerFileListView.as_view(), name='borrwor-file-list'),
     path('api/files-individual-collateral/', IndividualCollateralFileListView.as_view(), name='files-individual-collateral'),
   
 #    path('api/upload_files1', FileUploadView.as_view(), name='file-upload'),
@@ -392,6 +414,7 @@ urlpatterns = [
     path('api/disputes/confirmc/', views.confirm_dispute_colatteral, name='confirm_dispute_colatteral'),
     path('api/reject_individual_loan/<str:id_file>/', views.reject_individual_loan_view, name='reject_individual_loan'),
     path('api/reject_individual_collateral/<str:id_file>/', views.reject_individual_collateral_view, name='reject_individual_loan'),
+    path('api/borrower/reject/<str:BID>/', reject_borrower_loan_view, name='reject-borrower'),
 
     
     path('api/rollback_reconfirm/', views.rollback_and_reconfirm_individual, name='rollback_reconfirm'),
@@ -408,10 +431,15 @@ urlpatterns = [
     path('confirm_upload_individual_collateral/', views.confirm_upload_individual_collateral, name='confirm_upload_individual_collateral'),
     path('confirm_uploadc/', views.confirm_uploadc, name='confirm_uploadc'),
     path('unload_uploadc/', views.unload_data, name='unload_data'),
+    path('api/borrower/confirm/', confirm_upload_borrower, name='confirm-borrower'),
+
+
+    
     # path('check-upload-status/<str:FID>/', views.check_upload_status, name='check_upload_status'),
 
     # path('upload333/', FileUploadView3.as_view(), name='file-upload'),
     path('upload-files/', FileUploadView3.as_view(), name='upload_files_view'),
+    path('api/borrower/upload/', BorrowerFileUploadView.as_view(), name='borrower-upload'),
     path('upload-files-individual-loan/', IndividualFileUploadView.as_view(), name='upload_files_view_loan'),
     path('upload-files-individual-collateral/', FileUploadViewIndividual.as_view(), name='upload_files_view_collateral'),
     path('process-files/', upload_files, name='upload_files'),
@@ -437,6 +465,7 @@ urlpatterns = [
     path('process-multiple-disputes-collateral/', process_multiple_disputescollateral, name='process_multiple_disputescollateral'),
     path('api/dispute-loan/<int:id_disput_loan>/status/', views.update_dispute_status, name='update_dispute_status'),
     path('api/dispute-collateral/<int:id_disput_loan>/status/', views.update_dispute_status_collateral, name='update_dispute_status_collateral'),
+   
 
     path('api/enterprise-info/', views.create_enterprise_info, name='create_enterprise_info'),
     path('api/last-lcicid/', get_last_lcicid, name='get_last_lcicid'),
@@ -542,6 +571,46 @@ urlpatterns = [
     path('charge_report_main/', ChargeReportMainView.as_view(), name='charge-report-main'),
     path('charge_report_detail/', ChargeReportDetailView.as_view(), name='charge-report-detail'),
     path('report_individual/', FCR_reportIndividualView.as_view(), name='fcr-report-individual'),
+    
+    
+    #---------------------------------------------
+    #----- START POINTS -----------------------------
+    
+    # # Matching endpoints
+    # path('find-candidates/', views.find_matching_candidates, name='find_candidates'),
+    # path('candidates/', views.get_matching_candidates, name='get_candidates'),
+    # path('review/', views.review_candidate, name='review_candidate'),
+    # # Merge/Unmerge endpoints
+    # path('merge/', views.merge_customers, name='merge_customers'),
+    # path('unmerge/', views.unmerge_customer, name='unmerge_customer'),
+    # # Customer data endpoints
+    # path('customer/<str:lcic_id>/identifiers/', views.get_customer_identifiers, name='get_identifiers'),
+    # path('customer/<str:lcic_id>/history/', views.get_merge_history, name='get_history'),
+    # # Statistics
+    # path('statistics/', views.get_statistics, name='statistics'),
+    
+    # Matching Candidates
+    path('find-candidates/', views.find_matching_candidates, name='find_matching_candidates'),
+    path('candidates/', views.list_matching_candidates, name='list_matching_candidates'),
+    path('review/', views.review_candidate, name='review_candidate'),
+    
+    # Merged Customers (IndividualBankIbkInfo)
+    path('merged-customers/', views.list_merged_customers, name='list_merged_customers'),
+    path('customer/<str:lcic_id>/', views.get_customer_details, name='get_customer_details'),
+    
+    # Approved Matches
+    path('approved-matches/', views.list_approved_matches, name='list_approved_matches'),
+    
+    # Manual Operations
+    path('merge/', views.manual_merge, name='manual_merge'),
+    path('unmerge/', views.unmerge_customer, name='unmerge_customer'),
+    
+    # Statistics
+    path('statistics/', views.get_statistics, name='get_statistics'),
+
+    #---------------------------------------------
+    #----- END POINTS -----------------------------
+    
     # SearchLog Reports  
     path('searchlog_report_main/', SearchLogReportMainView.as_view(), name='searchlog-report-main'),
     path('searchlog_report_detail/', SearchLogReportDetailView.as_view(), name='searchlog-report-detail'),

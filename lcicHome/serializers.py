@@ -32,7 +32,143 @@ class IndividualCollatteralFileSerializer(serializers.ModelSerializer):
         model = Upload_File_Individual_Collateral
         fields = '__all__'  
         
+from rest_framework import serializers
+from .models import EnterpriseMemberSubmit
 
+from .models import Upload_File_Borrower
+
+class BorrowerFileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Upload_File_Borrower
+        fields = [
+            'BID',
+            'SType',
+            'UType',
+            'user_id',
+            'file_id',
+            'fileName',
+            'fileUpload',
+            'progress_percentage',
+            'fileSize',
+            'path',
+            'insertDate',
+            'updateDate',
+            'period',
+            'status',
+            'statussubmit',
+            'status_upload',
+            'FileType',
+            'percentage',
+            'dispuste'
+        ]
+
+from rest_framework import serializers
+from .models import CollateralNew
+
+from rest_framework import serializers
+from .models import EnterpriseInfo
+from rest_framework import serializers
+from .models import EnterpriseInfo
+
+
+class EnterpriseInfoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EnterpriseInfo
+        fields = '__all__'
+class CollateralNewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CollateralNew
+        fields = [
+            'id',
+            'bank_id',
+            'branch_id',
+            'filename',
+            'image',
+            'user',
+            'insertdate',
+            'updatedate',
+            'pathfile',
+            'status',
+            'decaption',
+            'LCIC_reques'
+        ]
+class EnterpriseMemberSubmitSerializer(serializers.ModelSerializer):
+    """
+    Serializer ສຳຫຼັບ EnterpriseMemberSubmit
+    """
+    
+    # Read-only fields ທີ່ສະແດງຂໍ້ມູນເພີ່ມເຕີມ
+    id_file_name = serializers.CharField(
+        source='id_file.file_name', 
+        read_only=True, 
+        allow_null=True
+    )
+    
+    class Meta:
+        model = EnterpriseMemberSubmit
+        fields = '__all__'
+        read_only_fields = [
+            'LCICID', 
+            'InsertDate', 
+            'UpdateDate', 
+            'LastUpdate',
+            'user_insert',
+            'user_update'
+        ]
+    
+    def validate_LCIC_code(self, value):
+        """
+        ກວດສອບວ່າ LCIC_code ບໍ່ຊ້ຳກັນ
+        """
+        if value:
+            instance = self.instance
+            queryset = EnterpriseMemberSubmit.objects.filter(LCIC_code=value)
+            
+            if instance:
+                queryset = queryset.exclude(pk=instance.pk)
+            
+            if queryset.exists():
+                raise serializers.ValidationError(
+                    f"LCIC_code {value} ມີຢູ່ແລ້ວໃນລະບົບ"
+                )
+        
+        return value
+    
+    def validate_investmentAmount(self, value):
+        """
+        ກວດສອບຈຳນວນເງິນລົງທຶນ
+        """
+        if value is not None and value < 0:
+            raise serializers.ValidationError(
+                "ຈຳນວນເງິນລົງທຶນຕ້ອງບໍ່ນ້ອຍກວ່າ 0"
+            )
+        return value
+    
+    def to_representation(self, instance):
+        """
+        ປັບແຕ່ງຂໍ້ມູນທີ່ສົ່ງກັບ
+        """
+        data = super().to_representation(instance)
+        
+        # ແປງວັນທີເປັນ format ທີ່ອ່ານງ່າຍ
+        date_fields = ['regisDate', 'LastUpdate', 'InsertDate', 'UpdateDate', 'CancellationDate']
+        for field in date_fields:
+            if data.get(field):
+                try:
+                    date_obj = datetime.fromisoformat(data[field].replace('Z', '+00:00'))
+                    data[f'{field}_formatted'] = date_obj.strftime('%d/%m/%Y %H:%M:%S')
+                except:
+                    pass
+        
+        # ເພີ່ມຂໍ້ມູນສະຖານະເປັນຂໍ້ຄວາມ
+        status_map = {
+            -1: 'ຖືກລຶບ',
+            0: 'ປິດໃຊ້ງານ',
+            1: 'ເປີດໃຊ້ງານ'
+        }
+        data['status_text'] = status_map.get(data.get('status'), 'ບໍ່ທຮາບ')
+        
+        return data
         
 from rest_framework import serializers
 from .models import Login
@@ -925,15 +1061,15 @@ class EDLCustomerSerializer(serializers.ModelSerializer):
         # You may have a province mapping or related model
         # For now, return the ID or map manually
         province_map = {
-            '1': 'ນະຄອນຫຼວງວຽງຈັນ',
-            '2': 'ຜົ້ງສາລີ',
-            '3': 'ຫຼວງນໍ້າທາ',
-            '4': 'ອຸດົມໄຊ',
-            '5': 'ບໍ່ແກ້ວ',
-            '6': 'ຫຼວງພະບາງ',
-            '7': 'ຫົວພັນ',
-            '8': 'ໄຊຍະບູລີ',
-            '9': 'ຊຽງຂວາງ',
+            '01': 'ນະຄອນຫຼວງວຽງຈັນ',
+            '02': 'ຜົ້ງສາລີ',
+            '03': 'ຫຼວງນໍ້າທາ',
+            '04': 'ອຸດົມໄຊ',
+            '05': 'ບໍ່ແກ້ວ',
+            '06': 'ຫຼວງພະບາງ',
+            '07': 'ຫົວພັນ',
+            '08': 'ໄຊຍະບູລີ',
+            '09': 'ຊຽງຂວາງ',
             '10': 'ວຽງຈັນ',
             '11': 'ບໍລິຄໍາໄຊ',
             '12': 'ຄໍາມ່ວນ',
@@ -1805,4 +1941,79 @@ class UserAccessLogSerializer(serializers.ModelSerializer):
             'id', 'user', 'bnk_code', 'login_time', 'logout_time',
             'ip_address', 'user_agent', 'remarks'
         ]
+
+# serializers.py
+from rest_framework import serializers
+from .models import (
+    IndividualBankIbk, B1, C1,
+    col_real_estates, col_money_mia, col_equipment_eqi,
+    col_project_prj, col_vechicle_veh, col_guarantor_gua,
+    col_goldsilver_gold, col_guarantor_com,
+    scr_atttype_desc, scr_attribute_table
+)
+
+class IndividualBankIbkSerializers(serializers.ModelSerializer):
+    age = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = IndividualBankIbk
+        fields = '__all__'
+    
+    def get_age(self, obj):
+        if obj.ind_birth_date:
+            from datetime import date
+            today = date.today()
+            age = today.year - obj.ind_birth_date.year - (
+                (today.month, today.day) < (obj.ind_birth_date.month, obj.ind_birth_date.day)
+            )
+            return age
+        return None
+
+class B1Serializers(serializers.ModelSerializer):
+    class Meta:
+        model = B1
+        fields = '__all__'
+
+class C1Serializers(serializers.ModelSerializer):
+    class Meta:
+        model = C1
+        fields = '__all__'
+
+class CollateralDetailSerializers(serializers.Serializer):
+    col_type = serializers.CharField()
+    count = serializers.IntegerField()
+    total_value_lak = serializers.DecimalField(max_digits=20, decimal_places=2)
+    items = serializers.ListField()
+
+class CreditScoreResponseSerializers(serializers.Serializer):
+    # Customer Information
+    customer_info = IndividualBankIbkSerializers()
+    
+    # Loan Information
+    loan_summary = serializers.DictField()
+    
+    # Collateral Information
+    collateral_summary = serializers.DictField()
+    
+    # Score Breakdown
+    score_breakdown = serializers.DictField()
+    
+    # Final Credit Score
+    final_credit_score = serializers.DecimalField(max_digits=10, decimal_places=2)
+    credit_rating = serializers.CharField()
+    
+    
+from rest_framework import serializers
+from .models import scr_atttype_desc, scr_attribute_table
+
+class ScrAttTypeDescSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = scr_atttype_desc
+        fields = '__all__'
+
+
+class ScrAttributeTableSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = scr_attribute_table
+        fields = '__all__'
 
