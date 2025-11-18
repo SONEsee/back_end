@@ -49,6 +49,7 @@ from .views import UserLoginView
 from django.contrib.auth import views as auth_views
 from .views import UserProfileView
 from .views import UserManagementView, FCR_reportView, SidebarItemsView, RoleListView, SidebarItemListView, SidebarSubItemListView, AssignRoleView, ManageUserView,FCR_reportView,update_statussubmitc,confirm_uploadc
+from . import cleanup_views
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
@@ -159,6 +160,21 @@ from .views import (
     BorrowerFileListView,
     BorrowerFilePeriodListView,
     confirm_upload_borrower,
+    CustomerUnmergeViewSet,
+    CompareJsonWithDBAPIView,
+    RegisterCustomerBatchAPIView,
+    MyUploadsListAPIView,
+    AllUploadsListAPIView,
+    AllUploadsFilteredAPIView,
+    CustomerConfirmAPIView,
+    
+    CustomerManualRegisterAPIView,
+    CustomerBatchRegisterAPIView,
+    CustomerBatchFinalizeAPIView,
+    MyUploadsListAPIView,
+    CustomerAllUploadsAPIView,
+    
+
     reject_borrower_loan_view,
     CollateralNewListView,
     CheckEnterpriseView
@@ -185,6 +201,7 @@ router.register(r'user-groups', UserGroupViewSet, basename='usergroup')
 router.register(r'maincatalog', SubCatalogCatViewSet, basename='categorymain')
 router.register(r'subcatalog', MainCatalogCatViewSet, basename='categorysub')
 router.register(r'enterprises', EnterpriseMemberSubmitViewSet, basename='enterprise')
+router.register(r'customer-unmerge', CustomerUnmergeViewSet, basename='customer-unmerge')
 @ensure_csrf_cookie
 def get_csrf_token(request):
     return JsonResponse({'csrfToken': request.META.get('CSRF_COOKIE')})
@@ -610,6 +627,72 @@ urlpatterns = [
     # Statistics
     path('statistics/', views.get_statistics, name='get_statistics'),
 
+    path('cleanup/duplicates/', cleanup_views.list_duplicate_info_records, name='list_duplicate_info_records'),
+    path('cleanup/merge/', cleanup_views.merge_info_records, name='merge_info_records'),
+    path('cleanup/statistics/', cleanup_views.get_cleanup_statistics, name='get_cleanup_statistics'),
+    
+    
+    # Customer Merge Information
+    path('customer/<str:lcic_id>/merge-info/', 
+         views.get_customer_merge_info, 
+         name='get_customer_merge_info'),
+    
+    # NEW: List all merged customers with optional filters
+    path('customers/merged/', 
+         views.list_merged_customers, 
+         name='list_merged_customers'),
+    
+    # NEW: Get merge statistics
+    path('customers/merged/statistics/', 
+         views.get_merge_statistics, 
+         name='get_merge_statistics'),
+    
+    # General customer search (requires search term)
+    path('customers/search/', 
+         views.search_customers, 
+         name='search_customers'),
+    
+    # List all merge operations
+    path('merges/history/', 
+         views.list_all_merges, 
+         name='list_all_merges'),
+    
+    #Create Customer With LCIC ID
+    path('new/customer/create/',CompareJsonWithDBAPIView.as_view(), name="create_customer_with_lcic_id"),
+    path('customer/register/batch/', RegisterCustomerBatchAPIView.as_view(), name="register_customer_batch"),
+    # Main endpoints
+    path('register/customer/my-uploads/', MyUploadsListAPIView.as_view(), name='my-uploads'),
+    # path('register/customer/all-uploads/', AllUploadsListAPIView.as_view(), name='all-uploads'),
+    # Optional: More powerful filtering
+    path('register/customer/uploads/', AllUploadsFilteredAPIView.as_view(), name='uploads-filtered'),
+    # path('register/customer/confirm/', CustomerConfirmAPIView.as_view(), name='customer-confirm'),
+    
+        # Manual customer registration
+    path('register/customer/manual/', 
+         CustomerManualRegisterAPIView.as_view(), 
+         name='customer-manual-register'),
+    
+    # Batch customer registration
+    path('register/customer/batch/', 
+         CustomerBatchRegisterAPIView.as_view(), 
+         name='customer-batch-register'),
+    path('register/customer/batch/finalize/', 
+         CustomerBatchFinalizeAPIView.as_view(), 
+         name='customer-batch-finalize'),
+    
+    # My uploads list
+    path('register/customer/my-uploads/', 
+         MyUploadsListAPIView.as_view(), 
+         name='my-uploads'),
+        # Get all uploaded customers (Admin)
+    path('register/customer/all-uploads/', 
+         CustomerAllUploadsAPIView.as_view(), 
+         name='customer-all-uploads'),
+    
+    # Confirm customers with matching
+    path('register/customer/confirm/', 
+         CustomerConfirmAPIView.as_view(), 
+         name='customer-confirm'),
     #---------------------------------------------
     #----- END POINTS -----------------------------
     

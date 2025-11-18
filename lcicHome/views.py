@@ -32938,7 +32938,7 @@ from .models import (
     IndividualBankIbk, IndividualBankIbkInfo, IndividualIdentifier,
     MatchingCandidate, MergeHistory
 )
-# from .matching_service_corrected import CustomerMatchingService
+from .matching_service_corrected import CustomerMatchingService
 from .merge_service import CustomerMergeService
 
 
@@ -33667,6 +33667,2354 @@ class ScrAttTypeDescListCreateView(generics.ListCreateAPIView):
     queryset = scr_atttype_desc.objects.all()
     serializer_class = ScrAttTypeDescSerializer
 
+class CreditScoreAPIView(APIView):
+    """
+    API endpoint to calculate credit score
+    
+    POST /api/credit-score/calculate/
+    GET  /api/credit-score/calculate/?lcic_id=your_lcic_id
+    """
+    
+    def post(self, request):
+        return self._calculate_score(request.data.get('lcic_id'))
+    
+    def get(self, request):
+        return self._calculate_score(request.query_params.get('lcic_id'))
+    
+    def _calculate_score(self, lcic_id):
+        """Calculate credit score with error handling"""
+        try:
+            # Validate lcic_id
+            if not lcic_id:
+                return Response(
+                    {'error': 'lcic_id is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Calculate credit score
+            service = CreditScoreService(lcic_id)
+            result = service.calculate_credit_score()
+            
+            # Check result
+            if not result:
+                return Response(
+                    {'error': f'Customer not found with lcic_id: {lcic_id}'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Return success
+            return Response({'success': True, 'data': result}, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {'error': 'Internal server error', 'message': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+            
+            
+# views.py
+from rest_framework import viewsets, status
+from rest_framework.response import Response
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
+from django.db.models import Count
+from django.utils import timezone
+import logging
+from .models import IndividualBankIbk, IndividualBankIbk_MapLog
+
+logger = logging.getLogger(__name__)
+
+
+class CustomerUnmergeViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+    
+    @action(detail=False, methods=['get'])
+    def list_grouped(self, request):
+        """
+        List all customers grouped by lcic_id where count > 1
+        Supports pagination
+        """
+        try:
+            page_size = int(request.query_params.get('page_size', 50))
+            page = int(request.query_params.get('page', 1))
+            
+            # Validate pagination parameters
+            if page_size < 1 or page_size > 200:
+                page_size = 50
+            if page < 1:
+                page = 1
+                
+            offset = (page - 1) * page_size
+
+            # Get all lcic_id with more than 1 customer
+            grouped = (
+                IndividualBankIbk.objects
+                .exclude(lcic_id__isnull=True)
+                .exclude(lcic_id='')
+                .values('lcic_id')
+                .annotate(count=Count('ind_sys_id'))
+                .filter(count__gt=1)
+                .order_by('lcic_id')
+            )
+
+            total_groups = grouped.count()
+            paginated_groups = grouped[offset:offset + page_size]
+
+            result = []
+            for group in paginated_groups:
+                lcic_id = group['lcic_id']
+                customers = IndividualBankIbk.objects.filter(
+                    lcic_id=lcic_id
+                ).order_by('ind_sys_id')
+
+                customer_list = []
+                is_first = True
+                
+                for cust in customers:
+                    # Build display names
+                    full_name = f"{cust.ind_name or ''} {cust.ind_surname or ''}".strip()
+                    lao_name = f"{cust.ind_lao_name or ''} {cust.ind_lao_surname or ''}".strip()
+                    display_name = lao_name if lao_name else full_name
+
+                    customer_list.append({
+                        "ind_sys_id": cust.ind_sys_id,
+                        "display_name": display_name or "Unknown",
+                        "customerid": cust.customerid or "N/A",
+                        "bnk_code": cust.bnk_code or "N/A",
+                        "ind_national_id": cust.ind_national_id or "N/A",
+                        "ind_birth_date": cust.ind_birth_date.isoformat() if cust.ind_birth_date else "N/A",
+                        "is_master": is_first,
+                        "mm_status": cust.mm_status or "ACTIVE"
+                    })
+                    is_first = False
+
+                result.append({
+                    "lcic_id": lcic_id,
+                    "count": len(customer_list),
+                    "customers": customer_list
+                })
+
+            return Response({
+                "total": total_groups,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": (total_groups + page_size - 1) // page_size,
+                "results": result
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"List grouped failed: {str(e)}")
+            return Response({
+                "error": "Failed to fetch grouped customers",
+                "detail": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['post'])
+    def unmerge(self, request):
+        """
+        Unmerge selected customers from their lcic_id groups
+        
+        Expected payload:
+        {
+            "unmerge_list": [
+                {"lcic_id": "202501-0988", "ind_sys_ids": [123, 456]},
+                ...
+            ]
+        }
+        """
+        unmerge_list = request.data.get("unmerge_list", [])
+        
+        if not unmerge_list:
+            return Response({
+                "error": "No data provided"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate input structure
+        for item in unmerge_list:
+            if not isinstance(item, dict) or 'lcic_id' not in item or 'ind_sys_ids' not in item:
+                return Response({
+                    "error": "Invalid data structure. Each item must have 'lcic_id' and 'ind_sys_ids'"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        log_entries = []
+        updated_count = 0
+        failed_ids = []
+
+        try:
+            with transaction.atomic():
+                for item in unmerge_list:
+                    lcic_id = item.get("lcic_id")
+                    ind_sys_ids = item.get("ind_sys_ids", [])
+
+                    if not lcic_id or not ind_sys_ids:
+                        continue
+
+                    # Fetch customers to unmerge
+                    customers_to_unmerge = IndividualBankIbk.objects.filter(
+                        ind_sys_id__in=ind_sys_ids,
+                        lcic_id=lcic_id
+                    )
+
+                    for cust in customers_to_unmerge:
+                        try:
+                            # Create log entry
+                            log_entry = IndividualBankIbk_MapLog(
+                                lcic_id=cust.lcic_id,
+                                segment=cust.segment,
+                                mm_ind_sys_id=str(cust.ind_sys_id),
+                                bnk_code=cust.bnk_code,
+                                branchcode=cust.branchcode,
+                                customerid=cust.customerid,
+                                ind_national_id=cust.ind_national_id,
+                                ind_national_id_date=cust.ind_national_id_date,
+                                ind_passport=cust.ind_passport,
+                                ind_passport_date=cust.ind_passport_date,
+                                ind_familybook=cust.ind_familybook,
+                                ind_familybook_prov_code=cust.ind_familybook_prov_code,
+                                ind_familybook_date=cust.ind_familybook_date,
+                                ind_birth_date=cust.ind_birth_date,
+                                ind_name=cust.ind_name,
+                                ind_second_name=cust.ind_second_name,
+                                ind_surname=cust.ind_surname,
+                                ind_lao_name=cust.ind_lao_name,
+                                ind_lao_surname=cust.ind_lao_surname,
+                                ind_old_surname=cust.ind_old_surname,
+                                ind_lao_old_surname=cust.ind_lao_old_surname,
+                                ind_nationality=cust.ind_nationality,
+                                ind_gender=cust.ind_gender,
+                                ind_civil_status=cust.ind_civil_status,
+                                ind_insert_date=cust.ind_insert_date,
+                                ind_update_date=cust.ind_update_date,
+                                mm_action_date=timezone.now(),
+                                mm_log=f"Unmerged from lcic_id={lcic_id}",
+                                mm_comment=f"Unmerged by {request.user.username}. Awaiting new LCIC assignment.",
+                                mm_by=request.user.username,
+                                blk_sys_id=cust.blk_sys_id,
+                                mm_status="UNMERGED",
+                                is_manual=True,
+                                ind_lao_name_code=cust.ind_lao_name_code,
+                                ind_lao_surname_code=cust.ind_lao_surname_code
+                            )
+                            log_entries.append(log_entry)
+
+                            # Update customer record - nullify lcic_id
+                            cust.lcic_id = None
+                            cust.mm_status = "UNMERGED"
+                            cust.mm_comment = f"Unmerged by {request.user.username} on {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                            cust.mm_action_date = timezone.now()
+                            cust.save(update_fields=['lcic_id', 'mm_status', 'mm_comment', 'mm_action_date'])
+                            
+                            updated_count += 1
+                            
+                        except Exception as e:
+                            logger.error(f"Failed to unmerge ind_sys_id={cust.ind_sys_id}: {str(e)}")
+                            failed_ids.append(cust.ind_sys_id)
+
+                # Bulk create logs
+                if log_entries:
+                    IndividualBankIbk_MapLog.objects.bulk_create(log_entries)
+
+            response_data = {
+                "message": f"Successfully unmerged {updated_count} customer(s).",
+                "logged": len(log_entries),
+                "status": "success"
+            }
+            
+            if failed_ids:
+                response_data["warning"] = f"Failed to unmerge {len(failed_ids)} customer(s)"
+                response_data["failed_ids"] = failed_ids
+
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Unmerge transaction failed: {str(e)}")
+            return Response({
+                "error": "Unmerge operation failed",
+                "detail": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+"""
+Customer Merge Information Views - UPDATED
+Shows all merged customers by default with optional filters
+"""
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from django.db.models import Q, Count, Prefetch
+from django.core.cache import cache
+import logging
+from datetime import datetime, timedelta
+
+from .models import (
+    IndividualBankIbkInfo, 
+    IndividualIdentifier, 
+    MergeHistory
+)
+
+logger = logging.getLogger(__name__)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_customer_merge_info(request, lcic_id):
+    """
+    Get detailed merge information for a specific customer
+    """
+    try:
+        # Get customer master record
+        try:
+            customer = IndividualBankIbkInfo.objects.get(lcic_id=lcic_id)
+        except IndividualBankIbkInfo.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': f'Customer with LCIC ID {lcic_id} not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get all identifiers for this LCIC ID
+        identifiers = IndividualIdentifier.objects.filter(
+            lcic_id=lcic_id,
+            is_active=True
+        ).order_by('identifier_type', 'created_at')
+        
+        # Organize identifiers by type
+        identifiers_by_type = {
+            'national_ids': [],
+            'passports': [],
+            'family_books': [],
+        }
+        
+        for identifier in identifiers:
+            id_info = {
+                'id': identifier.id,
+                'value': identifier.identifier_value,
+                'date': identifier.identifier_date.isoformat() if identifier.identifier_date else None,
+                'province_code': identifier.province_code,
+                'created_at': identifier.created_at.isoformat(),
+                'created_by': identifier.created_by,
+                'notes': identifier.notes,
+            }
+            
+            if identifier.identifier_type == 'NATIONAL_ID':
+                identifiers_by_type['national_ids'].append(id_info)
+            elif identifier.identifier_type == 'PASSPORT':
+                identifiers_by_type['passports'].append(id_info)
+            elif identifier.identifier_type == 'FAMILY_BOOK':
+                identifiers_by_type['family_books'].append(id_info)
+        
+        # Get merge history where this LCIC ID is the master
+        merge_history = MergeHistory.objects.filter(
+            master_lcic_id=lcic_id
+        ).order_by('-performed_at')
+        
+        merge_records = []
+        for merge in merge_history:
+            merge_info = {
+                'id': merge.id,
+                'action': merge.action,
+                'performed_at': merge.performed_at.isoformat(),
+                'performed_by': merge.performed_by,
+                'reason': merge.reason,
+                'merged_ind_sys_ids': merge.merged_ind_sys_ids,
+                'merged_records_count': len(merge.merged_ind_sys_ids),
+                'merged_data': merge.merged_data,
+            }
+            merge_records.append(merge_info)
+        
+        # Build customer info
+        customer_info = {
+            'ind_sys_id': customer.ind_sys_id,
+            'lcic_id': customer.lcic_id,
+            'name': f"{customer.ind_name or ''} {customer.ind_surname or ''}".strip(),
+            'lao_name': f"{customer.ind_lao_name or ''} {customer.ind_lao_surname or ''}".strip(),
+            'first_name': customer.ind_name,
+            'surname': customer.ind_surname,
+            'lao_first_name': customer.ind_lao_name,
+            'lao_surname': customer.ind_lao_surname,
+            'birth_date': customer.ind_birth_date.isoformat() if customer.ind_birth_date else None,
+            'current_national_id': customer.ind_national_id,
+            'current_passport': customer.ind_passport,
+            'current_family_book': customer.ind_familybook,
+        }
+        
+        # Summary statistics
+        summary = {
+            'total_identifiers': len(identifiers),
+            'national_ids_count': len(identifiers_by_type['national_ids']),
+            'passports_count': len(identifiers_by_type['passports']),
+            'family_books_count': len(identifiers_by_type['family_books']),
+            'total_merges': len(merge_records),
+            'is_merged_record': len(merge_records) > 0,
+        }
+        
+        return Response({
+            'success': True,
+            'customer': customer_info,
+            'identifiers': identifiers_by_type,
+            'merge_history': merge_records,
+            'summary': summary,
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in get_customer_merge_info: {str(e)}", exc_info=True)
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_merged_customers(request):
+    """
+    List ALL merged customers with optional filters
+    
+    NEW: Shows all merged customers by default
+    
+    Query params (all optional):
+    - search: search by name, lcic_id, national_id
+    - performed_by: filter by user who performed merge
+    - date_from: filter merges from this date (YYYY-MM-DD)
+    - date_to: filter merges until this date (YYYY-MM-DD)
+    - has_multiple_ids: filter customers with multiple identifiers (true/false)
+    - identifier_type: filter by identifier type (NATIONAL_ID, PASSPORT, FAMILY_BOOK)
+    - sort_by: sort field (name, lcic_id, merge_date, identifier_count)
+    - sort_order: sort order (asc, desc)
+    - page: page number
+    - page_size: items per page (max 100)
+    """
+    try:
+        # Parse parameters (all optional now)
+        search_term = request.query_params.get('search', '').strip()
+        performed_by = request.query_params.get('performed_by', '').strip()
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        has_multiple_ids = request.query_params.get('has_multiple_ids', '').lower()
+        identifier_type = request.query_params.get('identifier_type', '').strip().upper()
+        sort_by = request.query_params.get('sort_by', 'merge_date')
+        sort_order = request.query_params.get('sort_order', 'desc')
+        page = int(request.query_params.get('page', 1))
+        page_size = min(int(request.query_params.get('page_size', 20)), 100)
+        
+        # Start with all merge history records
+        merge_queryset = MergeHistory.objects.all()
+        
+        # Apply filters
+        if performed_by:
+            merge_queryset = merge_queryset.filter(performed_by__icontains=performed_by)
+        
+        if date_from:
+            merge_queryset = merge_queryset.filter(performed_at__date__gte=date_from)
+        
+        if date_to:
+            merge_queryset = merge_queryset.filter(performed_at__date__lte=date_to)
+        
+        # Get all unique master LCIC IDs from merge history
+        merged_lcic_ids = merge_queryset.values_list('master_lcic_id', flat=True).distinct()
+        
+        # Build customer queryset
+        customer_queryset = IndividualBankIbkInfo.objects.filter(
+            lcic_id__in=merged_lcic_ids
+        )
+        
+        # Apply search filter
+        if search_term:
+            customer_queryset = customer_queryset.filter(
+                Q(lcic_id__icontains=search_term) |
+                Q(ind_name__icontains=search_term) |
+                Q(ind_surname__icontains=search_term) |
+                Q(ind_lao_name__icontains=search_term) |
+                Q(ind_lao_surname__icontains=search_term) |
+                Q(ind_national_id__icontains=search_term) |
+                Q(ind_passport__icontains=search_term) |
+                Q(ind_familybook__icontains=search_term)
+            )
+        
+        # Apply identifier type filter
+        if identifier_type and identifier_type in ['NATIONAL_ID', 'PASSPORT', 'FAMILY_BOOK']:
+            # Get LCIC IDs that have this identifier type
+            lcic_with_type = IndividualIdentifier.objects.filter(
+                identifier_type=identifier_type,
+                is_active=True
+            ).values_list('lcic_id', flat=True).distinct()
+            
+            customer_queryset = customer_queryset.filter(lcic_id__in=lcic_with_type)
+        
+        # Get total count before pagination
+        total_count = customer_queryset.count()
+        
+        # Apply sorting
+        sort_field = 'ind_name'
+        if sort_by == 'lcic_id':
+            sort_field = 'lcic_id'
+        elif sort_by == 'name':
+            sort_field = 'ind_name'
+        
+        if sort_order == 'desc':
+            sort_field = f'-{sort_field}'
+        
+        customer_queryset = customer_queryset.order_by(sort_field)
+        
+        # Paginate
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        customers = customer_queryset[start_idx:end_idx]
+        
+        # Build results
+        results = []
+        for customer in customers:
+            # Get merge history for this customer
+            customer_merges = MergeHistory.objects.filter(
+                master_lcic_id=customer.lcic_id
+            ).order_by('-performed_at')
+            
+            # Get most recent merge
+            latest_merge = customer_merges.first() if customer_merges.exists() else None
+            
+            # Get identifier counts
+            identifier_counts = IndividualIdentifier.objects.filter(
+                lcic_id=customer.lcic_id,
+                is_active=True
+            ).values('identifier_type').annotate(count=Count('id'))
+            
+            id_counts = {
+                'national_ids': 0,
+                'passports': 0,
+                'family_books': 0,
+            }
+            
+            for item in identifier_counts:
+                if item['identifier_type'] == 'NATIONAL_ID':
+                    id_counts['national_ids'] = item['count']
+                elif item['identifier_type'] == 'PASSPORT':
+                    id_counts['passports'] = item['count']
+                elif item['identifier_type'] == 'FAMILY_BOOK':
+                    id_counts['family_books'] = item['count']
+            
+            total_ids = sum(id_counts.values())
+            
+            # Apply has_multiple_ids filter
+            if has_multiple_ids == 'true' and total_ids <= 1:
+                continue
+            
+            customer_data = {
+                'ind_sys_id': customer.ind_sys_id,
+                'lcic_id': customer.lcic_id,
+                'name': f"{customer.ind_name or ''} {customer.ind_surname or ''}".strip(),
+                'lao_name': f"{customer.ind_lao_name or ''} {customer.ind_lao_surname or ''}".strip(),
+                'birth_date': customer.ind_birth_date.isoformat() if customer.ind_birth_date else None,
+                'national_id': customer.ind_national_id,
+                'passport': customer.ind_passport,
+                'family_book': customer.ind_familybook,
+                'identifier_counts': id_counts,
+                'total_identifiers': total_ids,
+                'total_merges': customer_merges.count(),
+                'latest_merge': {
+                    'performed_at': latest_merge.performed_at.isoformat(),
+                    'performed_by': latest_merge.performed_by,
+                    'reason': latest_merge.reason,
+                    'merged_count': len(latest_merge.merged_ind_sys_ids),
+                } if latest_merge else None,
+            }
+            
+            results.append(customer_data)
+        
+        # Get filter statistics
+        stats = {
+            'total_merged_customers': total_count,
+            'total_merge_operations': merge_queryset.count(),
+            'date_range': {
+                'from': date_from,
+                'to': date_to,
+            } if (date_from or date_to) else None,
+        }
+        
+        return Response({
+            'success': True,
+            'results': results,
+            'count': len(results),
+            'total_count': total_count,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': (total_count + page_size - 1) // page_size,
+            'statistics': stats,
+            'filters_applied': {
+                'search': search_term or None,
+                'performed_by': performed_by or None,
+                'date_from': date_from,
+                'date_to': date_to,
+                'identifier_type': identifier_type or None,
+                'has_multiple_ids': has_multiple_ids == 'true',
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in list_merged_customers: {str(e)}", exc_info=True)
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_merge_statistics(request):
+    """
+    Get statistics about merge operations
+    """
+    try:
+        # Total merge operations
+        total_merges = MergeHistory.objects.count()
+        
+        # Total unique merged customers
+        total_merged_customers = MergeHistory.objects.values('master_lcic_id').distinct().count()
+        
+        # Merges by user
+        merges_by_user = MergeHistory.objects.values('performed_by').annotate(
+            count=Count('id')
+        ).order_by('-count')[:10]
+        
+        # Recent merges (last 7 days)
+        seven_days_ago = datetime.now() - timedelta(days=7)
+        recent_merges = MergeHistory.objects.filter(
+            performed_at__gte=seven_days_ago
+        ).count()
+        
+        # Customers with multiple identifier types
+        customers_with_multiple_ids = IndividualIdentifier.objects.filter(
+            is_active=True
+        ).values('lcic_id').annotate(
+            type_count=Count('identifier_type', distinct=True)
+        ).filter(type_count__gt=1).count()
+        
+        # Total active identifiers
+        total_identifiers = IndividualIdentifier.objects.filter(is_active=True).count()
+        
+        return Response({
+            'success': True,
+            'statistics': {
+                'total_merge_operations': total_merges,
+                'total_merged_customers': total_merged_customers,
+                'total_active_identifiers': total_identifiers,
+                'customers_with_multiple_ids': customers_with_multiple_ids,
+                'recent_merges_7days': recent_merges,
+                'top_merge_users': [
+                    {'user': item['performed_by'], 'count': item['count']}
+                    for item in merges_by_user
+                ],
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in get_merge_statistics: {str(e)}", exc_info=True)
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def search_customers(request):
+    """
+    Search customers by LCIC ID, name, or identifier
+    This endpoint is for general search (includes non-merged customers)
+    
+    Query params:
+    - q: search term (REQUIRED for this endpoint)
+    - merged_only: show only customers with merge history (default false)
+    - page: page number
+    - page_size: items per page (max 50)
+    """
+    try:
+        search_term = request.query_params.get('q', '').strip()
+        merged_only = request.query_params.get('merged_only', 'false').lower() == 'true'
+        page = int(request.query_params.get('page', 1))
+        page_size = min(int(request.query_params.get('page_size', 20)), 50)
+        
+        if not search_term:
+            return Response({
+                'success': False,
+                'error': 'Search term (q) is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Build base queryset
+        queryset = IndividualBankIbkInfo.objects.all()
+        
+        # Search by LCIC ID, name, or identifier
+        queryset = queryset.filter(
+            Q(lcic_id__icontains=search_term) |
+            Q(ind_name__icontains=search_term) |
+            Q(ind_surname__icontains=search_term) |
+            Q(ind_lao_name__icontains=search_term) |
+            Q(ind_lao_surname__icontains=search_term) |
+            Q(ind_national_id__icontains=search_term) |
+            Q(ind_passport__icontains=search_term) |
+            Q(ind_familybook__icontains=search_term)
+        )
+        
+        # If merged_only, filter by customers with merge history
+        if merged_only:
+            merged_lcic_ids = MergeHistory.objects.values_list('master_lcic_id', flat=True).distinct()
+            queryset = queryset.filter(lcic_id__in=merged_lcic_ids)
+        
+        # Get total count
+        total_count = queryset.count()
+        
+        # Paginate
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        customers = queryset[start_idx:end_idx]
+        
+        # Build results
+        results = []
+        for customer in customers:
+            # Check if customer has merge history
+            has_merge = MergeHistory.objects.filter(master_lcic_id=customer.lcic_id).exists()
+            
+            # Get identifier counts
+            identifier_counts = IndividualIdentifier.objects.filter(
+                lcic_id=customer.lcic_id,
+                is_active=True
+            ).values('identifier_type').annotate(count=Count('id'))
+            
+            id_counts = {
+                'national_ids': 0,
+                'passports': 0,
+                'family_books': 0,
+            }
+            
+            for item in identifier_counts:
+                if item['identifier_type'] == 'NATIONAL_ID':
+                    id_counts['national_ids'] = item['count']
+                elif item['identifier_type'] == 'PASSPORT':
+                    id_counts['passports'] = item['count']
+                elif item['identifier_type'] == 'FAMILY_BOOK':
+                    id_counts['family_books'] = item['count']
+            
+            results.append({
+                'ind_sys_id': customer.ind_sys_id,
+                'lcic_id': customer.lcic_id,
+                'name': f"{customer.ind_name or ''} {customer.ind_surname or ''}".strip(),
+                'lao_name': f"{customer.ind_lao_name or ''} {customer.ind_lao_surname or ''}".strip(),
+                'birth_date': customer.ind_birth_date.isoformat() if customer.ind_birth_date else None,
+                'national_id': customer.ind_national_id,
+                'passport': customer.ind_passport,
+                'family_book': customer.ind_familybook,
+                'has_merge_history': has_merge,
+                'identifier_counts': id_counts,
+                'total_identifiers': sum(id_counts.values()),
+            })
+        
+        return Response({
+            'success': True,
+            'results': results,
+            'count': total_count,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': (total_count + page_size - 1) // page_size,
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in search_customers: {str(e)}", exc_info=True)
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_all_merges(request):
+    """
+    List all merge operations with pagination and filtering
+    Shows all merges by default
+    
+    Query params (all optional):
+    - performed_by: filter by user who performed merge
+    - date_from: filter merges from this date (YYYY-MM-DD)
+    - date_to: filter merges until this date (YYYY-MM-DD)
+    - page: page number
+    - page_size: items per page (max 100)
+    """
+    try:
+        performed_by = request.query_params.get('performed_by', '').strip()
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        page = int(request.query_params.get('page', 1))
+        page_size = min(int(request.query_params.get('page_size', 20)), 100)
+        
+        # Build queryset
+        queryset = MergeHistory.objects.all()
+        
+        if performed_by:
+            queryset = queryset.filter(performed_by__icontains=performed_by)
+        
+        if date_from:
+            queryset = queryset.filter(performed_at__date__gte=date_from)
+        
+        if date_to:
+            queryset = queryset.filter(performed_at__date__lte=date_to)
+        
+        # Order by most recent first
+        queryset = queryset.order_by('-performed_at')
+        
+        # Get total count
+        total_count = queryset.count()
+        
+        # Paginate
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        merges = queryset[start_idx:end_idx]
+        
+        # Build results
+        results = []
+        for merge in merges:
+            # Get customer name from master LCIC ID
+            try:
+                customer = IndividualBankIbkInfo.objects.get(lcic_id=merge.master_lcic_id)
+                customer_name = f"{customer.ind_name or ''} {customer.ind_surname or ''}".strip()
+            except IndividualBankIbkInfo.DoesNotExist:
+                customer_name = 'Unknown (deleted)'
+            
+            results.append({
+                'id': merge.id,
+                'master_lcic_id': merge.master_lcic_id,
+                'customer_name': customer_name,
+                'action': merge.action,
+                'performed_at': merge.performed_at.isoformat(),
+                'performed_by': merge.performed_by,
+                'reason': merge.reason,
+                'merged_count': len(merge.merged_ind_sys_ids),
+                'merged_ind_sys_ids': merge.merged_ind_sys_ids,
+            })
+        
+        return Response({
+            'success': True,
+            'results': results,
+            'count': total_count,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': (total_count + page_size - 1) // page_size,
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in list_all_merges: {str(e)}", exc_info=True)
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+        
+        
+# ---- Code Souly :
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from datetime import datetime
+from rapidfuzz import fuzz
+from .models import IndividualBankIbkInfo, IndividualBankIbk
+import json
+
+class CompareJsonWithDBAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        new_rows = request.data
+        if not isinstance(new_rows, list):
+            return Response({"error": "Expected a list of records."}, status=status.HTTP_400_BAD_REQUEST)
+
+        compare_cols = [
+            "ind_national_id", "ind_national_id_date", "ind_passport", "ind_passport_date",
+            "ind_familybook", "ind_familybook_prov_code", "ind_familybook_date",
+            "ind_birth_date", "ind_name", "ind_surname", "ind_lao_name", "ind_lao_surname"
+        ]
+
+        # 🔹 ດຶງຂໍ້ມູນຈາກ DB
+        base_rows = list(IndividualBankIbkInfo.objects.values(*compare_cols, "lcic_id"))
+        existing_ids = {r["lcic_id"] for r in base_rows if r["lcic_id"]}
+
+        # 🔹 ຕັ້ງຄ່າຕົ້ນ
+        date_prefix = datetime.now().strftime("%Y%m%d")
+        seq = 1
+        assigned_cache = {}
+        results = []
+        details = []
+
+        # ----------------------------------------------------
+        def is_empty(v):
+            if v is None:
+                return True
+            if isinstance(v, str):
+                s = v.strip().lower()
+                return s in ["", "null", "none", "nan"]
+            return False
+
+        def ratio(a, b):
+            if is_empty(a) or is_empty(b):
+                return None
+            return fuzz.QRatio(str(a).strip().lower(), str(b).strip().lower()) / 100.0
+
+        def is_match(row1, row2):
+            """ປຽບທຽບຂໍ້ມູນສອງຝັ່ງ"""
+            scores = {}
+            for col in compare_cols:
+                score = ratio(row1.get(col), row2.get(col))
+                if score is not None:
+                    scores[col] = score
+
+            # 🔹 ຖ້າມີຟິວປຽບທຽບ < 3 → ບໍ່ຄິດຄຳນວນ
+            if len(scores) < 3:
+                return False, 0, scores
+
+            match_ratio = sum(scores.values()) / len(scores)
+
+            lao_name_ratio = scores.get("ind_lao_name", 0)
+            ind_lao_surname = scores.get("ind_lao_surname", 0)
+            birth_date_ratio = scores.get("ind_birth_date", 0)
+            en_name_ratio = scores.get("ind_name", 0)
+            ind_surname = scores.get("ind_surname", 0)
+
+            # ✅ ຕັດສິນຜົນສຸດທ້າຍ
+            if match_ratio > 0.90:
+                # ຄ້າຍກັນເກີນ 90%
+                return True, match_ratio, scores
+
+            elif 0.70 < match_ratio <= 0.90:
+                # ກວດຟິວທີ່ມີຄ່າເທົ່ານັ້ນ (ບໍ່ໃຫ້ and ຟິວທີ່ຫວ່າງ)
+                conditions = []
+
+                # ເງື່ອນໄຂສຳລັບຊື່ພາສາລາວ
+                lao_conditions = []
+                if lao_name_ratio:  # ມີຄ່າຈິງ
+                    lao_conditions.append(lao_name_ratio > 0.8)
+                if birth_date_ratio:
+                    lao_conditions.append(birth_date_ratio >= 0.9)
+                if ind_lao_surname:
+                    lao_conditions.append(ind_lao_surname > 0.8)
+
+                # ເງື່ອນໄຂສຳລັບຊື່ພາສາອັງກິດ
+                en_conditions = []
+                if en_name_ratio:
+                    en_conditions.append(en_name_ratio > 0.8)
+                if birth_date_ratio:
+                    en_conditions.append(birth_date_ratio >= 0.9)
+                if ind_surname:
+                    en_conditions.append(ind_surname > 0.8)
+
+                # ກວດຈາກຈໍານວນຟິວທີ່ຜ່ານເງື່ອນໄຂ
+                lao_pass = len(lao_conditions) > 1 and all(lao_conditions)
+                en_pass = len(en_conditions) > 1 and all(en_conditions)
+
+                if lao_pass or en_pass:
+                    return True, match_ratio, scores
+                else:
+                    return False, match_ratio, scores
+
+            return False, match_ratio, scores
+
+        def generate_unique_lcic():
+            nonlocal seq
+            while True:
+                new_id = f"{date_prefix}-{seq}"
+                seq += 1
+                if new_id not in existing_ids:
+                    existing_ids.add(new_id)
+                    return new_id
+
+        # ----------------------------------------------------
+        # Main process
+        # ----------------------------------------------------
+        for new_row in new_rows:
+            matched_lcic = None
+
+            # 1️⃣ ກວດກັບ DB (ປຽບທຽບກັບທຸກ record)
+            for base_row in base_rows:
+                matched, match_ratio, score_detail = is_match(new_row, base_row)
+                if matched:
+                    matched_lcic = base_row["lcic_id"]
+                    details.append({
+                        "status": "MATCHED",
+                        "json_data": new_row,
+                        "db_data": base_row,
+                        "match_percent": round(match_ratio * 100, 2),
+                        "field_scores": {k: round(v * 100, 2) for k, v in score_detail.items()},
+                        "field_count_used": len(score_detail),
+                        "lcic_id": matched_lcic
+                    })
+                    break
+
+            # 2️⃣ ກວດກັບ cache
+            if not matched_lcic:
+                for cached_key, lcic in assigned_cache.items():
+                    cached_row = json.loads(cached_key)
+                    matched, match_ratio, score_detail = is_match(new_row, cached_row)
+                    if matched:
+                        matched_lcic = lcic
+                        details.append({
+                            "status": "MATCHED (CACHE)",
+                            "json_data": new_row,
+                            "db_data": cached_row,
+                            "match_percent": round(match_ratio * 100, 2),
+                            "field_scores": {k: round(v * 100, 2) for k, v in score_detail.items()},
+                            "field_count_used": len(score_detail),
+                            "lcic_id": matched_lcic
+                        })
+                        break
+
+            # 3️⃣ ບໍ່ພົບ → ສ້າງໃໝ່
+            if not matched_lcic:
+                matched_lcic = generate_unique_lcic()
+                assigned_cache[json.dumps(new_row, sort_keys=True)] = matched_lcic
+                details.append({
+                    "status": "NEW RECORD",
+                    "json_data": new_row,
+                    "match_percent": 0,
+                    "field_scores": {},
+                    "field_count_used": 0,
+                    "lcic_id": matched_lcic
+                })
+
+            results.append({**new_row, "lcic_id": matched_lcic})
+
+        return Response({
+            # "summary": results,
+            "details": details
+        }, status=status.HTTP_200_OK)
+        
+        
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from rest_framework import status
+# from rest_framework.permissions import IsAuthenticated
+# from django.db import transaction
+# from django.utils import timezone
+# from datetime import datetime
+# from rapidfuzz import fuzz
+# from .models import (
+#     IndividualBankIbkInfo, 
+#     IndividualBankIbkInfo_Register, 
+#     IndividualBankIbkInfo_CreateLog
+# )
+# from .serializers import CustomerRegistrationSerializer
+# import json
+
+
+# class RegisterCustomerBatchAPIView(APIView):
+#     permission_classes = [IsAuthenticated]
+
+#     def post(self, request):
+#         # Validate input
+#         if not isinstance(request.data, list):
+#             return Response(
+#                 {"error": "Expected a list of customer records."}, 
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+
+#         # Validate each customer record
+#         serializer = CustomerRegistrationSerializer(data=request.data, many=True)
+#         if not serializer.is_valid():
+#             return Response(
+#                 {"error": "Invalid data format.", "details": serializer.errors}, 
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+
+#         customers = serializer.validated_data
+        
+#         # Process customers
+#         results = self._process_customers(customers, request.user)
+        
+#         return Response({
+#             "success": True,
+#             "total_processed": len(customers),
+#             "matched": results["matched_count"],
+#             "new_records": results["new_count"],
+#             "duplicates_skipped": results["duplicate_count"],
+#             "details": results["details"]
+#         }, status=status.HTTP_200_OK)
+
+#     def _process_customers(self, customers, user):
+#         compare_cols = [
+#             "ind_national_id", "ind_national_id_date", "ind_passport", "ind_passport_date",
+#             "ind_familybook", "ind_familybook_prov_code", "ind_familybook_date",
+#             "ind_birth_date", "ind_name", "ind_surname", "ind_lao_name", "ind_lao_surname"
+#         ]
+
+#         # Get existing records from DB
+#         base_rows = list(IndividualBankIbkInfo.objects.values(*compare_cols, "lcic_id"))
+#         existing_ids = {r["lcic_id"] for r in base_rows if r["lcic_id"]}
+
+#         # Initialize counters
+#         date_prefix = datetime.now().strftime("%Y%m%d")
+#         seq = 1
+#         assigned_cache = {}
+#         details = []
+#         matched_count = 0
+#         new_count = 0
+#         duplicate_count = 0
+
+#         for customer in customers:
+#             matched_lcic = None
+#             match_info = None
+
+#             # Step 1: Check against existing DB records
+#             for base_row in base_rows:
+#                 matched, match_ratio, score_detail = self._is_match(customer, base_row)
+#                 if matched:
+#                     matched_lcic = base_row["lcic_id"]
+#                     match_info = {
+#                         "status": "MATCHED",
+#                         "match_percent": round(match_ratio * 100, 2),
+#                         "field_scores": {k: round(v * 100, 2) for k, v in score_detail.items()}
+#                     }
+#                     break
+
+#             # Step 2: Check against cache (new records in this batch)
+#             if not matched_lcic:
+#                 for cached_key, lcic in assigned_cache.items():
+#                     cached_row = json.loads(cached_key)
+#                     matched, match_ratio, score_detail = self._is_match(customer, cached_row)
+#                     if matched:
+#                         matched_lcic = lcic
+#                         match_info = {
+#                             "status": "MATCHED (BATCH)",
+#                             "match_percent": round(match_ratio * 100, 2),
+#                             "field_scores": {k: round(v * 100, 2) for k, v in score_detail.items()}
+#                         }
+#                         break
+
+#             # Step 3: Generate new LCIC ID if no match found
+#             if not matched_lcic:
+#                 matched_lcic = self._generate_unique_lcic(date_prefix, seq, existing_ids)
+#                 seq += 1
+#                 assigned_cache[json.dumps(customer, sort_keys=True, default=str)] = matched_lcic
+#                 match_info = {
+#                     "status": "NEW RECORD",
+#                     "match_percent": 0
+#                 }
+
+#             # Step 4: Insert into database
+#             try:
+#                 insert_result = self._insert_customer(customer, matched_lcic, match_info["status"], user)
+                
+#                 if insert_result["inserted"]:
+#                     if match_info["status"] == "NEW RECORD":
+#                         new_count += 1
+#                     else:
+#                         matched_count += 1
+                    
+#                     details.append({
+#                         "customer_id": customer.get("customer_ID"),
+#                         "bnk_code": customer.get("bnk_code"),
+#                         "lcic_id": matched_lcic,
+#                         **match_info,
+#                         "action": "INSERTED"
+#                     })
+#                 else:
+#                     duplicate_count += 1
+#                     details.append({
+#                         "customer_id": customer.get("customer_ID"),
+#                         "bnk_code": customer.get("bnk_code"),
+#                         "lcic_id": matched_lcic,
+#                         **match_info,
+#                         "action": "SKIPPED (DUPLICATE)"
+#                     })
+
+#             except Exception as e:
+#                 details.append({
+#                     "customer_id": customer.get("customer_ID"),
+#                     "bnk_code": customer.get("bnk_code"),
+#                     "error": str(e),
+#                     "action": "FAILED"
+#                 })
+
+#         return {
+#             "matched_count": matched_count,
+#             "new_count": new_count,
+#             "duplicate_count": duplicate_count,
+#             "details": details
+#         }
+
+#     @transaction.atomic
+#     def _insert_customer(self, customer, lcic_id, match_status, user):
+#         """Insert customer into Register table and CreateLog (if new)"""
+        
+#         bnk_code = customer.get("bnk_code")
+#         customer_id = customer.get("customer_ID")
+#         branch_id = customer.get("branch_id_code")
+
+#         # Check for duplicates (same bank, customer_id, branch)
+#         exists = IndividualBankIbkInfo_Register.objects.filter(
+#             bnk_code=bnk_code,
+#             customer_id=customer_id,
+#             bank_branch=branch_id
+#         ).exists()
+
+#         if exists:
+#             return {"inserted": False, "reason": "Duplicate record"}
+
+#         # Prepare common data
+#         now = timezone.now()
+#         common_data = {
+#             "lcic_id": lcic_id,
+#             "ind_national_id": customer.get("ind_national_id"),
+#             "ind_national_id_date": customer.get("ind_national_id_date"),
+#             "ind_passport": customer.get("ind_passport"),
+#             "ind_passport_date": customer.get("ind_passport_date"),
+#             "ind_familybook": customer.get("ind_familybook"),
+#             "ind_familybook_prov_code": customer.get("ind_familybook_prov_code"),
+#             "ind_familybook_date": customer.get("ind_familybook_date"),
+#             "ind_birth_date": customer.get("ind_birth_date"),
+#             "ind_name": customer.get("ind_name"),
+#             "ind_surname": customer.get("ind_surname"),
+#             "ind_lao_name": customer.get("ind_lao_name"),
+#             "ind_lao_surname": customer.get("ind_lao_surname"),
+#             "bnk_code": bnk_code,
+#             "bank_branch": branch_id,
+#             "customer_id": customer_id,
+#             "insert_by": user.username,
+#             "status": match_status,
+#             "lcic_registerd_date": now.date(),
+#             "insert_date": now
+#         }
+
+#         # Insert into Register table
+#         IndividualBankIbkInfo_Register.objects.create(**common_data)
+
+#         # If new record, also insert into CreateLog
+#         if match_status == "NEW RECORD":
+#             IndividualBankIbkInfo_CreateLog.objects.create(**common_data)
+
+#         return {"inserted": True}
+
+#     def _generate_unique_lcic(self, date_prefix, seq, existing_ids):
+#         """Generate unique LCIC ID"""
+#         while True:
+#             new_id = f"{date_prefix}-{seq}"
+#             if new_id not in existing_ids:
+#                 existing_ids.add(new_id)
+#                 return new_id
+#             seq += 1
+
+#     def _is_empty(self, v):
+#         """Check if value is empty"""
+#         if v is None:
+#             return True
+#         if isinstance(v, str):
+#             s = v.strip().lower()
+#             return s in ["", "null", "none", "nan"]
+#         return False
+
+#     def _ratio(self, a, b):
+#         """Calculate fuzzy matching ratio"""
+#         if self._is_empty(a) or self._is_empty(b):
+#             return None
+#         return fuzz.QRatio(str(a).strip().lower(), str(b).strip().lower()) / 100.0
+
+#     def _is_match(self, row1, row2):
+#         """Compare two customer records using fuzzy matching"""
+#         compare_cols = [
+#             "ind_national_id", "ind_national_id_date", "ind_passport", "ind_passport_date",
+#             "ind_familybook", "ind_familybook_prov_code", "ind_familybook_date",
+#             "ind_birth_date", "ind_name", "ind_surname", "ind_lao_name", "ind_lao_surname"
+#         ]
+        
+#         scores = {}
+#         for col in compare_cols:
+#             score = self._ratio(row1.get(col), row2.get(col))
+#             if score is not None:
+#                 scores[col] = score
+
+#         # Need at least 3 fields to compare
+#         if len(scores) < 3:
+#             return False, 0, scores
+
+#         match_ratio = sum(scores.values()) / len(scores)
+
+#         # Extract specific field scores
+#         lao_name_ratio = scores.get("ind_lao_name", 0)
+#         ind_lao_surname = scores.get("ind_lao_surname", 0)
+#         birth_date_ratio = scores.get("ind_birth_date", 0)
+#         en_name_ratio = scores.get("ind_name", 0)
+#         ind_surname = scores.get("ind_surname", 0)
+
+#         # Decision logic
+#         if match_ratio > 0.90:
+#             return True, match_ratio, scores
+
+#         elif 0.70 < match_ratio <= 0.90:
+#             # Check Lao name conditions
+#             lao_conditions = []
+#             if lao_name_ratio:
+#                 lao_conditions.append(lao_name_ratio > 0.8)
+#             if birth_date_ratio:
+#                 lao_conditions.append(birth_date_ratio >= 0.9)
+#             if ind_lao_surname:
+#                 lao_conditions.append(ind_lao_surname > 0.8)
+
+#             # Check English name conditions
+#             en_conditions = []
+#             if en_name_ratio:
+#                 en_conditions.append(en_name_ratio > 0.8)
+#             if birth_date_ratio:
+#                 en_conditions.append(birth_date_ratio >= 0.9)
+#             if ind_surname:
+#                 en_conditions.append(ind_surname > 0.8)
+
+#             lao_pass = len(lao_conditions) > 1 and all(lao_conditions)
+#             en_pass = len(en_conditions) > 1 and all(en_conditions)
+
+#             if lao_pass or en_pass:
+#                 return True, match_ratio, scores
+
+#         return False, match_ratio, scores
+
+import json
+import logging
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
+from django.utils import timezone
+from datetime import datetime
+from rapidfuzz import fuzz
+
+# Optional: Use Python logging (appears in console/server logs)
+logger = logging.getLogger(__name__)
+
+class RegisterCustomerBatchAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        print("\n" + "="*60)
+        print("BATCH CUSTOMER REGISTRATION STARTED")
+        print("="*60)
+        print(f"User: {request.user}")
+        print(f"Content-Type: {request.content_type}")
+        print(f"Raw body: {request.body.decode('utf-8')[:500]}{'...' if len(request.body) > 500 else ''}")
+        print("-" * 60)
+
+        data = request.data
+
+        # Fix: Handle string JSON from Postman
+        if isinstance(data, str):
+            try:
+                print("Raw data is string → parsing with json.loads()")
+                data = json.loads(data)
+            except json.JSONDecodeError as e:
+                print(f"JSON DECODE ERROR: {e}")
+                return Response({"error": "Invalid JSON", "details": str(e)}, status=400)
+
+        if not isinstance(data, list):
+            print(f"ERROR: Expected list, got {type(data)}")
+            return Response({"error": "Expected a JSON array of customers"}, status=400)
+
+        print(f"Received {len(data)} customer(s) in batch")
+
+        serializer = CustomerRegistrationSerializer(data=data, many=True)
+        if not serializer.is_valid():
+            print("SERIALIZER VALIDATION FAILED:")
+            for i, err in enumerate(serializer.errors):
+                print(f"   Customer {i}: {err}")
+            return Response({"error": "Invalid data", "details": serializer.errors}, status=400)
+
+        print("All customers passed serializer validation")
+        customers = serializer.validated_data
+
+        results = self._process_customers(customers, request.user)
+
+        print("\n" + "="*60)
+        print("BATCH PROCESSING COMPLETED")
+        print(f"Matched: {results['matched_count']} | New: {results['new_count']} | Skipped: {results['duplicate_count']}")
+        print("="*60 + "\n")
+
+        return Response({
+            "success": True,
+            "message": "Batch processed successfully",
+            "total_received": len(customers),
+            "matched": results["matched_count"],
+            "new_records": results["new_count"],
+            "duplicates_skipped": results["duplicate_count"],
+            "details": results["details"]
+        }, status=status.HTTP_200_OK)
+
+    def _process_customers(self, customers, user):
+        print(f"\nStarting fuzzy matching for {len(customers)} customers...")
+
+        compare_cols = [
+            "ind_national_id", "ind_national_id_date", "ind_passport", "ind_passport_date",
+            "ind_familybook", "ind_familybook_prov_code", "ind_familybook_date",
+            "ind_birth_date", "ind_name", "ind_surname", "ind_lao_name", "ind_lao_surname"
+        ]
+
+        print("Loading existing records from database...")
+        base_rows = list(IndividualBankIbkInfo.objects.values(*compare_cols, "lcic_id"))
+        existing_ids = {r["lcic_id"] for r in base_rows if r["lcic_id"]}
+        print(f"Found {len(base_rows)} existing records in database")
+
+        date_prefix = datetime.now().strftime("%Y%m%d")
+        seq = 1
+        assigned_cache = {}
+        details = []
+        matched_count = new_count = duplicate_count = 0
+
+        for idx, customer in enumerate(customers, 1):
+            cust_id = customer.get("customer_ID", "Unknown")
+            bnk_code = customer.get("bnk_code", "Unknown")
+            print(f"\n[{idx}/{len(customers)}] Processing Customer ID: {cust_id} | Bank: {bnk_code}")
+
+            matched_lcic = None
+            match_info = {"status": "UNKNOWN"}
+
+            # Step 1: Match against DB
+            for base_row in base_rows:
+                matched, ratio, scores = self._is_match(customer, base_row)
+                if matched:
+                    matched_lcic = base_row["lcic_id"]
+                    match_info = {
+                        "status": "MATCHED (DB)",
+                        "match_percent": round(ratio * 100, 2),
+                        "field_scores": {k: round(v * 100, 2) for k, v in scores.items() if v is not None}
+                    }
+                    print(f"   → MATCHED in DATABASE → LCIC: {matched_lcic} ({match_info['match_percent']}%)")
+                    break
+
+            # Step 2: Match against current batch (cache)
+            if not matched_lcic:
+                for cached_json, lcic in assigned_cache.items():
+                    cached_row = json.loads(cached_json)
+                    matched, ratio, scores = self._is_match(customer, cached_row)
+                    if matched:
+                        matched_lcic = lcic
+                        match_info = {
+                            "status": "MATCHED (BATCH)",
+                            "match_percent": round(ratio * 100, 2),
+                        }
+                        print(f"   → MATCHED in current BATCH → LCIC: {matched_lcic} ({match_info['match_percent']}%)")
+                        break
+
+            # Step 3: Create new LCIC
+            if not matched_lcic:
+                matched_lcic = self._generate_unique_lcic(date_prefix, seq, existing_ids)
+                seq += 1
+                cache_key = json.dumps(customer, sort_keys=True, default=str)
+                assigned_cache[cache_key] = matched_lcic
+                match_info = {"status": "NEW RECORD", "match_percent": 0}
+                print(f"   → NO MATCH → Generated NEW LCIC: {matched_lcic}")
+
+            # Step 4: Insert
+            try:
+                result = self._insert_customer(customer, matched_lcic, match_info["status"], user)
+                if result["inserted"]:
+                    action = "INSERTED"
+                    if match_info["status"] == "NEW RECORD":
+                        new_count += 1
+                    else:
+                        matched_count += 1
+                else:
+                    action = "SKIPPED (DUPLICATE)"
+                    duplicate_count += 1
+
+                print(f"   → {action}")
+
+                details.append({
+                    "customer_id": cust_id,
+                    "bnk_code": bnk_code,
+                    "lcic_id": matched_lcic,
+                    **match_info,
+                    "action": action
+                })
+
+            except Exception as e:
+                print(f"   → FAILED: {str(e)}")
+                details.append({
+                    "customer_id": cust_id,
+                    "bnk_code": bnk_code,
+                    "error": str(e),
+                    "action": "FAILED"
+                })
+
+        return {
+            "matched_count": matched_count,
+            "new_count": new_count,
+            "duplicate_count": duplicate_count,
+            "details": details
+        }
+
+    @transaction.atomic
+    def _insert_customer(self, customer, lcic_id, match_status, user):
+        """Insert customer into Register table and CreateLog (if new)"""
+        
+        bnk_code = customer.get("bnk_code")
+        customer_id = customer.get("customer_ID")
+        branch_id = customer.get("branch_id_code")
+
+        # Check for duplicates (same bank, customer_id, branch)
+        exists = IndividualBankIbkInfo_Register.objects.filter(
+            bnk_code=bnk_code,
+            customer_id=customer_id,
+            bank_branch=branch_id
+        ).exists()
+
+        if exists:
+            return {"inserted": False, "reason": "Duplicate record"}
+
+        # Prepare common data
+        now = timezone.now()
+        common_data = {
+            # "lcic_id": lcic_id,
+            "lcic_id": '',
+            "ind_national_id": customer.get("ind_national_id"),
+            "ind_national_id_date": customer.get("ind_national_id_date"),
+            "ind_passport": customer.get("ind_passport"),
+            "ind_passport_date": customer.get("ind_passport_date"),
+            "ind_familybook": customer.get("ind_familybook"),
+            "ind_familybook_prov_code": customer.get("ind_familybook_prov_code"),
+            "ind_familybook_date": customer.get("ind_familybook_date"),
+            "ind_birth_date": customer.get("ind_birth_date"),
+            "ind_name": customer.get("ind_name"),
+            "ind_surname": customer.get("ind_surname"),
+            "ind_lao_name": customer.get("ind_lao_name"),
+            "ind_lao_surname": customer.get("ind_lao_surname"),
+            "bnk_code": bnk_code,
+            "bank_branch": branch_id,
+            "customer_id": customer_id,
+            "insert_by": user.username,
+            "status": match_status,
+            "lcic_registerd_date": now.date(),
+            "insert_date": now
+        }
+
+        # Insert into Register table
+        IndividualBankIbkInfo_Register.objects.create(**common_data)
+
+        # If new record, also insert into CreateLog
+        if match_status == "NEW RECORD":
+            IndividualBankIbkInfo_CreateLog.objects.create(**common_data)
+
+        return {"inserted": True}
+
+    def _generate_unique_lcic(self, date_prefix, seq, existing_ids):
+        """Generate unique LCIC ID"""
+        while True:
+            new_id = f"{date_prefix}-{seq}"
+            if new_id not in existing_ids:
+                existing_ids.add(new_id)
+                return new_id
+            seq += 1
+
+    def _is_empty(self, v):
+        """Check if value is empty"""
+        if v is None:
+            return True
+        if isinstance(v, str):
+            s = v.strip().lower()
+            return s in ["", "null", "none", "nan"]
+        return False
+
+    def _ratio(self, a, b):
+        """Calculate fuzzy matching ratio"""
+        if self._is_empty(a) or self._is_empty(b):
+            return None
+        return fuzz.QRatio(str(a).strip().lower(), str(b).strip().lower()) / 100.0
+
+    def _is_match(self, row1, row2):
+        """Compare two customer records using fuzzy matching"""
+        compare_cols = [
+            "ind_national_id", "ind_national_id_date", "ind_passport", "ind_passport_date",
+            "ind_familybook", "ind_familybook_prov_code", "ind_familybook_date",
+            "ind_birth_date", "ind_name", "ind_surname", "ind_lao_name", "ind_lao_surname"
+        ]
+        
+        scores = {}
+        for col in compare_cols:
+            score = self._ratio(row1.get(col), row2.get(col))
+            if score is not None:
+                scores[col] = score
+
+        # Need at least 3 fields to compare
+        if len(scores) < 3:
+            return False, 0, scores
+
+        match_ratio = sum(scores.values()) / len(scores)
+
+        # Extract specific field scores
+        lao_name_ratio = scores.get("ind_lao_name", 0)
+        ind_lao_surname = scores.get("ind_lao_surname", 0)
+        birth_date_ratio = scores.get("ind_birth_date", 0)
+        en_name_ratio = scores.get("ind_name", 0)
+        ind_surname = scores.get("ind_surname", 0)
+
+        # Decision logic
+        if match_ratio > 0.90:
+            return True, match_ratio, scores
+
+        elif 0.70 < match_ratio <= 0.90:
+            # Check Lao name conditions
+            lao_conditions = []
+            if lao_name_ratio:
+                lao_conditions.append(lao_name_ratio > 0.8)
+            if birth_date_ratio:
+                lao_conditions.append(birth_date_ratio >= 0.9)
+            if ind_lao_surname:
+                lao_conditions.append(ind_lao_surname > 0.8)
+
+            # Check English name conditions
+            en_conditions = []
+            if en_name_ratio:
+                en_conditions.append(en_name_ratio > 0.8)
+            if birth_date_ratio:
+                en_conditions.append(birth_date_ratio >= 0.9)
+            if ind_surname:
+                en_conditions.append(ind_surname > 0.8)
+
+            lao_pass = len(lao_conditions) > 1 and all(lao_conditions)
+            en_pass = len(en_conditions) > 1 and all(en_conditions)
+
+            if lao_pass or en_pass:
+                return True, match_ratio, scores
+
+        return False, match_ratio, scores
+    
+    
+from rest_framework import generics, filters
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.pagination import PageNumberPagination
+from django.db.models import Q
+from .models import IndividualBankIbkInfo_Register
+from .serializers import CustomerUploadListSerializer
+
+
+# Optional: Nice pagination (10 per page)
+class StandardPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+# 1. My Uploads - Only current user's records
+class MyUploadsListAPIView(generics.ListAPIView):
+    serializer_class = CustomerUploadListSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    
+    search_fields = [
+        'customer_id', 'ind_national_id', 'ind_passport',
+        'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname'
+    ]
+    ordering_fields = ['insert_date', 'lcic_id', 'customer_id']
+    ordering = ['-insert_date']  # newest first
+
+    def get_queryset(self):
+        return IndividualBankIbkInfo_Register.objects.filter(
+            insert_by=self.request.user.username
+        )
+
+
+# 2. All Uploads - Smart access control (admin sees all, user sees own)
+class AllUploadsListAPIView(generics.ListAPIView):
+    serializer_class = CustomerUploadListSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardPagination
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+
+    search_fields = [
+        'customer_id', 'ind_national_id', 'ind_passport',
+        'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname',
+        'bnk_code', 'insert_by'
+    ]
+    ordering_fields = ['insert_date', 'lcic_id', 'bnk_code', 'customer_id']
+    ordering = ['-insert_date']
+
+    def get_queryset(self):
+        user = self.request.user
+        
+        if user.is_staff or user.is_superuser:
+            return IndividualBankIbkInfo_Register.objects.all()
+        else:
+            # Regular users only see their own uploads
+            return IndividualBankIbkInfo_Register.objects.filter(insert_by=user.username)
+
+
+# Bonus: Search by bank code using ?bnk_code=BCEL
+class AllUploadsFilteredAPIView(generics.ListAPIView):
+    serializer_class = CustomerUploadListSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardPagination
+
+    def get_queryset(self):
+        queryset = IndividualBankIbkInfo_Register.objects.all()
+        user = self.request.user
+
+        # Security first
+        if not (user.is_staff or user.is_superuser):
+            queryset = queryset.filter(insert_by=user.username)
+
+        # Manual filters from query params
+        bnk_code = self.request.query_params.get('bnk_code')
+        status = self.request.query_params.get('status')
+        search = self.request.query_params.get('search')
+
+        if bnk_code:
+            queryset = queryset.filter(bnk_code__iexact=bnk_code)
+        if status:
+            queryset = queryset.filter(status=status)
+        if search:
+            queryset = queryset.filter(
+                Q(customer_id__icontains=search) |
+                Q(ind_national_id__icontains=search) |
+                Q(ind_name__icontains=search) |
+                Q(ind_lao_name__icontains=search)
+            )
+
+        return queryset.order_by('-insert_date')
+    
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
+from django.utils import timezone
+from datetime import datetime
+from .models import IndividualBankIbkInfo_Register, IndividualBankIbkInfo
+from difflib import SequenceMatcher
+
+
+class CustomerConfirmAPIView(APIView):
+    """
+    Confirm customers with smart matching logic
+    POST /api/register/customer/confirm/
+    Body: { "ids": [1, 2, 3] }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def similarity(self, a, b):
+        """Calculate similarity between two strings"""
+        if not a or not b:
+            return 0
+        return SequenceMatcher(None, str(a).lower(), str(b).lower()).ratio() * 100
+
+    def find_matching_customer(self, reg_record):
+        """
+        Find matching customer in main table
+        Returns: (matched_customer, match_score) or (None, 0)
+        """
+        # Priority 1: Exact match by National ID
+        if reg_record.ind_national_id:
+            exact_match = IndividualBankIbkInfo.objects.filter(
+                ind_national_id=reg_record.ind_national_id
+            ).first()
+            if exact_match:
+                return exact_match, 100
+
+        # Priority 2: Exact match by Passport
+        if reg_record.ind_passport:
+            exact_match = IndividualBankIbkInfo.objects.filter(
+                ind_passport=reg_record.ind_passport
+            ).first()
+            if exact_match:
+                return exact_match, 100
+
+        # Priority 3: Exact match by Family Book
+        if reg_record.ind_familybook:
+            exact_match = IndividualBankIbkInfo.objects.filter(
+                ind_familybook=reg_record.ind_familybook
+            ).first()
+            if exact_match:
+                return exact_match, 100
+
+        # Priority 4: Fuzzy match by name + birth date
+        if reg_record.ind_name and reg_record.ind_surname:
+            potential_matches = IndividualBankIbkInfo.objects.filter(
+                ind_birth_date=reg_record.ind_birth_date
+            ) if reg_record.ind_birth_date else IndividualBankIbkInfo.objects.all()
+
+            best_match = None
+            best_score = 0
+
+            for candidate in potential_matches[:100]:  # Limit for performance
+                name_score = self.similarity(
+                    f"{reg_record.ind_name} {reg_record.ind_surname}",
+                    f"{candidate.ind_name} {candidate.ind_surname}"
+                )
+                
+                # Consider it a match if name similarity > 85%
+                if name_score > 85:
+                    if name_score > best_score:
+                        best_match = candidate
+                        best_score = name_score
+
+            if best_match and best_score > 85:
+                return best_match, best_score
+
+        return None, 0
+
+    def post(self, request):
+        try:
+            ids_list = request.data.get('ids', [])
+            
+            if not ids_list:
+                return Response({
+                    'success': False,
+                    'error': 'No IDs provided'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            print(f"📋 Confirming IDs: {ids_list}")
+
+            # Get all records
+            all_records = IndividualBankIbkInfo_Register.objects.filter(
+                ind_sys_id__in=ids_list
+            )
+
+            pending_records = all_records.filter(is_confirmed=False)
+            already_confirmed = all_records.filter(is_confirmed=True)
+
+            print(f"✅ Found: {pending_records.count()} pending, {already_confirmed.count()} already confirmed")
+
+            # Handle already confirmed
+            if already_confirmed.exists() and not pending_records.exists():
+                return Response({
+                    'success': False,
+                    'error': 'All requested records are already confirmed',
+                    'already_confirmed_count': already_confirmed.count()
+                }, status=status.HTTP_409_CONFLICT)
+
+            if not pending_records.exists():
+                return Response({
+                    'success': False,
+                    'error': 'No pending records found',
+                    'requested_ids': ids_list
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Process confirmations
+            confirmed_records = []
+            matched_records = []
+            new_records = []
+            errors = []
+
+            with transaction.atomic():
+                today_prefix = datetime.now().strftime("%Y%m%d")
+                
+                # Get last sequence number for new LCIC IDs
+                last_lcic = IndividualBankIbkInfo.objects.filter(
+                    lcic_id__startswith=today_prefix
+                ).order_by('-lcic_id').values_list('lcic_id', flat=True).first()
+                
+                seq = 1
+                if last_lcic:
+                    try:
+                        seq = int(last_lcic.split('-')[1]) + 1
+                    except:
+                        pass
+
+                for reg in pending_records:
+                    try:
+                        # Try to find matching customer
+                        matched_customer, match_score = self.find_matching_customer(reg)
+
+                        if matched_customer:
+                            # MATCHED - Use existing LCIC ID
+                            lcic_id = matched_customer.lcic_id
+                            
+                            reg.is_confirmed = True
+                            reg.confirmed_at = timezone.now()
+                            reg.confirmed_by = request.user.username
+                            reg.lcic_id = lcic_id
+                            reg.status = 'MATCHED'
+                            reg.save(update_fields=[
+                                'is_confirmed', 'confirmed_at', 
+                                'confirmed_by', 'lcic_id', 'status'
+                            ])
+
+                            matched_records.append({
+                                'ind_sys_id': reg.ind_sys_id,
+                                'customer_id': reg.customer_id,
+                                'lcic_id': lcic_id,
+                                'status': 'MATCHED',
+                                'match_percent': round(match_score, 2),
+                                'matched_with': {
+                                    'lcic_id': matched_customer.lcic_id,
+                                    'name': f"{matched_customer.ind_name} {matched_customer.ind_surname}"
+                                }
+                            })
+
+                            print(f"✓ MATCHED: {reg.customer_id} -> {lcic_id} (Score: {match_score}%)")
+
+                        else:
+                            # NEW RECORD - Create new LCIC ID
+                            lcic_id = f"{today_prefix}-{seq:04d}"
+                            
+                            # Prepare data for main table
+                            ALLOWED_FIELDS = {
+                                'ind_national_id', 'ind_national_id_date',
+                                'ind_passport', 'ind_passport_date',
+                                'ind_familybook', 'ind_familybook_prov_code',
+                                'ind_familybook_date', 'ind_birth_date',
+                                'ind_name', 'ind_surname',
+                                'ind_lao_name', 'ind_lao_surname',
+                            }
+
+                            main_data = {'lcic_id': lcic_id}
+                            for field in ALLOWED_FIELDS:
+                                if hasattr(reg, field):
+                                    value = getattr(reg, field)
+                                    if value not in [None, '']:
+                                        main_data[field] = value
+
+                            # Create in main table
+                            IndividualBankIbkInfo.objects.create(**main_data)
+
+                            # Update registration
+                            reg.is_confirmed = True
+                            reg.confirmed_at = timezone.now()
+                            reg.confirmed_by = request.user.username
+                            reg.lcic_id = lcic_id
+                            reg.status = 'NEW RECORD'
+                            reg.save(update_fields=[
+                                'is_confirmed', 'confirmed_at',
+                                'confirmed_by', 'lcic_id', 'status'
+                            ])
+
+                            new_records.append({
+                                'ind_sys_id': reg.ind_sys_id,
+                                'customer_id': reg.customer_id,
+                                'lcic_id': lcic_id,
+                                'status': 'NEW RECORD',
+                                'match_percent': 0
+                            })
+
+                            seq += 1
+                            print(f"✓ NEW: {reg.customer_id} -> {lcic_id}")
+
+                        confirmed_records.append({
+                            'ind_sys_id': reg.ind_sys_id,
+                            'customer_id': reg.customer_id,
+                            'lcic_id': lcic_id
+                        })
+
+                    except Exception as e:
+                        print(f"❌ Error confirming {reg.ind_sys_id}: {e}")
+                        errors.append({
+                            'ind_sys_id': reg.ind_sys_id,
+                            'error': str(e)
+                        })
+
+            # Build response
+            response_data = {
+                'success': True,
+                'message': f'Confirmed {len(confirmed_records)} customer(s)',
+                'total_confirmed': len(confirmed_records),
+                'matched': len(matched_records),
+                'new_records': len(new_records),
+                'already_confirmed': already_confirmed.count(),
+                'details': {
+                    'matched': matched_records,
+                    'new': new_records
+                },
+                'timestamp': timezone.now().isoformat()
+            }
+
+            if errors:
+                response_data['errors'] = errors
+
+            print(f"✅ Confirmation complete: {len(matched_records)} matched, {len(new_records)} new")
+
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"❌ Confirmation failed: {e}")
+            return Response({
+                'success': False,
+                'error': f'Confirmation failed: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class CustomerAllUploadsAPIView(APIView):
+    """
+    Get all uploaded customers (Admin only)
+    GET /api/register/customer/all-uploads/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            # Optional: Check if user is admin (GID 1-5)
+            # user_gid = request.user.GID.GID if hasattr(request.user, 'GID') else 0
+            # if user_gid not in [1, 2, 3, 4, 5]:
+            #     return Response({
+            #         'success': False,
+            #         'error': 'Admin access required'
+            #     }, status=status.HTTP_403_FORBIDDEN)
+
+            # Get all customers
+            customers = IndividualBankIbkInfo_Register.objects.all().order_by('-insert_date')
+
+            # Transform to response format
+            customer_list = []
+            for customer in customers:
+                customer_list.append({
+                    'ind_sys_id': customer.ind_sys_id,
+                    'customer_id': customer.customer_id,
+                    'bnk_code': customer.bnk_code,
+                    'bank_branch': customer.bank_branch,
+                    'lcic_id': customer.lcic_id,
+                    'status': customer.status,
+                    'match_percent': 0,  # Can add calculation logic if needed
+                    
+                    # Personal info
+                    'ind_name': customer.ind_name,
+                    'ind_surname': customer.ind_surname,
+                    'ind_lao_name': customer.ind_lao_name,
+                    'ind_lao_surname': customer.ind_lao_surname,
+                    'ind_national_id': customer.ind_national_id,
+                    'ind_passport': customer.ind_passport,
+                    'ind_familybook': customer.ind_familybook,
+                    'ind_birth_date': customer.ind_birth_date.isoformat() if customer.ind_birth_date else None,
+                    
+                    # Document
+                    'document_file': customer.document_file.url if customer.document_file else None,
+                    
+                    # Confirmation status
+                    'is_confirmed': customer.is_confirmed,
+                    'confirmed_at': customer.confirmed_at.isoformat() if customer.confirmed_at else None,
+                    'confirmed_by': customer.confirmed_by,
+                    
+                    # Upload info
+                    'insert_by': customer.insert_by,
+                    'insert_date': customer.insert_date.isoformat() if customer.insert_date else None,
+                })
+
+            return Response({
+                'success': True,
+                'count': len(customer_list),
+                'data': customer_list
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"Error fetching all customers: {e}")
+            return Response({
+                'success': False,
+                'error': f'Failed to fetch customers: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    
+#update Code RegisterCsutomer Info:
+from rest_framework import generics, status, filters
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
+from django.utils import timezone
+from django.db import transaction
+import json
+from .models import IndividualBankIbkInfo_Register
+from .serializers import (
+    CustomerManualRegisterSerializer,
+    CustomerBatchRegisterSerializer,
+    CustomerUploadListSerializer
+)
+
+
+class CustomerManualRegisterAPIView(APIView):
+    """
+    API for manual customer registration with document upload
+    POST /api/register/customer/manual/
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        try:
+            serializer = CustomerManualRegisterSerializer(data=request.data)
+            
+            if serializer.is_valid():
+                # Create customer record with pending status
+                customer = serializer.save(
+                    insert_by=request.user.username,
+                    insert_date=timezone.now(),
+                    status='pending',
+                    is_confirmed=False
+                )
+                
+                return Response({
+                    'success': True,
+                    'message': 'Customer registered successfully. Awaiting admin confirmation.',
+                    'data': {
+                        'ind_sys_id': customer.ind_sys_id,
+                        'ind_national_id': customer.ind_national_id,
+                        'status': customer.status
+                    }
+                }, status=status.HTTP_201_CREATED)
+            
+            return Response({
+                'success': False,
+                'error': 'Validation failed',
+                'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': f'Failed to register customer: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class CustomerBatchRegisterAPIView(APIView):
+    """
+    STEP 1: Upload JSON file only, validate and return customer list
+    POST /api/register/customer/batch/
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        try:
+            json_file = request.FILES.get('json_file')
+            bnk_code = request.data.get('bnk_code')
+            
+            if not json_file:
+                return Response({
+                    'success': False,
+                    'error': 'JSON file is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not bnk_code:
+                return Response({
+                    'success': False,
+                    'error': 'Bank code is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Parse JSON content
+            try:
+                json_content = json_file.read().decode('utf-8')
+                customers_data = json.loads(json_content)
+                
+                if not isinstance(customers_data, list):
+                    return Response({
+                        'success': False,
+                        'error': 'JSON file must contain an array of customer objects'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+            except json.JSONDecodeError as e:
+                return Response({
+                    'success': False,
+                    'error': f'Invalid JSON format: {str(e)}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Validate and prepare response data
+            validated_customers = []
+            errors = []
+            
+            for idx, customer_data in enumerate(customers_data):
+                try:
+                    # Validate required fields
+                    if not customer_data.get('ind_name'):
+                        errors.append(f"Row {idx + 1}: Missing ind_name")
+                        continue
+                    
+                    if not customer_data.get('ind_surname'):
+                        errors.append(f"Row {idx + 1}: Missing ind_surname")
+                        continue
+                    
+                    # Check which ID documents are available
+                    available_docs = []
+                    if customer_data.get('ind_national_id'):
+                        available_docs.append('national_id')
+                    if customer_data.get('ind_passport'):
+                        available_docs.append('passport')
+                    if customer_data.get('ind_familybook'):
+                        available_docs.append('familybook')
+                    
+                    if not available_docs:
+                        errors.append(f"Row {idx + 1}: At least one ID document required")
+                        continue
+                    
+                    # Add to validated list
+                    validated_customers.append({
+                        'index': idx,
+                        'customer_data': customer_data,
+                        'available_docs': available_docs,
+                        'bnk_code': bnk_code
+                    })
+                    
+                except Exception as e:
+                    errors.append(f"Row {idx + 1}: {str(e)}")
+            
+            if not validated_customers:
+                return Response({
+                    'success': False,
+                    'error': 'No valid customers found in JSON file',
+                    'errors': errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Store in session or cache for later submission
+            # For now, just return the validated data
+            return Response({
+                'success': True,
+                'message': f'Successfully validated {len(validated_customers)} customers',
+                'total_processed': len(customers_data),
+                'valid_count': len(validated_customers),
+                'error_count': len(errors),
+                'customers': validated_customers,
+                'errors': errors if errors else None
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': f'Failed to process batch upload: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CustomerBatchFinalizeAPIView(APIView):
+    """
+    STEP 2: Submit all customers with their documents
+    POST /api/register/customer/batch/finalize/
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        try:
+            customers_json = request.data.get('customers_data')
+            
+            if not customers_json:
+                return Response({
+                    'success': False,
+                    'error': 'Customer data is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                customers_data = json.loads(customers_json)
+            except json.JSONDecodeError:
+                return Response({
+                    'success': False,
+                    'error': 'Invalid customer data format'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            created_count = 0
+            errors = []
+            
+            with transaction.atomic():
+                for customer_info in customers_data:
+                    try:
+                        idx = customer_info.get('index')
+                        customer_data = customer_info.get('customer_data')
+                        bnk_code = customer_info.get('bnk_code')
+                        
+                        doc_file = request.FILES.get(f'document_{idx}')
+                        
+                        if not doc_file:
+                            errors.append(f"Customer {idx + 1}: Document file missing")
+                            continue
+                        
+                        # ✅ FIXED: Explicitly get custype and bank_branch with defaults
+                        custype = customer_data.get('custype') or 'IND'
+                        bank_branch = customer_data.get('bank_branch') or ''
+                        segment = customer_data.get('segment') or ''
+                        
+                        # DEBUG logging
+                        print(f"Creating customer {idx}: custype={custype}, bank_branch={bank_branch}, segment={segment}")
+                        
+                        # Create customer record
+                        IndividualBankIbkInfo_Register.objects.create(
+                            # ID Documents
+                            ind_national_id=customer_data.get('ind_national_id') or None,
+                            ind_national_id_date=customer_data.get('ind_national_id_date') or None,
+                            ind_passport=customer_data.get('ind_passport') or None,
+                            ind_passport_date=customer_data.get('ind_passport_date') or None,
+                            ind_familybook=customer_data.get('ind_familybook') or None,
+                            ind_familybook_prov_code=customer_data.get('ind_familybook_prov_code') or None,
+                            ind_familybook_date=customer_data.get('ind_familybook_date') or None,
+                            
+                            # Personal Info
+                            ind_birth_date=customer_data.get('ind_birth_date') or None,
+                            ind_name=customer_data.get('ind_name'),
+                            ind_surname=customer_data.get('ind_surname'),
+                            ind_lao_name=customer_data.get('ind_lao_name') or None,
+                            ind_lao_surname=customer_data.get('ind_lao_surname') or None,
+                            
+                            # Bank Info - ✅ FIXED: Use extracted variables
+                            bnk_code=bnk_code,
+                            bank_branch=bank_branch,
+                            custype=custype,
+                            segment=segment,
+                            
+                            # Other
+                            description=customer_data.get('description') or None,
+                            document_file=doc_file,
+                            
+                            # System fields
+                            insert_by=request.user.username,
+                            insert_date=timezone.now(),
+                            status='pending',
+                            is_confirmed=False
+                        )
+                        created_count += 1
+                        
+                    except Exception as e:
+                        errors.append(f"Customer {idx + 1}: {str(e)}")
+                        print(f"Error creating customer {idx}: {str(e)}")  # DEBUG
+            
+            return Response({
+                'success': True,
+                'message': f'Successfully registered {created_count} customers',
+                'created_count': created_count,
+                'errors': errors if errors else None
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            print(f"Batch finalize error: {str(e)}")  # DEBUG
+            return Response({
+                'success': False,
+                'error': f'Failed to finalize batch upload: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class MyUploadsListAPIView(generics.ListAPIView):
+    """
+    API to list current user's customer uploads
+    GET /api/register/customer/my-uploads/
+    """
+    serializer_class = CustomerUploadListSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    
+    search_fields = [
+        'customer_id', 'ind_national_id', 'ind_passport',
+        'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname'
+    ]
+    ordering_fields = ['insert_date', 'lcic_id', 'customer_id']
+    ordering = ['-insert_date']  # newest first
+
+    def get_queryset(self):
+        """Return only records created by the current user"""
+        return IndividualBankIbkInfo_Register.objects.filter(
+            insert_by=self.request.user.username
+        )
+
+    def list(self, request, *args, **kwargs):
+        """Override list to add summary statistics"""
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        
+        # Calculate statistics
+        total_count = queryset.count()
+        pending_count = queryset.filter(status='pending').count()
+        approved_count = queryset.filter(status='approved').count()
+        rejected_count = queryset.filter(status='rejected').count()
+        
+        return Response({
+            'success': True,
+            'data': serializer.data,
+            'statistics': {
+                'total': total_count,
+                'pending': pending_count,
+                'approved': approved_count,
+                'rejected': rejected_count
+            }
+        })
 class ScrAttTypeDescRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
     queryset = scr_atttype_desc.objects.all()
     serializer_class = ScrAttTypeDescSerializer
