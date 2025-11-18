@@ -30337,3 +30337,184 @@ class ScoringIndividualInfoSearchView(APIView):
                 'details': traceback.format_exc()
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+
+class MainCatalogCatViewSet(viewsets.ModelViewSet):
+    queryset = Main_catalog_cat.objects.all().order_by('cat_sys_id')
+    serializer_class = MainCatalogCatSerializer
+class SubCatalogCatViewSet(viewsets.ModelViewSet):
+    queryset = catalog_type_cat.objects.all().order_by('cat_id')
+    serializer_class = SubCatalogCatSerializer
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from datetime import datetime
+from rapidfuzz import fuzz
+from .models import IndividualBankIbkInfo, IndividualBankIbk
+import json
+
+class CompareJsonWithDBAPIView(APIView):
+    def post(self, request):
+        new_rows = request.data
+        if not isinstance(new_rows, list):
+            return Response({"error": "Expected a list of records."}, status=status.HTTP_400_BAD_REQUEST)
+
+        compare_cols = [
+            "ind_national_id", "ind_national_id_date", "ind_passport", "ind_passport_date",
+            "ind_familybook", "ind_familybook_prov_code", "ind_familybook_date",
+            "ind_birth_date", "ind_name", "ind_surname", "ind_lao_name", "ind_lao_surname"
+        ]
+
+        # 🔹 ດຶງຂໍ້ມູນຈາກ DB
+        base_rows = list(IndividualBankIbk.objects.values(*compare_cols, "lcic_id"))
+        existing_ids = {r["lcic_id"] for r in base_rows if r["lcic_id"]}
+
+        # 🔹 ຕັ້ງຄ່າຕົ້ນ
+        date_prefix = datetime.now().strftime("%Y%m%d")
+        seq = 1
+        assigned_cache = {}
+        results = []
+        details = []
+
+        # ----------------------------------------------------
+        def is_empty(v):
+            if v is None:
+                return True
+            if isinstance(v, str):
+                s = v.strip().lower()
+                return s in ["", "null", "none", "nan"]
+            return False
+
+        def ratio(a, b):
+            if is_empty(a) or is_empty(b):
+                return None
+            return fuzz.QRatio(str(a).strip().lower(), str(b).strip().lower()) / 100.0
+
+        def is_match(row1, row2):
+            """ປຽບທຽບຂໍ້ມູນສອງຝັ່ງ"""
+            scores = {}
+            for col in compare_cols:
+                score = ratio(row1.get(col), row2.get(col))
+                if score is not None:
+                    scores[col] = score
+
+            # 🔹 ຖ້າມີຟິວປຽບທຽບ < 3 → ບໍ່ຄິດຄຳນວນ
+            if len(scores) < 3:
+                return False, 0, scores
+
+            match_ratio = sum(scores.values()) / len(scores)
+
+            lao_name_ratio = scores.get("ind_lao_name", 0)
+            ind_lao_surname = scores.get("ind_lao_surname", 0)
+            birth_date_ratio = scores.get("ind_birth_date", 0)
+            en_name_ratio = scores.get("ind_name", 0)
+            ind_surname = scores.get("ind_surname", 0)
+
+            # ✅ ຕັດສິນຜົນສຸດທ້າຍ
+            if match_ratio > 0.90:
+                # ຄ້າຍກັນເກີນ 90%
+                return True, match_ratio, scores
+
+            elif 0.70 < match_ratio <= 0.90:
+                # ກວດຟິວທີ່ມີຄ່າເທົ່ານັ້ນ (ບໍ່ໃຫ້ and ຟິວທີ່ຫວ່າງ)
+                conditions = []
+
+                # ເງື່ອນໄຂສຳລັບຊື່ພາສາລາວ
+                lao_conditions = []
+                if lao_name_ratio:  # ມີຄ່າຈິງ
+                    lao_conditions.append(lao_name_ratio > 0.8)
+                if birth_date_ratio:
+                    lao_conditions.append(birth_date_ratio >= 0.9)
+                if ind_lao_surname:
+                    lao_conditions.append(ind_lao_surname > 0.8)
+
+                # ເງື່ອນໄຂສຳລັບຊື່ພາສາອັງກິດ
+                en_conditions = []
+                if en_name_ratio:
+                    en_conditions.append(en_name_ratio > 0.8)
+                if birth_date_ratio:
+                    en_conditions.append(birth_date_ratio >= 0.9)
+                if ind_surname:
+                    en_conditions.append(ind_surname > 0.8)
+
+                # ກວດຈາກຈໍານວນຟິວທີ່ຜ່ານເງື່ອນໄຂ
+                lao_pass = len(lao_conditions) > 1 and all(lao_conditions)
+                en_pass = len(en_conditions) > 1 and all(en_conditions)
+
+                if lao_pass or en_pass:
+                    return True, match_ratio, scores
+                else:
+                    return False, match_ratio, scores
+
+            return False, match_ratio, scores
+
+        def generate_unique_lcic():
+            nonlocal seq
+            while True:
+                new_id = f"{date_prefix}-{seq}"
+                seq += 1
+                if new_id not in existing_ids:
+                    existing_ids.add(new_id)
+                    return new_id
+
+        # ----------------------------------------------------
+        # Main process
+        # ----------------------------------------------------
+        for new_row in new_rows:
+            matched_lcic = None
+
+            # 1️⃣ ກວດກັບ DB (ປຽບທຽບກັບທຸກ record)
+            for base_row in base_rows:
+                matched, match_ratio, score_detail = is_match(new_row, base_row)
+                if matched:
+                    matched_lcic = base_row["lcic_id"]
+                    details.append({
+                        "status": "MATCHED",
+                        "json_data": new_row,
+                        "db_data": base_row,
+                        "match_percent": round(match_ratio * 100, 2),
+                        "field_scores": {k: round(v * 100, 2) for k, v in score_detail.items()},
+                        "field_count_used": len(score_detail),
+                        "lcic_id": matched_lcic
+                    })
+                    break
+
+            # 2️⃣ ກວດກັບ cache
+            if not matched_lcic:
+                for cached_key, lcic in assigned_cache.items():
+                    cached_row = json.loads(cached_key)
+                    matched, match_ratio, score_detail = is_match(new_row, cached_row)
+                    if matched:
+                        matched_lcic = lcic
+                        details.append({
+                            "status": "MATCHED (CACHE)",
+                            "json_data": new_row,
+                            "db_data": cached_row,
+                            "match_percent": round(match_ratio * 100, 2),
+                            "field_scores": {k: round(v * 100, 2) for k, v in score_detail.items()},
+                            "field_count_used": len(score_detail),
+                            "lcic_id": matched_lcic
+                        })
+                        break
+
+            # 3️⃣ ບໍ່ພົບ → ສ້າງໃໝ່
+            if not matched_lcic:
+                matched_lcic = generate_unique_lcic()
+                assigned_cache[json.dumps(new_row, sort_keys=True)] = matched_lcic
+                details.append({
+                    "status": "NEW RECORD",
+                    "json_data": new_row,
+                    "match_percent": 0,
+                    "field_scores": {},
+                    "field_count_used": 0,
+                    "lcic_id": matched_lcic
+                })
+
+            results.append({**new_row, "lcic_id": matched_lcic})
+
+        return Response({
+            # "summary": results,
+            "details": details
+        }, status=status.HTTP_200_OK)
