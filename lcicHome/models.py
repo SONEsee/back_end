@@ -2533,7 +2533,6 @@ class IndividualBankIbk_MapLog(models.Model):
 
 class IndividualBankIbkInfo_CreateLog(models.Model):
     ind_sys_id = models.AutoField(primary_key=True)
-    mm_ind_sys_id = models.CharField(max_length=150, blank=True, null=True)
     lcic_id = models.CharField(max_length=150, blank=True, null=True)
     ind_national_id = models.CharField(max_length=150, blank=True, null=True)
     ind_national_id_date = models.DateField(blank=True, null=True)
@@ -2547,13 +2546,52 @@ class IndividualBankIbkInfo_CreateLog(models.Model):
     ind_surname = models.CharField(max_length=150, blank=True, null=True)
     ind_lao_name = models.CharField(max_length=150, blank=True, null=True)
     ind_lao_surname = models.CharField(max_length=150, blank=True, null=True)
+    bnk_code = models.CharField(max_length=150, blank=True, null=True)
+    bank_branch = models.CharField(max_length=150, blank=True, null=True)
+    customer_id = models.CharField(max_length=150, blank=True, null=True)
     insert_by = models.CharField(max_length=150, blank=True, null=True)
     update_by = models.CharField(max_length=150, blank=True, null=True)
     status = models.CharField(max_length=150, blank=True, null=True)
     description = models.TextField(blank=True, null=True)
+    lcic_registerd_date = models.DateField(blank=True, null=True)
+    insert_date = models.DateTimeField(blank=True, null=True)
+    update_date = models.DateTimeField(blank=True, null=True)
+    document_file = models.FileField(upload_to='individual_documents/log/', blank=True, null=True)
+    
+class IndividualBankIbkInfo_Register(models.Model):
+    ind_sys_id = models.AutoField(primary_key=True)
+    lcic_id = models.CharField(max_length=150, blank=True, null=True)
+    ind_national_id = models.CharField(max_length=150, blank=True, null=True)
+    ind_national_id_date = models.DateField(blank=True, null=True)
+    ind_passport = models.CharField(max_length=150, blank=True, null=True)
+    ind_passport_date = models.DateField(blank=True, null=True)
+    ind_familybook = models.CharField(max_length=150, blank=True, null=True)
+    ind_familybook_prov_code = models.CharField(max_length=150, blank=True, null=True)
+    ind_familybook_date = models.DateField(blank=True, null=True)
+    ind_birth_date = models.DateField(blank=True, null=True)
+    ind_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_surname = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_surname = models.CharField(max_length=150, blank=True, null=True)
+    bnk_code = models.CharField(max_length=150, blank=True, null=True)
+    bank_branch = models.CharField(max_length=150, blank=True, null=True)
+    customer_id = models.CharField(max_length=150, blank=True, null=True)
+    insert_by = models.CharField(max_length=150, blank=True, null=True)
+    update_by = models.CharField(max_length=150, blank=True, null=True)
+    status = models.CharField(max_length=150, blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    is_confirmed = models.BooleanField(default=False)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    confirmed_by = models.CharField(max_length=150, null=True, blank=True)
+    lcic_registerd_date = models.DateField(blank=True, null=True)
     insert_date = models.DateTimeField(blank=True, null=True)
     update_date = models.DateTimeField(blank=True, null=True)
     document_file = models.FileField(upload_to='individual_documents/', blank=True, null=True)
+    class Meta:
+        indexes = [
+            models.Index(fields=['is_confirmed']),
+            models.Index(fields=['insert_by']),
+        ]
     
     
 from django.db import models
@@ -2679,7 +2717,7 @@ class MergeHistory(models.Model):
     ]
     
     id = models.AutoField(primary_key=True)
-    action = models.CharField(max_length=10, choices=ACTION_CHOICES)
+    action = models.CharField(max_length=100, choices=ACTION_CHOICES)
     master_lcic_id = models.CharField(max_length=150)
     merged_ind_sys_ids = models.JSONField()  # List of merged ind_sys_ids
     merged_data = models.JSONField()  # Store snapshot of merged records
