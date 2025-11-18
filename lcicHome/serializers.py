@@ -9,6 +9,9 @@ from django.core.validators import MaxValueValidator, MinLengthValidator
 
 
 
+
+
+
 class CustomerInfoINDSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer_Info_IND
