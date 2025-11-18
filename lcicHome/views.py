@@ -33654,18 +33654,6 @@ def get_statistics(request):
             'success': False,
             'error': str(e)
         }, status=status.HTTP_400_BAD_REQUEST)
-        
-
-from rest_framework import generics
-from .models import scr_atttype_desc, scr_attribute_table
-from .serializers import ScrAttTypeDescSerializer, ScrAttributeTableSerializer
-
-# =======================
-# CRUD สำหรับ scr_atttype_desc
-# =======================
-class ScrAttTypeDescListCreateView(generics.ListCreateAPIView):
-    queryset = scr_atttype_desc.objects.all()
-    serializer_class = ScrAttTypeDescSerializer
 
 class CreditScoreAPIView(APIView):
     """
@@ -36015,6 +36003,18 @@ class MyUploadsListAPIView(generics.ListAPIView):
                 'rejected': rejected_count
             }
         })
+        
+from rest_framework import generics
+from .models import scr_atttype_desc, scr_attribute_table
+from .serializers import ScrAttTypeDescSerializer, ScrAttributeTableSerializer
+
+# =======================
+# CRUD สำหรับ scr_atttype_desc
+# =======================
+class ScrAttTypeDescListCreateView(generics.ListCreateAPIView):
+    queryset = scr_atttype_desc.objects.all()
+    serializer_class = ScrAttTypeDescSerializer
+
 class ScrAttTypeDescRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
     queryset = scr_atttype_desc.objects.all()
     serializer_class = ScrAttTypeDescSerializer
