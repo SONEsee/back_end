@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('utility', '0056_stype_alter_w_customer_info_options_and_more'),
+        ('utility', '0055_edl_customer_info_insertdate_and_more'),
     ]
 
     operations = [
