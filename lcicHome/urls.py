@@ -173,6 +173,9 @@ from .views import (
     CustomerBatchFinalizeAPIView,
     MyUploadsListAPIView,
     CustomerAllUploadsAPIView,
+    ApproveEnterpriseMappingView,
+    CustomerUpdateIDAPIView,
+    CustomerUpdateSegmentAPIView,
     
 
     reject_borrower_loan_view,
@@ -281,6 +284,10 @@ urlpatterns = [
    path('progress/<slug:object_id>', views.progress, name='progress'),
    path('tax_invoice', views.tax, name='tax'),
    path('check-enterprise/', CheckEnterpriseView.as_view(), name='check-enterprise'),
+   path('api/company/create/', views.create_company_with_registration, name='create_company'),
+   path('api/register/list/', views.get_register_customer_list, name='register_list'),
+   path('api/company/info/<str:id_file>/', views.get_company_info_by_id_file, name='company_info'),
+   path('api/approve-enterprise-mapping/', ApproveEnterpriseMappingView.as_view(), name='approve-enterprise-mapping'),
 
   
    
@@ -389,6 +396,9 @@ urlpatterns = [
   #  update-models
 
   #  path('upload_files/', upload_files, name='upload_files'),
+   
+
+
    
       #tik
     path('user/', UserListAPIView.as_view(), name='user-list'),
@@ -698,6 +708,15 @@ urlpatterns = [
     path('register/customer/confirm/', 
          CustomerConfirmAPIView.as_view(), 
          name='customer-confirm'),
+    
+    path('register/customer/update-id/', 
+     CustomerUpdateIDAPIView.as_view(), 
+     name='customer-update-id'),
+    
+    path('register/customer/update-segment/', 
+     CustomerUpdateSegmentAPIView.as_view(), 
+     name='customer-update-segment'),
+    
     #---------------------------------------------
     #----- END POINTS -----------------------------
     

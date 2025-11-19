@@ -31238,8 +31238,263 @@ class UserDetailAPIView(APIView):
         user.delete()
         return Response({"message": "User deleted successfully"}, status=status.HTTP_200_OK)
 
-    
-    
+# views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+from django.utils import timezone
+from .models import (
+    RegisterCustomerWhitEnterprise,
+    CompanyInfoMappingMemberSubmit,
+    CompanyInfoMapping
+)
+
+
+class ApproveEnterpriseMappingView(APIView):
+    """
+    ອະນຸມັດການພູກລະຫັດວິສາຫະກິດ
+    POST: { "register_id": 25 }
+    """
+    @transaction.atomic
+    def post(self, request):
+        register_id = request.data.get("register_id")
+
+        if not register_id:
+            return Response({
+                "success": False,
+                "message": "ກະລຸນາສົ່ງ register_id ມາ"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+         
+            reg = RegisterCustomerWhitEnterprise.objects.get(id=register_id)
+
+         
+            submit = CompanyInfoMappingMemberSubmit.objects.filter(
+                id_file=str(register_id)
+            ).first()
+
+            if not submit:
+                return Response({
+                    "success": False,
+                    "message": f"ບໍ່ພົບຂໍ້ມູນທີ່ສົ່ງມາ (id_file = {register_id})"
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            
+            master_id = submit.mm_com_sys_id or submit.com_sys_id
+            if not master_id:
+                return Response({
+                    "success": False,
+                    "message": "ບໍ່ພົບ com_sys_id ຫຼື mm_com_sys_id"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+          
+            CompanyInfoMapping.objects.update_or_create(
+                com_sys_id=master_id,
+                defaults={
+                    "segment": submit.segment,
+                    "mm_com_sys_id": submit.mm_com_sys_id,
+                    "bnk_code": submit.bnk_code,
+                    "branchcode": submit.branchcode,
+                    "customerid": submit.customerid,
+                    "com_enterprise_code": submit.com_enterprise_code,
+                    "com_registration_date": submit.com_registration_date,
+                    "com_registration_place_issue": submit.com_registration_place_issue,
+                    "com_name": submit.com_name,
+                    "com_lao_name": submit.com_lao_name,
+                    "com_tax_no": submit.com_tax_no,
+                    "com_category": submit.com_category,
+                    "com_regulatory_capital": submit.com_regulatory_capital,
+                    "com_regulatory_capital_unit": submit.com_regulatory_capital_unit,
+                    "com_insert_date": submit.com_insert_date,
+                    "com_update_date": timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "mm_action_date": timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "mm_log": "Approved by admin",
+                    "mm_comment": submit.mm_comment or "",
+                    "mm_by": request.user.username if request.user.is_authenticated else "system",
+                    "blk_sys_id": submit.blk_sys_id,
+                    "mm_status": "A", 
+                    "is_manual": submit.is_manual,
+                    "com_lao_name_code": submit.com_lao_name_code,
+                    "LCIC_code": submit.LCIC_code,
+                    "enterprise_code": reg.EnterpriseID,  
+                    "status": "1",
+                }
+            )
+
+            
+            reg.status = 0
+            reg.user_update = request.user.username if request.user.is_authenticated else "system"
+            reg.UpdateDate = timezone.now()
+            reg.save()
+
+            return Response({
+                "success": True,
+                "message": "ອະນຸມັດ ແລະ ບັນທຶກຂໍ້ມູນສຳເລັດແລ້ວ",
+                "data": {
+                    "register_id": reg.id,
+                    "status": reg.status,  
+                    "enterprise_code": reg.EnterpriseID,
+                    "customerid": submit.customerid,
+                    "master_com_sys_id": master_id
+                }
+            }, status=status.HTTP_200_OK)
+
+        except RegisterCustomerWhitEnterprise.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "ບໍ່ພົບລາຍການພູກລະຫັດນີ້"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "message": f"ເກີດຂໍ້ຜິດພາດ: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)      
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from django.core.paginator import Paginator, EmptyPage
+from django.db.models import Q
+from .models import RegisterCustomerWhitEnterprise, CompanyInfoMappingMemberSubmit
+from .serializers import (
+    RegisterCustomerWhitEnterpriseSerializer,
+    CompanyInfoMappingMemberSubmitSerializer
+)
+
+@api_view(['GET'])
+def get_register_customer_list(request):
+ 
+    try:
+        
+        user_bnk_code = request.GET.get('bnk_code', None)
+        
+        if not user_bnk_code:
+            return Response({
+                'success': False,
+                'message': 'ກະລຸນາລະບຸ bnk_code'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 10))
+        
+        
+        bnk_code_filter = request.GET.get('bnk_code_filter', None)
+        search = request.GET.get('search', None)
+        filter_status = request.GET.get('status', None)
+        
+        
+        queryset = RegisterCustomerWhitEnterprise.objects.all()
+        
+        
+        if user_bnk_code == '01':
+            
+            if bnk_code_filter:
+               
+                queryset = queryset.filter(bnk_code=bnk_code_filter)
+        else:
+            
+            queryset = queryset.filter(bnk_code=user_bnk_code)
+            
+            
+            if bnk_code_filter and bnk_code_filter != user_bnk_code:
+                return Response({
+                    'success': False,
+                    'message': 'ທ່ານບໍ່ມີສິດເບິ່ງຂໍ້ມູນຂອງ bnk_code ອື່ນ'
+                }, status=status.HTTP_403_FORBIDDEN)
+        
+        
+        if search:
+            queryset = queryset.filter(
+                Q(EnterpriseID__icontains=search) |
+                Q(customerID__icontains=search) |
+                Q(LCIC_code__icontains=search)
+            )
+        
+        
+        if filter_status is not None:
+            queryset = queryset.filter(status=filter_status)
+        
+       
+        queryset = queryset.order_by('-InsertDate')
+        
+        
+        paginator = Paginator(queryset, page_size)
+        
+        try:
+            page_obj = paginator.page(page)
+        except EmptyPage:
+            page_obj = paginator.page(paginator.num_pages)
+        
+       
+        serializer = RegisterCustomerWhitEnterpriseSerializer(page_obj, many=True)
+        
+        return Response({
+            'success': True,
+            'data': serializer.data,
+            'pagination': {
+                'current_page': page_obj.number,
+                'total_pages': paginator.num_pages,
+                'total_items': paginator.count,
+                'page_size': page_size,
+                'has_next': page_obj.has_next(),
+                'has_previous': page_obj.has_previous(),
+            },
+            'permissions': {
+                'is_admin': user_bnk_code == '01',
+                'user_bnk_code': user_bnk_code,
+                'filtered_by': bnk_code_filter if bnk_code_filter else 'all' if user_bnk_code == '01' else user_bnk_code
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except ValueError as e:
+        return Response({
+            'success': False,
+            'message': 'ຄ່າ page ຫຼື page_size ບໍ່ຖືກຕ້ອງ'
+        }, status=status.HTTP_400_BAD_REQUEST)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# views.py
+@api_view(['GET'])
+def get_company_info_by_id_file(request, id_file):
+   
+    try:
+        
+        company_info = CompanyInfoMappingMemberSubmit.objects.filter(
+            id_file=id_file
+        ).first()
+        
+        if not company_info:
+            return Response({
+                'success': False,
+                'message': 'ບໍ່ພົບຂໍ້ມູນ'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+       
+        serializer = CompanyInfoMappingMemberSubmitSerializer(company_info)
+        
+        return Response({
+            'success': True,
+            'data': serializer.data
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from .models import User_Group
@@ -31253,7 +31508,103 @@ class UserGroupList(APIView):
         groups = User_Group.objects.all().order_by('nameL')
         serializer = UserGroupSerializers(groups, many=True)
         return Response(serializer.data)
-    
+
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+from django.db.models import Max
+from .models import RegisterCustomerWhitEnterprise, CompanyInfoMappingMemberSubmit, EnterpriseInfo
+from .serializers import CompanyInfoMappingMemberSubmitSerializer
+
+@api_view(['POST'])
+def create_company_with_registration(request):
+    """
+    ສ້າງຂໍ້ມູນບໍລິສັດພ້ອມທັງລົງທະບຽນ
+    ກວດສອບ EnterpriseID ກ່ອນບັນທຶກ
+    """
+    try:
+       
+        company_data = request.data.copy()
+        enterprise_id = company_data.get('enterprise_code')
+        
+       
+        if not enterprise_id:
+            return Response({
+                'success': False,
+                'message': 'ກະລຸນາປ້ອນລະຫັດວິສາຫະກິດ (enterprise_code)'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+       
+        enterprise_exists = EnterpriseInfo.objects.filter(
+            EnterpriseID=enterprise_id
+        ).exists()
+        
+        if not enterprise_exists:
+            return Response({
+                'success': False,
+                'message': 'ຍັງບໍ່ທັນໄດ້ລົງທະບຽນອອກລະຫັດຂສລ ສຳຫຼັບລະຫັດວິສາຫະກິດນີ້ ກະລຸນາລົງທະບຽນຄືນໃໝ່',
+                'enterprise_id': enterprise_id
+            }, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        
+       
+        with transaction.atomic():
+          
+            max_id = CompanyInfoMappingMemberSubmit.objects.aggregate(
+                max_id=Max('com_sys_id')
+            )['max_id']
+            new_com_sys_id = (max_id or 0) + 1
+            company_data['com_sys_id'] = new_com_sys_id
+            
+           
+            register_data = {
+                'EnterpriseID': enterprise_id,
+                'customerID': company_data.get('customerid'),
+                'LCIC_code': company_data.get('LCIC_code'),
+                'bnk_code': company_data.get('bnk_code'),
+                'branch': company_data.get('branchcode'),
+                'status': 0,
+                'user_insert': request.user.username if request.user.is_authenticated else None,
+            }
+            
+            register_obj = RegisterCustomerWhitEnterprise.objects.create(**register_data)
+            
+            
+            company_data['id_file'] = str(register_obj.id)
+            
+           
+            serializer = CompanyInfoMappingMemberSubmitSerializer(data=company_data)
+            
+            if serializer.is_valid():
+                company_obj = serializer.save()
+                
+               
+                if not company_obj.id_file:
+                    company_obj.id_file = str(register_obj.id)
+                    company_obj.save(update_fields=['id_file'])
+                
+                return Response({
+                    'success': True,
+                    'message': 'ສ້າງຂໍ້ມູນສຳເລັດ',
+                    'data': {
+                        'register_id': register_obj.id,
+                        'company_id': company_obj.com_sys_id,
+                        'id_file': company_obj.id_file,
+                        'enterprise_id': enterprise_id
+                    }
+                }, status=status.HTTP_201_CREATED)
+            else:
+                return Response({
+                    'success': False,
+                    'message': 'ຂໍ້ມູນບໍ່ຖືກຕ້ອງ',
+                    'errors': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)   
 # views.py
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -35960,6 +36311,169 @@ class MyUploadsListAPIView(generics.ListAPIView):
             }
         })
         
+class CustomerUpdateIDAPIView(APIView):
+    """
+    Update customer_id for confirmed records (one time only)
+    POST /api/register/customer/update-id/
+    Body: { "ind_sys_id": 123, "new_customer_id": "CUST001" }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            ind_sys_id = request.data.get('ind_sys_id')
+            new_customer_id = request.data.get('new_customer_id')
+            
+            if not ind_sys_id or not new_customer_id:
+                return Response({
+                    'success': False,
+                    'error': 'ind_sys_id and new_customer_id are required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get record
+            record = IndividualBankIbkInfo_Register.objects.filter(
+                ind_sys_id=ind_sys_id,
+                insert_by=request.user.username  # Only own records
+            ).first()
+
+            if not record:
+                return Response({
+                    'success': False,
+                    'error': 'Record not found or access denied'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Check if confirmed
+            if not record.is_confirmed:
+                return Response({
+                    'success': False,
+                    'error': 'Record must be confirmed before updating customer ID'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check if already updated (one time only)
+            if record.customer_id and record.customer_id != '':
+                return Response({
+                    'success': False,
+                    'error': 'Customer ID can only be updated once'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if not record.lcic_id:
+                return Response({
+                    'success': False,
+                    'error': 'LCIC ID not found'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Update all tables with transaction
+            with transaction.atomic():
+                lcic_id = record.lcic_id
+                
+                # 1. Update Register table
+                record.customer_id = new_customer_id
+                record.update_by = request.user.username
+                record.update_date = timezone.now()
+                record.save()
+
+                # 4. Update IndividualBankIbk
+                IndividualBankIbk.objects.filter(
+                    lcic_id=lcic_id
+                ).update(customerid=new_customer_id)
+
+                # 5. Update IndividualBankIbkInfo_CreateLog
+                IndividualBankIbkInfo_CreateLog.objects.filter(
+                    lcic_id=lcic_id
+                ).update(customer_id=new_customer_id)
+
+                # 6. Update B1_Monthly
+                B1_Monthly.objects.filter(
+                    lcicID=lcic_id
+                ).update(customer_id=new_customer_id)
+
+                # 7. Update B1
+                B1.objects.filter(
+                    lcicID=lcic_id
+                ).update(customer_id=new_customer_id)
+
+            return Response({
+                'success': True,
+                'message': 'Customer ID updated successfully across all tables',
+                'customer_id': new_customer_id,
+                'lcic_id': lcic_id
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': f'Failed to update customer ID: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class CustomerUpdateSegmentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            ind_sys_id = request.data.get('ind_sys_id')
+            segment = request.data.get('segment')
+            
+            if not ind_sys_id or not segment:
+                return Response({
+                    'success': False,
+                    'error': 'ind_sys_id and segment are required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate segment
+            valid_segments = ['A1', 'A2', 'A3']
+            if segment not in valid_segments:
+                return Response({
+                    'success': False,
+                    'error': f'Invalid segment. Must be one of: {", ".join(valid_segments)}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get record
+            record = IndividualBankIbkInfo_Register.objects.filter(
+                ind_sys_id=ind_sys_id
+            ).first()
+
+            if not record:
+                return Response({
+                    'success': False,
+                    'error': 'Record not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Check permissions
+            user_gid = request.user.userprofile.GID.GID if hasattr(request.user, 'userprofile') else 0
+            user_bank_code = request.user.userprofile.MID.id if hasattr(request.user, 'userprofile') else ''
+            
+            is_admin = 1 <= user_gid <= 5
+            is_member = 6 <= user_gid <= 7
+            
+            # Admin can update all, Member can update only own bank
+            if not is_admin and (not is_member or record.bnk_code != user_bank_code):
+                return Response({
+                    'success': False,
+                    'error': 'Access denied. You can only update records from your bank.'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Update segment
+            record.segment = segment
+            record.update_by = request.user.username
+            record.update_date = timezone.now()
+            record.save()
+
+            return Response({
+                'success': True,
+                'message': 'Segment updated successfully',
+                'segment': segment,
+                'ind_sys_id': ind_sys_id
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': f'Failed to update segment: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+            
+            
 from rest_framework import generics
 from .models import scr_atttype_desc, scr_attribute_table
 from .serializers import ScrAttTypeDescSerializer, ScrAttributeTableSerializer,ScrAttributeTablenewSerializer,ScrAttTypeDescnewSerializer
