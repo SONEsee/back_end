@@ -34005,18 +34005,6 @@ def get_statistics(request):
             'success': False,
             'error': str(e)
         }, status=status.HTTP_400_BAD_REQUEST)
-        
-
-from rest_framework import generics
-from .models import scr_atttype_desc, scr_attribute_table
-from .serializers import ScrAttTypeDescSerializer, ScrAttributeTableSerializer
-
-# =======================
-# CRUD สำหรับ scr_atttype_desc
-# =======================
-class ScrAttTypeDescListCreateView(generics.ListCreateAPIView):
-    queryset = scr_atttype_desc.objects.all()
-    serializer_class = ScrAttTypeDescSerializer
 
 class CreditScoreAPIView(APIView):
     """
@@ -36366,6 +36354,181 @@ class MyUploadsListAPIView(generics.ListAPIView):
                 'rejected': rejected_count
             }
         })
+        
+class CustomerUpdateIDAPIView(APIView):
+    """
+    Update customer_id for confirmed records (one time only)
+    POST /api/register/customer/update-id/
+    Body: { "ind_sys_id": 123, "new_customer_id": "CUST001" }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            ind_sys_id = request.data.get('ind_sys_id')
+            new_customer_id = request.data.get('new_customer_id')
+            
+            if not ind_sys_id or not new_customer_id:
+                return Response({
+                    'success': False,
+                    'error': 'ind_sys_id and new_customer_id are required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get record
+            record = IndividualBankIbkInfo_Register.objects.filter(
+                ind_sys_id=ind_sys_id,
+                insert_by=request.user.username  # Only own records
+            ).first()
+
+            if not record:
+                return Response({
+                    'success': False,
+                    'error': 'Record not found or access denied'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Check if confirmed
+            if not record.is_confirmed:
+                return Response({
+                    'success': False,
+                    'error': 'Record must be confirmed before updating customer ID'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check if already updated (one time only)
+            if record.customer_id and record.customer_id != '':
+                return Response({
+                    'success': False,
+                    'error': 'Customer ID can only be updated once'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if not record.lcic_id:
+                return Response({
+                    'success': False,
+                    'error': 'LCIC ID not found'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Update all tables with transaction
+            with transaction.atomic():
+                lcic_id = record.lcic_id
+                
+                # 1. Update Register table
+                record.customer_id = new_customer_id
+                record.update_by = request.user.username
+                record.update_date = timezone.now()
+                record.save()
+
+                # 4. Update IndividualBankIbk
+                IndividualBankIbk.objects.filter(
+                    lcic_id=lcic_id
+                ).update(customerid=new_customer_id)
+
+                # 5. Update IndividualBankIbkInfo_CreateLog
+                IndividualBankIbkInfo_CreateLog.objects.filter(
+                    lcic_id=lcic_id
+                ).update(customer_id=new_customer_id)
+
+                # 6. Update B1_Monthly
+                B1_Monthly.objects.filter(
+                    lcicID=lcic_id
+                ).update(customer_id=new_customer_id)
+
+                # 7. Update B1
+                B1.objects.filter(
+                    lcicID=lcic_id
+                ).update(customer_id=new_customer_id)
+
+            return Response({
+                'success': True,
+                'message': 'Customer ID updated successfully across all tables',
+                'customer_id': new_customer_id,
+                'lcic_id': lcic_id
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': f'Failed to update customer ID: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class CustomerUpdateSegmentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            ind_sys_id = request.data.get('ind_sys_id')
+            segment = request.data.get('segment')
+            
+            if not ind_sys_id or not segment:
+                return Response({
+                    'success': False,
+                    'error': 'ind_sys_id and segment are required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate segment
+            valid_segments = ['A1', 'A2', 'A3']
+            if segment not in valid_segments:
+                return Response({
+                    'success': False,
+                    'error': f'Invalid segment. Must be one of: {", ".join(valid_segments)}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get record
+            record = IndividualBankIbkInfo_Register.objects.filter(
+                ind_sys_id=ind_sys_id
+            ).first()
+
+            if not record:
+                return Response({
+                    'success': False,
+                    'error': 'Record not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Check permissions
+            user_gid = request.user.userprofile.GID.GID if hasattr(request.user, 'userprofile') else 0
+            user_bank_code = request.user.userprofile.MID.id if hasattr(request.user, 'userprofile') else ''
+            
+            is_admin = 1 <= user_gid <= 5
+            is_member = 6 <= user_gid <= 7
+            
+            # Admin can update all, Member can update only own bank
+            if not is_admin and (not is_member or record.bnk_code != user_bank_code):
+                return Response({
+                    'success': False,
+                    'error': 'Access denied. You can only update records from your bank.'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Update segment
+            record.segment = segment
+            record.update_by = request.user.username
+            record.update_date = timezone.now()
+            record.save()
+
+            return Response({
+                'success': True,
+                'message': 'Segment updated successfully',
+                'segment': segment,
+                'ind_sys_id': ind_sys_id
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': f'Failed to update segment: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+            
+            
+from rest_framework import generics
+from .models import scr_atttype_desc, scr_attribute_table
+from .serializers import ScrAttTypeDescSerializer, ScrAttributeTableSerializer
+
+# =======================
+# CRUD สำหรับ scr_atttype_desc
+# =======================
+class ScrAttTypeDescListCreateView(generics.ListCreateAPIView):
+    queryset = scr_atttype_desc.objects.all()
+    serializer_class = ScrAttTypeDescSerializer
+
 class ScrAttTypeDescRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
     queryset = scr_atttype_desc.objects.all()
     serializer_class = ScrAttTypeDescSerializer

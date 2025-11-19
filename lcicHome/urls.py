@@ -173,7 +173,12 @@ from .views import (
     CustomerBatchFinalizeAPIView,
     MyUploadsListAPIView,
     CustomerAllUploadsAPIView,
+<<<<<<< HEAD
     ApproveEnterpriseMappingView,
+=======
+    CustomerUpdateIDAPIView,
+    CustomerUpdateSegmentAPIView,
+>>>>>>> 07b20095858e0f6207b110e645f486cff98cd2d7
     
 
     reject_borrower_loan_view,
@@ -698,6 +703,15 @@ urlpatterns = [
     path('register/customer/confirm/', 
          CustomerConfirmAPIView.as_view(), 
          name='customer-confirm'),
+    
+    path('register/customer/update-id/', 
+     CustomerUpdateIDAPIView.as_view(), 
+     name='customer-update-id'),
+    
+    path('register/customer/update-segment/', 
+     CustomerUpdateSegmentAPIView.as_view(), 
+     name='customer-update-segment'),
+    
     #---------------------------------------------
     #----- END POINTS -----------------------------
     

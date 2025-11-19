@@ -1,7 +1,7 @@
 # urls.py
 from django.urls import path
 from .views import (STypeListCreate, STypeRetrieveUpdateDestroy, TelecomCusListCreate, TelecomCusRetrieveUpdateDestroy,
-                   UploadJsonFileView, UploadFileTelecomListCreate, UploadFileTelecomRetrieveUpdateDestroy,TelecomBillListCreate,
+                   UploadJsonTelecomView, UploadFileTelecomListCreate, UploadFileTelecomRetrieveUpdateDestroy,TelecomBillListCreate,
                    TelecomBillRetrieveUpdateDestroy,UploadBillJsonFileView)
 
 urlpatterns = [
@@ -11,7 +11,7 @@ urlpatterns = [
     path('telecom_cus/<int:pk>/', TelecomCusRetrieveUpdateDestroy.as_view(), name='telecomcus_detail'),
     path('telecom_bill/', TelecomBillListCreate.as_view(), name='telecombill-list-create'),
     path('telecom_bill/<int:pk>/', TelecomBillRetrieveUpdateDestroy.as_view(), name='telecombill_detail'),
-    path('upload-json-telecom/', UploadJsonFileView.as_view(), name='upload-json'),
+    path('upload-json-telecom/', UploadJsonTelecomView.as_view(), name='upload-json'),
     path('telecom-file/', UploadFileTelecomListCreate.as_view(), name='telecom-file-list-create'),
     path('telecom-file/<int:pk>/', UploadFileTelecomRetrieveUpdateDestroy.as_view(), name='telecom-file-detail'),
     path('upload-bill/', UploadBillJsonFileView.as_view(), name='upload-bill-json'),
