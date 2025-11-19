@@ -173,12 +173,9 @@ from .views import (
     CustomerBatchFinalizeAPIView,
     MyUploadsListAPIView,
     CustomerAllUploadsAPIView,
-<<<<<<< HEAD
     ApproveEnterpriseMappingView,
-=======
     CustomerUpdateIDAPIView,
     CustomerUpdateSegmentAPIView,
->>>>>>> 07b20095858e0f6207b110e645f486cff98cd2d7
     
 
     reject_borrower_loan_view,
@@ -399,6 +396,9 @@ urlpatterns = [
   #  update-models
 
   #  path('upload_files/', upload_files, name='upload_files'),
+   
+
+
    
       #tik
     path('user/', UserListAPIView.as_view(), name='user-list'),
