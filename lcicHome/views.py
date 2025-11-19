@@ -31239,7 +31239,166 @@ class UserDetailAPIView(APIView):
         return Response({"message": "User deleted successfully"}, status=status.HTTP_200_OK)
 
     
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from django.core.paginator import Paginator, EmptyPage
+from django.db.models import Q
+from .models import RegisterCustomerWhitEnterprise, CompanyInfoMappingMemberSubmit
+from .serializers import (
+    RegisterCustomerWhitEnterpriseSerializer,
+    CompanyInfoMappingMemberSubmitSerializer
+)
+
+@api_view(['GET'])
+def get_register_customer_list(request):
+    """
+    ດຶງລາຍການ RegisterCustomerWhitEnterprise ດ້ວຍ pagination
+    ກວດສອບສິດຕາມ bnk_code
+    - bnk_code = '01': ເບິ່ງໄດ້ທັງໝົດ + filter ໄດ້
+    - bnk_code ອື່ນ: ເບິ່ງສະເພາະຂອງຕົນເອງ
     
+    Query Parameters:
+    - page: ເລກໜ້າ (default: 1)
+    - page_size: ຈຳນວນຕໍ່ໜ້າ (default: 10)
+    - bnk_code: ລະຫັດຜູ້ໃຊ້ທີ່ເຂົ້າສູ່ລະບົບ (required)
+    - bnk_code_filter: filter ຕາມ bnk_code (ສຳລັບ admin ເທົ່ານັ້ນ)
+    - search: ຄົ້ນຫາຕາມ EnterpriseID, customerID, LCIC_code
+    - status: filter ຕາມສະຖານະ
+    """
+    try:
+        # ດຶງ bnk_code ຂອງຜູ້ໃຊ້ປະຈຸບັນ
+        user_bnk_code = request.GET.get('bnk_code', None)
+        
+        if not user_bnk_code:
+            return Response({
+                'success': False,
+                'message': 'ກະລຸນາລະບຸ bnk_code'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # ກຳນົດ page ແລະ page_size
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 10))
+        
+        # ກຳນົດ filter parameters
+        bnk_code_filter = request.GET.get('bnk_code_filter', None)
+        search = request.GET.get('search', None)
+        filter_status = request.GET.get('status', None)
+        
+        # ສ້າງ queryset
+        queryset = RegisterCustomerWhitEnterprise.objects.all()
+        
+        # ກວດສອບສິດການເຂົ້າເບິ່ງ
+        if user_bnk_code == '01':
+            # Admin: ເບິ່ງໄດ້ທັງໝົດ
+            if bnk_code_filter:
+                # ຖ້າມີການເລືອກ filter
+                queryset = queryset.filter(bnk_code=bnk_code_filter)
+        else:
+            # User ທົ່ວໄປ: ເບິ່ງສະເພາະຂອງຕົນເອງ
+            queryset = queryset.filter(bnk_code=user_bnk_code)
+            
+            # ຖ້າເປັນ user ທົ່ວໄປແລ້ວພະຍາຍາມໃຊ້ bnk_code_filter
+            if bnk_code_filter and bnk_code_filter != user_bnk_code:
+                return Response({
+                    'success': False,
+                    'message': 'ທ່ານບໍ່ມີສິດເບິ່ງຂໍ້ມູນຂອງ bnk_code ອື່ນ'
+                }, status=status.HTTP_403_FORBIDDEN)
+        
+        # ຄົ້ນຫາ
+        if search:
+            queryset = queryset.filter(
+                Q(EnterpriseID__icontains=search) |
+                Q(customerID__icontains=search) |
+                Q(LCIC_code__icontains=search)
+            )
+        
+        # Filter ຕາມສະຖານະ
+        if filter_status is not None:
+            queryset = queryset.filter(status=filter_status)
+        
+        # ຈັດລຽງຕາມວັນທີສ້າງ (ໃໝ່ສຸດກ່ອນ)
+        queryset = queryset.order_by('-InsertDate')
+        
+        # Pagination
+        paginator = Paginator(queryset, page_size)
+        
+        try:
+            page_obj = paginator.page(page)
+        except EmptyPage:
+            page_obj = paginator.page(paginator.num_pages)
+        
+        # Serialize data
+        serializer = RegisterCustomerWhitEnterpriseSerializer(page_obj, many=True)
+        
+        return Response({
+            'success': True,
+            'data': serializer.data,
+            'pagination': {
+                'current_page': page_obj.number,
+                'total_pages': paginator.num_pages,
+                'total_items': paginator.count,
+                'page_size': page_size,
+                'has_next': page_obj.has_next(),
+                'has_previous': page_obj.has_previous(),
+            },
+            'permissions': {
+                'is_admin': user_bnk_code == '01',
+                'user_bnk_code': user_bnk_code,
+                'filtered_by': bnk_code_filter if bnk_code_filter else 'all' if user_bnk_code == '01' else user_bnk_code
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except ValueError as e:
+        return Response({
+            'success': False,
+            'message': 'ຄ່າ page ຫຼື page_size ບໍ່ຖືກຕ້ອງ'
+        }, status=status.HTTP_400_BAD_REQUEST)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# views.py
+@api_view(['GET'])
+def get_company_info_by_id_file(request, id_file):
+    """
+    ດຶງຂໍ້ມູນ CompanyInfoMappingMemberSubmit ຕາມ id_file ເທົ່ານັ້ນ
+    ບໍ່ມີການກວດສອບສິດ bnk_code
+    
+    URL: /api/company/info/<id_file>/
+    """
+    try:
+        # ຄົ້ນຫາຂໍ້ມູນຕາມ id_file ເທົ່ານັ້ນ
+        company_info = CompanyInfoMappingMemberSubmit.objects.filter(
+            id_file=id_file
+        ).first()
+        
+        if not company_info:
+            return Response({
+                'success': False,
+                'message': 'ບໍ່ພົບຂໍ້ມູນ'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Serialize data
+        serializer = CompanyInfoMappingMemberSubmitSerializer(company_info)
+        
+        return Response({
+            'success': True,
+            'data': serializer.data
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from .models import User_Group
@@ -31253,7 +31412,103 @@ class UserGroupList(APIView):
         groups = User_Group.objects.all().order_by('nameL')
         serializer = UserGroupSerializers(groups, many=True)
         return Response(serializer.data)
-    
+
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+from django.db.models import Max
+from .models import RegisterCustomerWhitEnterprise, CompanyInfoMappingMemberSubmit, EnterpriseInfo
+from .serializers import CompanyInfoMappingMemberSubmitSerializer
+
+@api_view(['POST'])
+def create_company_with_registration(request):
+    """
+    ສ້າງຂໍ້ມູນບໍລິສັດພ້ອມທັງລົງທະບຽນ
+    ກວດສອບ EnterpriseID ກ່ອນບັນທຶກ
+    """
+    try:
+       
+        company_data = request.data.copy()
+        enterprise_id = company_data.get('enterprise_code')
+        
+       
+        if not enterprise_id:
+            return Response({
+                'success': False,
+                'message': 'ກະລຸນາປ້ອນລະຫັດວິສາຫະກິດ (enterprise_code)'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+       
+        enterprise_exists = EnterpriseInfo.objects.filter(
+            EnterpriseID=enterprise_id
+        ).exists()
+        
+        if not enterprise_exists:
+            return Response({
+                'success': False,
+                'message': 'ຍັງບໍ່ທັນໄດ້ລົງທະບຽນອອກລະຫັດຂສລ ສຳຫຼັບລະຫັດວິສາຫະກິດນີ້ ກະລຸນາລົງທະບຽນຄືນໃໝ່',
+                'enterprise_id': enterprise_id
+            }, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        
+       
+        with transaction.atomic():
+          
+            max_id = CompanyInfoMappingMemberSubmit.objects.aggregate(
+                max_id=Max('com_sys_id')
+            )['max_id']
+            new_com_sys_id = (max_id or 0) + 1
+            company_data['com_sys_id'] = new_com_sys_id
+            
+           
+            register_data = {
+                'EnterpriseID': enterprise_id,
+                'customerID': company_data.get('customerid'),
+                'LCIC_code': company_data.get('LCIC_code'),
+                'bnk_code': company_data.get('bnk_code'),
+                'branch': company_data.get('branchcode'),
+                'status': 0,
+                'user_insert': request.user.username if request.user.is_authenticated else None,
+            }
+            
+            register_obj = RegisterCustomerWhitEnterprise.objects.create(**register_data)
+            
+            
+            company_data['id_file'] = str(register_obj.id)
+            
+           
+            serializer = CompanyInfoMappingMemberSubmitSerializer(data=company_data)
+            
+            if serializer.is_valid():
+                company_obj = serializer.save()
+                
+               
+                if not company_obj.id_file:
+                    company_obj.id_file = str(register_obj.id)
+                    company_obj.save(update_fields=['id_file'])
+                
+                return Response({
+                    'success': True,
+                    'message': 'ສ້າງຂໍ້ມູນສຳເລັດ',
+                    'data': {
+                        'register_id': register_obj.id,
+                        'company_id': company_obj.com_sys_id,
+                        'id_file': company_obj.id_file,
+                        'enterprise_id': enterprise_id
+                    }
+                }, status=status.HTTP_201_CREATED)
+            else:
+                return Response({
+                    'success': False,
+                    'message': 'ຂໍ້ມູນບໍ່ຖືກຕ້ອງ',
+                    'errors': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)   
 # views.py
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
