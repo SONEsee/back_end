@@ -536,27 +536,28 @@ class TelecomCustomer(models.Model):
     Company_name = models.CharField(max_length=500, db_index=True, blank=True, default='')
     Name = models.CharField(max_length=500, db_index=True, blank=True, default='')
     Surname = models.CharField(max_length=500, db_index=True, blank=True, default='')
-    National_ID = models.CharField(max_length=100, blank=True, default='')
-    Passport = models.CharField(max_length=100, blank=True, default='')
+    National_ID = models.CharField(max_length=100, blank=True, null=True)
+    Passport = models.CharField(max_length=100, blank=True, null=True)
     Address = models.TextField(blank=True, default='')
     Dustrict_ID = models.CharField(max_length=100, db_index=True, blank=True, default='')
     Province_ID = models.CharField(max_length=100, db_index=True, blank=True, null=True, default='')
     Tel = models.CharField(max_length=100, blank=True, default='')
-    Email = models.CharField(max_length=100, blank=True, default='')
+    Email = models.CharField(max_length=100, blank=True, null=True)
+    telecomType = models.CharField(max_length=255)
     Cus_type = models.CharField(max_length=100, blank=True, default='')
-    Regis_date = models.CharField(max_length=100, blank=True, default='')
+    Regis_date = models.CharField(max_length=100, blank=True, null=True)
     InsertDate = models.CharField(max_length=50, null=True, blank=True)
     UpdateDate = models.CharField(max_length=50, null=True, blank=True)
 
-    # class Meta:
-    #     indexes = [
-    #         models.Index(fields=['Company_name', 'Province_ID'], name='telecom_company_province_idx'),
-    #         models.Index(fields=['Name', 'Province_ID'], name='telecom_name_province_idx'),
-    #         models.Index(fields=['Surname', 'Province_ID'], name='telecom_surname_province_idx'),
-    #     ]
+    class Meta:
+        indexes = [
+            models.Index(fields=['Company_name', 'Province_ID'], name='telecom_company_province_idx'),
+            models.Index(fields=['Name', 'Province_ID'], name='telecom_name_province_idx'),
+            models.Index(fields=['Surname', 'Province_ID'], name='telecom_surname_province_idx'),
+        ]
 
-    # def __str__(self):
-    #     return f"{self.Customer_ID} - {self.Name} {self.Surname}"
+    def __str__(self):
+        return f"{self.Customer_ID} - {self.Name} {self.Surname}"
 
 class Telecom_Bill(models.Model):
     TB_ID = models.AutoField(primary_key=True,)
@@ -575,6 +576,7 @@ class Telecom_Bill(models.Model):
     InvoiceDate = models.CharField(max_length=100, null=True, blank=True)
     DisID = models.CharField(max_length=100, null=True, blank=True)
     ProID = models.CharField(max_length=100, null=True, blank=True)
+    telecomType = models.CharField(max_length=255)
     InsertDate = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     UpdateDate = models.DateTimeField(auto_now=True, null=True, blank=True)
     UserID = models.CharField(max_length=100, null=True, blank=True)
