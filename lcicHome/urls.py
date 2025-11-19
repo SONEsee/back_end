@@ -173,6 +173,7 @@ from .views import (
     CustomerBatchFinalizeAPIView,
     MyUploadsListAPIView,
     CustomerAllUploadsAPIView,
+    ApproveEnterpriseMappingView,
     
 
     reject_borrower_loan_view,
@@ -284,6 +285,7 @@ urlpatterns = [
    path('api/company/create/', views.create_company_with_registration, name='create_company'),
    path('api/register/list/', views.get_register_customer_list, name='register_list'),
    path('api/company/info/<str:id_file>/', views.get_company_info_by_id_file, name='company_info'),
+   path('api/approve-enterprise-mapping/', ApproveEnterpriseMappingView.as_view(), name='approve-enterprise-mapping'),
 
   
    
