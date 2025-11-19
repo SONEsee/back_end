@@ -73,7 +73,7 @@ class CreditScoreService:
         collateral_mapping = {
             'C2.1': {
                 'code': 'C2.1',
-                'name_eng': 'BUILDING / BUILDING+LAND / HOME / HOME+LAND / LAND',
+                'name_eng': 'BUILDING / BUILDING + LAND / HOME / HOME+LAND / LAND',
                 'name_lao': 'ອາຄານ/ ອາຄານ + ທີ່ດິນ/ ເຮືອນ/ເຮືອນ+ທີ່ດິນ/ ທີ່ດິນ'
             },
             'C2.2': {

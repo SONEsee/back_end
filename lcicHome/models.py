@@ -2208,10 +2208,10 @@ class ChargeMatrix(models.Model):
 
 class Main_catalog_cat(models.Model):
     cat_sys_id = models.BigAutoField(auto_created=True, primary_key=True, null=False)
-    ct_type = models.CharField(max_length=30)
-    cat_name = models.CharField(max_length=100)
-    cat_lao_name = models.CharField(max_length=100)
-    cat_value = models.CharField(max_length=100)
+    ct_type = models.CharField(max_length=30,blank=False, null=False)
+    cat_name = models.CharField(max_length=100, blank=True, null=True)
+    cat_lao_name = models.CharField(max_length=100,blank=True, null=True)
+    cat_value = models.CharField(max_length=100, blank=True, null=True)
     cat_is_default = models.IntegerField(null=False)
     cat_sort_order = models.IntegerField(null=False)
     cat_group = models.IntegerField(null=True)
@@ -2570,7 +2570,6 @@ class IndividualBankIbk_MapLog(models.Model):
 
 class IndividualBankIbkInfo_CreateLog(models.Model):
     ind_sys_id = models.AutoField(primary_key=True)
-    mm_ind_sys_id = models.CharField(max_length=150, blank=True, null=True)
     lcic_id = models.CharField(max_length=150, blank=True, null=True)
     ind_national_id = models.CharField(max_length=150, blank=True, null=True)
     ind_national_id_date = models.DateField(blank=True, null=True)
@@ -2584,13 +2583,54 @@ class IndividualBankIbkInfo_CreateLog(models.Model):
     ind_surname = models.CharField(max_length=150, blank=True, null=True)
     ind_lao_name = models.CharField(max_length=150, blank=True, null=True)
     ind_lao_surname = models.CharField(max_length=150, blank=True, null=True)
+    bnk_code = models.CharField(max_length=150, blank=True, null=True)
+    bank_branch = models.CharField(max_length=150, blank=True, null=True)
+    customer_id = models.CharField(max_length=150, blank=True, null=True)
     insert_by = models.CharField(max_length=150, blank=True, null=True)
     update_by = models.CharField(max_length=150, blank=True, null=True)
     status = models.CharField(max_length=150, blank=True, null=True)
     description = models.TextField(blank=True, null=True)
+    lcic_registerd_date = models.DateField(blank=True, null=True)
+    insert_date = models.DateTimeField(blank=True, null=True)
+    update_date = models.DateTimeField(blank=True, null=True)
+    document_file = models.FileField(upload_to='individual_documents/log/', blank=True, null=True)
+    
+class IndividualBankIbkInfo_Register(models.Model):
+    ind_sys_id = models.AutoField(primary_key=True)
+    lcic_id = models.CharField(max_length=150, blank=True, null=True)
+    ind_national_id = models.CharField(max_length=150, blank=True, null=True)
+    ind_national_id_date = models.DateField(blank=True, null=True)
+    ind_passport = models.CharField(max_length=150, blank=True, null=True)
+    ind_passport_date = models.DateField(blank=True, null=True)
+    ind_familybook = models.CharField(max_length=150, blank=True, null=True)
+    ind_familybook_prov_code = models.CharField(max_length=150, blank=True, null=True)
+    ind_familybook_date = models.DateField(blank=True, null=True)
+    ind_birth_date = models.DateField(blank=True, null=True)
+    ind_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_surname = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_name = models.CharField(max_length=150, blank=True, null=True)
+    ind_lao_surname = models.CharField(max_length=150, blank=True, null=True)
+    bnk_code = models.CharField(max_length=150, blank=True, null=True)
+    bank_branch = models.CharField(max_length=150, blank=True, null=True)
+    customer_id = models.CharField(max_length=150, blank=True, null=True)
+    custype = models.CharField(max_length=150, blank=True, null=True)
+    segment = models.CharField(max_length=150, blank=True, null=True)
+    insert_by = models.CharField(max_length=150, blank=True, null=True)
+    update_by = models.CharField(max_length=150, blank=True, null=True)
+    status = models.CharField(max_length=150, blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    is_confirmed = models.BooleanField(default=False)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    confirmed_by = models.CharField(max_length=150, null=True, blank=True)
+    lcic_registerd_date = models.DateField(blank=True, null=True)
     insert_date = models.DateTimeField(blank=True, null=True)
     update_date = models.DateTimeField(blank=True, null=True)
     document_file = models.FileField(upload_to='individual_documents/', blank=True, null=True)
+    class Meta:
+        indexes = [
+            models.Index(fields=['is_confirmed']),
+            models.Index(fields=['insert_by']),
+        ]
     
     
 from django.db import models
@@ -2641,6 +2681,13 @@ class UserAccessLog(models.Model):
     def __str__(self):
         return f"{self.user.username} logged in at {self.login_time}"
 
+class catalog_type_cat(models.Model):
+    cat_id = models.BigAutoField(primary_key=True)
+    cat_type = models.CharField(max_length=30,unique=True)
+    cat_name = models.CharField(max_length=100)
+    cat_lao_name = models.CharField(max_length=100)
+    cat_status = models.IntegerField()
+    cat_detail = models.CharField(max_length=500, null=True, blank=True)
 #Pherm Karn Merge and Matching Models
 class IndividualIdentifier(models.Model):
     """
@@ -2716,7 +2763,7 @@ class MergeHistory(models.Model):
     ]
     
     id = models.AutoField(primary_key=True)
-    action = models.CharField(max_length=10, choices=ACTION_CHOICES)
+    action = models.CharField(max_length=100, choices=ACTION_CHOICES)
     master_lcic_id = models.CharField(max_length=150)
     merged_ind_sys_ids = models.JSONField()  # List of merged ind_sys_ids
     merged_data = models.JSONField()  # Store snapshot of merged records
@@ -2751,7 +2798,27 @@ class scr_attribute_table(models.Model):
     def __str__(self):
         return f"{self.att_name} ({self.att_code})"
 
+class scr_atttype_desc_new(models.Model):
+    id_desc = models.AutoField(primary_key=True) 
+    att_type = models.CharField(max_length=50, blank=False, null=False)
+    att_type_desc = models.CharField(max_length=100, blank=True, null=True)
+    att_type_lao_desc = models.CharField(max_length=100, blank=True, null=True)
+    att_weight = models.IntegerField() 
 
+    def __str__(self):
+        return f"{self.att_type_desc} ({self.att_type})"
+
+class scr_attribute_table_new(models.Model):
+    att_id = models.AutoField(primary_key=True) 
+    att_type = models.CharField(max_length=50, blank=False, null=False)
+    att_name = models.CharField(max_length=50, blank=False, null=False)
+    att_code = models.CharField(max_length=50, blank=False, null=False)
+    att_value = models.IntegerField()
+    att_group_id = models.CharField(max_length=5, blank=True, null=True)
+    att_desc = models.CharField(max_length=100, blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.att_name} ({self.att_code})"
 
 
 
