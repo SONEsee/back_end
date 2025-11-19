@@ -2302,7 +2302,7 @@ class CustomerUploadListSerializer(serializers.ModelSerializer):
         ]
     
 from rest_framework import serializers
-from .models import scr_atttype_desc, scr_attribute_table
+from .models import scr_atttype_desc, scr_attribute_table,scr_atttype_desc_new, scr_attribute_table_new
 
 class ScrAttTypeDescSerializer(serializers.ModelSerializer):
     class Meta:
@@ -2314,4 +2314,16 @@ class ScrAttributeTableSerializer(serializers.ModelSerializer):
     class Meta:
         model = scr_attribute_table
         fields = '__all__'
+        
+class ScrAttTypeDescnewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = scr_atttype_desc_new
+        fields = '__all__'
+
+
+class ScrAttributeTablenewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = scr_attribute_table_new
+        fields = '__all__'
+
 
