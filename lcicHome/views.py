@@ -32678,9 +32678,16 @@ class ScoringIndividualInfoSearchView(APIView):
             if not lcic_id:
                 return Response({'error': 'lcic_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-            all_individual_info = IndividualBankIbkInfo.objects.filter(
+            # ⭐ เปลี่ยนการค้นหา: ลองค้นหาใน IndividualBankIbk ก่อน
+            all_individual_info = IndividualBankIbk.objects.filter(
                 lcic_id=lcic_id
-            ).order_by('mm_ind_sys_id')
+            ).order_by('ind_sys_id')
+
+            # ⭐ ถ้าไม่เจอใน IndividualBankIbk → ค้นหาใน IndividualBankIbkInfo
+            if not all_individual_info.exists():
+                all_individual_info = IndividualBankIbkInfo.objects.filter(
+                    lcic_id=lcic_id
+                ).order_by('mm_ind_sys_id')
 
             if not all_individual_info.exists():
                 return Response({'error': 'Individual info not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -32688,11 +32695,17 @@ class ScoringIndividualInfoSearchView(APIView):
             unique_individuals = []
             seen_mm_ids = set()
             for info in all_individual_info:
-                if info.mm_ind_sys_id and info.mm_ind_sys_id not in seen_mm_ids:
+                mm_id = getattr(info, 'ind_sys_id', None) or getattr(info, 'mm_ind_sys_id', None)
+                if mm_id and mm_id not in seen_mm_ids:
                     unique_individuals.append(info)
-                    seen_mm_ids.add(info.mm_ind_sys_id)
+                    seen_mm_ids.add(mm_id)
 
-            mm_ids = [info.mm_ind_sys_id for info in unique_individuals if info.mm_ind_sys_id]
+            mm_ids = []
+            for info in unique_individuals:
+                mm_id = getattr(info, 'ind_sys_id', None) or getattr(info, 'mm_ind_sys_id', None)
+                if mm_id:
+                    mm_ids.append(mm_id)
+
             bank_records = {}
             if mm_ids:
                 bank_records = {
@@ -32713,7 +32726,8 @@ class ScoringIndividualInfoSearchView(APIView):
             created_logs = []
 
             for info in unique_individuals:
-                bank_record = bank_records.get(info.mm_ind_sys_id)
+                mm_id = getattr(info, 'ind_sys_id', None) or getattr(info, 'mm_ind_sys_id', None)
+                bank_record = bank_records.get(mm_id)
                 customerid = bank_record.customerid if bank_record else ''
                 branch_code = bank_record.branchcode if bank_record else ''
 
@@ -32760,12 +32774,12 @@ class ScoringIndividualInfoSearchView(APIView):
                 charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
                 charge.save()
 
-                # ⭐ เพิ่มข้อมูลให้ครบถ้วน
+                # เพิ่มข้อมูลให้ครบถ้วน
                 created_logs.append({
                     'search_log_id': search_log.search_ID,
                     'charge_id': charge.rec_charge_ID,
-                    'rec_reference_code': charge.rec_reference_code,  # ⭐ ส่งค่านี้
-                    'rec_sys_id': charge.rec_charge_ID,  # ⭐ ส่งค่านี้
+                    'rec_reference_code': charge.rec_reference_code,
+                    'rec_sys_id': charge.rec_charge_ID,
                     'customerid': customerid,
                     'lcic_id': lcic_id,
                     'rec_insert_date': charge.rec_insert_date.strftime('%d/%m/%Y') if hasattr(charge, 'rec_insert_date') and charge.rec_insert_date else now.strftime('%d/%m/%Y')
@@ -32773,13 +32787,13 @@ class ScoringIndividualInfoSearchView(APIView):
 
             serializer = IndividualBankIbkInfoSerializer(unique_individuals, many=True)
 
-            # ⭐ Return ข้อมูลให้ครบถ้วน
+            # Return ข้อมูลให้ครบถ้วน
             return Response({
-                'success': True,  # ⭐ เพิ่ม flag นี้
+                'success': True,
                 'individual_info': serializer.data,
                 'total_found': len(unique_individuals),
                 'log_created': len(created_logs),
-                'created_logs': created_logs,  # ⭐ ส่ง array นี้กลับไป
+                'created_logs': created_logs,
                 'debug_info': {
                     'total_raw_records': all_individual_info.count(),
                     'unique_records': len(unique_individuals),
@@ -32794,8 +32808,6 @@ class ScoringIndividualInfoSearchView(APIView):
                 'error': 'Internal server error',
                 'details': traceback.format_exc()
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
 
 class MainCatalogCatViewSet(viewsets.ModelViewSet):
     queryset = Main_catalog_cat.objects.all().order_by('cat_sys_id')
