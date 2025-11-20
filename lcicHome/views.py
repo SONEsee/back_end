@@ -34005,50 +34005,6 @@ def get_statistics(request):
             'success': False,
             'error': str(e)
         }, status=status.HTTP_400_BAD_REQUEST)
-
-class CreditScoreAPIView(APIView):
-    """
-    API endpoint to calculate credit score
-    
-    POST /api/credit-score/calculate/
-    GET  /api/credit-score/calculate/?lcic_id=your_lcic_id
-    """
-    
-    def post(self, request):
-        return self._calculate_score(request.data.get('lcic_id'))
-    
-    def get(self, request):
-        return self._calculate_score(request.query_params.get('lcic_id'))
-    
-    def _calculate_score(self, lcic_id):
-        """Calculate credit score with error handling"""
-        try:
-            # Validate lcic_id
-            if not lcic_id:
-                return Response(
-                    {'error': 'lcic_id is required'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Calculate credit score
-            service = CreditScoreService(lcic_id)
-            result = service.calculate_credit_score()
-            
-            # Check result
-            if not result:
-                return Response(
-                    {'error': f'Customer not found with lcic_id: {lcic_id}'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
-            # Return success
-            return Response({'success': True, 'data': result}, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            return Response(
-                {'error': 'Internal server error', 'message': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
             
             
 # views.py
@@ -36520,11 +36476,9 @@ class CustomerUpdateSegmentAPIView(APIView):
             
 from rest_framework import generics
 from .models import scr_atttype_desc, scr_attribute_table
-from .serializers import ScrAttTypeDescSerializer, ScrAttributeTableSerializer
+from .serializers import ScrAttTypeDescSerializer, ScrAttributeTableSerializer,ScrAttributeTablenewSerializer,ScrAttTypeDescnewSerializer
 
-# =======================
 # CRUD สำหรับ scr_atttype_desc
-# =======================
 class ScrAttTypeDescListCreateView(generics.ListCreateAPIView):
     queryset = scr_atttype_desc.objects.all()
     serializer_class = ScrAttTypeDescSerializer
@@ -36534,9 +36488,7 @@ class ScrAttTypeDescRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIVi
     serializer_class = ScrAttTypeDescSerializer
     lookup_field = 'id_desc'
 
-# =======================
 # CRUD สำหรับ scr_attribute_table
-# =======================
 class ScrAttributeTableListCreateView(generics.ListCreateAPIView):
     queryset = scr_attribute_table.objects.all()
     serializer_class = ScrAttributeTableSerializer
@@ -36545,3 +36497,104 @@ class ScrAttributeTableRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAP
     queryset = scr_attribute_table.objects.all()
     serializer_class = ScrAttributeTableSerializer
     lookup_field = 'att_id'
+    
+#.........................................................
+# CRUD สำหรับ scr_atttype_desc_new
+class ScrAttTypeDescnewListCreateView(generics.ListCreateAPIView):
+    queryset = scr_atttype_desc_new.objects.all()
+    serializer_class = ScrAttTypeDescnewSerializer
+
+class ScrAttTypeDescnewRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = scr_atttype_desc_new.objects.all()
+    serializer_class = ScrAttTypeDescnewSerializer
+    lookup_field = 'id_desc'
+
+# CRUD สำหรับ scr_attribute_table_new
+class ScrAttributeTablenewListCreateView(generics.ListCreateAPIView):
+    queryset = scr_attribute_table_new.objects.all()
+    serializer_class = ScrAttributeTablenewSerializer
+
+class ScrAttributeTablenewRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = scr_attribute_table_new.objects.all()
+    serializer_class = ScrAttributeTablenewSerializer
+    lookup_field = 'att_id'
+    
+# views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .credit_score_ind import CreditScoreServiceIND
+
+
+class CreditScoreINDAPIView(APIView):
+    """
+    API endpoint to calculate Individual credit score
+    
+    POST /api/credit-score-ind/calculate/
+    GET  /api/credit-score-ind/calculate/?lcic_id=your_lcic_id
+    
+    Example:
+        GET: /api/credit-score-ind/calculate/?lcic_id=LA01I0000001
+        POST: {"lcic_id": "LA01I0000001"}
+    """
+    
+    def post(self, request):
+        """Handle POST request"""
+        return self._calculate_score(request.data.get('lcic_id'))
+    
+    def get(self, request):
+        """Handle GET request"""
+        return self._calculate_score(request.query_params.get('lcic_id'))
+    
+    def _calculate_score(self, lcic_id):
+        """Calculate Individual credit score with error handling"""
+        try:
+            # Validate lcic_id
+            if not lcic_id:
+                return Response(
+                    {
+                        'success': False,
+                        'error': 'lcic_id is required',
+                        'message': 'Please provide a valid LCIC ID'
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Calculate credit score
+            service = CreditScoreServiceIND(lcic_id)
+            result = service.calculate_credit_score()
+            
+            # Check result
+            if not result:
+                return Response(
+                    {
+                        'success': False,
+                        'error': 'Customer not found',
+                        'message': f'No individual customer found with LCIC ID: {lcic_id}'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Return success response
+            return Response(
+                {
+                    'success': True,
+                    'data': result,
+                    'message': 'Credit score calculated successfully'
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            
+            return Response(
+                {
+                    'success': False,
+                    'error': 'Internal server error',
+                    'message': str(e),
+                    'detail': error_detail if settings.DEBUG else None
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
