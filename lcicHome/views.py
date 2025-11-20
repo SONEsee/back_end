@@ -31008,7 +31008,121 @@ class UserDetailAPIView(APIView):
         user.delete()
         return Response({"message": "User deleted successfully"}, status=status.HTTP_200_OK)
 
-    
+# views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+from django.utils import timezone
+from .models import (
+    RegisterCustomerWhitEnterprise,
+    CompanyInfoMappingMemberSubmit,
+    CompanyInfoMapping
+)
+
+
+class ApproveEnterpriseMappingView(APIView):
+    """
+    ອະນຸມັດການພູກລະຫັດວິສາຫະກິດ
+    POST: { "register_id": 25 }
+    """
+    @transaction.atomic
+    def post(self, request):
+        register_id = request.data.get("register_id")
+
+        if not register_id:
+            return Response({
+                "success": False,
+                "message": "ກະລຸນາສົ່ງ register_id ມາ"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+         
+            reg = RegisterCustomerWhitEnterprise.objects.get(id=register_id)
+
+         
+            submit = CompanyInfoMappingMemberSubmit.objects.filter(
+                id_file=str(register_id)
+            ).first()
+
+            if not submit:
+                return Response({
+                    "success": False,
+                    "message": f"ບໍ່ພົບຂໍ້ມູນທີ່ສົ່ງມາ (id_file = {register_id})"
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            
+            master_id = submit.mm_com_sys_id or submit.com_sys_id
+            if not master_id:
+                return Response({
+                    "success": False,
+                    "message": "ບໍ່ພົບ com_sys_id ຫຼື mm_com_sys_id"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+          
+            CompanyInfoMapping.objects.update_or_create(
+                com_sys_id=master_id,
+                defaults={
+                    "segment": submit.segment,
+                    "mm_com_sys_id": submit.mm_com_sys_id,
+                    "bnk_code": submit.bnk_code,
+                    "branchcode": submit.branchcode,
+                    "customerid": submit.customerid,
+                    "com_enterprise_code": submit.com_enterprise_code,
+                    "com_registration_date": submit.com_registration_date,
+                    "com_registration_place_issue": submit.com_registration_place_issue,
+                    "com_name": submit.com_name,
+                    "com_lao_name": submit.com_lao_name,
+                    "com_tax_no": submit.com_tax_no,
+                    "com_category": submit.com_category,
+                    "com_regulatory_capital": submit.com_regulatory_capital,
+                    "com_regulatory_capital_unit": submit.com_regulatory_capital_unit,
+                    "com_insert_date": submit.com_insert_date,
+                    "com_update_date": timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "mm_action_date": timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "mm_log": "Approved by admin",
+                    "mm_comment": submit.mm_comment or "",
+                    "mm_by": request.user.username if request.user.is_authenticated else "system",
+                    "blk_sys_id": submit.blk_sys_id,
+                    "mm_status": "A", 
+                    "is_manual": submit.is_manual,
+                    "com_lao_name_code": submit.com_lao_name_code,
+                    "LCIC_code": submit.LCIC_code,
+                    "enterprise_code": reg.EnterpriseID,  
+                    "status": "1",
+                }
+            )
+
+            
+            reg.status = 0
+            reg.user_update = request.user.username if request.user.is_authenticated else "system"
+            reg.UpdateDate = timezone.now()
+            reg.save()
+
+            return Response({
+                "success": True,
+                "message": "ອະນຸມັດ ແລະ ບັນທຶກຂໍ້ມູນສຳເລັດແລ້ວ",
+                "data": {
+                    "register_id": reg.id,
+                    "status": reg.status,  
+                    "enterprise_code": reg.EnterpriseID,
+                    "customerid": submit.customerid,
+                    "master_com_sys_id": master_id
+                }
+            }, status=status.HTTP_200_OK)
+
+        except RegisterCustomerWhitEnterprise.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "ບໍ່ພົບລາຍການພູກລະຫັດນີ້"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "message": f"ເກີດຂໍ້ຜິດພາດ: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)      
+
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
@@ -31023,22 +31137,9 @@ from .serializers import (
 
 @api_view(['GET'])
 def get_register_customer_list(request):
-    """
-    ດຶງລາຍການ RegisterCustomerWhitEnterprise ດ້ວຍ pagination
-    ກວດສອບສິດຕາມ bnk_code
-    - bnk_code = '01': ເບິ່ງໄດ້ທັງໝົດ + filter ໄດ້
-    - bnk_code ອື່ນ: ເບິ່ງສະເພາະຂອງຕົນເອງ
-    
-    Query Parameters:
-    - page: ເລກໜ້າ (default: 1)
-    - page_size: ຈຳນວນຕໍ່ໜ້າ (default: 10)
-    - bnk_code: ລະຫັດຜູ້ໃຊ້ທີ່ເຂົ້າສູ່ລະບົບ (required)
-    - bnk_code_filter: filter ຕາມ bnk_code (ສຳລັບ admin ເທົ່ານັ້ນ)
-    - search: ຄົ້ນຫາຕາມ EnterpriseID, customerID, LCIC_code
-    - status: filter ຕາມສະຖານະ
-    """
+ 
     try:
-        # ດຶງ bnk_code ຂອງຜູ້ໃຊ້ປະຈຸບັນ
+        
         user_bnk_code = request.GET.get('bnk_code', None)
         
         if not user_bnk_code:
@@ -31047,36 +31148,36 @@ def get_register_customer_list(request):
                 'message': 'ກະລຸນາລະບຸ bnk_code'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # ກຳນົດ page ແລະ page_size
+        
         page = int(request.GET.get('page', 1))
         page_size = int(request.GET.get('page_size', 10))
         
-        # ກຳນົດ filter parameters
+        
         bnk_code_filter = request.GET.get('bnk_code_filter', None)
         search = request.GET.get('search', None)
         filter_status = request.GET.get('status', None)
         
-        # ສ້າງ queryset
+        
         queryset = RegisterCustomerWhitEnterprise.objects.all()
         
-        # ກວດສອບສິດການເຂົ້າເບິ່ງ
+        
         if user_bnk_code == '01':
-            # Admin: ເບິ່ງໄດ້ທັງໝົດ
+            
             if bnk_code_filter:
-                # ຖ້າມີການເລືອກ filter
+               
                 queryset = queryset.filter(bnk_code=bnk_code_filter)
         else:
-            # User ທົ່ວໄປ: ເບິ່ງສະເພາະຂອງຕົນເອງ
+            
             queryset = queryset.filter(bnk_code=user_bnk_code)
             
-            # ຖ້າເປັນ user ທົ່ວໄປແລ້ວພະຍາຍາມໃຊ້ bnk_code_filter
+            
             if bnk_code_filter and bnk_code_filter != user_bnk_code:
                 return Response({
                     'success': False,
                     'message': 'ທ່ານບໍ່ມີສິດເບິ່ງຂໍ້ມູນຂອງ bnk_code ອື່ນ'
                 }, status=status.HTTP_403_FORBIDDEN)
         
-        # ຄົ້ນຫາ
+        
         if search:
             queryset = queryset.filter(
                 Q(EnterpriseID__icontains=search) |
@@ -31084,14 +31185,14 @@ def get_register_customer_list(request):
                 Q(LCIC_code__icontains=search)
             )
         
-        # Filter ຕາມສະຖານະ
+        
         if filter_status is not None:
             queryset = queryset.filter(status=filter_status)
         
-        # ຈັດລຽງຕາມວັນທີສ້າງ (ໃໝ່ສຸດກ່ອນ)
+       
         queryset = queryset.order_by('-InsertDate')
         
-        # Pagination
+        
         paginator = Paginator(queryset, page_size)
         
         try:
@@ -31099,7 +31200,7 @@ def get_register_customer_list(request):
         except EmptyPage:
             page_obj = paginator.page(paginator.num_pages)
         
-        # Serialize data
+       
         serializer = RegisterCustomerWhitEnterpriseSerializer(page_obj, many=True)
         
         return Response({
@@ -31136,14 +31237,9 @@ def get_register_customer_list(request):
 # views.py
 @api_view(['GET'])
 def get_company_info_by_id_file(request, id_file):
-    """
-    ດຶງຂໍ້ມູນ CompanyInfoMappingMemberSubmit ຕາມ id_file ເທົ່ານັ້ນ
-    ບໍ່ມີການກວດສອບສິດ bnk_code
-    
-    URL: /api/company/info/<id_file>/
-    """
+   
     try:
-        # ຄົ້ນຫາຂໍ້ມູນຕາມ id_file ເທົ່ານັ້ນ
+        
         company_info = CompanyInfoMappingMemberSubmit.objects.filter(
             id_file=id_file
         ).first()
@@ -31154,7 +31250,7 @@ def get_company_info_by_id_file(request, id_file):
                 'message': 'ບໍ່ພົບຂໍ້ມູນ'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Serialize data
+       
         serializer = CompanyInfoMappingMemberSubmitSerializer(company_info)
         
         return Response({
@@ -33679,50 +33775,6 @@ def get_statistics(request):
             'success': False,
             'error': str(e)
         }, status=status.HTTP_400_BAD_REQUEST)
-
-class CreditScoreAPIView(APIView):
-    """
-    API endpoint to calculate credit score
-    
-    POST /api/credit-score/calculate/
-    GET  /api/credit-score/calculate/?lcic_id=your_lcic_id
-    """
-    
-    def post(self, request):
-        return self._calculate_score(request.data.get('lcic_id'))
-    
-    def get(self, request):
-        return self._calculate_score(request.query_params.get('lcic_id'))
-    
-    def _calculate_score(self, lcic_id):
-        """Calculate credit score with error handling"""
-        try:
-            # Validate lcic_id
-            if not lcic_id:
-                return Response(
-                    {'error': 'lcic_id is required'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Calculate credit score
-            service = CreditScoreService(lcic_id)
-            result = service.calculate_credit_score()
-            
-            # Check result
-            if not result:
-                return Response(
-                    {'error': f'Customer not found with lcic_id: {lcic_id}'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
-            # Return success
-            return Response({'success': True, 'data': result}, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            return Response(
-                {'error': 'Internal server error', 'message': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
             
             
 # views.py
@@ -36194,11 +36246,9 @@ class CustomerUpdateSegmentAPIView(APIView):
             
 from rest_framework import generics
 from .models import scr_atttype_desc, scr_attribute_table
-from .serializers import ScrAttTypeDescSerializer, ScrAttributeTableSerializer
+from .serializers import ScrAttTypeDescSerializer, ScrAttributeTableSerializer,ScrAttributeTablenewSerializer,ScrAttTypeDescnewSerializer
 
-# =======================
 # CRUD สำหรับ scr_atttype_desc
-# =======================
 class ScrAttTypeDescListCreateView(generics.ListCreateAPIView):
     queryset = scr_atttype_desc.objects.all()
     serializer_class = ScrAttTypeDescSerializer
@@ -36208,9 +36258,7 @@ class ScrAttTypeDescRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIVi
     serializer_class = ScrAttTypeDescSerializer
     lookup_field = 'id_desc'
 
-# =======================
 # CRUD สำหรับ scr_attribute_table
-# =======================
 class ScrAttributeTableListCreateView(generics.ListCreateAPIView):
     queryset = scr_attribute_table.objects.all()
     serializer_class = ScrAttributeTableSerializer
@@ -36219,3 +36267,104 @@ class ScrAttributeTableRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAP
     queryset = scr_attribute_table.objects.all()
     serializer_class = ScrAttributeTableSerializer
     lookup_field = 'att_id'
+    
+#.........................................................
+# CRUD สำหรับ scr_atttype_desc_new
+class ScrAttTypeDescnewListCreateView(generics.ListCreateAPIView):
+    queryset = scr_atttype_desc_new.objects.all()
+    serializer_class = ScrAttTypeDescnewSerializer
+
+class ScrAttTypeDescnewRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = scr_atttype_desc_new.objects.all()
+    serializer_class = ScrAttTypeDescnewSerializer
+    lookup_field = 'id_desc'
+
+# CRUD สำหรับ scr_attribute_table_new
+class ScrAttributeTablenewListCreateView(generics.ListCreateAPIView):
+    queryset = scr_attribute_table_new.objects.all()
+    serializer_class = ScrAttributeTablenewSerializer
+
+class ScrAttributeTablenewRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = scr_attribute_table_new.objects.all()
+    serializer_class = ScrAttributeTablenewSerializer
+    lookup_field = 'att_id'
+    
+# views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .credit_score_ind import CreditScoreServiceIND
+
+
+class CreditScoreINDAPIView(APIView):
+    """
+    API endpoint to calculate Individual credit score
+    
+    POST /api/credit-score-ind/calculate/
+    GET  /api/credit-score-ind/calculate/?lcic_id=your_lcic_id
+    
+    Example:
+        GET: /api/credit-score-ind/calculate/?lcic_id=LA01I0000001
+        POST: {"lcic_id": "LA01I0000001"}
+    """
+    
+    def post(self, request):
+        """Handle POST request"""
+        return self._calculate_score(request.data.get('lcic_id'))
+    
+    def get(self, request):
+        """Handle GET request"""
+        return self._calculate_score(request.query_params.get('lcic_id'))
+    
+    def _calculate_score(self, lcic_id):
+        """Calculate Individual credit score with error handling"""
+        try:
+            # Validate lcic_id
+            if not lcic_id:
+                return Response(
+                    {
+                        'success': False,
+                        'error': 'lcic_id is required',
+                        'message': 'Please provide a valid LCIC ID'
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Calculate credit score
+            service = CreditScoreServiceIND(lcic_id)
+            result = service.calculate_credit_score()
+            
+            # Check result
+            if not result:
+                return Response(
+                    {
+                        'success': False,
+                        'error': 'Customer not found',
+                        'message': f'No individual customer found with LCIC ID: {lcic_id}'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Return success response
+            return Response(
+                {
+                    'success': True,
+                    'data': result,
+                    'message': 'Credit score calculated successfully'
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            
+            return Response(
+                {
+                    'success': False,
+                    'error': 'Internal server error',
+                    'message': str(e),
+                    'detail': error_detail if settings.DEBUG else None
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

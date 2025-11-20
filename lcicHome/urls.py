@@ -173,6 +173,7 @@ from .views import (
     CustomerBatchFinalizeAPIView,
     MyUploadsListAPIView,
     CustomerAllUploadsAPIView,
+    ApproveEnterpriseMappingView,
     CustomerUpdateIDAPIView,
     CustomerUpdateSegmentAPIView,
     
@@ -183,8 +184,8 @@ from .views import (
 )
 #tik
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
-                    ,RequestChargeSummaryAPIView,RequestChargeReportAllAPIView,UserLogoutView,UserAccessLogListView,ScoringIndividualInfoSearchView,CreditScoreAPIView,ScrAttTypeDescListCreateView, ScrAttTypeDescRetrieveUpdateDeleteView,ScrAttributeTableListCreateView
-                    ,ScrAttributeTableRetrieveUpdateDeleteView)
+                    ,RequestChargeSummaryAPIView,RequestChargeReportAllAPIView,UserLogoutView,UserAccessLogListView,ScoringIndividualInfoSearchView,CreditScoreAPIView,ScrAttTypeDescnewListCreateView, ScrAttTypeDescnewRetrieveUpdateDeleteView,ScrAttributeTablenewListCreateView
+                    ,ScrAttributeTablenewRetrieveUpdateDeleteView,CreditScoreINDAPIView)
 
 from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView,process_dispute_notification, process_multiple_disputes,process_multiple_disputescollateral
 from .views import upload_json,MemberInfoViewSet
@@ -286,6 +287,7 @@ urlpatterns = [
    path('api/company/create/', views.create_company_with_registration, name='create_company'),
    path('api/register/list/', views.get_register_customer_list, name='register_list'),
    path('api/company/info/<str:id_file>/', views.get_company_info_by_id_file, name='company_info'),
+   path('api/approve-enterprise-mapping/', ApproveEnterpriseMappingView.as_view(), name='approve-enterprise-mapping'),
 
   
    
@@ -395,6 +397,9 @@ urlpatterns = [
 
   #  path('upload_files/', upload_files, name='upload_files'),
    
+
+
+   
       #tik
     path('user/', UserListAPIView.as_view(), name='user-list'),
     path('user/<int:uid>/', UserDetailAPIView.as_view(), name='user-detail'),
@@ -414,10 +419,15 @@ urlpatterns = [
     path('access-logs/', UserAccessLogListView.as_view(), name='access-logs'),
     path('api/scoring-individual/', ScoringIndividualInfoSearchView.as_view(), name='scoring-individual'),
     path('credit-score/calculate/', CreditScoreAPIView.as_view(), name='credit-score-calculate'),
-    path('att-types/', ScrAttTypeDescListCreateView.as_view(), name='atttype-list-create'),
-    path('att-types/<int:id_desc>/', ScrAttTypeDescRetrieveUpdateDeleteView.as_view(), name='atttype-detail'),
-    path('attributes/', ScrAttributeTableListCreateView.as_view(), name='attribute-list-create'),
-    path('attributes/<int:att_id>/', ScrAttributeTableRetrieveUpdateDeleteView.as_view(), name='attribute-detail'),
+    # path('att-types/', ScrAttTypeDescListCreateView.as_view(), name='atttype-list-create'),
+    # path('att-types/<int:id_desc>/', ScrAttTypeDescRetrieveUpdateDeleteView.as_view(), name='atttype-detail'),
+    # path('attributes/', ScrAttributeTableListCreateView.as_view(), name='attribute-list-create'),
+    # path('attributes/<int:att_id>/', ScrAttributeTableRetrieveUpdateDeleteView.as_view(), name='attribute-detail'),
+    path('att-types/', ScrAttTypeDescnewListCreateView.as_view(), name='atttype-list-create'),
+    path('att-types/<int:id_desc>/', ScrAttTypeDescnewRetrieveUpdateDeleteView.as_view(), name='atttype-detail'),
+    path('attributes/', ScrAttributeTablenewListCreateView.as_view(), name='attribute-list-create'),
+    path('attributes/<int:att_id>/', ScrAttributeTablenewRetrieveUpdateDeleteView.as_view(), name='attribute-detail'),
+    path('credit-score-ind/calculate/', CreditScoreINDAPIView.as_view(), name='credit_score_ind_calculate'),
     
     path('api/individual-files/', IndividualFileListView.as_view(), name='individual-file-list'),
     path('api/borrwor-files/', BorrowerFileListView.as_view(), name='borrwor-file-list'),
