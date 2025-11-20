@@ -19686,7 +19686,7 @@ from .serializers import MainCatalogCatSerializer  # Serializer for your model
 
 class CatalogCatListView(APIView):
     def get(self, request):
-        cats = Main_catalog_cat.objects.all()
+        cats = Main_catalog_cat.objects.filter(ct_type='LPR').order_by('cat_sys_id')
         serializer = MainCatalogCatSerializer(cats, many=True)
         return Response(serializer.data)
 
@@ -23036,236 +23036,6 @@ def fix_problematic_dates():
     
     print(f"Successfully fixed {count} bills with problematic dates")
     return count
-
-# from utility.models import w_customer_info, Utility_Bill, searchlog_utility, request_charge_utility
-# from .serializers import WaterCustomerSerializer, UtilityBillSerializer, SearchLogUtilitySerializer
-# import uuid
-# from django.db.models import Func, F, Value
-
-# class UtilityReportAPIView(APIView):
-#     permission_classes = [IsAuthenticated]
-
-#     def get(self, request):
-#         try:
-#             customer_id = request.query_params.get('water')
-#             if not customer_id:
-#                 return Response({"error": "water parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-#             user = request.user
-#             bank = user.MID
-#             sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
-
-#             bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
-#             charge_bank_type = bank_info.bnk_type
-#             if charge_bank_type == 1:
-#                 chargeType = ChargeMatrix.objects.get(chg_sys_id=9)
-#             else:
-#                 chargeType = ChargeMatrix.objects.get(chg_sys_id=10)
-#             charge_amount_com = chargeType.chg_amount
-
-#             customer = w_customer_info.objects.get(Customer_ID=customer_id)
-
-#             # Custom function to convert MM-YYYY to YYYY-MM for sorting (PostgreSQL)
-#             class ReorderMonthYear(Func):
-#                 function = "TO_CHAR"
-#                 template = (
-#                     "CASE WHEN LENGTH(%(expressions)s) = 7 THEN "
-#                     "SUBSTRING(%(expressions)s FROM 4 FOR 4) || '-' || SUBSTRING(%(expressions)s FROM 1 FOR 2) "
-#                     "ELSE NULL END"
-#                 )
-
-#             # Filter and validate bills
-#             bills = Utility_Bill.objects.filter(Customer_ID=customer_id).exclude(
-#                 InvoiceMonth__isnull=True
-#             ).exclude(
-#                 InvoiceMonth=""
-#             ).annotate(
-#                 year_month=ReorderMonthYear(F('InvoiceMonth'))
-#             ).order_by('-year_month')
-
-#             # Log the search
-#             search_log = searchlog_utility.objects.create(
-#                 bnk_code=bank.bnk_code,
-#                 sys_usr=sys_usr,
-#                 wt_cusid=customer_id,
-#                 edl_cusid='',
-#                 tel_cusid='',
-#                 proID_edl='',
-#                 proID_wt='',
-#                 proID_tel='',
-#                 credittype='water',
-#                 inquiry_date=timezone.now(),
-#                 inquiry_time=timezone.now()
-#             )
-
-#             # Get current timestamp for rec_insert_date
-#             rec_insert_date = timezone.now()
-#             date_str = rec_insert_date.strftime('%d%m%Y')
-#             report_date = rec_insert_date.strftime('%d-%m-%Y')
-#             rec_reference_code = f"{chargeType.chg_code}-0-{bank.bnk_code}-{date_str}-{search_log.search_id}"
-#             rec_reference_code = rec_reference_code[:100]
-
-#             # Log the charge request
-#             request_charge_utility.objects.create(
-#                 usr_session_id=str(uuid.uuid4()),
-#                 search_id=search_log,
-#                 bnk_code=bank.bnk_code,
-#                 chg_code=chargeType.chg_code,
-#                 chg_amount=charge_amount_com,
-#                 chg_unit='LAK',
-#                 sys_usr=sys_usr,
-#                 credit_type='water',
-#                 wt_cusid=customer_id,
-#                 edl_cusid='',
-#                 tel_cusid='',
-#                 proID_edl='',
-#                 proID_wt='',
-#                 proID_tel='',
-#                 rec_reference_code=rec_reference_code
-#             )
-
-#             customer_serializer = WaterCustomerSerializer(customer)
-#             bill_serializer = UtilityBillSerializer(bills, many=True)
-#             search_log_serializer = SearchLogUtilitySerializer(search_log)
-
-#             # Construct reference_data as a tuple
-#             reference_data = (
-#                 rec_reference_code,
-#                 customer_id,
-#                 report_date,
-#                 search_log_serializer.data,
-#                 rec_insert_date.isoformat()
-#             )
-
-#             # Return response with reference_data as a list (JSON-compatible)
-#             return Response({
-#                 "reference_data": reference_data,
-#                 "customer": [customer_serializer.data],
-#                 "bill": bill_serializer.data
-#             }, status=status.HTTP_200_OK)
-
-#         except w_customer_info.DoesNotExist:
-#             return Response({"error": "Customer not found"}, status=status.HTTP_404_NOT_FOUND)
-#         except memberInfo.DoesNotExist:
-#             return Response({"error": "Bank information not found"}, status=status.HTTP_400_BAD_REQUEST)
-#         except ChargeMatrix.DoesNotExist:
-#             return Response({"error": "Charge configuration not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-#         except Exception as e:
-#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-      
-# from utility.models import edl_customer_info, Electric_Bill, searchlog_utility, request_charge_utility
-# from .serializers import EDLCustomerSerializer, ElectricBillSerializer, SearchLogUtilitySerializer
-# import uuid
-# from django.db.models import Func, F, Value
-
-# class ElectricReportAPIView(APIView):
-#     permission_classes = [IsAuthenticated]
-
-#     def get(self, request):
-#         try:
-#             customer_id = request.query_params.get('edl')
-#             if not customer_id:
-#                 return Response({"error": "water parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-#             user = request.user
-#             bank = user.MID
-#             sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
-
-#             bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
-#             charge_bank_type = bank_info.bnk_type
-#             if charge_bank_type == 1:
-#                 chargeType = ChargeMatrix.objects.get(chg_sys_id=9)
-#             else:
-#                 chargeType = ChargeMatrix.objects.get(chg_sys_id=10)
-#             charge_amount_com = chargeType.chg_amount
-
-#             customer = edl_customer_info.objects.get(Customer_ID=customer_id)
-
-#             # edl = edl_customer_info.objects.get(Customer_ID=customer_id)
-#             # Custom function to convert MM-YYYY to YYYY-MM for sorting (PostgreSQL)
-#             class ReorderMonthYear(Func):
-#                 function = "TO_CHAR"
-#                 template = "SUBSTRING(%(expressions)s FROM 4 FOR 4) || '-' || SUBSTRING(%(expressions)s FROM 1 FOR 2)"
-
-#             # Sort bills by InvoiceMonth in descending order
-#             bills = Electric_Bill.objects.filter(Customer_ID=customer_id).annotate(
-#                 year_month=ReorderMonthYear(F('InvoiceMonth'))
-#             ).order_by('-year_month')
-
-#             # edl_bill = Electric_Bill.objects.filter(Customer_ID=customer_id_2).annotate(
-#             #     year_month=ReorderMonthYear(F('InvoiceMonth'))
-#             # ).order_by('-year_month')
-            
-#             # Log the search
-#             search_log = searchlog_utility.objects.create(
-#                 bnk_code=bank.bnk_code,
-#                 sys_usr=sys_usr,
-#                 wt_cusid=customer_id,
-#                 edl_cusid='',
-#                 tel_cusid='',
-#                 proID_edl='',
-#                 proID_wt='',
-#                 proID_tel='',
-#                 credittype='edl',
-#                 inquiry_date=timezone.now(),
-#                 inquiry_time=timezone.now()
-#             )
-
-#             # Get current timestamp for rec_insert_date
-#             rec_insert_date = timezone.now()
-#             date_str = rec_insert_date.strftime('%d%m%Y')
-#             report_date = rec_insert_date.strftime('%d-%m-%Y')
-#             rec_reference_code = f"{chargeType.chg_code}-0-{bank.bnk_code}-{date_str}-{search_log.search_id}"
-#             rec_reference_code = rec_reference_code[:100]
-
-#             # Log the charge request
-#             request_charge_utility.objects.create(
-#                 usr_session_id=str(uuid.uuid4()),
-#                 search_id=search_log,
-#                 bnk_code=bank.bnk_code,
-#                 chg_code=chargeType.chg_code,
-#                 chg_amount=charge_amount_com,
-#                 chg_unit='LAK',
-#                 sys_usr=sys_usr,
-#                 credit_type='edl',
-#                 wt_cusid=customer_id,
-#                 edl_cusid='',
-#                 tel_cusid='',
-#                 proID_edl='',
-#                 proID_wt='',
-#                 proID_tel='',
-#                 rec_reference_code=rec_reference_code
-#             )
-
-#             customer_serializer = EDLCustomerSerializer(customer)
-#             bill_serializer = ElectricBillSerializer(bills, many=True)
-#             search_log_serializer = SearchLogUtilitySerializer(search_log)
-
-#             # Construct reference_data as a tuple
-#             reference_data = (
-#                 rec_reference_code,
-#                 customer_id,
-#                 report_date,
-#                 search_log_serializer.data,  # Serialized search_log
-#                 rec_insert_date.isoformat()  # Convert datetime to ISO string
-#             )
-
-#             # Return response with reference_data as a list (JSON-compatible)
-#             return Response({
-#                 "reference_data": reference_data,
-#                 "customer": [customer_serializer.data],
-#                 "bill": bill_serializer.data
-#             }, status=status.HTTP_200_OK)
-
-#         except w_customer_info.DoesNotExist:
-#             return Response({"error": "Customer not found"}, status=status.HTTP_404_NOT_FOUND)
-#         except memberInfo.DoesNotExist:
-#             return Response({"error": "Bank information not found"}, status=status.HTTP_400_BAD_REQUEST)
-#         except ChargeMatrix.DoesNotExist:
-#             return Response({"error": "Charge configuration not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-#         except Exception as e:
-#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -30884,53 +30654,19 @@ class WaterUploadSummaryAPIView(APIView):
         
         return Response(result, status=200)
 
-# class WaterUploadSummaryAPIView(APIView):
-#     """
-#     Step 6: Get upload summary across all periods
-#     GET /api/water-supply/statistics/summary/
-#     Query params:
-#         - start_month: Start month (optional)
-#         - end_month: End month (optional)
-#     """
-#     permission_classes = [IsAuthenticated]
-    
-#     def get(self, request):
-#         start_month = request.query_params.get('start_month')
-#         end_month = request.query_params.get('end_month')
-        
-#         queryset = WaterUploadDataTracking.objects.all()
-        
-#         if start_month:
-#             queryset = queryset.filter(upload_month__gte=start_month)
-#         if end_month:
-#             queryset = queryset.filter(upload_month__lte=end_month)
-        
-#         # Group by month and aggregate statistics
-#         summary = queryset.values('upload_month').annotate(
-#             total_provinces=Count('pro_id', distinct=True),
-#             total_districts=Count('dis_id', distinct=True),
-#             total_bills=Sum('payment_records'),
-#             total_customers=Sum('customer_records'),
-#             completed_uploads=Count('id', filter=Q(status='completed')),
-#             pending_uploads=Count('id', filter=Q(status='pending')),
-#             failed_uploads=Count('id', filter=Q(status='failed'))
-#         ).order_by('-upload_month')
-        
-#         serializer = UploadSummarySerializer(summary, many=True)
-#         return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Q
-from .models import IndividualBankIbk
+from .models import IndividualBankIbk, IndividualBankIbkInfo
 
 class SearchIndividualBankView(APIView):
     def get(self, request):
         customerid = request.query_params.get('customerid')
         lcic_id = request.query_params.get('lcic_id')
-        bnk_code = request.query_params.get('bnk_code')  # bnk_code ຂອງຜູ້ໃຊ້
+        bnk_code = request.query_params.get('bnk_code')  
 
-        # ຕ້ອງມີ customerid ຫຼື lcic_id
         if not any([customerid, lcic_id]):
             return Response({
                 "results": [],
@@ -30939,20 +30675,16 @@ class SearchIndividualBankView(APIView):
 
         query = Q()
 
-        # === ກໍລະນີ 1: ມີ customerid ===
+        # ຊອກໃນຕາຕະລາງທີ 1 ກ່ອນ
         if customerid:
             query &= Q(customerid=customerid)
 
-            # ຖ້າມີ bnk_code → ກວດສອບເງື່ອນໄຂພິເສດ
             if bnk_code:
                 if bnk_code == '01':
-                    # bnk_code = 01 → ເຫັນທຸກ bnk_code
-                    pass  # ບໍ່ເພີ່ມເງື່ອນໄຂ bnk_code
+                    pass 
                 else:
-                    # bnk_code ≠ 01 → ເຫັນພຽງ bnk_code ຂອງຕົນເອງ
                     query &= Q(bnk_code=bnk_code)
             else:
-                # ຖ້າບໍ່ມີ bnk_code → ໃຊ້ logic ເກົ່າ (valid bnk_code ທີ່ເຄີຍມີ)
                 valid_bnk_codes = IndividualBankIbk.objects.filter(
                     customerid=customerid
                 ).values_list('bnk_code', flat=True).distinct()
@@ -30965,30 +30697,58 @@ class SearchIndividualBankView(APIView):
 
                 query &= Q(bnk_code__in=valid_bnk_codes)
 
-            # ຖ້າມີ lcic_id → ເພີ່ມເງື່ອນໄຂ
             if lcic_id:
                 query &= Q(lcic_id=lcic_id)
 
-        # === ກໍລະນີ 2: ມີແຕ່ lcic_id ===
         elif lcic_id:
             query &= Q(lcic_id=lcic_id)
 
-            # ຖ້າມີ bnk_code → ກວດສອບເງື່ອນໄຂພິເສດ
             if bnk_code:
                 if bnk_code != '01':
-                    # ຖ້າບໍ່ແມ່ນ 01 → ຈຳກັດ bnk_code ຂອງຕົນເອງ
                     query &= Q(bnk_code=bnk_code)
 
-        # === ດຶງຂໍ້ມູນ ===
+        # ຄົ້ນຫາໃນຕາຕະລາງທີ 1
         results = IndividualBankIbk.objects.filter(query).values(
             'customerid', 'lcic_id', 'bnk_code',
-            'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname','branchcode'
+            'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname', 'branchcode'
         )
+
+        # ຖ້າບໍ່ພົບໃນຕາຕະລາງທີ 1 ແລະມີ lcic_id → ຊອກໃນຕາຕະລາງທີ 2
+        if not results and lcic_id:
+            results_info = IndividualBankIbkInfo.objects.filter(
+                lcic_id=lcic_id
+            ).values(
+                'lcic_id', 'ind_name', 'ind_surname', 
+                'ind_lao_name', 'ind_lao_surname'
+            )
+
+            if results_info:
+                # ເພີ່ມ field ທີ່ບໍ່ມີໃນຕາຕະລາງທີ 2
+                results_list = []
+                for item in results_info:
+                    item['customerid'] = None
+                    item['bnk_code'] = None
+                    item['branchcode'] = None
+                    results_list.append(item)
+
+                return Response({
+                    "count": len(results_list),
+                    "results": results_list,
+                    "source": "IndividualBankIbkInfo"
+                })
 
         return Response({
             "count": len(results),
-            "results": list(results)
+            "results": list(results),
+            "source": "IndividualBankIbk" if results else None
         })
+
+
+
+
+
+
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Q
