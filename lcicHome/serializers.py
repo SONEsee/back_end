@@ -7,9 +7,35 @@ from .models import Login, memberInfo, User_Group
 from django.core.validators import MaxValueValidator, MinLengthValidator
 
 
+# serializers.py
+from rest_framework import serializers
+from .models import RegisterCustomerWhitEnterprise, CompanyInfoMappingMemberSubmit
 
+class RegisterCustomerWhitEnterpriseSerializer(serializers.ModelSerializer):
+    InsertDate = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S", read_only=True)
+    UpdateDate = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S", read_only=True)
+    
+    class Meta:
+        model = RegisterCustomerWhitEnterprise
+        fields = '__all__'
 
+class CompanyInfoMappingMemberSubmitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CompanyInfoMappingMemberSubmit
+        fields = '__all__'
 
+from rest_framework import serializers
+from .models import CompanyInfoMappingMemberSubmit, RegisterCustomerWhitEnterprise
+
+class CompanyInfoMappingMemberSubmitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CompanyInfoMappingMemberSubmit
+        fields = '__all__'
+        read_only_fields = ['com_sys_id']  
+class CompanyInfoMappingMemberSubmitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CompanyInfoMappingMemberSubmit
+        fields = '__all__'
 
 
 class CustomerInfoINDSerializer(serializers.ModelSerializer):
@@ -2302,7 +2328,7 @@ class CustomerUploadListSerializer(serializers.ModelSerializer):
         ]
     
 from rest_framework import serializers
-from .models import scr_atttype_desc, scr_attribute_table
+from .models import scr_atttype_desc, scr_attribute_table,scr_atttype_desc_new, scr_attribute_table_new
 
 class ScrAttTypeDescSerializer(serializers.ModelSerializer):
     class Meta:
@@ -2314,4 +2340,16 @@ class ScrAttributeTableSerializer(serializers.ModelSerializer):
     class Meta:
         model = scr_attribute_table
         fields = '__all__'
+        
+class ScrAttTypeDescnewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = scr_atttype_desc_new
+        fields = '__all__'
+
+
+class ScrAttributeTablenewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = scr_attribute_table_new
+        fields = '__all__'
+
 

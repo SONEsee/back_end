@@ -2071,6 +2071,30 @@ class CollateralNew(models.Model):
         
     def __str__(self):
         return f"collateral_new {self.id} - {self.filename}"
+    
+class MactCustomer(models.Model):
+    bank_id = models.CharField(max_length=100, blank=True, null=True)
+    branch_id = models.CharField(max_length=100, blank=True, null=True)
+    filename = models.CharField(max_length=255)
+    customer_id = models.CharField(max_length=100)
+    user = models.CharField(max_length=100, blank=True, null=True)
+    insertdate = models.DateTimeField(auto_now_add=True)
+    updatedate = models.DateTimeField(null=True, blank=True)
+    pathfile = models.CharField(max_length=255, blank=True, null=True)
+    status = models.CharField(max_length=100)   
+    LCIC_reques = models.CharField(max_length=100, blank=True, null=True)
+    decaption = models.TextField(null=True)
+    def save(self, *args, **kwargs):
+        
+        if self.pk:  
+            self.updatedate = timezone.now()
+        super().save(*args, **kwargs)
+
+    class Meta:
+        db_table = 'mactcustomer'  
+        
+    def __str__(self):
+        return f"customer {self.id} - {self.filename}"
 
 
 
@@ -2636,7 +2660,7 @@ class IndividualBankIbkInfo_Register(models.Model):
 from django.db import models
 
 class CompanyInfoMapping(models.Model):
-    com_sys_id = models.IntegerField(primary_key=True)  # unique system id
+    com_sys_id = models.IntegerField(primary_key=True)  
     segment = models.CharField(max_length=5, null=True, blank=True)
     mm_com_sys_id = models.IntegerField(null=True, blank=True)
     bnk_code = models.CharField(max_length=10, null=True, blank=True)
@@ -2664,6 +2688,37 @@ class CompanyInfoMapping(models.Model):
     LCIC_code = models.CharField(max_length=255, null=True, blank=True)
     enterprise_code = models.CharField(max_length=255, null=True, blank=True)
     status = models.CharField(max_length=255, null=True, blank=True)
+    
+class CompanyInfoMappingMemberSubmit(models.Model):
+    com_sys_id = models.AutoField(primary_key=True) 
+    segment = models.CharField(max_length=5, null=True, blank=True)
+    mm_com_sys_id = models.IntegerField(null=True, blank=True)
+    bnk_code = models.CharField(max_length=10, null=True, blank=True)
+    branchcode = models.CharField(max_length=30, null=True, blank=True)
+    customerid = models.CharField(max_length=30, null=True, blank=True)
+    com_enterprise_code = models.CharField(max_length=30, null=True, blank=True)
+    com_registration_date = models.CharField(max_length=30, null=True, blank=True)
+    com_registration_place_issue = models.TextField(null=True, blank=True)
+    com_name = models.CharField(max_length=100, null=True, blank=True)
+    com_lao_name = models.TextField(null=True, blank=True)
+    com_tax_no = models.CharField(max_length=25, null=True, blank=True)
+    com_category = models.CharField(max_length=50, null=True, blank=True)
+    com_regulatory_capital = models.CharField(max_length=50, null=True, blank=True)
+    com_regulatory_capital_unit = models.CharField(max_length=10, null=True, blank=True)
+    com_insert_date = models.CharField(max_length=30, null=True, blank=True)
+    com_update_date = models.CharField(max_length=30, null=True, blank=True)
+    mm_action_date = models.CharField(max_length=30, null=True, blank=True)
+    mm_log = models.CharField(max_length=50, null=True, blank=True)
+    mm_comment = models.TextField(null=True, blank=True)
+    mm_by = models.CharField(max_length=50, null=True, blank=True)
+    blk_sys_id = models.IntegerField(null=True, blank=True)
+    mm_status = models.CharField(max_length=1, null=True, blank=True)
+    is_manual = models.CharField(max_length=1, null=True, blank=True)
+    com_lao_name_code = models.CharField(max_length=255, null=True, blank=True)
+    LCIC_code = models.CharField(max_length=255, null=True, blank=True)
+    enterprise_code = models.CharField(max_length=255, null=True, blank=True)
+    status = models.CharField(max_length=255, null=True, blank=True)
+    id_file = models.CharField(max_length=50, null=True, blank=True)
     
     
 class UserAccessLog(models.Model):

@@ -19686,7 +19686,7 @@ from .serializers import MainCatalogCatSerializer  # Serializer for your model
 
 class CatalogCatListView(APIView):
     def get(self, request):
-        cats = Main_catalog_cat.objects.all()
+        cats = Main_catalog_cat.objects.filter(ct_type='LPR').order_by('cat_sys_id')
         serializer = MainCatalogCatSerializer(cats, many=True)
         return Response(serializer.data)
 
@@ -23036,236 +23036,6 @@ def fix_problematic_dates():
     
     print(f"Successfully fixed {count} bills with problematic dates")
     return count
-
-# from utility.models import w_customer_info, Utility_Bill, searchlog_utility, request_charge_utility
-# from .serializers import WaterCustomerSerializer, UtilityBillSerializer, SearchLogUtilitySerializer
-# import uuid
-# from django.db.models import Func, F, Value
-
-# class UtilityReportAPIView(APIView):
-#     permission_classes = [IsAuthenticated]
-
-#     def get(self, request):
-#         try:
-#             customer_id = request.query_params.get('water')
-#             if not customer_id:
-#                 return Response({"error": "water parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-#             user = request.user
-#             bank = user.MID
-#             sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
-
-#             bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
-#             charge_bank_type = bank_info.bnk_type
-#             if charge_bank_type == 1:
-#                 chargeType = ChargeMatrix.objects.get(chg_sys_id=9)
-#             else:
-#                 chargeType = ChargeMatrix.objects.get(chg_sys_id=10)
-#             charge_amount_com = chargeType.chg_amount
-
-#             customer = w_customer_info.objects.get(Customer_ID=customer_id)
-
-#             # Custom function to convert MM-YYYY to YYYY-MM for sorting (PostgreSQL)
-#             class ReorderMonthYear(Func):
-#                 function = "TO_CHAR"
-#                 template = (
-#                     "CASE WHEN LENGTH(%(expressions)s) = 7 THEN "
-#                     "SUBSTRING(%(expressions)s FROM 4 FOR 4) || '-' || SUBSTRING(%(expressions)s FROM 1 FOR 2) "
-#                     "ELSE NULL END"
-#                 )
-
-#             # Filter and validate bills
-#             bills = Utility_Bill.objects.filter(Customer_ID=customer_id).exclude(
-#                 InvoiceMonth__isnull=True
-#             ).exclude(
-#                 InvoiceMonth=""
-#             ).annotate(
-#                 year_month=ReorderMonthYear(F('InvoiceMonth'))
-#             ).order_by('-year_month')
-
-#             # Log the search
-#             search_log = searchlog_utility.objects.create(
-#                 bnk_code=bank.bnk_code,
-#                 sys_usr=sys_usr,
-#                 wt_cusid=customer_id,
-#                 edl_cusid='',
-#                 tel_cusid='',
-#                 proID_edl='',
-#                 proID_wt='',
-#                 proID_tel='',
-#                 credittype='water',
-#                 inquiry_date=timezone.now(),
-#                 inquiry_time=timezone.now()
-#             )
-
-#             # Get current timestamp for rec_insert_date
-#             rec_insert_date = timezone.now()
-#             date_str = rec_insert_date.strftime('%d%m%Y')
-#             report_date = rec_insert_date.strftime('%d-%m-%Y')
-#             rec_reference_code = f"{chargeType.chg_code}-0-{bank.bnk_code}-{date_str}-{search_log.search_id}"
-#             rec_reference_code = rec_reference_code[:100]
-
-#             # Log the charge request
-#             request_charge_utility.objects.create(
-#                 usr_session_id=str(uuid.uuid4()),
-#                 search_id=search_log,
-#                 bnk_code=bank.bnk_code,
-#                 chg_code=chargeType.chg_code,
-#                 chg_amount=charge_amount_com,
-#                 chg_unit='LAK',
-#                 sys_usr=sys_usr,
-#                 credit_type='water',
-#                 wt_cusid=customer_id,
-#                 edl_cusid='',
-#                 tel_cusid='',
-#                 proID_edl='',
-#                 proID_wt='',
-#                 proID_tel='',
-#                 rec_reference_code=rec_reference_code
-#             )
-
-#             customer_serializer = WaterCustomerSerializer(customer)
-#             bill_serializer = UtilityBillSerializer(bills, many=True)
-#             search_log_serializer = SearchLogUtilitySerializer(search_log)
-
-#             # Construct reference_data as a tuple
-#             reference_data = (
-#                 rec_reference_code,
-#                 customer_id,
-#                 report_date,
-#                 search_log_serializer.data,
-#                 rec_insert_date.isoformat()
-#             )
-
-#             # Return response with reference_data as a list (JSON-compatible)
-#             return Response({
-#                 "reference_data": reference_data,
-#                 "customer": [customer_serializer.data],
-#                 "bill": bill_serializer.data
-#             }, status=status.HTTP_200_OK)
-
-#         except w_customer_info.DoesNotExist:
-#             return Response({"error": "Customer not found"}, status=status.HTTP_404_NOT_FOUND)
-#         except memberInfo.DoesNotExist:
-#             return Response({"error": "Bank information not found"}, status=status.HTTP_400_BAD_REQUEST)
-#         except ChargeMatrix.DoesNotExist:
-#             return Response({"error": "Charge configuration not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-#         except Exception as e:
-#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-      
-# from utility.models import edl_customer_info, Electric_Bill, searchlog_utility, request_charge_utility
-# from .serializers import EDLCustomerSerializer, ElectricBillSerializer, SearchLogUtilitySerializer
-# import uuid
-# from django.db.models import Func, F, Value
-
-# class ElectricReportAPIView(APIView):
-#     permission_classes = [IsAuthenticated]
-
-#     def get(self, request):
-#         try:
-#             customer_id = request.query_params.get('edl')
-#             if not customer_id:
-#                 return Response({"error": "water parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-#             user = request.user
-#             bank = user.MID
-#             sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
-
-#             bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
-#             charge_bank_type = bank_info.bnk_type
-#             if charge_bank_type == 1:
-#                 chargeType = ChargeMatrix.objects.get(chg_sys_id=9)
-#             else:
-#                 chargeType = ChargeMatrix.objects.get(chg_sys_id=10)
-#             charge_amount_com = chargeType.chg_amount
-
-#             customer = edl_customer_info.objects.get(Customer_ID=customer_id)
-
-#             # edl = edl_customer_info.objects.get(Customer_ID=customer_id)
-#             # Custom function to convert MM-YYYY to YYYY-MM for sorting (PostgreSQL)
-#             class ReorderMonthYear(Func):
-#                 function = "TO_CHAR"
-#                 template = "SUBSTRING(%(expressions)s FROM 4 FOR 4) || '-' || SUBSTRING(%(expressions)s FROM 1 FOR 2)"
-
-#             # Sort bills by InvoiceMonth in descending order
-#             bills = Electric_Bill.objects.filter(Customer_ID=customer_id).annotate(
-#                 year_month=ReorderMonthYear(F('InvoiceMonth'))
-#             ).order_by('-year_month')
-
-#             # edl_bill = Electric_Bill.objects.filter(Customer_ID=customer_id_2).annotate(
-#             #     year_month=ReorderMonthYear(F('InvoiceMonth'))
-#             # ).order_by('-year_month')
-            
-#             # Log the search
-#             search_log = searchlog_utility.objects.create(
-#                 bnk_code=bank.bnk_code,
-#                 sys_usr=sys_usr,
-#                 wt_cusid=customer_id,
-#                 edl_cusid='',
-#                 tel_cusid='',
-#                 proID_edl='',
-#                 proID_wt='',
-#                 proID_tel='',
-#                 credittype='edl',
-#                 inquiry_date=timezone.now(),
-#                 inquiry_time=timezone.now()
-#             )
-
-#             # Get current timestamp for rec_insert_date
-#             rec_insert_date = timezone.now()
-#             date_str = rec_insert_date.strftime('%d%m%Y')
-#             report_date = rec_insert_date.strftime('%d-%m-%Y')
-#             rec_reference_code = f"{chargeType.chg_code}-0-{bank.bnk_code}-{date_str}-{search_log.search_id}"
-#             rec_reference_code = rec_reference_code[:100]
-
-#             # Log the charge request
-#             request_charge_utility.objects.create(
-#                 usr_session_id=str(uuid.uuid4()),
-#                 search_id=search_log,
-#                 bnk_code=bank.bnk_code,
-#                 chg_code=chargeType.chg_code,
-#                 chg_amount=charge_amount_com,
-#                 chg_unit='LAK',
-#                 sys_usr=sys_usr,
-#                 credit_type='edl',
-#                 wt_cusid=customer_id,
-#                 edl_cusid='',
-#                 tel_cusid='',
-#                 proID_edl='',
-#                 proID_wt='',
-#                 proID_tel='',
-#                 rec_reference_code=rec_reference_code
-#             )
-
-#             customer_serializer = EDLCustomerSerializer(customer)
-#             bill_serializer = ElectricBillSerializer(bills, many=True)
-#             search_log_serializer = SearchLogUtilitySerializer(search_log)
-
-#             # Construct reference_data as a tuple
-#             reference_data = (
-#                 rec_reference_code,
-#                 customer_id,
-#                 report_date,
-#                 search_log_serializer.data,  # Serialized search_log
-#                 rec_insert_date.isoformat()  # Convert datetime to ISO string
-#             )
-
-#             # Return response with reference_data as a list (JSON-compatible)
-#             return Response({
-#                 "reference_data": reference_data,
-#                 "customer": [customer_serializer.data],
-#                 "bill": bill_serializer.data
-#             }, status=status.HTTP_200_OK)
-
-#         except w_customer_info.DoesNotExist:
-#             return Response({"error": "Customer not found"}, status=status.HTTP_404_NOT_FOUND)
-#         except memberInfo.DoesNotExist:
-#             return Response({"error": "Bank information not found"}, status=status.HTTP_400_BAD_REQUEST)
-#         except ChargeMatrix.DoesNotExist:
-#             return Response({"error": "Charge configuration not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-#         except Exception as e:
-#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -30884,53 +30654,19 @@ class WaterUploadSummaryAPIView(APIView):
         
         return Response(result, status=200)
 
-# class WaterUploadSummaryAPIView(APIView):
-#     """
-#     Step 6: Get upload summary across all periods
-#     GET /api/water-supply/statistics/summary/
-#     Query params:
-#         - start_month: Start month (optional)
-#         - end_month: End month (optional)
-#     """
-#     permission_classes = [IsAuthenticated]
-    
-#     def get(self, request):
-#         start_month = request.query_params.get('start_month')
-#         end_month = request.query_params.get('end_month')
-        
-#         queryset = WaterUploadDataTracking.objects.all()
-        
-#         if start_month:
-#             queryset = queryset.filter(upload_month__gte=start_month)
-#         if end_month:
-#             queryset = queryset.filter(upload_month__lte=end_month)
-        
-#         # Group by month and aggregate statistics
-#         summary = queryset.values('upload_month').annotate(
-#             total_provinces=Count('pro_id', distinct=True),
-#             total_districts=Count('dis_id', distinct=True),
-#             total_bills=Sum('payment_records'),
-#             total_customers=Sum('customer_records'),
-#             completed_uploads=Count('id', filter=Q(status='completed')),
-#             pending_uploads=Count('id', filter=Q(status='pending')),
-#             failed_uploads=Count('id', filter=Q(status='failed'))
-#         ).order_by('-upload_month')
-        
-#         serializer = UploadSummarySerializer(summary, many=True)
-#         return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Q
-from .models import IndividualBankIbk
+from .models import IndividualBankIbk, IndividualBankIbkInfo
 
 class SearchIndividualBankView(APIView):
     def get(self, request):
         customerid = request.query_params.get('customerid')
         lcic_id = request.query_params.get('lcic_id')
-        bnk_code = request.query_params.get('bnk_code')  # bnk_code ຂອງຜູ້ໃຊ້
+        bnk_code = request.query_params.get('bnk_code')  
 
-        # ຕ້ອງມີ customerid ຫຼື lcic_id
         if not any([customerid, lcic_id]):
             return Response({
                 "results": [],
@@ -30939,20 +30675,16 @@ class SearchIndividualBankView(APIView):
 
         query = Q()
 
-        # === ກໍລະນີ 1: ມີ customerid ===
+        # ຊອກໃນຕາຕະລາງທີ 1 ກ່ອນ
         if customerid:
             query &= Q(customerid=customerid)
 
-            # ຖ້າມີ bnk_code → ກວດສອບເງື່ອນໄຂພິເສດ
             if bnk_code:
                 if bnk_code == '01':
-                    # bnk_code = 01 → ເຫັນທຸກ bnk_code
-                    pass  # ບໍ່ເພີ່ມເງື່ອນໄຂ bnk_code
+                    pass 
                 else:
-                    # bnk_code ≠ 01 → ເຫັນພຽງ bnk_code ຂອງຕົນເອງ
                     query &= Q(bnk_code=bnk_code)
             else:
-                # ຖ້າບໍ່ມີ bnk_code → ໃຊ້ logic ເກົ່າ (valid bnk_code ທີ່ເຄີຍມີ)
                 valid_bnk_codes = IndividualBankIbk.objects.filter(
                     customerid=customerid
                 ).values_list('bnk_code', flat=True).distinct()
@@ -30965,30 +30697,58 @@ class SearchIndividualBankView(APIView):
 
                 query &= Q(bnk_code__in=valid_bnk_codes)
 
-            # ຖ້າມີ lcic_id → ເພີ່ມເງື່ອນໄຂ
             if lcic_id:
                 query &= Q(lcic_id=lcic_id)
 
-        # === ກໍລະນີ 2: ມີແຕ່ lcic_id ===
         elif lcic_id:
             query &= Q(lcic_id=lcic_id)
 
-            # ຖ້າມີ bnk_code → ກວດສອບເງື່ອນໄຂພິເສດ
             if bnk_code:
                 if bnk_code != '01':
-                    # ຖ້າບໍ່ແມ່ນ 01 → ຈຳກັດ bnk_code ຂອງຕົນເອງ
                     query &= Q(bnk_code=bnk_code)
 
-        # === ດຶງຂໍ້ມູນ ===
+        # ຄົ້ນຫາໃນຕາຕະລາງທີ 1
         results = IndividualBankIbk.objects.filter(query).values(
             'customerid', 'lcic_id', 'bnk_code',
-            'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname','branchcode'
+            'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname', 'branchcode'
         )
+
+        # ຖ້າບໍ່ພົບໃນຕາຕະລາງທີ 1 ແລະມີ lcic_id → ຊອກໃນຕາຕະລາງທີ 2
+        if not results and lcic_id:
+            results_info = IndividualBankIbkInfo.objects.filter(
+                lcic_id=lcic_id
+            ).values(
+                'lcic_id', 'ind_name', 'ind_surname', 
+                'ind_lao_name', 'ind_lao_surname'
+            )
+
+            if results_info:
+                # ເພີ່ມ field ທີ່ບໍ່ມີໃນຕາຕະລາງທີ 2
+                results_list = []
+                for item in results_info:
+                    item['customerid'] = None
+                    item['bnk_code'] = None
+                    item['branchcode'] = None
+                    results_list.append(item)
+
+                return Response({
+                    "count": len(results_list),
+                    "results": results_list,
+                    "source": "IndividualBankIbkInfo"
+                })
 
         return Response({
             "count": len(results),
-            "results": list(results)
+            "results": list(results),
+            "source": "IndividualBankIbk" if results else None
         })
+
+
+
+
+
+
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Q
@@ -31238,8 +30998,263 @@ class UserDetailAPIView(APIView):
         user.delete()
         return Response({"message": "User deleted successfully"}, status=status.HTTP_200_OK)
 
-    
-    
+# views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+from django.utils import timezone
+from .models import (
+    RegisterCustomerWhitEnterprise,
+    CompanyInfoMappingMemberSubmit,
+    CompanyInfoMapping
+)
+
+
+class ApproveEnterpriseMappingView(APIView):
+    """
+    ອະນຸມັດການພູກລະຫັດວິສາຫະກິດ
+    POST: { "register_id": 25 }
+    """
+    @transaction.atomic
+    def post(self, request):
+        register_id = request.data.get("register_id")
+
+        if not register_id:
+            return Response({
+                "success": False,
+                "message": "ກະລຸນາສົ່ງ register_id ມາ"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+         
+            reg = RegisterCustomerWhitEnterprise.objects.get(id=register_id)
+
+         
+            submit = CompanyInfoMappingMemberSubmit.objects.filter(
+                id_file=str(register_id)
+            ).first()
+
+            if not submit:
+                return Response({
+                    "success": False,
+                    "message": f"ບໍ່ພົບຂໍ້ມູນທີ່ສົ່ງມາ (id_file = {register_id})"
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            
+            master_id = submit.mm_com_sys_id or submit.com_sys_id
+            if not master_id:
+                return Response({
+                    "success": False,
+                    "message": "ບໍ່ພົບ com_sys_id ຫຼື mm_com_sys_id"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+          
+            CompanyInfoMapping.objects.update_or_create(
+                com_sys_id=master_id,
+                defaults={
+                    "segment": submit.segment,
+                    "mm_com_sys_id": submit.mm_com_sys_id,
+                    "bnk_code": submit.bnk_code,
+                    "branchcode": submit.branchcode,
+                    "customerid": submit.customerid,
+                    "com_enterprise_code": submit.com_enterprise_code,
+                    "com_registration_date": submit.com_registration_date,
+                    "com_registration_place_issue": submit.com_registration_place_issue,
+                    "com_name": submit.com_name,
+                    "com_lao_name": submit.com_lao_name,
+                    "com_tax_no": submit.com_tax_no,
+                    "com_category": submit.com_category,
+                    "com_regulatory_capital": submit.com_regulatory_capital,
+                    "com_regulatory_capital_unit": submit.com_regulatory_capital_unit,
+                    "com_insert_date": submit.com_insert_date,
+                    "com_update_date": timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "mm_action_date": timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "mm_log": "Approved by admin",
+                    "mm_comment": submit.mm_comment or "",
+                    "mm_by": request.user.username if request.user.is_authenticated else "system",
+                    "blk_sys_id": submit.blk_sys_id,
+                    "mm_status": "A", 
+                    "is_manual": submit.is_manual,
+                    "com_lao_name_code": submit.com_lao_name_code,
+                    "LCIC_code": submit.LCIC_code,
+                    "enterprise_code": reg.EnterpriseID,  
+                    "status": "1",
+                }
+            )
+
+            
+            reg.status = 0
+            reg.user_update = request.user.username if request.user.is_authenticated else "system"
+            reg.UpdateDate = timezone.now()
+            reg.save()
+
+            return Response({
+                "success": True,
+                "message": "ອະນຸມັດ ແລະ ບັນທຶກຂໍ້ມູນສຳເລັດແລ້ວ",
+                "data": {
+                    "register_id": reg.id,
+                    "status": reg.status,  
+                    "enterprise_code": reg.EnterpriseID,
+                    "customerid": submit.customerid,
+                    "master_com_sys_id": master_id
+                }
+            }, status=status.HTTP_200_OK)
+
+        except RegisterCustomerWhitEnterprise.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "ບໍ່ພົບລາຍການພູກລະຫັດນີ້"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "message": f"ເກີດຂໍ້ຜິດພາດ: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)      
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from django.core.paginator import Paginator, EmptyPage
+from django.db.models import Q
+from .models import RegisterCustomerWhitEnterprise, CompanyInfoMappingMemberSubmit
+from .serializers import (
+    RegisterCustomerWhitEnterpriseSerializer,
+    CompanyInfoMappingMemberSubmitSerializer
+)
+
+@api_view(['GET'])
+def get_register_customer_list(request):
+ 
+    try:
+        
+        user_bnk_code = request.GET.get('bnk_code', None)
+        
+        if not user_bnk_code:
+            return Response({
+                'success': False,
+                'message': 'ກະລຸນາລະບຸ bnk_code'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 10))
+        
+        
+        bnk_code_filter = request.GET.get('bnk_code_filter', None)
+        search = request.GET.get('search', None)
+        filter_status = request.GET.get('status', None)
+        
+        
+        queryset = RegisterCustomerWhitEnterprise.objects.all()
+        
+        
+        if user_bnk_code == '01':
+            
+            if bnk_code_filter:
+               
+                queryset = queryset.filter(bnk_code=bnk_code_filter)
+        else:
+            
+            queryset = queryset.filter(bnk_code=user_bnk_code)
+            
+            
+            if bnk_code_filter and bnk_code_filter != user_bnk_code:
+                return Response({
+                    'success': False,
+                    'message': 'ທ່ານບໍ່ມີສິດເບິ່ງຂໍ້ມູນຂອງ bnk_code ອື່ນ'
+                }, status=status.HTTP_403_FORBIDDEN)
+        
+        
+        if search:
+            queryset = queryset.filter(
+                Q(EnterpriseID__icontains=search) |
+                Q(customerID__icontains=search) |
+                Q(LCIC_code__icontains=search)
+            )
+        
+        
+        if filter_status is not None:
+            queryset = queryset.filter(status=filter_status)
+        
+       
+        queryset = queryset.order_by('-InsertDate')
+        
+        
+        paginator = Paginator(queryset, page_size)
+        
+        try:
+            page_obj = paginator.page(page)
+        except EmptyPage:
+            page_obj = paginator.page(paginator.num_pages)
+        
+       
+        serializer = RegisterCustomerWhitEnterpriseSerializer(page_obj, many=True)
+        
+        return Response({
+            'success': True,
+            'data': serializer.data,
+            'pagination': {
+                'current_page': page_obj.number,
+                'total_pages': paginator.num_pages,
+                'total_items': paginator.count,
+                'page_size': page_size,
+                'has_next': page_obj.has_next(),
+                'has_previous': page_obj.has_previous(),
+            },
+            'permissions': {
+                'is_admin': user_bnk_code == '01',
+                'user_bnk_code': user_bnk_code,
+                'filtered_by': bnk_code_filter if bnk_code_filter else 'all' if user_bnk_code == '01' else user_bnk_code
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except ValueError as e:
+        return Response({
+            'success': False,
+            'message': 'ຄ່າ page ຫຼື page_size ບໍ່ຖືກຕ້ອງ'
+        }, status=status.HTTP_400_BAD_REQUEST)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# views.py
+@api_view(['GET'])
+def get_company_info_by_id_file(request, id_file):
+   
+    try:
+        
+        company_info = CompanyInfoMappingMemberSubmit.objects.filter(
+            id_file=id_file
+        ).first()
+        
+        if not company_info:
+            return Response({
+                'success': False,
+                'message': 'ບໍ່ພົບຂໍ້ມູນ'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+       
+        serializer = CompanyInfoMappingMemberSubmitSerializer(company_info)
+        
+        return Response({
+            'success': True,
+            'data': serializer.data
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from .models import User_Group
@@ -31253,7 +31268,103 @@ class UserGroupList(APIView):
         groups = User_Group.objects.all().order_by('nameL')
         serializer = UserGroupSerializers(groups, many=True)
         return Response(serializer.data)
-    
+
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+from django.db.models import Max
+from .models import RegisterCustomerWhitEnterprise, CompanyInfoMappingMemberSubmit, EnterpriseInfo
+from .serializers import CompanyInfoMappingMemberSubmitSerializer
+
+@api_view(['POST'])
+def create_company_with_registration(request):
+    """
+    ສ້າງຂໍ້ມູນບໍລິສັດພ້ອມທັງລົງທະບຽນ
+    ກວດສອບ EnterpriseID ກ່ອນບັນທຶກ
+    """
+    try:
+       
+        company_data = request.data.copy()
+        enterprise_id = company_data.get('enterprise_code')
+        
+       
+        if not enterprise_id:
+            return Response({
+                'success': False,
+                'message': 'ກະລຸນາປ້ອນລະຫັດວິສາຫະກິດ (enterprise_code)'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+       
+        enterprise_exists = EnterpriseInfo.objects.filter(
+            EnterpriseID=enterprise_id
+        ).exists()
+        
+        if not enterprise_exists:
+            return Response({
+                'success': False,
+                'message': 'ຍັງບໍ່ທັນໄດ້ລົງທະບຽນອອກລະຫັດຂສລ ສຳຫຼັບລະຫັດວິສາຫະກິດນີ້ ກະລຸນາລົງທະບຽນຄືນໃໝ່',
+                'enterprise_id': enterprise_id
+            }, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        
+       
+        with transaction.atomic():
+          
+            max_id = CompanyInfoMappingMemberSubmit.objects.aggregate(
+                max_id=Max('com_sys_id')
+            )['max_id']
+            new_com_sys_id = (max_id or 0) + 1
+            company_data['com_sys_id'] = new_com_sys_id
+            
+           
+            register_data = {
+                'EnterpriseID': enterprise_id,
+                'customerID': company_data.get('customerid'),
+                'LCIC_code': company_data.get('LCIC_code'),
+                'bnk_code': company_data.get('bnk_code'),
+                'branch': company_data.get('branchcode'),
+                'status': 0,
+                'user_insert': request.user.username if request.user.is_authenticated else None,
+            }
+            
+            register_obj = RegisterCustomerWhitEnterprise.objects.create(**register_data)
+            
+            
+            company_data['id_file'] = str(register_obj.id)
+            
+           
+            serializer = CompanyInfoMappingMemberSubmitSerializer(data=company_data)
+            
+            if serializer.is_valid():
+                company_obj = serializer.save()
+                
+               
+                if not company_obj.id_file:
+                    company_obj.id_file = str(register_obj.id)
+                    company_obj.save(update_fields=['id_file'])
+                
+                return Response({
+                    'success': True,
+                    'message': 'ສ້າງຂໍ້ມູນສຳເລັດ',
+                    'data': {
+                        'register_id': register_obj.id,
+                        'company_id': company_obj.com_sys_id,
+                        'id_file': company_obj.id_file,
+                        'enterprise_id': enterprise_id
+                    }
+                }, status=status.HTTP_201_CREATED)
+            else:
+                return Response({
+                    'success': False,
+                    'message': 'ຂໍ້ມູນບໍ່ຖືກຕ້ອງ',
+                    'errors': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)   
 # views.py
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -32567,9 +32678,16 @@ class ScoringIndividualInfoSearchView(APIView):
             if not lcic_id:
                 return Response({'error': 'lcic_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-            all_individual_info = IndividualBankIbkInfo.objects.filter(
+            # ⭐ เปลี่ยนการค้นหา: ลองค้นหาใน IndividualBankIbk ก่อน
+            all_individual_info = IndividualBankIbk.objects.filter(
                 lcic_id=lcic_id
-            ).order_by('mm_ind_sys_id')
+            ).order_by('ind_sys_id')
+
+            # ⭐ ถ้าไม่เจอใน IndividualBankIbk → ค้นหาใน IndividualBankIbkInfo
+            if not all_individual_info.exists():
+                all_individual_info = IndividualBankIbkInfo.objects.filter(
+                    lcic_id=lcic_id
+                ).order_by('mm_ind_sys_id')
 
             if not all_individual_info.exists():
                 return Response({'error': 'Individual info not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -32577,11 +32695,17 @@ class ScoringIndividualInfoSearchView(APIView):
             unique_individuals = []
             seen_mm_ids = set()
             for info in all_individual_info:
-                if info.mm_ind_sys_id and info.mm_ind_sys_id not in seen_mm_ids:
+                mm_id = getattr(info, 'ind_sys_id', None) or getattr(info, 'mm_ind_sys_id', None)
+                if mm_id and mm_id not in seen_mm_ids:
                     unique_individuals.append(info)
-                    seen_mm_ids.add(info.mm_ind_sys_id)
+                    seen_mm_ids.add(mm_id)
 
-            mm_ids = [info.mm_ind_sys_id for info in unique_individuals if info.mm_ind_sys_id]
+            mm_ids = []
+            for info in unique_individuals:
+                mm_id = getattr(info, 'ind_sys_id', None) or getattr(info, 'mm_ind_sys_id', None)
+                if mm_id:
+                    mm_ids.append(mm_id)
+
             bank_records = {}
             if mm_ids:
                 bank_records = {
@@ -32602,7 +32726,8 @@ class ScoringIndividualInfoSearchView(APIView):
             created_logs = []
 
             for info in unique_individuals:
-                bank_record = bank_records.get(info.mm_ind_sys_id)
+                mm_id = getattr(info, 'ind_sys_id', None) or getattr(info, 'mm_ind_sys_id', None)
+                bank_record = bank_records.get(mm_id)
                 customerid = bank_record.customerid if bank_record else ''
                 branch_code = bank_record.branchcode if bank_record else ''
 
@@ -32649,12 +32774,12 @@ class ScoringIndividualInfoSearchView(APIView):
                 charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
                 charge.save()
 
-                # ⭐ เพิ่มข้อมูลให้ครบถ้วน
+                # เพิ่มข้อมูลให้ครบถ้วน
                 created_logs.append({
                     'search_log_id': search_log.search_ID,
                     'charge_id': charge.rec_charge_ID,
-                    'rec_reference_code': charge.rec_reference_code,  # ⭐ ส่งค่านี้
-                    'rec_sys_id': charge.rec_charge_ID,  # ⭐ ส่งค่านี้
+                    'rec_reference_code': charge.rec_reference_code,
+                    'rec_sys_id': charge.rec_charge_ID,
                     'customerid': customerid,
                     'lcic_id': lcic_id,
                     'rec_insert_date': charge.rec_insert_date.strftime('%d/%m/%Y') if hasattr(charge, 'rec_insert_date') and charge.rec_insert_date else now.strftime('%d/%m/%Y')
@@ -32662,13 +32787,13 @@ class ScoringIndividualInfoSearchView(APIView):
 
             serializer = IndividualBankIbkInfoSerializer(unique_individuals, many=True)
 
-            # ⭐ Return ข้อมูลให้ครบถ้วน
+            # Return ข้อมูลให้ครบถ้วน
             return Response({
-                'success': True,  # ⭐ เพิ่ม flag นี้
+                'success': True,
                 'individual_info': serializer.data,
                 'total_found': len(unique_individuals),
                 'log_created': len(created_logs),
-                'created_logs': created_logs,  # ⭐ ส่ง array นี้กลับไป
+                'created_logs': created_logs,
                 'debug_info': {
                     'total_raw_records': all_individual_info.count(),
                     'unique_records': len(unique_individuals),
@@ -32683,8 +32808,6 @@ class ScoringIndividualInfoSearchView(APIView):
                 'error': 'Internal server error',
                 'details': traceback.format_exc()
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
 
 class MainCatalogCatViewSet(viewsets.ModelViewSet):
     queryset = Main_catalog_cat.objects.all().order_by('cat_sys_id')
@@ -33654,50 +33777,6 @@ def get_statistics(request):
             'success': False,
             'error': str(e)
         }, status=status.HTTP_400_BAD_REQUEST)
-
-class CreditScoreAPIView(APIView):
-    """
-    API endpoint to calculate credit score
-    
-    POST /api/credit-score/calculate/
-    GET  /api/credit-score/calculate/?lcic_id=your_lcic_id
-    """
-    
-    def post(self, request):
-        return self._calculate_score(request.data.get('lcic_id'))
-    
-    def get(self, request):
-        return self._calculate_score(request.query_params.get('lcic_id'))
-    
-    def _calculate_score(self, lcic_id):
-        """Calculate credit score with error handling"""
-        try:
-            # Validate lcic_id
-            if not lcic_id:
-                return Response(
-                    {'error': 'lcic_id is required'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Calculate credit score
-            service = CreditScoreService(lcic_id)
-            result = service.calculate_credit_score()
-            
-            # Check result
-            if not result:
-                return Response(
-                    {'error': f'Customer not found with lcic_id: {lcic_id}'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            
-            # Return success
-            return Response({'success': True, 'data': result}, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            return Response(
-                {'error': 'Internal server error', 'message': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
             
             
 # views.py
@@ -36004,13 +36083,174 @@ class MyUploadsListAPIView(generics.ListAPIView):
             }
         })
         
+class CustomerUpdateIDAPIView(APIView):
+    """
+    Update customer_id for confirmed records (one time only)
+    POST /api/register/customer/update-id/
+    Body: { "ind_sys_id": 123, "new_customer_id": "CUST001" }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            ind_sys_id = request.data.get('ind_sys_id')
+            new_customer_id = request.data.get('new_customer_id')
+            
+            if not ind_sys_id or not new_customer_id:
+                return Response({
+                    'success': False,
+                    'error': 'ind_sys_id and new_customer_id are required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get record
+            record = IndividualBankIbkInfo_Register.objects.filter(
+                ind_sys_id=ind_sys_id,
+                insert_by=request.user.username  # Only own records
+            ).first()
+
+            if not record:
+                return Response({
+                    'success': False,
+                    'error': 'Record not found or access denied'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Check if confirmed
+            if not record.is_confirmed:
+                return Response({
+                    'success': False,
+                    'error': 'Record must be confirmed before updating customer ID'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check if already updated (one time only)
+            if record.customer_id and record.customer_id != '':
+                return Response({
+                    'success': False,
+                    'error': 'Customer ID can only be updated once'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if not record.lcic_id:
+                return Response({
+                    'success': False,
+                    'error': 'LCIC ID not found'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Update all tables with transaction
+            with transaction.atomic():
+                lcic_id = record.lcic_id
+                
+                # 1. Update Register table
+                record.customer_id = new_customer_id
+                record.update_by = request.user.username
+                record.update_date = timezone.now()
+                record.save()
+
+                # 4. Update IndividualBankIbk
+                IndividualBankIbk.objects.filter(
+                    lcic_id=lcic_id
+                ).update(customerid=new_customer_id)
+
+                # 5. Update IndividualBankIbkInfo_CreateLog
+                IndividualBankIbkInfo_CreateLog.objects.filter(
+                    lcic_id=lcic_id
+                ).update(customer_id=new_customer_id)
+
+                # 6. Update B1_Monthly
+                B1_Monthly.objects.filter(
+                    lcicID=lcic_id
+                ).update(customer_id=new_customer_id)
+
+                # 7. Update B1
+                B1.objects.filter(
+                    lcicID=lcic_id
+                ).update(customer_id=new_customer_id)
+
+            return Response({
+                'success': True,
+                'message': 'Customer ID updated successfully across all tables',
+                'customer_id': new_customer_id,
+                'lcic_id': lcic_id
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': f'Failed to update customer ID: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class CustomerUpdateSegmentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            ind_sys_id = request.data.get('ind_sys_id')
+            segment = request.data.get('segment')
+            
+            if not ind_sys_id or not segment:
+                return Response({
+                    'success': False,
+                    'error': 'ind_sys_id and segment are required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate segment
+            valid_segments = ['A1', 'A2', 'A3']
+            if segment not in valid_segments:
+                return Response({
+                    'success': False,
+                    'error': f'Invalid segment. Must be one of: {", ".join(valid_segments)}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get record
+            record = IndividualBankIbkInfo_Register.objects.filter(
+                ind_sys_id=ind_sys_id
+            ).first()
+
+            if not record:
+                return Response({
+                    'success': False,
+                    'error': 'Record not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Check permissions
+            user_gid = request.user.userprofile.GID.GID if hasattr(request.user, 'userprofile') else 0
+            user_bank_code = request.user.userprofile.MID.id if hasattr(request.user, 'userprofile') else ''
+            
+            is_admin = 1 <= user_gid <= 5
+            is_member = 6 <= user_gid <= 7
+            
+            # Admin can update all, Member can update only own bank
+            if not is_admin and (not is_member or record.bnk_code != user_bank_code):
+                return Response({
+                    'success': False,
+                    'error': 'Access denied. You can only update records from your bank.'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Update segment
+            record.segment = segment
+            record.update_by = request.user.username
+            record.update_date = timezone.now()
+            record.save()
+
+            return Response({
+                'success': True,
+                'message': 'Segment updated successfully',
+                'segment': segment,
+                'ind_sys_id': ind_sys_id
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': f'Failed to update segment: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+            
+            
 from rest_framework import generics
 from .models import scr_atttype_desc, scr_attribute_table
-from .serializers import ScrAttTypeDescSerializer, ScrAttributeTableSerializer
+from .serializers import ScrAttTypeDescSerializer, ScrAttributeTableSerializer,ScrAttributeTablenewSerializer,ScrAttTypeDescnewSerializer
 
-# =======================
 # CRUD สำหรับ scr_atttype_desc
-# =======================
 class ScrAttTypeDescListCreateView(generics.ListCreateAPIView):
     queryset = scr_atttype_desc.objects.all()
     serializer_class = ScrAttTypeDescSerializer
@@ -36020,9 +36260,7 @@ class ScrAttTypeDescRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIVi
     serializer_class = ScrAttTypeDescSerializer
     lookup_field = 'id_desc'
 
-# =======================
 # CRUD สำหรับ scr_attribute_table
-# =======================
 class ScrAttributeTableListCreateView(generics.ListCreateAPIView):
     queryset = scr_attribute_table.objects.all()
     serializer_class = ScrAttributeTableSerializer
@@ -36031,3 +36269,104 @@ class ScrAttributeTableRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAP
     queryset = scr_attribute_table.objects.all()
     serializer_class = ScrAttributeTableSerializer
     lookup_field = 'att_id'
+    
+#.........................................................
+# CRUD สำหรับ scr_atttype_desc_new
+class ScrAttTypeDescnewListCreateView(generics.ListCreateAPIView):
+    queryset = scr_atttype_desc_new.objects.all()
+    serializer_class = ScrAttTypeDescnewSerializer
+
+class ScrAttTypeDescnewRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = scr_atttype_desc_new.objects.all()
+    serializer_class = ScrAttTypeDescnewSerializer
+    lookup_field = 'id_desc'
+
+# CRUD สำหรับ scr_attribute_table_new
+class ScrAttributeTablenewListCreateView(generics.ListCreateAPIView):
+    queryset = scr_attribute_table_new.objects.all()
+    serializer_class = ScrAttributeTablenewSerializer
+
+class ScrAttributeTablenewRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = scr_attribute_table_new.objects.all()
+    serializer_class = ScrAttributeTablenewSerializer
+    lookup_field = 'att_id'
+    
+# views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .credit_score_ind import CreditScoreServiceIND
+
+
+class CreditScoreINDAPIView(APIView):
+    """
+    API endpoint to calculate Individual credit score
+    
+    POST /api/credit-score-ind/calculate/
+    GET  /api/credit-score-ind/calculate/?lcic_id=your_lcic_id
+    
+    Example:
+        GET: /api/credit-score-ind/calculate/?lcic_id=LA01I0000001
+        POST: {"lcic_id": "LA01I0000001"}
+    """
+    
+    def post(self, request):
+        """Handle POST request"""
+        return self._calculate_score(request.data.get('lcic_id'))
+    
+    def get(self, request):
+        """Handle GET request"""
+        return self._calculate_score(request.query_params.get('lcic_id'))
+    
+    def _calculate_score(self, lcic_id):
+        """Calculate Individual credit score with error handling"""
+        try:
+            # Validate lcic_id
+            if not lcic_id:
+                return Response(
+                    {
+                        'success': False,
+                        'error': 'lcic_id is required',
+                        'message': 'Please provide a valid LCIC ID'
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Calculate credit score
+            service = CreditScoreServiceIND(lcic_id)
+            result = service.calculate_credit_score()
+            
+            # Check result
+            if not result:
+                return Response(
+                    {
+                        'success': False,
+                        'error': 'Customer not found',
+                        'message': f'No individual customer found with LCIC ID: {lcic_id}'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Return success response
+            return Response(
+                {
+                    'success': True,
+                    'data': result,
+                    'message': 'Credit score calculated successfully'
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            
+            return Response(
+                {
+                    'success': False,
+                    'error': 'Internal server error',
+                    'message': str(e),
+                    'detail': error_detail if settings.DEBUG else None
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
