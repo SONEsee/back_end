@@ -185,7 +185,9 @@ from .views import (
 #tik
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
                     ,RequestChargeSummaryAPIView,RequestChargeReportAllAPIView,UserLogoutView,UserAccessLogListView,ScoringIndividualInfoSearchView,CreditScoreAPIView,ScrAttTypeDescnewListCreateView, ScrAttTypeDescnewRetrieveUpdateDeleteView,ScrAttributeTablenewListCreateView
-                    ,ScrAttributeTablenewRetrieveUpdateDeleteView,CreditScoreINDAPIView)
+                    ,ScrAttributeTablenewRetrieveUpdateDeleteView,CreditScoreINDAPIView
+                    ,MemberProductAccessListCreateAPIView,MemberProductAccessDetailAPIView,MemberProductAccessByMemberAPIView,BulkActivateProductsAPIView,BulkDeactivateProductsAPIView,MemberProductAccessStatsAPIView
+                    ,ProductsByBankTypeAPIView,ToggleProductAccessAPIView,)
 
 from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView,process_dispute_notification, process_multiple_disputes,process_multiple_disputescollateral
 from .views import upload_json,MemberInfoViewSet
@@ -428,6 +430,14 @@ urlpatterns = [
     path('attributes/', ScrAttributeTablenewListCreateView.as_view(), name='attribute-list-create'),
     path('attributes/<int:att_id>/', ScrAttributeTablenewRetrieveUpdateDeleteView.as_view(), name='attribute-detail'),
     path('credit-score-ind/calculate/', CreditScoreINDAPIView.as_view(), name='credit_score_ind_calculate'),
+    path('member-product-access/', MemberProductAccessListCreateAPIView.as_view(), name='member-product-access-list'),
+    path('member-product-access/<int:access_id>/',  MemberProductAccessDetailAPIView.as_view(), name='member-product-access-detail'),
+    path('member-product-access/member/<str:bnk_code>/', MemberProductAccessByMemberAPIView.as_view(), name='member-product-access-by-member'),
+    path('member-product-access/bulk-activate/', BulkActivateProductsAPIView.as_view(), name='bulk-activate'),
+    path('member-product-access/bulk-deactivate/', BulkDeactivateProductsAPIView.as_view(), name='bulk-deactivate'),
+    path('member-product-access/stats/', MemberProductAccessStatsAPIView.as_view(), name='member-product-access-stats'),
+    path('products-by-bank-type/', ProductsByBankTypeAPIView.as_view(), name='products-by-bank-type'),
+    path('toggle-product-access/', ToggleProductAccessAPIView.as_view(), name='toggle-product-access'),
     
     path('api/individual-files/', IndividualFileListView.as_view(), name='individual-file-list'),
     path('api/borrwor-files/', BorrowerFileListView.as_view(), name='borrwor-file-list'),

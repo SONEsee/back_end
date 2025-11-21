@@ -36370,3 +36370,389 @@ class CreditScoreINDAPIView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+            
+from rest_framework import generics, status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.db.models import Q, Count
+from django.shortcuts import get_object_or_404
+from .models import MemberProductAccess, ChargeMatrix, memberInfo
+from .serializers import (
+    MemberProductAccessSerializer, 
+    MemberProductAccessListSerializer,
+    BulkActivateSerializer,
+    ProductsByBankTypeSerializer
+)
+
+
+class MemberProductAccessListCreateAPIView(generics.ListCreateAPIView):
+    """
+    GET: ດຶງລາຍການ Member Product Access ທັງໝົດ
+    POST: ສ້າງ Member Product Access ໃໝ່
+    """
+    queryset = MemberProductAccess.objects.all()
+    serializer_class = MemberProductAccessSerializer
+    # permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = MemberProductAccess.objects.all()
+        
+        # Filter by bnk_code
+        bnk_code = self.request.query_params.get('bnk_code', None)
+        if bnk_code:
+            queryset = queryset.filter(bnk_code=bnk_code)
+        
+        # Filter by chg_sys_id
+        chg_sys_id = self.request.query_params.get('chg_sys_id', None)
+        if chg_sys_id:
+            queryset = queryset.filter(chg_sys_id=chg_sys_id)
+        
+        # Filter by is_active
+        is_active = self.request.query_params.get('is_active', None)
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+        
+        return queryset
+    
+    def create(self, request, *args, **kwargs):
+        """ສ້າງ Access ໃໝ່ ຫຼື Reactivate ຖ້າມີຢູ່ແລ້ວ"""
+        bnk_code = request.data.get('bnk_code')
+        chg_sys_id = request.data.get('chg_sys_id')
+        
+        # ตรวจสอบว่ามี Access อยู่แล้วหรือไม่
+        existing_access = MemberProductAccess.objects.filter(
+            bnk_code=bnk_code,
+            chg_sys_id=chg_sys_id
+        ).first()
+        
+        if existing_access:
+            # ถ้ามีแล้ว แค่เปลี่ยน is_active เป็น True
+            existing_access.is_active = True
+            existing_access.save()
+            serializer = self.get_serializer(existing_access)
+            return Response(
+                {
+                    'message': 'ເປີດໃຊ້ງານສິດອີກຄັ້ງສຳເລັດ (Reactivated)',
+                    'data': serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+        
+        # ถ้ายังไม่มี ให้สร้างใหม่
+        return super().create(request, *args, **kwargs)
+
+
+class MemberProductAccessDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    GET: ດຶງຂໍ້ມູນ Member Product Access ຕາມ ID
+    PUT/PATCH: ແກ້ໄຂຂໍ້ມູນ
+    DELETE: ລົບ (Hard delete)
+    """
+    queryset = MemberProductAccess.objects.all()
+    serializer_class = MemberProductAccessSerializer
+    lookup_field = 'access_id'
+    # permission_classes = [IsAuthenticated]
+    
+    def destroy(self, request, *args, **kwargs):
+        """Hard delete - ລົບອອກຈາກ database"""
+        instance = self.get_object()
+        instance.delete()
+        
+        return Response(
+            {'message': 'ລົບສຳເລັດ (Deleted)'},
+            status=status.HTTP_200_OK
+        )
+
+
+class MemberProductAccessByMemberAPIView(APIView):
+    """
+    GET: ດຶງຂໍ້ມູນ Product Access ຂອງ Member ຄົນໃດຄົນໜຶ່ງ
+    ແສດງທັງທີ່ active ແລະ inactive ພ້ອມຂໍ້ມູນທີ່ລະອຽດ
+    """
+    # permission_classes = [IsAuthenticated]
+    
+    def get(self, request, bnk_code):
+        # ตรวจสอบว่า Member มีอยู่จริง
+        member = get_object_or_404(memberInfo, bnk_code=bnk_code)
+        
+        # ດຶງ Access ທັງໝົດຂອງ Member
+        accesses = MemberProductAccess.objects.filter(bnk_code=bnk_code)
+        
+        # ແຍກເປັນ Active ແລະ Inactive
+        active_accesses = accesses.filter(is_active=True)
+        inactive_accesses = accesses.filter(is_active=False)
+        
+        # Serialize
+        active_serializer = MemberProductAccessSerializer(active_accesses, many=True)
+        inactive_serializer = MemberProductAccessSerializer(inactive_accesses, many=True)
+        
+        return Response({
+            'member': {
+                'bnk_code': member.bnk_code,
+                'name_lao': member.nameL,
+                'name_en': member.nameE,
+            },
+            'active_products': active_serializer.data,
+            'inactive_products': inactive_serializer.data,
+            'summary': {
+                'total_active': active_accesses.count(),
+                'total_inactive': inactive_accesses.count(),
+                'total': accesses.count()
+            }
+        })
+
+
+class BulkActivateProductsAPIView(APIView):
+    """
+    POST: Activate ຫຼາຍ Products ພ້ອມກັນ
+    Body: {
+        "bnk_code": "BNK001",
+        "chg_sys_ids": ["1", "2", "3"]
+    }
+    """
+    # permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        serializer = BulkActivateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        bnk_code = serializer.validated_data['bnk_code']
+        chg_sys_ids = serializer.validated_data['chg_sys_ids']
+        
+        created = []
+        updated = []
+        
+        for chg_sys_id in chg_sys_ids:
+            access, is_created = MemberProductAccess.objects.get_or_create(
+                bnk_code=bnk_code,
+                chg_sys_id=chg_sys_id,
+                defaults={'is_active': True}
+            )
+            
+            if not is_created and not access.is_active:
+                access.is_active = True
+                access.save()
+                updated.append(access)
+            elif is_created:
+                created.append(access)
+        
+        return Response({
+            'message': 'ດຳເນີນການສຳເລັດ (Success)',
+            'created': len(created),
+            'updated': len(updated),
+            'total': len(chg_sys_ids)
+        }, status=status.HTTP_200_OK)
+
+
+class BulkDeactivateProductsAPIView(APIView):
+    """
+    POST: Deactivate ຫຼາຍ Products ພ້ອມກັນ
+    Body: {
+        "bnk_code": "BNK001",
+        "chg_sys_ids": ["1", "2", "3"]
+    }
+    """
+    # permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        serializer = BulkActivateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        bnk_code = serializer.validated_data['bnk_code']
+        chg_sys_ids = serializer.validated_data['chg_sys_ids']
+        
+        updated = MemberProductAccess.objects.filter(
+            bnk_code=bnk_code,
+            chg_sys_id__in=chg_sys_ids,
+            is_active=True
+        ).update(is_active=False)
+        
+        return Response({
+            'message': 'ປິດການໃຊ້ງານສຳເລັດ (Deactivated)',
+            'updated': updated
+        }, status=status.HTTP_200_OK)
+
+
+class MemberProductAccessStatsAPIView(APIView):
+    """
+    GET: ດຶງສະຖິຕິການໃຊ້ງານ
+    """
+    def get(self, request):
+        total_accesses = MemberProductAccess.objects.count()
+        active_accesses = MemberProductAccess.objects.filter(is_active=True).count()
+        inactive_accesses = MemberProductAccess.objects.filter(is_active=False).count()
+        
+        # ຈຳນວນ Members ທີ່ມີສິດ
+        members_with_access = MemberProductAccess.objects.filter(
+            is_active=True
+        ).values('bnk_code').distinct().count()
+        
+        # ຈຳນວນ Products ທີ່ຖືກໃຊ້
+        products_used = MemberProductAccess.objects.filter(
+            is_active=True
+        ).values('chg_sys_id').distinct().count()
+        
+        return Response({
+            'total_accesses': total_accesses,
+            'active_accesses': active_accesses,
+            'inactive_accesses': inactive_accesses,
+            'members_with_access': members_with_access,
+            'products_in_use': products_used,
+            'total_members': memberInfo.objects.count(),
+            'total_products': ChargeMatrix.objects.count()
+        })
+
+
+class ProductsByBankTypeAPIView(APIView):
+    """
+    GET: ດຶງລາຍການ Products ທີ່ເໝາະສົມຕາມ Bank Type
+    bnk_type = 1 (ທະນາຄານພາທິດ) -> chg_code ບໍ່ລົງທ້າຍດ້ວຍ "FI"
+    bnk_type = 2 (ສະຖາບັນການເງິນ) -> chg_code ລົງທ້າຍດ້ວຍ "FI"
+    
+    Query params: ?bnk_code=BNK001
+    """
+    # permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        bnk_code = request.query_params.get('bnk_code')
+        
+        if not bnk_code:
+            return Response(
+                {'error': 'ກະລຸນາໃສ່ bnk_code'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # ດຶງຂໍ້ມູນ Member
+        try:
+            member = memberInfo.objects.get(bnk_code=bnk_code)
+        except memberInfo.DoesNotExist:
+            return Response(
+                {'error': 'ບໍ່ພົບສະມາຊິກທີ່ມີລະຫັດນີ້'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Filter products ຕາມ bnk_type ດ້ວຍ chg_code ທີ່ກຳນົດໄວ້
+        if member.bnk_type == 1:
+            # ທະນາຄານພາທິດ - ເອົາແຕ່ທີ່ບໍ່ມີ FI (SCR, UTLT, NLR)
+            allowed_codes = ['FCR','SCR', 'UTLT', 'NLR', 'JCR','NJCR']
+            products = ChargeMatrix.objects.filter(chg_code__in=allowed_codes)
+        elif member.bnk_type == 2:
+            # ສະຖາບັນການເງິນ - ເອົາແຕ່ທີ່ມີ FI (FCRFI, NLRFI, SCRFI, UTLTFI, FCRJCRFI, NJRFI)
+            allowed_codes = ['FCRFI', 'NLRFI', 'SCRFI', 'UTLTFI', 'JCRFI', 'NJRFI']
+            products = ChargeMatrix.objects.filter(chg_code__in=allowed_codes)
+        else:
+            # ຖ້າບໍ່ມີ bnk_type ຫຼື ມີຄ່າອື່ນ ໃຫ້ສະແດງທັງໝົດ
+            products = ChargeMatrix.objects.all()
+        
+        # ດຶງຂໍ້ມູນ Access ຂອງ Member ນີ້
+        member_accesses = MemberProductAccess.objects.filter(bnk_code=bnk_code)
+        
+        # ສ້າງ response data
+        products_data = []
+        for product in products:
+            # ຊອກຫາວ່າ member ມີສິດນີ້ຢູ່ແລ້ວບໍ່
+            access = member_accesses.filter(chg_sys_id=product.chg_sys_id).first()
+            
+            products_data.append({
+                'chg_sys_id': product.chg_sys_id,
+                'chg_code': product.chg_code,
+                'chg_desc': product.chg_desc,
+                'chg_lao_desc': product.chg_lao_desc,
+                'chg_type': product.chg_type,
+                'has_access': access is not None,
+                'is_active': access.is_active if access else False,
+                'access_id': access.access_id if access else None
+            })
+        
+        return Response({
+            'member': {
+                'bnk_code': member.bnk_code,
+                'name_lao': member.nameL,
+                'name_en': member.nameE,
+                'bnk_type': member.bnk_type
+            },
+            'products': products_data,
+            'total_products': len(products_data)
+        })
+
+
+class ToggleProductAccessAPIView(APIView):
+    """
+    POST: Toggle Product Access (Add/Activate ຫຼື Delete)
+    
+    Body: {
+        "bnk_code": "BNK001",
+        "chg_sys_id": "1"
+    }
+    
+    Logic:
+    - ຖ້າບໍ່ມີ record -> ສ້າງໃໝ່ (is_active=True)
+    - ຖ້າມີ record ແລະ is_active=False -> ປ່ຽນເປັນ True
+    - ຖ້າມີ record ແລະ is_active=True -> ລົບອອກ (Hard Delete)
+    """
+    # permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        bnk_code = request.data.get('bnk_code')
+        chg_sys_id = request.data.get('chg_sys_id')
+        
+        if not bnk_code or not chg_sys_id:
+            return Response(
+                {'error': 'ກະລຸນາໃສ່ bnk_code ແລະ chg_sys_id'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # ກວດສອບວ່າ Member ມີຢູ່ຈິງ
+        if not memberInfo.objects.filter(bnk_code=bnk_code).exists():
+            return Response(
+                {'error': 'ບໍ່ພົບສະມາຊິກທີ່ມີລະຫັດນີ້'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # ກວດສອບວ່າ Product ມີຢູ່ຈິງ
+        if not ChargeMatrix.objects.filter(chg_sys_id=chg_sys_id).exists():
+            return Response(
+                {'error': 'ບໍ່ພົບຜະລິດຕະພັນທີ່ມີລະຫັດນີ້'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # ຊອກຫາ Access record
+        access = MemberProductAccess.objects.filter(
+            bnk_code=bnk_code,
+            chg_sys_id=chg_sys_id
+        ).first()
+        
+        if not access:
+            # ບໍ່ມີ record -> ສ້າງໃໝ່
+            access = MemberProductAccess.objects.create(
+                bnk_code=bnk_code,
+                chg_sys_id=chg_sys_id,
+                is_active=True
+            )
+            serializer = MemberProductAccessSerializer(access)
+            return Response({
+                'action': 'created',
+                'message': 'ເພີ່ມສິດສຳເລັດ',
+                'data': serializer.data
+            }, status=status.HTTP_201_CREATED)
+        
+        elif not access.is_active:
+            # ມີ record ແຕ່ inactive -> Activate
+            access.is_active = True
+            access.save()
+            serializer = MemberProductAccessSerializer(access)
+            return Response({
+                'action': 'activated',
+                'message': 'ເປີດໃຊ້ງານສິດສຳເລັດ',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        
+        else:
+            # ມີ record ແລະ active -> Delete
+            access.delete()
+            return Response({
+                'action': 'deleted',
+                'message': 'ລົບສິດສຳເລັດ'
+            }, status=status.HTTP_200_OK)
+        
