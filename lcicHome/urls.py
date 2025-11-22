@@ -176,11 +176,12 @@ from .views import (
     ApproveEnterpriseMappingView,
     CustomerUpdateIDAPIView,
     CustomerUpdateSegmentAPIView,
+    CheckAndCreateEnterpriseViewList,
     
 
     reject_borrower_loan_view,
     CollateralNewListView,
-    CheckEnterpriseView
+    CheckAndCreateEnterpriseView
 )
 #tik
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
@@ -283,7 +284,8 @@ urlpatterns = [
    path('render_pdf_view/<slug:object_id>', render_pdf_view, name='render_pdf_view'),
    path('progress/<slug:object_id>', views.progress, name='progress'),
    path('tax_invoice', views.tax, name='tax'),
-   path('check-enterprise/', CheckEnterpriseView.as_view(), name='check-enterprise'),
+   path('check-enterprise/', CheckAndCreateEnterpriseView.as_view(), name='check-enterprise'),
+   path('check-enterprise_list/', CheckAndCreateEnterpriseViewList.as_view(), name='check-enterprise-list'),
    path('api/company/create/', views.create_company_with_registration, name='create_company'),
    path('api/register/list/', views.get_register_customer_list, name='register_list'),
    path('api/company/info/<str:id_file>/', views.get_company_info_by_id_file, name='company_info'),

@@ -16588,16 +16588,12 @@ from rest_framework import status
 from .models import EnterpriseInfo
 from .serializers import EnterpriseInfoSerializer
 
-class CheckEnterpriseView(APIView):
-    """
-    POST API ເພື່ອກວດສອບວ່າມີ EnterpriseID ຢູ່ໃນລະບົບບໍ່
-    ຖ້າມີ - ສົ່ງຂໍ້ມູນລາຍລະອຽດກັບຄືນ
-    ຖ້າບໍ່ມີ - ແຈ້ງວ່າບໍ່ພົບຂໍ້ມູນ
-    """
+class CheckAndCreateEnterpriseViewList(APIView):
+   
     def post(self, request):
         enterprise_id = request.data.get('EnterpriseID')
         
-        # ກວດສອບວ່າມີການສົ່ງ EnterpriseID ມາບໍ່
+        
         if not enterprise_id:
             return Response({
                 'success': False,
@@ -16607,10 +16603,10 @@ class CheckEnterpriseView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            # ກວດສອບວ່າມີຂໍ້ມູນຢູ່ໃນຖານຂໍ້ມູນບໍ່
+           
             enterprise = EnterpriseInfo.objects.get(EnterpriseID=enterprise_id)
             
-            # ດຶງລາຍລະອຽດອອກມາ
+          
             serializer = EnterpriseInfoSerializer(enterprise)
             
             return Response({
@@ -16621,7 +16617,7 @@ class CheckEnterpriseView(APIView):
             }, status=status.HTTP_200_OK)
             
         except EnterpriseInfo.DoesNotExist:
-            # ບໍ່ພົບຂໍ້ມູນ
+           
             return Response({
                 'success': True,
                 'message': 'ບໍ່ພົບຂໍ້ມູນວິສາຫະກິດໃນລະບົບ',
@@ -16629,37 +16625,300 @@ class CheckEnterpriseView(APIView):
                 'data': None
             }, status=status.HTTP_200_OK)     
 
+
 # views.py
+import logging
+from datetime import datetime
+from django.utils import timezone
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+from .models import EnterpriseInfo, CollateralNew
+from .serializers import EnterpriseInfoSerializer, EnterpriseMemberSubmitSerializer
+
+logger = logging.getLogger(__name__)
+
+
+class CheckAndCreateEnterpriseView(APIView):
+    """
+    API: ກວດສອບ EnterpriseID
+    - ຖ້າມີແລ້ວ → merge ຂໍ້ມູນເກົ່າ + ສ້າງ EnterpriseMemberSubmit ໃໝ່ + ອັບໂຫຼດໄຟລ໌
+    - ຖ້າບໍ່ມີ → ສົ່ງ success=True, exists=False (frontend ຈະສ້າງໃໝ່ຕາມປົກກະຕິ)
+    """
+
+    def post(self, request):
+        logger.info("ເລີ່ມ CheckAndCreateEnterpriseView")
+        print("=" * 60)
+        print("Request User:", request.user)
+        print("Request Data:", request.data)
+        print("Request FILES:", request.FILES)
+        print("=" * 60)
+
+        enterprise_id = request.data.get("EnterpriseID")
+        if not enterprise_id:
+            return Response(
+                {
+                    "success": False,
+                    "message": "ກະລຸນາລະບຸ EnterpriseID",
+                    "exists": False,
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+      
+        try:
+            enterprise = EnterpriseInfo.objects.get(EnterpriseID=enterprise_id)
+            old_data = EnterpriseInfoSerializer(enterprise).data
+            logger.info(f"ພົບວິສາຫະກິດແລ້ວ: {enterprise_id}")
+            return self._handle_existing_enterprise(request, old_data)
+
+        except EnterpriseInfo.DoesNotExist:
+            logger.info(f"ບໍ່ພົບວິສາຫະກິດ: {enterprise_id}")
+            return Response(
+                {
+                    "success": True,
+                    "message": "ບໍ່ພົບຂໍ້ມູນວິສາຫະກິດໃນລະບົບ (ສາມາດສ້າງໃໝ່ໄດ້)",
+                    "exists": False,
+                    "data": None,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            logger.error(f"Error ກວດສອບ EnterpriseID: {str(e)}", exc_info=True)
+            return Response(
+                {"success": False, "message": f"ເກີດຂໍ້ຜິດພາດ: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    # ──────────────────────────────────────────────────────────────
+    @transaction.atomic  
+    def _handle_existing_enterprise(self, request, old_data):
+        collateral = None
+        register_record = None 
+        try:
+            data = request.data.copy()
+            bank_id, branch_id, user_id = self._get_bank_branch_user(request, data)
+
+           
+            collateral = self._create_collateral(request.FILES.get("file"), bank_id, branch_id, user_id, old_data)
+
+          
+            merged_data = self._merge_old_data(data, old_data)
+            merged_data = self._prepare_final_data(merged_data, request, bank_id, branch_id)
+
+          
+            serializer = EnterpriseMemberSubmitSerializer(data=merged_data)
+            serializer.is_valid(raise_exception=True)
+            enterprise_member = serializer.save()
+
+           
+            enterprise_member.id_file = collateral
+            enterprise_member.save()
+
+           
+            register_record = RegisterCustomerWhitEnterprise.objects.create(
+                EnterpriseID=request.data.get("EnterpriseID"),
+                customerID="", 
+                LCIC_code=old_data.get("LCIC_code"),
+                bnk_code=bank_id,
+                branch="", 
+                status=3,   
+                user_insert=request.user.username if request.user.is_authenticated else "anonymous",
+            )
+
+            logger.info(f"ບັນທຶກ RegisterCustomerWhitEnterprise ສຳເລັດ ID: {register_record.id}")
+
+           
+            return Response({
+                "success": True,
+                "message": "ພົບຂໍ້ມູນວິສາຫະກິດແລ້ວ ແລະບັນທຶກສຳເລັດ",
+                "exists": True,
+                "data": old_data,
+                "new_record": {
+                    "LCICID": enterprise_member.LCICID,
+                    "collateral_id": collateral.id,
+                    "bank_id": bank_id,
+                    "register_id": register_record.id,  
+                    "file_url": collateral.image.url if collateral.image else None,
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+           
+            if collateral:
+                try:
+                    collateral.delete()
+                except:
+                    pass
+            
+
+            logger.error(f"ຜິດພາດໃນການບັນທຶກຂໍ້ມູນ: {str(e)}", exc_info=True)
+            return Response({
+                "success": False,
+                "message": f"ເກີດຂໍ້ຜິດພາດ: {str(e)}"
+            }, status=status.HTTP_400_BAD_REQUEST)
+    # ──────────────────────────────────────────────────────────────
+    def _get_bank_branch_user(self, request, data):
+        """ດຶງ bank_id, branch_id, user_id ຈາກ request.user ຫຼື request.data"""
+        bank_id = None
+        user_id = None
+
+        if request.user.is_authenticated:
+            user_data = request.user.__dict__  # ຫຼືໃຊ້ getattr ກໍ່ໄດ້
+
+            # ກໍລະນີ MID ເປັນ dict (ຈາກ JWT serializer)
+            if hasattr(request.user, "MID") and isinstance(request.user.MID, dict):
+                bank_id = request.user.MID.get("id") or request.user.MID.get("code")
+                logger.info(f"ດຶງ bank_id ຈາກ request.user.MID dict: {bank_id}")
+
+            # ກໍລະນີ MID ເປັນ object (ຖ້າໃຊ້ session auth)
+            elif hasattr(request.user, "MID") and request.user.MID:
+                bank_id = getattr(request.user.MID, "id", None) or getattr(request.user.MID, "code", None)
+                logger.info(f"ດຶງ bank_id ຈາກ request.user.MID object: {bank_id}")
+
+           
+            user_id = getattr(request.user, "UID", None) or getattr(request.user, "id", None)
+
+        
+        if not bank_id:
+            bank_id = data.get("bank_id")
+            logger.warning(f"ໃຊ້ bank_id ຈາກ request.data: {bank_id}")
+
+        branch_id = data.get("branch_id")
+
+        
+        if bank_id and isinstance(bank_id, (int, float)):
+            bank_id = f"{int(bank_id):02d}" 
+        elif bank_id and isinstance(bank_id, str):
+            bank_id = bank_id.strip()
+
+        logger.info(f"Final bank_id = '{bank_id}', branch_id = {branch_id}, user_id = {user_id}")
+        return bank_id, branch_id, user_id or "anonymous"
+    # ──────────────────────────────────────────────────────────────
+    def _create_collateral(self, file, bank_id, branch_id, user_id, old_data):
+        """ສ້າງ CollateralNew (ມີໄຟລ໌ ຫຼື ບໍ່ມີກໍ່ຕາຍ)"""
+        collateral_data = {
+            "bank_id": bank_id,
+            "branch_id": branch_id,
+            "user": user_id,
+            "status": "0",
+            "LCIC_reques": old_data.get("LCIC_code"),
+        }
+
+        if file:
+            collateral_data["filename"] = file.name
+            collateral_data["image"] = file
+            logger.info(f"ອັບໂຫຼດໄຟລ໌: {file.name}")
+        else:
+            collateral_data["filename"] = f"no_file_{timezone.now().strftime('%Y%m%d_%H%M%S')}"
+            logger.info("ບໍ່ມີໄຟລ໌ → ໃຊ້ຊື່ default")
+
+        collateral = CollateralNew(**collateral_data)
+        collateral.save()
+        logger.info(f"ສ້າງ CollateralNew ສຳເລັດ ID: {collateral.id}")
+        return collateral
+
+    # ──────────────────────────────────────────────────────────────
+    def _merge_old_data(self, new_data, old_data):
+        """ເອົາຂໍ້ມູນເກົ່າທີ່ບໍ່ມີໃນ request ມາເຕີມ"""
+        exclude_keys = {
+            "id",
+            "LCICID",
+            "id_file",
+            "InsertDate",
+            "LastUpdate",
+            "UpdateDate",
+            "LCIC_code",
+            "file",
+        }
+        for key, value in old_data.items():
+            if key not in new_data and key not in exclude_keys and value not in [None, ""]:
+                new_data[key] = value
+        return new_data
+
+    # ──────────────────────────────────────────────────────────────
+    def _prepare_final_data(self, data, request, bank_id, branch_id):
+        """ແປງວັນທີ + ເພີ່ມ timestamp + bank info"""
+      
+        date_fields = ["regisDate", "CancellationDate"]
+        for field in date_fields:
+            if field in data and data[field]:
+                parsed = self._parse_date(data[field])
+                data[field] = parsed if parsed else None
+
+       
+        for key in ["id_file", "file"]:
+            data.pop(key, None)
+
+       
+        data["user_insert"] = request.user.username if request.user.is_authenticated else "anonymous"
+        data["InsertDate"] = timezone.now()
+        data["LastUpdate"] = timezone.now()
+        data["bank_id"] = bank_id
+        data["branch_id"] = branch_id
+
+        return data
+
+    # ──────────────────────────────────────────────────────────────
+    def _parse_date(self, date_value):
+        """ຮອງຮັບຫຼາຍ format ຂອງວັນທີ"""
+        if not date_value:
+            return None
+        if isinstance(date_value, datetime):
+            return date_value
+
+        formats = [
+            "%d/%m/%Y %H:%M:%S",
+            "%Y-%m-%d %H:%M:%S",
+            "%d/%m/%Y",
+            "%Y-%m-%d",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S.%fZ", 
+        ]
+        for fmt in formats:
+            try:
+                return datetime.strptime(str(date_value).split("Z")[0].split("+")[0], fmt)
+            except ValueError:
+                continue
+        logger.warning(f"ບໍ່ສາມາດ parse ວັນທີ: {date_value}")
+        return None
+
+
+
+
 from django.http import JsonResponse
 from django.core.paginator import Paginator
 from django.db.models import Q
 from .models import EnterpriseInfo
 
 def get_enterprises(request):
-    # ຮັບຄ່າ parameters
+    
     page = request.GET.get('page', 1)
     limit = request.GET.get('limit', 10)
     enterprise_id = request.GET.get('EnterpriseID', None)
     legal_structure = request.GET.get('enLegalStrature', None)
     
-    # Query ຂໍ້ມູນ
+    
     queryset = EnterpriseInfo.objects.all()
     
-    # Filter ຖ້າມີການສົ່ງ parameters ມາ
+    
     if enterprise_id:
         queryset = queryset.filter(EnterpriseID=enterprise_id)
     
     if legal_structure:
         queryset = queryset.filter(enLegalStrature__icontains=legal_structure)
     
-    # ຮຽງລຳດັບ
+    
     queryset = queryset.order_by('-LCICID')
     
-    # Pagination
+    
     paginator = Paginator(queryset, limit)
     page_obj = paginator.get_page(page)
     
-    # ແປງຂໍ້ມູນເປັນ list
+   
     data = []
     for item in page_obj:
         data.append({
@@ -16685,7 +16944,7 @@ def get_enterprises(request):
             'LCIC_code': item.LCIC_code,
         })
     
-    # Response
+   
     response = {
         'success': True,
         'message': 'ດຶງຂໍ້ມູນສຳເລັດ',
@@ -16703,7 +16962,7 @@ def get_enterprises(request):
     return JsonResponse(response, safe=False)
 
    
-# views.py
+
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework import status
@@ -30112,9 +30371,7 @@ class WaterDataProcessor:
         }
 
 
-# ============================================================================
-# API VIEWS
-# ============================================================================
+
 class InitializeWaterTrackingAPIView(APIView):
     """Initialize tracking record for a month"""
     permission_classes = [IsAuthenticated]
@@ -30150,7 +30407,7 @@ class InitializeWaterTrackingAPIView(APIView):
             except w_district_code.DoesNotExist:
                 pass
         
-        # Create or update tracking record
+      
         tracking, created = WaterUploadDataTracking.objects.get_or_create(
             pro_id=pro_id,
             dis_id=dis_id,
@@ -30675,7 +30932,7 @@ class SearchIndividualBankView(APIView):
 
         query = Q()
 
-        # ຊອກໃນຕາຕະລາງທີ 1 ກ່ອນ
+       
         if customerid:
             query &= Q(customerid=customerid)
 
@@ -30707,13 +30964,13 @@ class SearchIndividualBankView(APIView):
                 if bnk_code != '01':
                     query &= Q(bnk_code=bnk_code)
 
-        # ຄົ້ນຫາໃນຕາຕະລາງທີ 1
+        
         results = IndividualBankIbk.objects.filter(query).values(
             'customerid', 'lcic_id', 'bnk_code',
             'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname', 'branchcode'
         )
 
-        # ຖ້າບໍ່ພົບໃນຕາຕະລາງທີ 1 ແລະມີ lcic_id → ຊອກໃນຕາຕະລາງທີ 2
+       
         if not results and lcic_id:
             results_info = IndividualBankIbkInfo.objects.filter(
                 lcic_id=lcic_id
@@ -30723,7 +30980,7 @@ class SearchIndividualBankView(APIView):
             )
 
             if results_info:
-                # ເພີ່ມ field ທີ່ບໍ່ມີໃນຕາຕະລາງທີ 2
+               
                 results_list = []
                 for item in results_info:
                     item['customerid'] = None
