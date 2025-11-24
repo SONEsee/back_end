@@ -36569,6 +36569,21 @@ class ScrAttributeTableRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAP
     queryset = scr_attribute_table.objects.all()
     serializer_class = ScrAttributeTableSerializer
     lookup_field = 'att_id'
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from .n_credit_score_service import CreditScoreCalculator
+
+class GetIndividualAPIView(APIView):
+
+    def get(self, request):
+        lcic_id = request.GET.get("lcic_id")
+        ind_sys_id = request.GET.get("ind_sys_id")
+        service = CreditScoreCalculator()
+        result = service.get_individual_data(lcic_id=lcic_id, ind_sys_id=ind_sys_id)
+        if result is None:
+            return Response({"message": "Not found"}, status=404)
+        return Response(result, status=200)
     
 #.........................................................
 # CRUD สำหรับ scr_atttype_desc_new
@@ -36844,6 +36859,7 @@ class ToggleProductAccessAPIView(APIView):
                 'action': 'deleted',
                 'message': 'ລົບສິດສຳເລັດ'
             }, status=status.HTTP_200_OK)
+
             
 from django.db.models import Prefetch
 
@@ -36923,159 +36939,4 @@ class MemberListWithActiveCountAPIView(APIView):
                 'active_products': products_detail,  # ← ລາຍລະອຽດເຕັມ!
             })
         
-        return Response(members_data)
-    
-# views.py
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
-from django.db import transaction
-from django.utils import timezone
-from django.core.cache import cache
-
-class ScoreFactorChargeAPIView(APIView):
-    """
-    API สำหรับเพิ่มค่าบริการ Score Factors (Add-on Packet)
-    POST: สร้าง charge SCR_FOR เมื่อคลิกปุ่ม "Show Details"
-    """
-    permission_classes = [IsAuthenticated]
-    
-    @transaction.atomic
-    def post(self, request):
-        try:
-            user = request.user
-            UID = getattr(user, 'UID', '')
-            bank = getattr(user, 'MID', None)
-            
-            if not bank or not hasattr(bank, 'bnk_code'):
-                return Response({
-                    'error': 'Invalid bank information'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # ✅ ดึงข้อมูลธนาคาร
-            try:
-                bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
-            except memberInfo.DoesNotExist:
-                return Response({
-                    'error': 'Bank not found'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
-            # ✅ รับข้อมูลจาก Frontend
-            search_log_id = request.data.get('search_log_id')
-            lcic_id = request.data.get('lcic_id')
-            
-            if not search_log_id:
-                return Response({
-                    'error': 'search_log_id is required'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            if not lcic_id:
-                return Response({
-                    'error': 'lcic_id is required'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # ✅ ดึง searchLog เดิม
-            try:
-                search_log = searchLog.objects.get(search_ID=search_log_id)
-            except searchLog.DoesNotExist:
-                return Response({
-                    'error': 'Search log not found'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
-            # ✅ เช็ค Cache ก่อน (ป้องกัน double-click)
-            cache_key = f"score_factor_charge:{search_log_id}"
-            
-            if cache.get(cache_key):
-                return Response({
-                    'success': True,
-                    'message': 'Request is being processed',
-                    'already_charged': True
-                }, status=status.HTTP_200_OK)
-            
-            # ✅ Lock ใน cache 30 วินาที (ป้องกัน double-click)
-            cache.set(cache_key, True, 30)
-            
-            # ✅ เช็คใน Database ว่ามี charge SCR_FOR แล้วหรือยัง
-            existing_charge = request_charge.objects.filter(
-                search_log=search_log,
-                chg_code='SCR_FOR'
-            ).first()
-            
-            if existing_charge:
-                return Response({
-                    'success': True,
-                    'message': 'Score factor charge already exists for this search',
-                    'charge_id': existing_charge.rec_charge_ID,
-                    'rec_reference_code': existing_charge.rec_reference_code,
-                    'chg_amount': float(existing_charge.chg_amount),
-                    'chg_unit': existing_charge.chg_unit,
-                    'search_log_id': search_log.search_ID,
-                    'already_charged': True,
-                    'created_at': existing_charge.rec_insert_date.isoformat() if existing_charge.rec_insert_date else None
-                }, status=status.HTTP_200_OK)
-            
-            # ✅ ดึงข้อมูล ChargeMatrix สำหรับ SCR_FOR
-            try:
-                chargeType = ChargeMatrix.objects.get(chg_code='SCR_FOR')
-            except ChargeMatrix.DoesNotExist:
-                # Clear cache ถ้า error
-                cache.delete(cache_key)
-                return Response({
-                    'error': 'Charge type SCR_FOR not found in ChargeMatrix. Please contact administrator.'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
-            # ✅ สร้าง charge ใหม่
-            now = timezone.now()
-            inquiry_month_charge = now.strftime('%d%m%Y')
-            sys_usr = f"{UID}-{bank.bnk_code}"
-            
-            charge = request_charge.objects.create(
-                bnk_code=bank_info.bnk_code,
-                bnk_type=bank_info.bnk_type,
-                chg_amount=chargeType.chg_amount,
-                chg_code='SCR_FOR',  # ← ค่าบริการ Score Factors
-                status='pending',
-                rtp_code='1',
-                lon_purpose=search_log.rec_loan_purpose or '',
-                chg_unit=chargeType.chg_unit,
-                user_sys_id=sys_usr,
-                LCIC_code=lcic_id,
-                cusType='A1',
-                user_session_id='',
-                rec_reference_code='',
-                search_log=search_log  # ← FK ไปยัง searchLog เดิม
-            )
-            
-            # ✅ สร้าง rec_reference_code
-            charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
-            charge.save()
-            
-            # ✅ Clear cache หลังสร้างสำเร็จ
-            cache.delete(cache_key)
-            
-            return Response({
-                'success': True,
-                'message': 'Score factor charge created successfully',
-                'charge_id': charge.rec_charge_ID,
-                'rec_reference_code': charge.rec_reference_code,
-                'chg_amount': float(charge.chg_amount),
-                'chg_unit': charge.chg_unit,
-                'chg_code': charge.chg_code,
-                'search_log_id': search_log.search_ID,
-                'already_charged': False,
-                'created_at': charge.rec_insert_date.isoformat() if hasattr(charge, 'rec_insert_date') and charge.rec_insert_date else now.isoformat()
-            }, status=status.HTTP_201_CREATED)
-            
-        except Exception as e:
-            # Clear cache ถ้า error
-            if 'cache_key' in locals():
-                cache.delete(cache_key)
-            
-            import traceback
-            return Response({
-                'error': 'Internal server error',
-                'details': str(e),
-                'traceback': traceback.format_exc()
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)    
-        
+        return Response(members_data) 
