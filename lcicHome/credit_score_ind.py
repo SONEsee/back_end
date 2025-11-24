@@ -236,11 +236,11 @@ class CreditScoreServiceIND:
         """
         ประเมินระดับเครดิตจากคะแนน
         """
-        if score >= 850:
+        if score >= 800:
             return "Excellent"
-        elif score >= 750:
+        elif score >= 740:
             return "Good"
-        elif score >= 650:
+        elif score >= 670:
             return "Fair"
         elif score >= 550:
             return "Poor"

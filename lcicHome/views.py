@@ -32000,8 +32000,6 @@ def approve_collateral(request):
             'message': 'ເກີດຂໍ້ຜິດພາດທີ່ບໍ່ຄາດຄິດ'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
-
 @api_view(['POST'])
 @transaction.atomic
 def reject_collateral(request):
@@ -36681,230 +36679,8 @@ from django.db.models import Q, Count
 from django.shortcuts import get_object_or_404
 from .models import MemberProductAccess, ChargeMatrix, memberInfo
 from .serializers import (
-    MemberProductAccessSerializer, 
-    MemberProductAccessListSerializer,
-    BulkActivateSerializer,
-    ProductsByBankTypeSerializer
+    MemberProductAccessSerializer
 )
-
-
-class MemberProductAccessListCreateAPIView(generics.ListCreateAPIView):
-    """
-    GET: ດຶງລາຍການ Member Product Access ທັງໝົດ
-    POST: ສ້າງ Member Product Access ໃໝ່
-    """
-    queryset = MemberProductAccess.objects.all()
-    serializer_class = MemberProductAccessSerializer
-    # permission_classes = [IsAuthenticated]
-    
-    def get_queryset(self):
-        queryset = MemberProductAccess.objects.all()
-        
-        # Filter by bnk_code
-        bnk_code = self.request.query_params.get('bnk_code', None)
-        if bnk_code:
-            queryset = queryset.filter(bnk_code=bnk_code)
-        
-        # Filter by chg_sys_id
-        chg_sys_id = self.request.query_params.get('chg_sys_id', None)
-        if chg_sys_id:
-            queryset = queryset.filter(chg_sys_id=chg_sys_id)
-        
-        # Filter by is_active
-        is_active = self.request.query_params.get('is_active', None)
-        if is_active is not None:
-            queryset = queryset.filter(is_active=is_active.lower() == 'true')
-        
-        return queryset
-    
-    def create(self, request, *args, **kwargs):
-        """ສ້າງ Access ໃໝ່ ຫຼື Reactivate ຖ້າມີຢູ່ແລ້ວ"""
-        bnk_code = request.data.get('bnk_code')
-        chg_sys_id = request.data.get('chg_sys_id')
-        
-        # ตรวจสอบว่ามี Access อยู่แล้วหรือไม่
-        existing_access = MemberProductAccess.objects.filter(
-            bnk_code=bnk_code,
-            chg_sys_id=chg_sys_id
-        ).first()
-        
-        if existing_access:
-            # ถ้ามีแล้ว แค่เปลี่ยน is_active เป็น True
-            existing_access.is_active = True
-            existing_access.save()
-            serializer = self.get_serializer(existing_access)
-            return Response(
-                {
-                    'message': 'ເປີດໃຊ້ງານສິດອີກຄັ້ງສຳເລັດ (Reactivated)',
-                    'data': serializer.data
-                },
-                status=status.HTTP_200_OK
-            )
-        
-        # ถ้ายังไม่มี ให้สร้างใหม่
-        return super().create(request, *args, **kwargs)
-
-
-class MemberProductAccessDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
-    """
-    GET: ດຶງຂໍ້ມູນ Member Product Access ຕາມ ID
-    PUT/PATCH: ແກ້ໄຂຂໍ້ມູນ
-    DELETE: ລົບ (Hard delete)
-    """
-    queryset = MemberProductAccess.objects.all()
-    serializer_class = MemberProductAccessSerializer
-    lookup_field = 'access_id'
-    # permission_classes = [IsAuthenticated]
-    
-    def destroy(self, request, *args, **kwargs):
-        """Hard delete - ລົບອອກຈາກ database"""
-        instance = self.get_object()
-        instance.delete()
-        
-        return Response(
-            {'message': 'ລົບສຳເລັດ (Deleted)'},
-            status=status.HTTP_200_OK
-        )
-
-
-class MemberProductAccessByMemberAPIView(APIView):
-    """
-    GET: ດຶງຂໍ້ມູນ Product Access ຂອງ Member ຄົນໃດຄົນໜຶ່ງ
-    ແສດງທັງທີ່ active ແລະ inactive ພ້ອມຂໍ້ມູນທີ່ລະອຽດ
-    """
-    # permission_classes = [IsAuthenticated]
-    
-    def get(self, request, bnk_code):
-        # ตรวจสอบว่า Member มีอยู่จริง
-        member = get_object_or_404(memberInfo, bnk_code=bnk_code)
-        
-        # ດຶງ Access ທັງໝົດຂອງ Member
-        accesses = MemberProductAccess.objects.filter(bnk_code=bnk_code)
-        
-        # ແຍກເປັນ Active ແລະ Inactive
-        active_accesses = accesses.filter(is_active=True)
-        inactive_accesses = accesses.filter(is_active=False)
-        
-        # Serialize
-        active_serializer = MemberProductAccessSerializer(active_accesses, many=True)
-        inactive_serializer = MemberProductAccessSerializer(inactive_accesses, many=True)
-        
-        return Response({
-            'member': {
-                'bnk_code': member.bnk_code,
-                'name_lao': member.nameL,
-                'name_en': member.nameE,
-            },
-            'active_products': active_serializer.data,
-            'inactive_products': inactive_serializer.data,
-            'summary': {
-                'total_active': active_accesses.count(),
-                'total_inactive': inactive_accesses.count(),
-                'total': accesses.count()
-            }
-        })
-
-
-class BulkActivateProductsAPIView(APIView):
-    """
-    POST: Activate ຫຼາຍ Products ພ້ອມກັນ
-    Body: {
-        "bnk_code": "BNK001",
-        "chg_sys_ids": ["1", "2", "3"]
-    }
-    """
-    # permission_classes = [IsAuthenticated]
-    
-    def post(self, request):
-        serializer = BulkActivateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        bnk_code = serializer.validated_data['bnk_code']
-        chg_sys_ids = serializer.validated_data['chg_sys_ids']
-        
-        created = []
-        updated = []
-        
-        for chg_sys_id in chg_sys_ids:
-            access, is_created = MemberProductAccess.objects.get_or_create(
-                bnk_code=bnk_code,
-                chg_sys_id=chg_sys_id,
-                defaults={'is_active': True}
-            )
-            
-            if not is_created and not access.is_active:
-                access.is_active = True
-                access.save()
-                updated.append(access)
-            elif is_created:
-                created.append(access)
-        
-        return Response({
-            'message': 'ດຳເນີນການສຳເລັດ (Success)',
-            'created': len(created),
-            'updated': len(updated),
-            'total': len(chg_sys_ids)
-        }, status=status.HTTP_200_OK)
-
-
-class BulkDeactivateProductsAPIView(APIView):
-    """
-    POST: Deactivate ຫຼາຍ Products ພ້ອມກັນ
-    Body: {
-        "bnk_code": "BNK001",
-        "chg_sys_ids": ["1", "2", "3"]
-    }
-    """
-    # permission_classes = [IsAuthenticated]
-    
-    def post(self, request):
-        serializer = BulkActivateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        bnk_code = serializer.validated_data['bnk_code']
-        chg_sys_ids = serializer.validated_data['chg_sys_ids']
-        
-        updated = MemberProductAccess.objects.filter(
-            bnk_code=bnk_code,
-            chg_sys_id__in=chg_sys_ids,
-            is_active=True
-        ).update(is_active=False)
-        
-        return Response({
-            'message': 'ປິດການໃຊ້ງານສຳເລັດ (Deactivated)',
-            'updated': updated
-        }, status=status.HTTP_200_OK)
-
-
-class MemberProductAccessStatsAPIView(APIView):
-    """
-    GET: ດຶງສະຖິຕິການໃຊ້ງານ
-    """
-    def get(self, request):
-        total_accesses = MemberProductAccess.objects.count()
-        active_accesses = MemberProductAccess.objects.filter(is_active=True).count()
-        inactive_accesses = MemberProductAccess.objects.filter(is_active=False).count()
-        
-        # ຈຳນວນ Members ທີ່ມີສິດ
-        members_with_access = MemberProductAccess.objects.filter(
-            is_active=True
-        ).values('bnk_code').distinct().count()
-        
-        # ຈຳນວນ Products ທີ່ຖືກໃຊ້
-        products_used = MemberProductAccess.objects.filter(
-            is_active=True
-        ).values('chg_sys_id').distinct().count()
-        
-        return Response({
-            'total_accesses': total_accesses,
-            'active_accesses': active_accesses,
-            'inactive_accesses': inactive_accesses,
-            'members_with_access': members_with_access,
-            'products_in_use': products_used,
-            'total_members': memberInfo.objects.count(),
-            'total_products': ChargeMatrix.objects.count()
-        })
-
 
 class ProductsByBankTypeAPIView(APIView):
     """
@@ -36936,11 +36712,11 @@ class ProductsByBankTypeAPIView(APIView):
         
         # Filter products ຕາມ bnk_type ດ້ວຍ chg_code ທີ່ກຳນົດໄວ້
         if member.bnk_type == 1:
-            # ທະນາຄານພາທິດ - ເອົາແຕ່ທີ່ບໍ່ມີ FI (SCR, UTLT, NLR)
-            allowed_codes = ['FCR','SCR', 'UTLT', 'NLR', 'JCR','NJCR']
+            # ທະນາຄານພາທິດ - ເອົາແຕ່ທີ່ບໍ່ມີ FI
+            allowed_codes = ['FCR', 'SCR', 'UTLT', 'NLR', 'JCR', 'NJCR']
             products = ChargeMatrix.objects.filter(chg_code__in=allowed_codes)
         elif member.bnk_type == 2:
-            # ສະຖາບັນການເງິນ - ເອົາແຕ່ທີ່ມີ FI (FCRFI, NLRFI, SCRFI, UTLTFI, FCRJCRFI, NJRFI)
+            # ສະຖາບັນການເງິນ - ເອົາແຕ່ທີ່ມີ FI
             allowed_codes = ['FCRFI', 'NLRFI', 'SCRFI', 'UTLTFI', 'JCRFI', 'NJRFI']
             products = ChargeMatrix.objects.filter(chg_code__in=allowed_codes)
         else:
@@ -36967,12 +36743,23 @@ class ProductsByBankTypeAPIView(APIView):
                 'access_id': access.access_id if access else None
             })
         
+        # ສ້າງ mImage URL
+        # ວິທີທີ່ 1: ຖ້າມີຮູບ ໃຫ້ສ້າງ URL
+        mimage_url = None
+        if member.mImage:
+            try:
+                mimage_url = member.mImage.url  # ຈະໄດ້ /media/memberUpload/LCIC.png
+            except (ValueError, AttributeError):
+                # ຖ້າບໍ່ມີຟາຍຈິງ ຫຼື field ເປົ່າ
+                mimage_url = None
+        
         return Response({
             'member': {
                 'bnk_code': member.bnk_code,
                 'name_lao': member.nameL,
                 'name_en': member.nameE,
-                'bnk_type': member.bnk_type
+                'bnk_type': member.bnk_type,
+                'mImage': mimage_url  # ← ສົ່ງເປັນ URL string
             },
             'products': products_data,
             'total_products': len(products_data)
@@ -37057,4 +36844,238 @@ class ToggleProductAccessAPIView(APIView):
                 'action': 'deleted',
                 'message': 'ລົບສິດສຳເລັດ'
             }, status=status.HTTP_200_OK)
+            
+from django.db.models import Prefetch
+
+class MemberListWithActiveCountAPIView(APIView):
+    """
+    GET: ດຶງລາຍການ Members ທັງໝົດ ພ້ອມລາຍລະອຽດ Active Products (Optimized)
+    """
+    # permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        # ✅ ດຶງທຸກຢ່າງພ້ອມກັນ (1-2 queries ເທົ່ານັ້ນ!)
+        members = memberInfo.objects.all().order_by('bnk_code')
+        
+        # ດຶງ active products ທັງໝົດ
+        all_active_products = MemberProductAccess.objects.filter(
+            is_active=True
+        ).values_list('bnk_code', 'chg_sys_id', 'access_id', 'created_at')
+        
+        # ສ້າງ dict group by bnk_code
+        products_by_member = {}
+        chg_sys_ids_all = set()
+        
+        for bnk_code, chg_sys_id, access_id, created_at in all_active_products:
+            if bnk_code not in products_by_member:
+                products_by_member[bnk_code] = []
+            products_by_member[bnk_code].append({
+                'access_id': access_id,
+                'chg_sys_id': chg_sys_id,
+                'created_at': created_at
+            })
+            chg_sys_ids_all.add(chg_sys_id)
+        
+        # ດຶງຂໍ້ມູນ ChargeMatrix ທັງໝົດ
+        charge_matrices = ChargeMatrix.objects.filter(
+            chg_sys_id__in=chg_sys_ids_all
+        )
+        charge_dict = {str(c.chg_sys_id): c for c in charge_matrices}
+        
+        members_data = []
+        
+        for member in members:
+            # ດຶງ products ຂອງ member ນີ້
+            member_products = products_by_member.get(member.bnk_code, [])
+            
+            # ສ້າງລາຍລະອຽດ
+            products_detail = []
+            for product in member_products:
+                charge = charge_dict.get(product['chg_sys_id'])
+                if charge:
+                    products_detail.append({
+                        'access_id': product['access_id'],
+                        'chg_sys_id': charge.chg_sys_id,
+                        'chg_code': charge.chg_code,  # ← ທີ່ຕ້ອງການ!
+                        'chg_type': charge.chg_type,
+                        'chg_lao_type': charge.chg_lao_type,
+                        'chg_amount': charge.chg_amount,
+                        'chg_unit': charge.chg_unit,
+                    })
+            
+            # ສ້າງ mImage URL
+            mimage_url = None
+            if member.mImage:
+                try:
+                    mimage_url = member.mImage.url
+                except (ValueError, AttributeError):
+                    mimage_url = None
+            
+            members_data.append({
+                'bnk_code': member.bnk_code,
+                'nameL': member.nameL,
+                'nameE': member.nameE,
+                'bnk_type': member.bnk_type,
+                'mImage': mimage_url,
+                
+                # ✅ ຂໍ້ມູນລາຍລະອຽດ
+                'active_products_count': len(products_detail),
+                'active_products': products_detail,  # ← ລາຍລະອຽດເຕັມ!
+            })
+        
+        return Response(members_data)
+    
+# views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
+from django.utils import timezone
+from django.core.cache import cache
+
+class ScoreFactorChargeAPIView(APIView):
+    """
+    API สำหรับเพิ่มค่าบริการ Score Factors (Add-on Packet)
+    POST: สร้าง charge SCR_FOR เมื่อคลิกปุ่ม "Show Details"
+    """
+    permission_classes = [IsAuthenticated]
+    
+    @transaction.atomic
+    def post(self, request):
+        try:
+            user = request.user
+            UID = getattr(user, 'UID', '')
+            bank = getattr(user, 'MID', None)
+            
+            if not bank or not hasattr(bank, 'bnk_code'):
+                return Response({
+                    'error': 'Invalid bank information'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # ✅ ดึงข้อมูลธนาคาร
+            try:
+                bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
+            except memberInfo.DoesNotExist:
+                return Response({
+                    'error': 'Bank not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # ✅ รับข้อมูลจาก Frontend
+            search_log_id = request.data.get('search_log_id')
+            lcic_id = request.data.get('lcic_id')
+            
+            if not search_log_id:
+                return Response({
+                    'error': 'search_log_id is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not lcic_id:
+                return Response({
+                    'error': 'lcic_id is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # ✅ ดึง searchLog เดิม
+            try:
+                search_log = searchLog.objects.get(search_ID=search_log_id)
+            except searchLog.DoesNotExist:
+                return Response({
+                    'error': 'Search log not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # ✅ เช็ค Cache ก่อน (ป้องกัน double-click)
+            cache_key = f"score_factor_charge:{search_log_id}"
+            
+            if cache.get(cache_key):
+                return Response({
+                    'success': True,
+                    'message': 'Request is being processed',
+                    'already_charged': True
+                }, status=status.HTTP_200_OK)
+            
+            # ✅ Lock ใน cache 30 วินาที (ป้องกัน double-click)
+            cache.set(cache_key, True, 30)
+            
+            # ✅ เช็คใน Database ว่ามี charge SCR_FOR แล้วหรือยัง
+            existing_charge = request_charge.objects.filter(
+                search_log=search_log,
+                chg_code='SCR_FOR'
+            ).first()
+            
+            if existing_charge:
+                return Response({
+                    'success': True,
+                    'message': 'Score factor charge already exists for this search',
+                    'charge_id': existing_charge.rec_charge_ID,
+                    'rec_reference_code': existing_charge.rec_reference_code,
+                    'chg_amount': float(existing_charge.chg_amount),
+                    'chg_unit': existing_charge.chg_unit,
+                    'search_log_id': search_log.search_ID,
+                    'already_charged': True,
+                    'created_at': existing_charge.rec_insert_date.isoformat() if existing_charge.rec_insert_date else None
+                }, status=status.HTTP_200_OK)
+            
+            # ✅ ดึงข้อมูล ChargeMatrix สำหรับ SCR_FOR
+            try:
+                chargeType = ChargeMatrix.objects.get(chg_code='SCR_FOR')
+            except ChargeMatrix.DoesNotExist:
+                # Clear cache ถ้า error
+                cache.delete(cache_key)
+                return Response({
+                    'error': 'Charge type SCR_FOR not found in ChargeMatrix. Please contact administrator.'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # ✅ สร้าง charge ใหม่
+            now = timezone.now()
+            inquiry_month_charge = now.strftime('%d%m%Y')
+            sys_usr = f"{UID}-{bank.bnk_code}"
+            
+            charge = request_charge.objects.create(
+                bnk_code=bank_info.bnk_code,
+                bnk_type=bank_info.bnk_type,
+                chg_amount=chargeType.chg_amount,
+                chg_code='SCR_FOR',  # ← ค่าบริการ Score Factors
+                status='pending',
+                rtp_code='1',
+                lon_purpose=search_log.rec_loan_purpose or '',
+                chg_unit=chargeType.chg_unit,
+                user_sys_id=sys_usr,
+                LCIC_code=lcic_id,
+                cusType='A1',
+                user_session_id='',
+                rec_reference_code='',
+                search_log=search_log  # ← FK ไปยัง searchLog เดิม
+            )
+            
+            # ✅ สร้าง rec_reference_code
+            charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
+            charge.save()
+            
+            # ✅ Clear cache หลังสร้างสำเร็จ
+            cache.delete(cache_key)
+            
+            return Response({
+                'success': True,
+                'message': 'Score factor charge created successfully',
+                'charge_id': charge.rec_charge_ID,
+                'rec_reference_code': charge.rec_reference_code,
+                'chg_amount': float(charge.chg_amount),
+                'chg_unit': charge.chg_unit,
+                'chg_code': charge.chg_code,
+                'search_log_id': search_log.search_ID,
+                'already_charged': False,
+                'created_at': charge.rec_insert_date.isoformat() if hasattr(charge, 'rec_insert_date') and charge.rec_insert_date else now.isoformat()
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            # Clear cache ถ้า error
+            if 'cache_key' in locals():
+                cache.delete(cache_key)
+            
+            import traceback
+            return Response({
+                'error': 'Internal server error',
+                'details': str(e),
+                'traceback': traceback.format_exc()
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)    
         
