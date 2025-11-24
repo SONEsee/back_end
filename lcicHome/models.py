@@ -1951,7 +1951,7 @@ class EnterpriseMemberSubmit(models.Model):
     CancellationDate = models.DateTimeField(blank=True, null=True)
     InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
     UpdateDate = models.DateTimeField(blank=True, null=True)
-    LCIC_code = models.CharField(max_length=255, blank=True, null=True, unique=True,  db_index=True )
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True, unique=False,  db_index=True )
     
     class Meta:
         db_table = 'enterprisemember_submit'  
