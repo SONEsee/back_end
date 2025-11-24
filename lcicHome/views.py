@@ -32000,6 +32000,8 @@ def approve_collateral(request):
             'message': 'ເກີດຂໍ້ຜິດພາດທີ່ບໍ່ຄາດຄິດ'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+
 @api_view(['POST'])
 @transaction.atomic
 def reject_collateral(request):
