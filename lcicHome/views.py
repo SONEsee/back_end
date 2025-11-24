@@ -33683,3 +33683,18 @@ class ScrAttributeTableRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAP
     queryset = scr_attribute_table.objects.all()
     serializer_class = ScrAttributeTableSerializer
     lookup_field = 'att_id'
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from .n_credit_score_service import CreditScoreCalculator
+
+class GetIndividualAPIView(APIView):
+
+    def get(self, request):
+        lcic_id = request.GET.get("lcic_id")
+        ind_sys_id = request.GET.get("ind_sys_id")
+        service = CreditScoreCalculator()
+        result = service.get_individual_data(lcic_id=lcic_id, ind_sys_id=ind_sys_id)
+        if result is None:
+            return Response({"message": "Not found"}, status=404)
+        return Response(result, status=200)

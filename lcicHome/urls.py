@@ -20,7 +20,7 @@ from .views import LoginView1
 from rest_framework.routers import DefaultRouter
 from .views import EnterpriseInfoViewSet
 from rest_framework.routers import DefaultRouter
-from .views import EnterpriseInfoViewSet
+from .views import EnterpriseInfoViewSet, GetIndividualAPIView
 from .views import Search
 from .views import EnterpriseInfoSearch
 from .views import EnterpriseInfoViewSet, InvestorInfoViewSet
@@ -636,7 +636,9 @@ urlpatterns = [
     path('api/investors/statistics/', views.get_investor_statistics_api, name='investor_statistics'),
     path('api/investors/enterprise/<str:enterprise_id>/', views.get_investors_by_enterprise_api, name='get_investors_by_enterprise'),
     path('api/investors/nationality/<str:nationality>/', views.get_investors_by_nationality_api, name='get_investors_by_nationality'),
+#   sssss
     path('match/', CompareJsonWithDBAPIView.as_view(), name='compare_json_with_db'),
+    path('creditscore/', GetIndividualAPIView.as_view(), name="individual_api"),
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 if settings.DEBUG:
