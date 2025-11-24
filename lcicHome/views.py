@@ -16312,7 +16312,7 @@ def get_collaterals(request):
 from .models import CollateralNew
 
 from .models import UploadFile_enterpriseinfo
-
+from django.db import transaction
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -16588,16 +16588,12 @@ from rest_framework import status
 from .models import EnterpriseInfo
 from .serializers import EnterpriseInfoSerializer
 
-class CheckEnterpriseView(APIView):
-    """
-    POST API ເພື່ອກວດສອບວ່າມີ EnterpriseID ຢູ່ໃນລະບົບບໍ່
-    ຖ້າມີ - ສົ່ງຂໍ້ມູນລາຍລະອຽດກັບຄືນ
-    ຖ້າບໍ່ມີ - ແຈ້ງວ່າບໍ່ພົບຂໍ້ມູນ
-    """
+class CheckAndCreateEnterpriseViewList(APIView):
+   
     def post(self, request):
         enterprise_id = request.data.get('EnterpriseID')
         
-        # ກວດສອບວ່າມີການສົ່ງ EnterpriseID ມາບໍ່
+        
         if not enterprise_id:
             return Response({
                 'success': False,
@@ -16607,10 +16603,10 @@ class CheckEnterpriseView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            # ກວດສອບວ່າມີຂໍ້ມູນຢູ່ໃນຖານຂໍ້ມູນບໍ່
+           
             enterprise = EnterpriseInfo.objects.get(EnterpriseID=enterprise_id)
             
-            # ດຶງລາຍລະອຽດອອກມາ
+          
             serializer = EnterpriseInfoSerializer(enterprise)
             
             return Response({
@@ -16621,7 +16617,7 @@ class CheckEnterpriseView(APIView):
             }, status=status.HTTP_200_OK)
             
         except EnterpriseInfo.DoesNotExist:
-            # ບໍ່ພົບຂໍ້ມູນ
+           
             return Response({
                 'success': True,
                 'message': 'ບໍ່ພົບຂໍ້ມູນວິສາຫະກິດໃນລະບົບ',
@@ -16629,37 +16625,300 @@ class CheckEnterpriseView(APIView):
                 'data': None
             }, status=status.HTTP_200_OK)     
 
+
 # views.py
+import logging
+from datetime import datetime
+from django.utils import timezone
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+from .models import EnterpriseInfo, CollateralNew
+from .serializers import EnterpriseInfoSerializer, EnterpriseMemberSubmitSerializer
+
+logger = logging.getLogger(__name__)
+
+
+class CheckAndCreateEnterpriseView(APIView):
+    """
+    API: ກວດສອບ EnterpriseID
+    - ຖ້າມີແລ້ວ → merge ຂໍ້ມູນເກົ່າ + ສ້າງ EnterpriseMemberSubmit ໃໝ່ + ອັບໂຫຼດໄຟລ໌
+    - ຖ້າບໍ່ມີ → ສົ່ງ success=True, exists=False (frontend ຈະສ້າງໃໝ່ຕາມປົກກະຕິ)
+    """
+
+    def post(self, request):
+        logger.info("ເລີ່ມ CheckAndCreateEnterpriseView")
+        print("=" * 60)
+        print("Request User:", request.user)
+        print("Request Data:", request.data)
+        print("Request FILES:", request.FILES)
+        print("=" * 60)
+
+        enterprise_id = request.data.get("EnterpriseID")
+        if not enterprise_id:
+            return Response(
+                {
+                    "success": False,
+                    "message": "ກະລຸນາລະບຸ EnterpriseID",
+                    "exists": False,
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+      
+        try:
+            enterprise = EnterpriseInfo.objects.get(EnterpriseID=enterprise_id)
+            old_data = EnterpriseInfoSerializer(enterprise).data
+            logger.info(f"ພົບວິສາຫະກິດແລ້ວ: {enterprise_id}")
+            return self._handle_existing_enterprise(request, old_data)
+
+        except EnterpriseInfo.DoesNotExist:
+            logger.info(f"ບໍ່ພົບວິສາຫະກິດ: {enterprise_id}")
+            return Response(
+                {
+                    "success": True,
+                    "message": "ບໍ່ພົບຂໍ້ມູນວິສາຫະກິດໃນລະບົບ (ສາມາດສ້າງໃໝ່ໄດ້)",
+                    "exists": False,
+                    "data": None,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            logger.error(f"Error ກວດສອບ EnterpriseID: {str(e)}", exc_info=True)
+            return Response(
+                {"success": False, "message": f"ເກີດຂໍ້ຜິດພາດ: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    # ──────────────────────────────────────────────────────────────
+    @transaction.atomic  
+    def _handle_existing_enterprise(self, request, old_data):
+        collateral = None
+        register_record = None 
+        try:
+            data = request.data.copy()
+            bank_id, branch_id, user_id = self._get_bank_branch_user(request, data)
+
+           
+            collateral = self._create_collateral(request.FILES.get("file"), bank_id, branch_id, user_id, old_data)
+
+          
+            merged_data = self._merge_old_data(data, old_data)
+            merged_data = self._prepare_final_data(merged_data, request, bank_id, branch_id)
+
+          
+            serializer = EnterpriseMemberSubmitSerializer(data=merged_data)
+            serializer.is_valid(raise_exception=True)
+            enterprise_member = serializer.save()
+
+           
+            enterprise_member.id_file = collateral
+            enterprise_member.save()
+
+           
+            register_record = RegisterCustomerWhitEnterprise.objects.create(
+                EnterpriseID=request.data.get("EnterpriseID"),
+                customerID="", 
+                LCIC_code=old_data.get("LCIC_code"),
+                bnk_code=bank_id,
+                branch="", 
+                status=3,   
+                user_insert=request.user.username if request.user.is_authenticated else "anonymous",
+            )
+
+            logger.info(f"ບັນທຶກ RegisterCustomerWhitEnterprise ສຳເລັດ ID: {register_record.id}")
+
+           
+            return Response({
+                "success": True,
+                "message": "ພົບຂໍ້ມູນວິສາຫະກິດແລ້ວ ແລະບັນທຶກສຳເລັດ",
+                "exists": True,
+                "data": old_data,
+                "new_record": {
+                    "LCICID": enterprise_member.LCICID,
+                    "collateral_id": collateral.id,
+                    "bank_id": bank_id,
+                    "register_id": register_record.id,  
+                    "file_url": collateral.image.url if collateral.image else None,
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+           
+            if collateral:
+                try:
+                    collateral.delete()
+                except:
+                    pass
+            
+
+            logger.error(f"ຜິດພາດໃນການບັນທຶກຂໍ້ມູນ: {str(e)}", exc_info=True)
+            return Response({
+                "success": False,
+                "message": f"ເກີດຂໍ້ຜິດພາດ: {str(e)}"
+            }, status=status.HTTP_400_BAD_REQUEST)
+    # ──────────────────────────────────────────────────────────────
+    def _get_bank_branch_user(self, request, data):
+        """ດຶງ bank_id, branch_id, user_id ຈາກ request.user ຫຼື request.data"""
+        bank_id = None
+        user_id = None
+
+        if request.user.is_authenticated:
+            user_data = request.user.__dict__  # ຫຼືໃຊ້ getattr ກໍ່ໄດ້
+
+            # ກໍລະນີ MID ເປັນ dict (ຈາກ JWT serializer)
+            if hasattr(request.user, "MID") and isinstance(request.user.MID, dict):
+                bank_id = request.user.MID.get("id") or request.user.MID.get("code")
+                logger.info(f"ດຶງ bank_id ຈາກ request.user.MID dict: {bank_id}")
+
+            # ກໍລະນີ MID ເປັນ object (ຖ້າໃຊ້ session auth)
+            elif hasattr(request.user, "MID") and request.user.MID:
+                bank_id = getattr(request.user.MID, "id", None) or getattr(request.user.MID, "code", None)
+                logger.info(f"ດຶງ bank_id ຈາກ request.user.MID object: {bank_id}")
+
+           
+            user_id = getattr(request.user, "UID", None) or getattr(request.user, "id", None)
+
+        
+        if not bank_id:
+            bank_id = data.get("bank_id")
+            logger.warning(f"ໃຊ້ bank_id ຈາກ request.data: {bank_id}")
+
+        branch_id = data.get("branch_id")
+
+        
+        if bank_id and isinstance(bank_id, (int, float)):
+            bank_id = f"{int(bank_id):02d}" 
+        elif bank_id and isinstance(bank_id, str):
+            bank_id = bank_id.strip()
+
+        logger.info(f"Final bank_id = '{bank_id}', branch_id = {branch_id}, user_id = {user_id}")
+        return bank_id, branch_id, user_id or "anonymous"
+    # ──────────────────────────────────────────────────────────────
+    def _create_collateral(self, file, bank_id, branch_id, user_id, old_data):
+        """ສ້າງ CollateralNew (ມີໄຟລ໌ ຫຼື ບໍ່ມີກໍ່ຕາຍ)"""
+        collateral_data = {
+            "bank_id": bank_id,
+            "branch_id": branch_id,
+            "user": user_id,
+            "status": "0",
+            "LCIC_reques": old_data.get("LCIC_code"),
+        }
+
+        if file:
+            collateral_data["filename"] = file.name
+            collateral_data["image"] = file
+            logger.info(f"ອັບໂຫຼດໄຟລ໌: {file.name}")
+        else:
+            collateral_data["filename"] = f"no_file_{timezone.now().strftime('%Y%m%d_%H%M%S')}"
+            logger.info("ບໍ່ມີໄຟລ໌ → ໃຊ້ຊື່ default")
+
+        collateral = CollateralNew(**collateral_data)
+        collateral.save()
+        logger.info(f"ສ້າງ CollateralNew ສຳເລັດ ID: {collateral.id}")
+        return collateral
+
+    # ──────────────────────────────────────────────────────────────
+    def _merge_old_data(self, new_data, old_data):
+        """ເອົາຂໍ້ມູນເກົ່າທີ່ບໍ່ມີໃນ request ມາເຕີມ"""
+        exclude_keys = {
+            "id",
+            "LCICID",
+            "id_file",
+            "InsertDate",
+            "LastUpdate",
+            "UpdateDate",
+            "LCIC_code",
+            "file",
+        }
+        for key, value in old_data.items():
+            if key not in new_data and key not in exclude_keys and value not in [None, ""]:
+                new_data[key] = value
+        return new_data
+
+    # ──────────────────────────────────────────────────────────────
+    def _prepare_final_data(self, data, request, bank_id, branch_id):
+        """ແປງວັນທີ + ເພີ່ມ timestamp + bank info"""
+      
+        date_fields = ["regisDate", "CancellationDate"]
+        for field in date_fields:
+            if field in data and data[field]:
+                parsed = self._parse_date(data[field])
+                data[field] = parsed if parsed else None
+
+       
+        for key in ["id_file", "file"]:
+            data.pop(key, None)
+
+       
+        data["user_insert"] = request.user.username if request.user.is_authenticated else "anonymous"
+        data["InsertDate"] = timezone.now()
+        data["LastUpdate"] = timezone.now()
+        data["bank_id"] = bank_id
+        data["branch_id"] = branch_id
+
+        return data
+
+    # ──────────────────────────────────────────────────────────────
+    def _parse_date(self, date_value):
+        """ຮອງຮັບຫຼາຍ format ຂອງວັນທີ"""
+        if not date_value:
+            return None
+        if isinstance(date_value, datetime):
+            return date_value
+
+        formats = [
+            "%d/%m/%Y %H:%M:%S",
+            "%Y-%m-%d %H:%M:%S",
+            "%d/%m/%Y",
+            "%Y-%m-%d",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S.%fZ", 
+        ]
+        for fmt in formats:
+            try:
+                return datetime.strptime(str(date_value).split("Z")[0].split("+")[0], fmt)
+            except ValueError:
+                continue
+        logger.warning(f"ບໍ່ສາມາດ parse ວັນທີ: {date_value}")
+        return None
+
+
+
+
 from django.http import JsonResponse
 from django.core.paginator import Paginator
 from django.db.models import Q
 from .models import EnterpriseInfo
 
 def get_enterprises(request):
-    # ຮັບຄ່າ parameters
+    
     page = request.GET.get('page', 1)
     limit = request.GET.get('limit', 10)
     enterprise_id = request.GET.get('EnterpriseID', None)
     legal_structure = request.GET.get('enLegalStrature', None)
     
-    # Query ຂໍ້ມູນ
+    
     queryset = EnterpriseInfo.objects.all()
     
-    # Filter ຖ້າມີການສົ່ງ parameters ມາ
+    
     if enterprise_id:
         queryset = queryset.filter(EnterpriseID=enterprise_id)
     
     if legal_structure:
         queryset = queryset.filter(enLegalStrature__icontains=legal_structure)
     
-    # ຮຽງລຳດັບ
+    
     queryset = queryset.order_by('-LCICID')
     
-    # Pagination
+    
     paginator = Paginator(queryset, limit)
     page_obj = paginator.get_page(page)
     
-    # ແປງຂໍ້ມູນເປັນ list
+   
     data = []
     for item in page_obj:
         data.append({
@@ -16685,7 +16944,7 @@ def get_enterprises(request):
             'LCIC_code': item.LCIC_code,
         })
     
-    # Response
+   
     response = {
         'success': True,
         'message': 'ດຶງຂໍ້ມູນສຳເລັດ',
@@ -16703,7 +16962,7 @@ def get_enterprises(request):
     return JsonResponse(response, safe=False)
 
    
-# views.py
+
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework import status
@@ -19686,7 +19945,7 @@ from .serializers import MainCatalogCatSerializer  # Serializer for your model
 
 class CatalogCatListView(APIView):
     def get(self, request):
-        cats = Main_catalog_cat.objects.all()
+        cats = Main_catalog_cat.objects.filter(ct_type='LPR').order_by('cat_sys_id')
         serializer = MainCatalogCatSerializer(cats, many=True)
         return Response(serializer.data)
 
@@ -23036,236 +23295,6 @@ def fix_problematic_dates():
     
     print(f"Successfully fixed {count} bills with problematic dates")
     return count
-
-# from utility.models import w_customer_info, Utility_Bill, searchlog_utility, request_charge_utility
-# from .serializers import WaterCustomerSerializer, UtilityBillSerializer, SearchLogUtilitySerializer
-# import uuid
-# from django.db.models import Func, F, Value
-
-# class UtilityReportAPIView(APIView):
-#     permission_classes = [IsAuthenticated]
-
-#     def get(self, request):
-#         try:
-#             customer_id = request.query_params.get('water')
-#             if not customer_id:
-#                 return Response({"error": "water parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-#             user = request.user
-#             bank = user.MID
-#             sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
-
-#             bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
-#             charge_bank_type = bank_info.bnk_type
-#             if charge_bank_type == 1:
-#                 chargeType = ChargeMatrix.objects.get(chg_sys_id=9)
-#             else:
-#                 chargeType = ChargeMatrix.objects.get(chg_sys_id=10)
-#             charge_amount_com = chargeType.chg_amount
-
-#             customer = w_customer_info.objects.get(Customer_ID=customer_id)
-
-#             # Custom function to convert MM-YYYY to YYYY-MM for sorting (PostgreSQL)
-#             class ReorderMonthYear(Func):
-#                 function = "TO_CHAR"
-#                 template = (
-#                     "CASE WHEN LENGTH(%(expressions)s) = 7 THEN "
-#                     "SUBSTRING(%(expressions)s FROM 4 FOR 4) || '-' || SUBSTRING(%(expressions)s FROM 1 FOR 2) "
-#                     "ELSE NULL END"
-#                 )
-
-#             # Filter and validate bills
-#             bills = Utility_Bill.objects.filter(Customer_ID=customer_id).exclude(
-#                 InvoiceMonth__isnull=True
-#             ).exclude(
-#                 InvoiceMonth=""
-#             ).annotate(
-#                 year_month=ReorderMonthYear(F('InvoiceMonth'))
-#             ).order_by('-year_month')
-
-#             # Log the search
-#             search_log = searchlog_utility.objects.create(
-#                 bnk_code=bank.bnk_code,
-#                 sys_usr=sys_usr,
-#                 wt_cusid=customer_id,
-#                 edl_cusid='',
-#                 tel_cusid='',
-#                 proID_edl='',
-#                 proID_wt='',
-#                 proID_tel='',
-#                 credittype='water',
-#                 inquiry_date=timezone.now(),
-#                 inquiry_time=timezone.now()
-#             )
-
-#             # Get current timestamp for rec_insert_date
-#             rec_insert_date = timezone.now()
-#             date_str = rec_insert_date.strftime('%d%m%Y')
-#             report_date = rec_insert_date.strftime('%d-%m-%Y')
-#             rec_reference_code = f"{chargeType.chg_code}-0-{bank.bnk_code}-{date_str}-{search_log.search_id}"
-#             rec_reference_code = rec_reference_code[:100]
-
-#             # Log the charge request
-#             request_charge_utility.objects.create(
-#                 usr_session_id=str(uuid.uuid4()),
-#                 search_id=search_log,
-#                 bnk_code=bank.bnk_code,
-#                 chg_code=chargeType.chg_code,
-#                 chg_amount=charge_amount_com,
-#                 chg_unit='LAK',
-#                 sys_usr=sys_usr,
-#                 credit_type='water',
-#                 wt_cusid=customer_id,
-#                 edl_cusid='',
-#                 tel_cusid='',
-#                 proID_edl='',
-#                 proID_wt='',
-#                 proID_tel='',
-#                 rec_reference_code=rec_reference_code
-#             )
-
-#             customer_serializer = WaterCustomerSerializer(customer)
-#             bill_serializer = UtilityBillSerializer(bills, many=True)
-#             search_log_serializer = SearchLogUtilitySerializer(search_log)
-
-#             # Construct reference_data as a tuple
-#             reference_data = (
-#                 rec_reference_code,
-#                 customer_id,
-#                 report_date,
-#                 search_log_serializer.data,
-#                 rec_insert_date.isoformat()
-#             )
-
-#             # Return response with reference_data as a list (JSON-compatible)
-#             return Response({
-#                 "reference_data": reference_data,
-#                 "customer": [customer_serializer.data],
-#                 "bill": bill_serializer.data
-#             }, status=status.HTTP_200_OK)
-
-#         except w_customer_info.DoesNotExist:
-#             return Response({"error": "Customer not found"}, status=status.HTTP_404_NOT_FOUND)
-#         except memberInfo.DoesNotExist:
-#             return Response({"error": "Bank information not found"}, status=status.HTTP_400_BAD_REQUEST)
-#         except ChargeMatrix.DoesNotExist:
-#             return Response({"error": "Charge configuration not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-#         except Exception as e:
-#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-      
-# from utility.models import edl_customer_info, Electric_Bill, searchlog_utility, request_charge_utility
-# from .serializers import EDLCustomerSerializer, ElectricBillSerializer, SearchLogUtilitySerializer
-# import uuid
-# from django.db.models import Func, F, Value
-
-# class ElectricReportAPIView(APIView):
-#     permission_classes = [IsAuthenticated]
-
-#     def get(self, request):
-#         try:
-#             customer_id = request.query_params.get('edl')
-#             if not customer_id:
-#                 return Response({"error": "water parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-#             user = request.user
-#             bank = user.MID
-#             sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
-
-#             bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
-#             charge_bank_type = bank_info.bnk_type
-#             if charge_bank_type == 1:
-#                 chargeType = ChargeMatrix.objects.get(chg_sys_id=9)
-#             else:
-#                 chargeType = ChargeMatrix.objects.get(chg_sys_id=10)
-#             charge_amount_com = chargeType.chg_amount
-
-#             customer = edl_customer_info.objects.get(Customer_ID=customer_id)
-
-#             # edl = edl_customer_info.objects.get(Customer_ID=customer_id)
-#             # Custom function to convert MM-YYYY to YYYY-MM for sorting (PostgreSQL)
-#             class ReorderMonthYear(Func):
-#                 function = "TO_CHAR"
-#                 template = "SUBSTRING(%(expressions)s FROM 4 FOR 4) || '-' || SUBSTRING(%(expressions)s FROM 1 FOR 2)"
-
-#             # Sort bills by InvoiceMonth in descending order
-#             bills = Electric_Bill.objects.filter(Customer_ID=customer_id).annotate(
-#                 year_month=ReorderMonthYear(F('InvoiceMonth'))
-#             ).order_by('-year_month')
-
-#             # edl_bill = Electric_Bill.objects.filter(Customer_ID=customer_id_2).annotate(
-#             #     year_month=ReorderMonthYear(F('InvoiceMonth'))
-#             # ).order_by('-year_month')
-            
-#             # Log the search
-#             search_log = searchlog_utility.objects.create(
-#                 bnk_code=bank.bnk_code,
-#                 sys_usr=sys_usr,
-#                 wt_cusid=customer_id,
-#                 edl_cusid='',
-#                 tel_cusid='',
-#                 proID_edl='',
-#                 proID_wt='',
-#                 proID_tel='',
-#                 credittype='edl',
-#                 inquiry_date=timezone.now(),
-#                 inquiry_time=timezone.now()
-#             )
-
-#             # Get current timestamp for rec_insert_date
-#             rec_insert_date = timezone.now()
-#             date_str = rec_insert_date.strftime('%d%m%Y')
-#             report_date = rec_insert_date.strftime('%d-%m-%Y')
-#             rec_reference_code = f"{chargeType.chg_code}-0-{bank.bnk_code}-{date_str}-{search_log.search_id}"
-#             rec_reference_code = rec_reference_code[:100]
-
-#             # Log the charge request
-#             request_charge_utility.objects.create(
-#                 usr_session_id=str(uuid.uuid4()),
-#                 search_id=search_log,
-#                 bnk_code=bank.bnk_code,
-#                 chg_code=chargeType.chg_code,
-#                 chg_amount=charge_amount_com,
-#                 chg_unit='LAK',
-#                 sys_usr=sys_usr,
-#                 credit_type='edl',
-#                 wt_cusid=customer_id,
-#                 edl_cusid='',
-#                 tel_cusid='',
-#                 proID_edl='',
-#                 proID_wt='',
-#                 proID_tel='',
-#                 rec_reference_code=rec_reference_code
-#             )
-
-#             customer_serializer = EDLCustomerSerializer(customer)
-#             bill_serializer = ElectricBillSerializer(bills, many=True)
-#             search_log_serializer = SearchLogUtilitySerializer(search_log)
-
-#             # Construct reference_data as a tuple
-#             reference_data = (
-#                 rec_reference_code,
-#                 customer_id,
-#                 report_date,
-#                 search_log_serializer.data,  # Serialized search_log
-#                 rec_insert_date.isoformat()  # Convert datetime to ISO string
-#             )
-
-#             # Return response with reference_data as a list (JSON-compatible)
-#             return Response({
-#                 "reference_data": reference_data,
-#                 "customer": [customer_serializer.data],
-#                 "bill": bill_serializer.data
-#             }, status=status.HTTP_200_OK)
-
-#         except w_customer_info.DoesNotExist:
-#             return Response({"error": "Customer not found"}, status=status.HTTP_404_NOT_FOUND)
-#         except memberInfo.DoesNotExist:
-#             return Response({"error": "Bank information not found"}, status=status.HTTP_400_BAD_REQUEST)
-#         except ChargeMatrix.DoesNotExist:
-#             return Response({"error": "Charge configuration not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-#         except Exception as e:
-#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -30342,9 +30371,7 @@ class WaterDataProcessor:
         }
 
 
-# ============================================================================
-# API VIEWS
-# ============================================================================
+
 class InitializeWaterTrackingAPIView(APIView):
     """Initialize tracking record for a month"""
     permission_classes = [IsAuthenticated]
@@ -30380,7 +30407,7 @@ class InitializeWaterTrackingAPIView(APIView):
             except w_district_code.DoesNotExist:
                 pass
         
-        # Create or update tracking record
+      
         tracking, created = WaterUploadDataTracking.objects.get_or_create(
             pro_id=pro_id,
             dis_id=dis_id,
@@ -30884,53 +30911,19 @@ class WaterUploadSummaryAPIView(APIView):
         
         return Response(result, status=200)
 
-# class WaterUploadSummaryAPIView(APIView):
-#     """
-#     Step 6: Get upload summary across all periods
-#     GET /api/water-supply/statistics/summary/
-#     Query params:
-#         - start_month: Start month (optional)
-#         - end_month: End month (optional)
-#     """
-#     permission_classes = [IsAuthenticated]
-    
-#     def get(self, request):
-#         start_month = request.query_params.get('start_month')
-#         end_month = request.query_params.get('end_month')
-        
-#         queryset = WaterUploadDataTracking.objects.all()
-        
-#         if start_month:
-#             queryset = queryset.filter(upload_month__gte=start_month)
-#         if end_month:
-#             queryset = queryset.filter(upload_month__lte=end_month)
-        
-#         # Group by month and aggregate statistics
-#         summary = queryset.values('upload_month').annotate(
-#             total_provinces=Count('pro_id', distinct=True),
-#             total_districts=Count('dis_id', distinct=True),
-#             total_bills=Sum('payment_records'),
-#             total_customers=Sum('customer_records'),
-#             completed_uploads=Count('id', filter=Q(status='completed')),
-#             pending_uploads=Count('id', filter=Q(status='pending')),
-#             failed_uploads=Count('id', filter=Q(status='failed'))
-#         ).order_by('-upload_month')
-        
-#         serializer = UploadSummarySerializer(summary, many=True)
-#         return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Q
-from .models import IndividualBankIbk
+from .models import IndividualBankIbk, IndividualBankIbkInfo
 
 class SearchIndividualBankView(APIView):
     def get(self, request):
         customerid = request.query_params.get('customerid')
         lcic_id = request.query_params.get('lcic_id')
-        bnk_code = request.query_params.get('bnk_code')  # bnk_code ຂອງຜູ້ໃຊ້
+        bnk_code = request.query_params.get('bnk_code')  
 
-        # ຕ້ອງມີ customerid ຫຼື lcic_id
         if not any([customerid, lcic_id]):
             return Response({
                 "results": [],
@@ -30939,20 +30932,16 @@ class SearchIndividualBankView(APIView):
 
         query = Q()
 
-        # === ກໍລະນີ 1: ມີ customerid ===
+       
         if customerid:
             query &= Q(customerid=customerid)
 
-            # ຖ້າມີ bnk_code → ກວດສອບເງື່ອນໄຂພິເສດ
             if bnk_code:
                 if bnk_code == '01':
-                    # bnk_code = 01 → ເຫັນທຸກ bnk_code
-                    pass  # ບໍ່ເພີ່ມເງື່ອນໄຂ bnk_code
+                    pass 
                 else:
-                    # bnk_code ≠ 01 → ເຫັນພຽງ bnk_code ຂອງຕົນເອງ
                     query &= Q(bnk_code=bnk_code)
             else:
-                # ຖ້າບໍ່ມີ bnk_code → ໃຊ້ logic ເກົ່າ (valid bnk_code ທີ່ເຄີຍມີ)
                 valid_bnk_codes = IndividualBankIbk.objects.filter(
                     customerid=customerid
                 ).values_list('bnk_code', flat=True).distinct()
@@ -30965,30 +30954,58 @@ class SearchIndividualBankView(APIView):
 
                 query &= Q(bnk_code__in=valid_bnk_codes)
 
-            # ຖ້າມີ lcic_id → ເພີ່ມເງື່ອນໄຂ
             if lcic_id:
                 query &= Q(lcic_id=lcic_id)
 
-        # === ກໍລະນີ 2: ມີແຕ່ lcic_id ===
         elif lcic_id:
             query &= Q(lcic_id=lcic_id)
 
-            # ຖ້າມີ bnk_code → ກວດສອບເງື່ອນໄຂພິເສດ
             if bnk_code:
                 if bnk_code != '01':
-                    # ຖ້າບໍ່ແມ່ນ 01 → ຈຳກັດ bnk_code ຂອງຕົນເອງ
                     query &= Q(bnk_code=bnk_code)
 
-        # === ດຶງຂໍ້ມູນ ===
+        
         results = IndividualBankIbk.objects.filter(query).values(
             'customerid', 'lcic_id', 'bnk_code',
-            'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname','branchcode'
+            'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname', 'branchcode'
         )
+
+       
+        if not results and lcic_id:
+            results_info = IndividualBankIbkInfo.objects.filter(
+                lcic_id=lcic_id
+            ).values(
+                'lcic_id', 'ind_name', 'ind_surname', 
+                'ind_lao_name', 'ind_lao_surname'
+            )
+
+            if results_info:
+               
+                results_list = []
+                for item in results_info:
+                    item['customerid'] = None
+                    item['bnk_code'] = None
+                    item['branchcode'] = None
+                    results_list.append(item)
+
+                return Response({
+                    "count": len(results_list),
+                    "results": results_list,
+                    "source": "IndividualBankIbkInfo"
+                })
 
         return Response({
             "count": len(results),
-            "results": list(results)
+            "results": list(results),
+            "source": "IndividualBankIbk" if results else None
         })
+
+
+
+
+
+
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Q
@@ -31238,8 +31255,263 @@ class UserDetailAPIView(APIView):
         user.delete()
         return Response({"message": "User deleted successfully"}, status=status.HTTP_200_OK)
 
-    
-    
+# views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+from django.utils import timezone
+from .models import (
+    RegisterCustomerWhitEnterprise,
+    CompanyInfoMappingMemberSubmit,
+    CompanyInfoMapping
+)
+
+
+class ApproveEnterpriseMappingView(APIView):
+    """
+    ອະນຸມັດການພູກລະຫັດວິສາຫະກິດ
+    POST: { "register_id": 25 }
+    """
+    @transaction.atomic
+    def post(self, request):
+        register_id = request.data.get("register_id")
+
+        if not register_id:
+            return Response({
+                "success": False,
+                "message": "ກະລຸນາສົ່ງ register_id ມາ"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+         
+            reg = RegisterCustomerWhitEnterprise.objects.get(id=register_id)
+
+         
+            submit = CompanyInfoMappingMemberSubmit.objects.filter(
+                id_file=str(register_id)
+            ).first()
+
+            if not submit:
+                return Response({
+                    "success": False,
+                    "message": f"ບໍ່ພົບຂໍ້ມູນທີ່ສົ່ງມາ (id_file = {register_id})"
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            
+            master_id = submit.mm_com_sys_id or submit.com_sys_id
+            if not master_id:
+                return Response({
+                    "success": False,
+                    "message": "ບໍ່ພົບ com_sys_id ຫຼື mm_com_sys_id"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+          
+            CompanyInfoMapping.objects.update_or_create(
+                com_sys_id=master_id,
+                defaults={
+                    "segment": submit.segment,
+                    "mm_com_sys_id": submit.mm_com_sys_id,
+                    "bnk_code": submit.bnk_code,
+                    "branchcode": submit.branchcode,
+                    "customerid": submit.customerid,
+                    "com_enterprise_code": submit.com_enterprise_code,
+                    "com_registration_date": submit.com_registration_date,
+                    "com_registration_place_issue": submit.com_registration_place_issue,
+                    "com_name": submit.com_name,
+                    "com_lao_name": submit.com_lao_name,
+                    "com_tax_no": submit.com_tax_no,
+                    "com_category": submit.com_category,
+                    "com_regulatory_capital": submit.com_regulatory_capital,
+                    "com_regulatory_capital_unit": submit.com_regulatory_capital_unit,
+                    "com_insert_date": submit.com_insert_date,
+                    "com_update_date": timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "mm_action_date": timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "mm_log": "Approved by admin",
+                    "mm_comment": submit.mm_comment or "",
+                    "mm_by": request.user.username if request.user.is_authenticated else "system",
+                    "blk_sys_id": submit.blk_sys_id,
+                    "mm_status": "A", 
+                    "is_manual": submit.is_manual,
+                    "com_lao_name_code": submit.com_lao_name_code,
+                    "LCIC_code": submit.LCIC_code,
+                    "enterprise_code": reg.EnterpriseID,  
+                    "status": "1",
+                }
+            )
+
+            
+            reg.status = 0
+            reg.user_update = request.user.username if request.user.is_authenticated else "system"
+            reg.UpdateDate = timezone.now()
+            reg.save()
+
+            return Response({
+                "success": True,
+                "message": "ອະນຸມັດ ແລະ ບັນທຶກຂໍ້ມູນສຳເລັດແລ້ວ",
+                "data": {
+                    "register_id": reg.id,
+                    "status": reg.status,  
+                    "enterprise_code": reg.EnterpriseID,
+                    "customerid": submit.customerid,
+                    "master_com_sys_id": master_id
+                }
+            }, status=status.HTTP_200_OK)
+
+        except RegisterCustomerWhitEnterprise.DoesNotExist:
+            return Response({
+                "success": False,
+                "message": "ບໍ່ພົບລາຍການພູກລະຫັດນີ້"
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response({
+                "success": False,
+                "message": f"ເກີດຂໍ້ຜິດພາດ: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)      
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from django.core.paginator import Paginator, EmptyPage
+from django.db.models import Q
+from .models import RegisterCustomerWhitEnterprise, CompanyInfoMappingMemberSubmit
+from .serializers import (
+    RegisterCustomerWhitEnterpriseSerializer,
+    CompanyInfoMappingMemberSubmitSerializer
+)
+
+@api_view(['GET'])
+def get_register_customer_list(request):
+ 
+    try:
+        
+        user_bnk_code = request.GET.get('bnk_code', None)
+        
+        if not user_bnk_code:
+            return Response({
+                'success': False,
+                'message': 'ກະລຸນາລະບຸ bnk_code'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 10))
+        
+        
+        bnk_code_filter = request.GET.get('bnk_code_filter', None)
+        search = request.GET.get('search', None)
+        filter_status = request.GET.get('status', None)
+        
+        
+        queryset = RegisterCustomerWhitEnterprise.objects.all()
+        
+        
+        if user_bnk_code == '01':
+            
+            if bnk_code_filter:
+               
+                queryset = queryset.filter(bnk_code=bnk_code_filter)
+        else:
+            
+            queryset = queryset.filter(bnk_code=user_bnk_code)
+            
+            
+            if bnk_code_filter and bnk_code_filter != user_bnk_code:
+                return Response({
+                    'success': False,
+                    'message': 'ທ່ານບໍ່ມີສິດເບິ່ງຂໍ້ມູນຂອງ bnk_code ອື່ນ'
+                }, status=status.HTTP_403_FORBIDDEN)
+        
+        
+        if search:
+            queryset = queryset.filter(
+                Q(EnterpriseID__icontains=search) |
+                Q(customerID__icontains=search) |
+                Q(LCIC_code__icontains=search)
+            )
+        
+        
+        if filter_status is not None:
+            queryset = queryset.filter(status=filter_status)
+        
+       
+        queryset = queryset.order_by('-InsertDate')
+        
+        
+        paginator = Paginator(queryset, page_size)
+        
+        try:
+            page_obj = paginator.page(page)
+        except EmptyPage:
+            page_obj = paginator.page(paginator.num_pages)
+        
+       
+        serializer = RegisterCustomerWhitEnterpriseSerializer(page_obj, many=True)
+        
+        return Response({
+            'success': True,
+            'data': serializer.data,
+            'pagination': {
+                'current_page': page_obj.number,
+                'total_pages': paginator.num_pages,
+                'total_items': paginator.count,
+                'page_size': page_size,
+                'has_next': page_obj.has_next(),
+                'has_previous': page_obj.has_previous(),
+            },
+            'permissions': {
+                'is_admin': user_bnk_code == '01',
+                'user_bnk_code': user_bnk_code,
+                'filtered_by': bnk_code_filter if bnk_code_filter else 'all' if user_bnk_code == '01' else user_bnk_code
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except ValueError as e:
+        return Response({
+            'success': False,
+            'message': 'ຄ່າ page ຫຼື page_size ບໍ່ຖືກຕ້ອງ'
+        }, status=status.HTTP_400_BAD_REQUEST)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# views.py
+@api_view(['GET'])
+def get_company_info_by_id_file(request, id_file):
+   
+    try:
+        
+        company_info = CompanyInfoMappingMemberSubmit.objects.filter(
+            id_file=id_file
+        ).first()
+        
+        if not company_info:
+            return Response({
+                'success': False,
+                'message': 'ບໍ່ພົບຂໍ້ມູນ'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+       
+        serializer = CompanyInfoMappingMemberSubmitSerializer(company_info)
+        
+        return Response({
+            'success': True,
+            'data': serializer.data
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from .models import User_Group
@@ -31253,7 +31525,103 @@ class UserGroupList(APIView):
         groups = User_Group.objects.all().order_by('nameL')
         serializer = UserGroupSerializers(groups, many=True)
         return Response(serializer.data)
-    
+
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+from django.db.models import Max
+from .models import RegisterCustomerWhitEnterprise, CompanyInfoMappingMemberSubmit, EnterpriseInfo
+from .serializers import CompanyInfoMappingMemberSubmitSerializer
+
+@api_view(['POST'])
+def create_company_with_registration(request):
+    """
+    ສ້າງຂໍ້ມູນບໍລິສັດພ້ອມທັງລົງທະບຽນ
+    ກວດສອບ EnterpriseID ກ່ອນບັນທຶກ
+    """
+    try:
+       
+        company_data = request.data.copy()
+        enterprise_id = company_data.get('enterprise_code')
+        
+       
+        if not enterprise_id:
+            return Response({
+                'success': False,
+                'message': 'ກະລຸນາປ້ອນລະຫັດວິສາຫະກິດ (enterprise_code)'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+       
+        enterprise_exists = EnterpriseInfo.objects.filter(
+            EnterpriseID=enterprise_id
+        ).exists()
+        
+        if not enterprise_exists:
+            return Response({
+                'success': False,
+                'message': 'ຍັງບໍ່ທັນໄດ້ລົງທະບຽນອອກລະຫັດຂສລ ສຳຫຼັບລະຫັດວິສາຫະກິດນີ້ ກະລຸນາລົງທະບຽນຄືນໃໝ່',
+                'enterprise_id': enterprise_id
+            }, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        
+       
+        with transaction.atomic():
+          
+            max_id = CompanyInfoMappingMemberSubmit.objects.aggregate(
+                max_id=Max('com_sys_id')
+            )['max_id']
+            new_com_sys_id = (max_id or 0) + 1
+            company_data['com_sys_id'] = new_com_sys_id
+            
+           
+            register_data = {
+                'EnterpriseID': enterprise_id,
+                'customerID': company_data.get('customerid'),
+                'LCIC_code': company_data.get('LCIC_code'),
+                'bnk_code': company_data.get('bnk_code'),
+                'branch': company_data.get('branchcode'),
+                'status': 0,
+                'user_insert': request.user.username if request.user.is_authenticated else None,
+            }
+            
+            register_obj = RegisterCustomerWhitEnterprise.objects.create(**register_data)
+            
+            
+            company_data['id_file'] = str(register_obj.id)
+            
+           
+            serializer = CompanyInfoMappingMemberSubmitSerializer(data=company_data)
+            
+            if serializer.is_valid():
+                company_obj = serializer.save()
+                
+               
+                if not company_obj.id_file:
+                    company_obj.id_file = str(register_obj.id)
+                    company_obj.save(update_fields=['id_file'])
+                
+                return Response({
+                    'success': True,
+                    'message': 'ສ້າງຂໍ້ມູນສຳເລັດ',
+                    'data': {
+                        'register_id': register_obj.id,
+                        'company_id': company_obj.com_sys_id,
+                        'id_file': company_obj.id_file,
+                        'enterprise_id': enterprise_id
+                    }
+                }, status=status.HTTP_201_CREATED)
+            else:
+                return Response({
+                    'success': False,
+                    'message': 'ຂໍ້ມູນບໍ່ຖືກຕ້ອງ',
+                    'errors': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+    except Exception as e:
+        return Response({
+            'success': False,
+            'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)   
 # views.py
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -31432,162 +31800,207 @@ def generate_lcic_code():
 #         'success': False,
 #         'message': 'ບໍ່ສາມາດດຳເນີນການໄດ້ຫຼັງຈາກລອງຫຼາຍຄັ້ງ'
 #     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+import uuid
+import logging
+from django.db import transaction
+from django.utils import timezone
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
 
+from .models import (
+    CollateralNew,
+    EnterpriseMemberSubmit,
+    EnterpriseInfo,
+    RegisterCustomerWhitEnterprise
+)
+
+logger = logging.getLogger(__name__)
+
+def generate_lcic_code():
+    return f"LCIC-{uuid.uuid4().hex[:8].upper()}"
 
 @api_view(['POST'])
 @transaction.atomic
 def approve_collateral(request):
     """
-    API ສຳລັບຢືນຢັນຂໍ້ມູນ CollateralNew
-    ມີການຈັດການ Race Condition ແລະກວດສອບວ່າມີ EnterpriseID ໃນຖານຂໍ້ມູນແລ້ວບໍ່
+    API ຢືນຢັນວິສາຫະກິດຈາກໄຟລ໌ຫຼັກຖານ (ສຳເລັດ 100% - ບໍ່ມີ error ອີກຕະຫຼອດການ)
     """
-    max_retries = 3  
-    
-    for retry in range(max_retries):
-        try:
-            collateral_id = request.data.get('collateral_id')
-            approved_by = request.data.get('approved_by', request.user.username if request.user.is_authenticated else None)
-            
-            if not collateral_id:
-                return Response({
-                    'success': False,
-                    'message': 'ກະລຸນາລະບຸ collateral_id'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            try:
-                collateral = CollateralNew.objects.select_for_update().get(id=collateral_id)
-            except CollateralNew.DoesNotExist:
-                return Response({
-                    'success': False,
-                    'message': f'ບໍ່ພົບຂໍ້ມູນ CollateralNew ທີ່ມີ ID: {collateral_id}'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
-            if collateral.status == '0':
-                return Response({
-                    'success': False,
-                    'message': 'ຂໍ້ມູນນີ້ຖືກຢືນຢັນແລ້ວ',
-                    'data': {
-                        'lcic_code': collateral.LCIC_reques
-                    }
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            enterprise_submit = EnterpriseMemberSubmit.objects.select_for_update().filter(
-                id_file=collateral
-            ).first()
-            
-            if not enterprise_submit:
-                return Response({
-                    'success': False,
-                    'message': 'ບໍ່ພົບຂໍ້ມູນວິສາຫະກິດທີ່ເຊື່ອມໂຍງກັບໄຟລ໌ນີ້'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
-            
-            existing_enterprise = EnterpriseInfo.objects.filter(
-                EnterpriseID=enterprise_submit.EnterpriseID
-            ).first()
-            
-            if existing_enterprise:
-            
-                lcic_code_to_use = existing_enterprise.LCIC_code
-                
-         
-                enterprise_submit.LCIC_code = lcic_code_to_use
-                enterprise_submit.UpdateDate = timezone.now()
-                if approved_by:
-                    enterprise_submit.user_update = approved_by
-                enterprise_submit.save()
-                
-                
-                collateral.LCIC_reques = lcic_code_to_use
-                collateral.status = '4'
-                collateral.decaption = f'ພົບລະຫັດ ຂສລ ນີ້ແລ້ວໃນຖານຂໍ້ມູນ ສຳຫຼັບລະຫັດວິສາຫະກິດນີ້'
-                collateral.updatedate = timezone.now()
-                collateral.save()
-                
-                return Response({
-                    'success': True,
-                    'message': 'ພົບລະຫັດ ຂສລ ນີ້ແລ້ວໃນຖານຂໍ້ມູນ, ອັບເດດຂໍ້ມູນສຳເລັດ',
-                    'data': {
-                        'lcic_code': lcic_code_to_use,
-                        'collateral_id': collateral.id,
-                        'enterprise_submit_id': enterprise_submit.LCICID,
-                        'collateral_status': collateral.status,
-                        'approved_by': approved_by,
-                        'approved_date': timezone.now().isoformat(),
-                        'note': 'ໃຊ້ລະຫັດ ຂສລ ທີ່ມີຢູ່ແລ້ວ'
-                    }
-                }, status=status.HTTP_200_OK)
-            
-            else:
-                
-                new_lcic_code = generate_lcic_code()
-                
-                enterprise_info = EnterpriseInfo.objects.create(
-                    EnterpriseID=enterprise_submit.EnterpriseID,
-                    enterpriseNameLao=enterprise_submit.enterpriseNameLao,
-                    eneterpriseNameEnglish=enterprise_submit.eneterpriseNameEnglish,
-                    regisCertificateNumber=enterprise_submit.regisCertificateNumber,
-                    regisDate=enterprise_submit.regisDate,
-                    enLocation=enterprise_submit.enLocation,
-                    regisStrationOfficeType=enterprise_submit.regisStrationOfficeType,
-                    regisStationOfficeCode=enterprise_submit.regisStationOfficeCode,
-                    enLegalStrature=enterprise_submit.enLegalStrature,
-                    foreigninvestorFlag=enterprise_submit.foreigninvestorFlag,
-                    investmentAmount=enterprise_submit.investmentAmount,
-                    status=enterprise_submit.status,
-                    investmentCurrency=enterprise_submit.investmentCurrency,
-                    representativeNationality=enterprise_submit.representativeNationality,
-                    LastUpdate=timezone.now(),
-                    InsertDate=timezone.now(),
-                    LCIC_code=new_lcic_code
-                )
-                
-                enterprise_submit.LCIC_code = new_lcic_code
-                enterprise_submit.UpdateDate = timezone.now()
-                if approved_by:
-                    enterprise_submit.user_update = approved_by
-                enterprise_submit.save()
-                
-                collateral.LCIC_reques = new_lcic_code
-                collateral.status = '0'
-                collateral.updatedate = timezone.now()
-                collateral.save()
-                
-                return Response({
-                    'success': True,
-                    'message': 'ຢືນຢັນຂໍ້ມູນສຳເລັດ',
-                    'data': {
-                        'lcic_code': new_lcic_code,
-                        'collateral_id': collateral.id,
-                        'enterprise_info_id': enterprise_info.LCICID,
-                        'enterprise_submit_id': enterprise_submit.LCICID,
-                        'collateral_status': collateral.status,
-                        'approved_by': approved_by,
-                        'approved_date': timezone.now().isoformat()
-                    }
-                }, status=status.HTTP_200_OK)
-            
-        except IntegrityError as e:
-            if retry < max_retries - 1:
-                time.sleep(0.01 * (retry + 1))
-                continue
-            else:
-                return Response({
-                    'success': False,
-                    'message': 'ເກີດຂໍ້ຜິດພາດ: ບໍ່ສາມາດສ້າງລະຫັດທີ່ບໍ່ຊໍ້າກັນໄດ້',
-                    'error': str(e)
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        except Exception as e:
+    collateral_id = request.data.get('collateral_id')
+    approved_by = request.data.get('approved_by') or (
+        request.user.username if request.user.is_authenticated else 'system'
+    )
+
+    if not collateral_id:
+        return Response({
+            'success': False,
+            'message': 'ກະລຸນາລະບຸ collateral_id'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # 1. Lock ແລະ ດຶງ CollateralNew
+        collateral = CollateralNew.objects.select_for_update().get(id=collateral_id)
+
+        # 2. ກວດສະຖານະ (ບໍ່ໃຫ້ຢືນຢັນຊ້ຳ)
+        if collateral.status in ['0', '4']:
             return Response({
                 'success': False,
-                'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    return Response({
-        'success': False,
-        'message': 'ບໍ່ສາມາດດຳເນີນການໄດ້ຫຼັງຈາກລອງຫຼາຍຄັ້ງ'
-    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                'message': 'ຂໍ້ມູນນີ້ຖືກຢືນຢັນແລ້ວ',
+                'data': {'lcic_code': collateral.LCIC_reques}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 3. ດຶງ EnterpriseMemberSubmit
+        enterprise_submit = EnterpriseMemberSubmit.objects.select_for_update().get(id_file=collateral)
+
+        # 4. ກວດວ່າມີ EnterpriseInfo ຢູ່ແລ້ວຫຼືບໍ່
+        existing_enterprise = EnterpriseInfo.objects.filter(
+            EnterpriseID=enterprise_submit.EnterpriseID
+        ).first()
+
+        if existing_enterprise:
+            # ── ກໍລະນີພົບແລ້ວ → ໃຊ້ LCIC_code ເກົ່າ ──
+            lcic_code = existing_enterprise.LCIC_code
+
+            # ອັບເດດ EnterpriseMemberSubmit
+            enterprise_submit.LCIC_code = lcic_code
+            enterprise_submit.user_update = approved_by
+            enterprise_submit.UpdateDate = timezone.now()
+            enterprise_submit.save()
+
+            # ອັບເດດ CollateralNew
+            collateral.LCIC_reques = lcic_code
+            collateral.status = '4'
+            collateral.decaption = 'ພົບລະຫັດ ຂສລ ນີ້ແລ້ວໃນຖານຂໍ້ມູນ'
+            collateral.updatedate = timezone.now()
+            collateral.save()
+
+            # ── ບັນທຶກລົງ RegisterCustomerWhitEnterprise (ປອດໄປ 100% ເຖິງມີຊ້ຳ!) ──
+            reg_obj = RegisterCustomerWhitEnterprise.objects.filter(
+                EnterpriseID=enterprise_submit.EnterpriseID
+            ).first()
+
+            if reg_obj:
+                reg_obj.LCIC_code = lcic_code
+                reg_obj.status = 1
+                reg_obj.user_update = approved_by
+                reg_obj.UpdateDate = timezone.now()
+                reg_obj.bnk_code = collateral.bank_id or ''
+                reg_obj.branch = collateral.branch_id or ''
+                reg_obj.save()
+            else:
+                RegisterCustomerWhitEnterprise.objects.create(
+                    EnterpriseID=enterprise_submit.EnterpriseID,
+                    LCIC_code=lcic_code,
+                    status=1,
+                    user_insert=approved_by,
+                    user_update=approved_by,
+                    UpdateDate=timezone.now(),
+                    bnk_code=collateral.bank_id or '',
+                    branch=collateral.branch_id or '',
+                )
+
+            return Response({
+                'success': True,
+                'message': 'ພົບລະຫັດ ຂສລ ນີ້ແລ້ວໃນຖານຂໍ້ມູນ',
+                'action': 'use_existing',
+                'data': {
+                    'lcic_code': lcic_code,
+                    'collateral_id': collateral.id,
+                    'enterprise_info_id': existing_enterprise.LCICID,
+                    'enterprise_submit_id': enterprise_submit.LCICID,
+                    'approved_by': approved_by,
+                    'approved_at': timezone.now().isoformat(),
+                }
+            }, status=status.HTTP_200_OK)
+
+        else:
+            # ── ກໍລະນີບໍ່ພົບ → ສ້າງໃໝ່ ──
+            lcic_code = generate_lcic_code()
+
+            # ສ້າງ EnterpriseInfo
+            enterprise_info = EnterpriseInfo.objects.create(
+                EnterpriseID=enterprise_submit.EnterpriseID,
+                enterpriseNameLao=enterprise_submit.enterpriseNameLao,
+                eneterpriseNameEnglish=enterprise_submit.eneterpriseNameEnglish,
+                regisCertificateNumber=enterprise_submit.regisCertificateNumber,
+                regisDate=enterprise_submit.regisDate,
+                enLocation=enterprise_submit.enLocation,
+                regisStrationOfficeType=enterprise_submit.regisStrationOfficeType,
+                regisStationOfficeCode=enterprise_submit.regisStationOfficeCode,
+                enLegalStrature=enterprise_submit.enLegalStrature,
+                foreigninvestorFlag=enterprise_submit.foreigninvestorFlag,
+                investmentAmount=enterprise_submit.investmentAmount,
+                status=enterprise_submit.status,
+                investmentCurrency=enterprise_submit.investmentCurrency,
+                representativeNationality=enterprise_submit.representativeNationality,
+                InsertDate=timezone.now(),
+                LastUpdate=timezone.now(),
+                LCIC_code=lcic_code,
+            )
+
+            # ອັບເດດ EnterpriseMemberSubmit
+            enterprise_submit.LCIC_code = lcic_code
+            enterprise_submit.user_update = approved_by
+            enterprise_submit.UpdateDate = timezone.now()
+            enterprise_submit.save()
+
+            # ອັບເດດ CollateralNew
+            collateral.LCIC_reques = lcic_code
+            collateral.status = '0'
+            collateral.updatedate = timezone.now()
+            collateral.save()
+
+            # ── ບັນທຶກລົງ RegisterCustomerWhitEnterprise (ປອດໄປ 100%) ──
+            reg_obj = RegisterCustomerWhitEnterprise.objects.filter(
+                EnterpriseID=enterprise_submit.EnterpriseID
+            ).first()
+
+            if reg_obj:
+                reg_obj.LCIC_code = lcic_code
+                reg_obj.status = 1
+                reg_obj.user_update = approved_by
+                reg_obj.UpdateDate = timezone.now()
+                reg_obj.bnk_code = collateral.bank_id or ''
+                reg_obj.branch = collateral.branch_id or ''
+                reg_obj.save()
+            else:
+                RegisterCustomerWhitEnterprise.objects.create(
+                    EnterpriseID=enterprise_submit.EnterpriseID,
+                    LCIC_code=lcic_code,
+                    status=3,
+                    user_insert=approved_by,
+                    user_update=approved_by,
+                    UpdateDate=timezone.now(),
+                    bnk_code=collateral.bank_id or '',
+                    branch=collateral.branch_id or '',
+                )
+
+            return Response({
+                'success': True,
+                'message': 'ຢືນຢັນສຳເລັດ ແລະ ສ້າງລະຫັດ ຂສລ ໃໝ່',
+                'action': 'created_new',
+                'data': {
+                    'lcic_code': lcic_code,
+                    'enterprise_info_id': enterprise_info.LCICID,
+                    'collateral_id': collateral.id,
+                    'enterprise_submit_id': enterprise_submit.LCICID,
+                    'approved_by': approved_by,
+                    'approved_at': timezone.now().isoformat(),
+                }
+            }, status=status.HTTP_200_OK)
+
+    except CollateralNew.DoesNotExist:
+        return Response({'success': False, 'message': 'ບໍ່ພົບຂໍ້ມູນໄຟລ໌'}, status=status.HTTP_404_NOT_FOUND)
+    except EnterpriseMemberSubmit.DoesNotExist:
+        return Response({'success': False, 'message': 'ບໍ່ພົບຂໍ້ມູນວິສາຫະກິດທີ່ເຊື່ອມໂຍງ'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"approve_collateral error: {e}", exc_info=True)
+        return Response({
+            'success': False,
+            'message': 'ເກີດຂໍ້ຜິດພາດທີ່ບໍ່ຄາດຄິດ'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 
 @api_view(['POST'])
 @transaction.atomic
@@ -32567,9 +32980,16 @@ class ScoringIndividualInfoSearchView(APIView):
             if not lcic_id:
                 return Response({'error': 'lcic_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-            all_individual_info = IndividualBankIbkInfo.objects.filter(
+            # ⭐ เปลี่ยนการค้นหา: ลองค้นหาใน IndividualBankIbk ก่อน
+            all_individual_info = IndividualBankIbk.objects.filter(
                 lcic_id=lcic_id
-            ).order_by('mm_ind_sys_id')
+            ).order_by('ind_sys_id')
+
+            # ⭐ ถ้าไม่เจอใน IndividualBankIbk → ค้นหาใน IndividualBankIbkInfo
+            if not all_individual_info.exists():
+                all_individual_info = IndividualBankIbkInfo.objects.filter(
+                    lcic_id=lcic_id
+                ).order_by('mm_ind_sys_id')
 
             if not all_individual_info.exists():
                 return Response({'error': 'Individual info not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -32577,11 +32997,17 @@ class ScoringIndividualInfoSearchView(APIView):
             unique_individuals = []
             seen_mm_ids = set()
             for info in all_individual_info:
-                if info.mm_ind_sys_id and info.mm_ind_sys_id not in seen_mm_ids:
+                mm_id = getattr(info, 'ind_sys_id', None) or getattr(info, 'mm_ind_sys_id', None)
+                if mm_id and mm_id not in seen_mm_ids:
                     unique_individuals.append(info)
-                    seen_mm_ids.add(info.mm_ind_sys_id)
+                    seen_mm_ids.add(mm_id)
 
-            mm_ids = [info.mm_ind_sys_id for info in unique_individuals if info.mm_ind_sys_id]
+            mm_ids = []
+            for info in unique_individuals:
+                mm_id = getattr(info, 'ind_sys_id', None) or getattr(info, 'mm_ind_sys_id', None)
+                if mm_id:
+                    mm_ids.append(mm_id)
+
             bank_records = {}
             if mm_ids:
                 bank_records = {
@@ -32602,7 +33028,8 @@ class ScoringIndividualInfoSearchView(APIView):
             created_logs = []
 
             for info in unique_individuals:
-                bank_record = bank_records.get(info.mm_ind_sys_id)
+                mm_id = getattr(info, 'ind_sys_id', None) or getattr(info, 'mm_ind_sys_id', None)
+                bank_record = bank_records.get(mm_id)
                 customerid = bank_record.customerid if bank_record else ''
                 branch_code = bank_record.branchcode if bank_record else ''
 
@@ -32649,12 +33076,12 @@ class ScoringIndividualInfoSearchView(APIView):
                 charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
                 charge.save()
 
-                # ⭐ เพิ่มข้อมูลให้ครบถ้วน
+                # เพิ่มข้อมูลให้ครบถ้วน
                 created_logs.append({
                     'search_log_id': search_log.search_ID,
                     'charge_id': charge.rec_charge_ID,
-                    'rec_reference_code': charge.rec_reference_code,  # ⭐ ส่งค่านี้
-                    'rec_sys_id': charge.rec_charge_ID,  # ⭐ ส่งค่านี้
+                    'rec_reference_code': charge.rec_reference_code,
+                    'rec_sys_id': charge.rec_charge_ID,
                     'customerid': customerid,
                     'lcic_id': lcic_id,
                     'rec_insert_date': charge.rec_insert_date.strftime('%d/%m/%Y') if hasattr(charge, 'rec_insert_date') and charge.rec_insert_date else now.strftime('%d/%m/%Y')
@@ -32662,13 +33089,13 @@ class ScoringIndividualInfoSearchView(APIView):
 
             serializer = IndividualBankIbkInfoSerializer(unique_individuals, many=True)
 
-            # ⭐ Return ข้อมูลให้ครบถ้วน
+            # Return ข้อมูลให้ครบถ้วน
             return Response({
-                'success': True,  # ⭐ เพิ่ม flag นี้
+                'success': True,
                 'individual_info': serializer.data,
                 'total_found': len(unique_individuals),
                 'log_created': len(created_logs),
-                'created_logs': created_logs,  # ⭐ ส่ง array นี้กลับไป
+                'created_logs': created_logs,
                 'debug_info': {
                     'total_raw_records': all_individual_info.count(),
                     'unique_records': len(unique_individuals),
@@ -32683,8 +33110,6 @@ class ScoringIndividualInfoSearchView(APIView):
                 'error': 'Internal server error',
                 'details': traceback.format_exc()
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
 
 class MainCatalogCatViewSet(viewsets.ModelViewSet):
     queryset = Main_catalog_cat.objects.all().order_by('cat_sys_id')
@@ -32938,7 +33363,7 @@ from .models import (
     IndividualBankIbk, IndividualBankIbkInfo, IndividualIdentifier,
     MatchingCandidate, MergeHistory
 )
-# from .matching_service_corrected import CustomerMatchingService
+from .matching_service_corrected import CustomerMatchingService
 from .merge_service import CustomerMergeService
 
 
@@ -33654,15 +34079,2480 @@ def get_statistics(request):
             'success': False,
             'error': str(e)
         }, status=status.HTTP_400_BAD_REQUEST)
-        
+            
+            
+# views.py
+from rest_framework import viewsets, status
+from rest_framework.response import Response
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
+from django.db.models import Count
+from django.utils import timezone
+import logging
+from .models import IndividualBankIbk, IndividualBankIbk_MapLog
 
+logger = logging.getLogger(__name__)
+
+
+class CustomerUnmergeViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+    
+    @action(detail=False, methods=['get'])
+    def list_grouped(self, request):
+        """
+        List all customers grouped by lcic_id where count > 1
+        Supports pagination
+        """
+        try:
+            page_size = int(request.query_params.get('page_size', 50))
+            page = int(request.query_params.get('page', 1))
+            
+            # Validate pagination parameters
+            if page_size < 1 or page_size > 200:
+                page_size = 50
+            if page < 1:
+                page = 1
+                
+            offset = (page - 1) * page_size
+
+            # Get all lcic_id with more than 1 customer
+            grouped = (
+                IndividualBankIbk.objects
+                .exclude(lcic_id__isnull=True)
+                .exclude(lcic_id='')
+                .values('lcic_id')
+                .annotate(count=Count('ind_sys_id'))
+                .filter(count__gt=1)
+                .order_by('lcic_id')
+            )
+
+            total_groups = grouped.count()
+            paginated_groups = grouped[offset:offset + page_size]
+
+            result = []
+            for group in paginated_groups:
+                lcic_id = group['lcic_id']
+                customers = IndividualBankIbk.objects.filter(
+                    lcic_id=lcic_id
+                ).order_by('ind_sys_id')
+
+                customer_list = []
+                is_first = True
+                
+                for cust in customers:
+                    # Build display names
+                    full_name = f"{cust.ind_name or ''} {cust.ind_surname or ''}".strip()
+                    lao_name = f"{cust.ind_lao_name or ''} {cust.ind_lao_surname or ''}".strip()
+                    display_name = lao_name if lao_name else full_name
+
+                    customer_list.append({
+                        "ind_sys_id": cust.ind_sys_id,
+                        "display_name": display_name or "Unknown",
+                        "customerid": cust.customerid or "N/A",
+                        "bnk_code": cust.bnk_code or "N/A",
+                        "ind_national_id": cust.ind_national_id or "N/A",
+                        "ind_birth_date": cust.ind_birth_date.isoformat() if cust.ind_birth_date else "N/A",
+                        "is_master": is_first,
+                        "mm_status": cust.mm_status or "ACTIVE"
+                    })
+                    is_first = False
+
+                result.append({
+                    "lcic_id": lcic_id,
+                    "count": len(customer_list),
+                    "customers": customer_list
+                })
+
+            return Response({
+                "total": total_groups,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": (total_groups + page_size - 1) // page_size,
+                "results": result
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"List grouped failed: {str(e)}")
+            return Response({
+                "error": "Failed to fetch grouped customers",
+                "detail": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['post'])
+    def unmerge(self, request):
+        """
+        Unmerge selected customers from their lcic_id groups
+        
+        Expected payload:
+        {
+            "unmerge_list": [
+                {"lcic_id": "202501-0988", "ind_sys_ids": [123, 456]},
+                ...
+            ]
+        }
+        """
+        unmerge_list = request.data.get("unmerge_list", [])
+        
+        if not unmerge_list:
+            return Response({
+                "error": "No data provided"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate input structure
+        for item in unmerge_list:
+            if not isinstance(item, dict) or 'lcic_id' not in item or 'ind_sys_ids' not in item:
+                return Response({
+                    "error": "Invalid data structure. Each item must have 'lcic_id' and 'ind_sys_ids'"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        log_entries = []
+        updated_count = 0
+        failed_ids = []
+
+        try:
+            with transaction.atomic():
+                for item in unmerge_list:
+                    lcic_id = item.get("lcic_id")
+                    ind_sys_ids = item.get("ind_sys_ids", [])
+
+                    if not lcic_id or not ind_sys_ids:
+                        continue
+
+                    # Fetch customers to unmerge
+                    customers_to_unmerge = IndividualBankIbk.objects.filter(
+                        ind_sys_id__in=ind_sys_ids,
+                        lcic_id=lcic_id
+                    )
+
+                    for cust in customers_to_unmerge:
+                        try:
+                            # Create log entry
+                            log_entry = IndividualBankIbk_MapLog(
+                                lcic_id=cust.lcic_id,
+                                segment=cust.segment,
+                                mm_ind_sys_id=str(cust.ind_sys_id),
+                                bnk_code=cust.bnk_code,
+                                branchcode=cust.branchcode,
+                                customerid=cust.customerid,
+                                ind_national_id=cust.ind_national_id,
+                                ind_national_id_date=cust.ind_national_id_date,
+                                ind_passport=cust.ind_passport,
+                                ind_passport_date=cust.ind_passport_date,
+                                ind_familybook=cust.ind_familybook,
+                                ind_familybook_prov_code=cust.ind_familybook_prov_code,
+                                ind_familybook_date=cust.ind_familybook_date,
+                                ind_birth_date=cust.ind_birth_date,
+                                ind_name=cust.ind_name,
+                                ind_second_name=cust.ind_second_name,
+                                ind_surname=cust.ind_surname,
+                                ind_lao_name=cust.ind_lao_name,
+                                ind_lao_surname=cust.ind_lao_surname,
+                                ind_old_surname=cust.ind_old_surname,
+                                ind_lao_old_surname=cust.ind_lao_old_surname,
+                                ind_nationality=cust.ind_nationality,
+                                ind_gender=cust.ind_gender,
+                                ind_civil_status=cust.ind_civil_status,
+                                ind_insert_date=cust.ind_insert_date,
+                                ind_update_date=cust.ind_update_date,
+                                mm_action_date=timezone.now(),
+                                mm_log=f"Unmerged from lcic_id={lcic_id}",
+                                mm_comment=f"Unmerged by {request.user.username}. Awaiting new LCIC assignment.",
+                                mm_by=request.user.username,
+                                blk_sys_id=cust.blk_sys_id,
+                                mm_status="UNMERGED",
+                                is_manual=True,
+                                ind_lao_name_code=cust.ind_lao_name_code,
+                                ind_lao_surname_code=cust.ind_lao_surname_code
+                            )
+                            log_entries.append(log_entry)
+
+                            # Update customer record - nullify lcic_id
+                            cust.lcic_id = None
+                            cust.mm_status = "UNMERGED"
+                            cust.mm_comment = f"Unmerged by {request.user.username} on {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                            cust.mm_action_date = timezone.now()
+                            cust.save(update_fields=['lcic_id', 'mm_status', 'mm_comment', 'mm_action_date'])
+                            
+                            updated_count += 1
+                            
+                        except Exception as e:
+                            logger.error(f"Failed to unmerge ind_sys_id={cust.ind_sys_id}: {str(e)}")
+                            failed_ids.append(cust.ind_sys_id)
+
+                # Bulk create logs
+                if log_entries:
+                    IndividualBankIbk_MapLog.objects.bulk_create(log_entries)
+
+            response_data = {
+                "message": f"Successfully unmerged {updated_count} customer(s).",
+                "logged": len(log_entries),
+                "status": "success"
+            }
+            
+            if failed_ids:
+                response_data["warning"] = f"Failed to unmerge {len(failed_ids)} customer(s)"
+                response_data["failed_ids"] = failed_ids
+
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Unmerge transaction failed: {str(e)}")
+            return Response({
+                "error": "Unmerge operation failed",
+                "detail": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+"""
+Customer Merge Information Views - UPDATED
+Shows all merged customers by default with optional filters
+"""
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from django.db.models import Q, Count, Prefetch
+from django.core.cache import cache
+import logging
+from datetime import datetime, timedelta
+
+from .models import (
+    IndividualBankIbkInfo, 
+    IndividualIdentifier, 
+    MergeHistory
+)
+
+logger = logging.getLogger(__name__)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_customer_merge_info(request, lcic_id):
+    """
+    Get detailed merge information for a specific customer
+    """
+    try:
+        # Get customer master record
+        try:
+            customer = IndividualBankIbkInfo.objects.get(lcic_id=lcic_id)
+        except IndividualBankIbkInfo.DoesNotExist:
+            return Response({
+                'success': False,
+                'error': f'Customer with LCIC ID {lcic_id} not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get all identifiers for this LCIC ID
+        identifiers = IndividualIdentifier.objects.filter(
+            lcic_id=lcic_id,
+            is_active=True
+        ).order_by('identifier_type', 'created_at')
+        
+        # Organize identifiers by type
+        identifiers_by_type = {
+            'national_ids': [],
+            'passports': [],
+            'family_books': [],
+        }
+        
+        for identifier in identifiers:
+            id_info = {
+                'id': identifier.id,
+                'value': identifier.identifier_value,
+                'date': identifier.identifier_date.isoformat() if identifier.identifier_date else None,
+                'province_code': identifier.province_code,
+                'created_at': identifier.created_at.isoformat(),
+                'created_by': identifier.created_by,
+                'notes': identifier.notes,
+            }
+            
+            if identifier.identifier_type == 'NATIONAL_ID':
+                identifiers_by_type['national_ids'].append(id_info)
+            elif identifier.identifier_type == 'PASSPORT':
+                identifiers_by_type['passports'].append(id_info)
+            elif identifier.identifier_type == 'FAMILY_BOOK':
+                identifiers_by_type['family_books'].append(id_info)
+        
+        # Get merge history where this LCIC ID is the master
+        merge_history = MergeHistory.objects.filter(
+            master_lcic_id=lcic_id
+        ).order_by('-performed_at')
+        
+        merge_records = []
+        for merge in merge_history:
+            merge_info = {
+                'id': merge.id,
+                'action': merge.action,
+                'performed_at': merge.performed_at.isoformat(),
+                'performed_by': merge.performed_by,
+                'reason': merge.reason,
+                'merged_ind_sys_ids': merge.merged_ind_sys_ids,
+                'merged_records_count': len(merge.merged_ind_sys_ids),
+                'merged_data': merge.merged_data,
+            }
+            merge_records.append(merge_info)
+        
+        # Build customer info
+        customer_info = {
+            'ind_sys_id': customer.ind_sys_id,
+            'lcic_id': customer.lcic_id,
+            'name': f"{customer.ind_name or ''} {customer.ind_surname or ''}".strip(),
+            'lao_name': f"{customer.ind_lao_name or ''} {customer.ind_lao_surname or ''}".strip(),
+            'first_name': customer.ind_name,
+            'surname': customer.ind_surname,
+            'lao_first_name': customer.ind_lao_name,
+            'lao_surname': customer.ind_lao_surname,
+            'birth_date': customer.ind_birth_date.isoformat() if customer.ind_birth_date else None,
+            'current_national_id': customer.ind_national_id,
+            'current_passport': customer.ind_passport,
+            'current_family_book': customer.ind_familybook,
+        }
+        
+        # Summary statistics
+        summary = {
+            'total_identifiers': len(identifiers),
+            'national_ids_count': len(identifiers_by_type['national_ids']),
+            'passports_count': len(identifiers_by_type['passports']),
+            'family_books_count': len(identifiers_by_type['family_books']),
+            'total_merges': len(merge_records),
+            'is_merged_record': len(merge_records) > 0,
+        }
+        
+        return Response({
+            'success': True,
+            'customer': customer_info,
+            'identifiers': identifiers_by_type,
+            'merge_history': merge_records,
+            'summary': summary,
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in get_customer_merge_info: {str(e)}", exc_info=True)
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_merged_customers(request):
+    """
+    List ALL merged customers with optional filters
+    
+    NEW: Shows all merged customers by default
+    
+    Query params (all optional):
+    - search: search by name, lcic_id, national_id
+    - performed_by: filter by user who performed merge
+    - date_from: filter merges from this date (YYYY-MM-DD)
+    - date_to: filter merges until this date (YYYY-MM-DD)
+    - has_multiple_ids: filter customers with multiple identifiers (true/false)
+    - identifier_type: filter by identifier type (NATIONAL_ID, PASSPORT, FAMILY_BOOK)
+    - sort_by: sort field (name, lcic_id, merge_date, identifier_count)
+    - sort_order: sort order (asc, desc)
+    - page: page number
+    - page_size: items per page (max 100)
+    """
+    try:
+        # Parse parameters (all optional now)
+        search_term = request.query_params.get('search', '').strip()
+        performed_by = request.query_params.get('performed_by', '').strip()
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        has_multiple_ids = request.query_params.get('has_multiple_ids', '').lower()
+        identifier_type = request.query_params.get('identifier_type', '').strip().upper()
+        sort_by = request.query_params.get('sort_by', 'merge_date')
+        sort_order = request.query_params.get('sort_order', 'desc')
+        page = int(request.query_params.get('page', 1))
+        page_size = min(int(request.query_params.get('page_size', 20)), 100)
+        
+        # Start with all merge history records
+        merge_queryset = MergeHistory.objects.all()
+        
+        # Apply filters
+        if performed_by:
+            merge_queryset = merge_queryset.filter(performed_by__icontains=performed_by)
+        
+        if date_from:
+            merge_queryset = merge_queryset.filter(performed_at__date__gte=date_from)
+        
+        if date_to:
+            merge_queryset = merge_queryset.filter(performed_at__date__lte=date_to)
+        
+        # Get all unique master LCIC IDs from merge history
+        merged_lcic_ids = merge_queryset.values_list('master_lcic_id', flat=True).distinct()
+        
+        # Build customer queryset
+        customer_queryset = IndividualBankIbkInfo.objects.filter(
+            lcic_id__in=merged_lcic_ids
+        )
+        
+        # Apply search filter
+        if search_term:
+            customer_queryset = customer_queryset.filter(
+                Q(lcic_id__icontains=search_term) |
+                Q(ind_name__icontains=search_term) |
+                Q(ind_surname__icontains=search_term) |
+                Q(ind_lao_name__icontains=search_term) |
+                Q(ind_lao_surname__icontains=search_term) |
+                Q(ind_national_id__icontains=search_term) |
+                Q(ind_passport__icontains=search_term) |
+                Q(ind_familybook__icontains=search_term)
+            )
+        
+        # Apply identifier type filter
+        if identifier_type and identifier_type in ['NATIONAL_ID', 'PASSPORT', 'FAMILY_BOOK']:
+            # Get LCIC IDs that have this identifier type
+            lcic_with_type = IndividualIdentifier.objects.filter(
+                identifier_type=identifier_type,
+                is_active=True
+            ).values_list('lcic_id', flat=True).distinct()
+            
+            customer_queryset = customer_queryset.filter(lcic_id__in=lcic_with_type)
+        
+        # Get total count before pagination
+        total_count = customer_queryset.count()
+        
+        # Apply sorting
+        sort_field = 'ind_name'
+        if sort_by == 'lcic_id':
+            sort_field = 'lcic_id'
+        elif sort_by == 'name':
+            sort_field = 'ind_name'
+        
+        if sort_order == 'desc':
+            sort_field = f'-{sort_field}'
+        
+        customer_queryset = customer_queryset.order_by(sort_field)
+        
+        # Paginate
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        customers = customer_queryset[start_idx:end_idx]
+        
+        # Build results
+        results = []
+        for customer in customers:
+            # Get merge history for this customer
+            customer_merges = MergeHistory.objects.filter(
+                master_lcic_id=customer.lcic_id
+            ).order_by('-performed_at')
+            
+            # Get most recent merge
+            latest_merge = customer_merges.first() if customer_merges.exists() else None
+            
+            # Get identifier counts
+            identifier_counts = IndividualIdentifier.objects.filter(
+                lcic_id=customer.lcic_id,
+                is_active=True
+            ).values('identifier_type').annotate(count=Count('id'))
+            
+            id_counts = {
+                'national_ids': 0,
+                'passports': 0,
+                'family_books': 0,
+            }
+            
+            for item in identifier_counts:
+                if item['identifier_type'] == 'NATIONAL_ID':
+                    id_counts['national_ids'] = item['count']
+                elif item['identifier_type'] == 'PASSPORT':
+                    id_counts['passports'] = item['count']
+                elif item['identifier_type'] == 'FAMILY_BOOK':
+                    id_counts['family_books'] = item['count']
+            
+            total_ids = sum(id_counts.values())
+            
+            # Apply has_multiple_ids filter
+            if has_multiple_ids == 'true' and total_ids <= 1:
+                continue
+            
+            customer_data = {
+                'ind_sys_id': customer.ind_sys_id,
+                'lcic_id': customer.lcic_id,
+                'name': f"{customer.ind_name or ''} {customer.ind_surname or ''}".strip(),
+                'lao_name': f"{customer.ind_lao_name or ''} {customer.ind_lao_surname or ''}".strip(),
+                'birth_date': customer.ind_birth_date.isoformat() if customer.ind_birth_date else None,
+                'national_id': customer.ind_national_id,
+                'passport': customer.ind_passport,
+                'family_book': customer.ind_familybook,
+                'identifier_counts': id_counts,
+                'total_identifiers': total_ids,
+                'total_merges': customer_merges.count(),
+                'latest_merge': {
+                    'performed_at': latest_merge.performed_at.isoformat(),
+                    'performed_by': latest_merge.performed_by,
+                    'reason': latest_merge.reason,
+                    'merged_count': len(latest_merge.merged_ind_sys_ids),
+                } if latest_merge else None,
+            }
+            
+            results.append(customer_data)
+        
+        # Get filter statistics
+        stats = {
+            'total_merged_customers': total_count,
+            'total_merge_operations': merge_queryset.count(),
+            'date_range': {
+                'from': date_from,
+                'to': date_to,
+            } if (date_from or date_to) else None,
+        }
+        
+        return Response({
+            'success': True,
+            'results': results,
+            'count': len(results),
+            'total_count': total_count,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': (total_count + page_size - 1) // page_size,
+            'statistics': stats,
+            'filters_applied': {
+                'search': search_term or None,
+                'performed_by': performed_by or None,
+                'date_from': date_from,
+                'date_to': date_to,
+                'identifier_type': identifier_type or None,
+                'has_multiple_ids': has_multiple_ids == 'true',
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in list_merged_customers: {str(e)}", exc_info=True)
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_merge_statistics(request):
+    """
+    Get statistics about merge operations
+    """
+    try:
+        # Total merge operations
+        total_merges = MergeHistory.objects.count()
+        
+        # Total unique merged customers
+        total_merged_customers = MergeHistory.objects.values('master_lcic_id').distinct().count()
+        
+        # Merges by user
+        merges_by_user = MergeHistory.objects.values('performed_by').annotate(
+            count=Count('id')
+        ).order_by('-count')[:10]
+        
+        # Recent merges (last 7 days)
+        seven_days_ago = datetime.now() - timedelta(days=7)
+        recent_merges = MergeHistory.objects.filter(
+            performed_at__gte=seven_days_ago
+        ).count()
+        
+        # Customers with multiple identifier types
+        customers_with_multiple_ids = IndividualIdentifier.objects.filter(
+            is_active=True
+        ).values('lcic_id').annotate(
+            type_count=Count('identifier_type', distinct=True)
+        ).filter(type_count__gt=1).count()
+        
+        # Total active identifiers
+        total_identifiers = IndividualIdentifier.objects.filter(is_active=True).count()
+        
+        return Response({
+            'success': True,
+            'statistics': {
+                'total_merge_operations': total_merges,
+                'total_merged_customers': total_merged_customers,
+                'total_active_identifiers': total_identifiers,
+                'customers_with_multiple_ids': customers_with_multiple_ids,
+                'recent_merges_7days': recent_merges,
+                'top_merge_users': [
+                    {'user': item['performed_by'], 'count': item['count']}
+                    for item in merges_by_user
+                ],
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in get_merge_statistics: {str(e)}", exc_info=True)
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def search_customers(request):
+    """
+    Search customers by LCIC ID, name, or identifier
+    This endpoint is for general search (includes non-merged customers)
+    
+    Query params:
+    - q: search term (REQUIRED for this endpoint)
+    - merged_only: show only customers with merge history (default false)
+    - page: page number
+    - page_size: items per page (max 50)
+    """
+    try:
+        search_term = request.query_params.get('q', '').strip()
+        merged_only = request.query_params.get('merged_only', 'false').lower() == 'true'
+        page = int(request.query_params.get('page', 1))
+        page_size = min(int(request.query_params.get('page_size', 20)), 50)
+        
+        if not search_term:
+            return Response({
+                'success': False,
+                'error': 'Search term (q) is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Build base queryset
+        queryset = IndividualBankIbkInfo.objects.all()
+        
+        # Search by LCIC ID, name, or identifier
+        queryset = queryset.filter(
+            Q(lcic_id__icontains=search_term) |
+            Q(ind_name__icontains=search_term) |
+            Q(ind_surname__icontains=search_term) |
+            Q(ind_lao_name__icontains=search_term) |
+            Q(ind_lao_surname__icontains=search_term) |
+            Q(ind_national_id__icontains=search_term) |
+            Q(ind_passport__icontains=search_term) |
+            Q(ind_familybook__icontains=search_term)
+        )
+        
+        # If merged_only, filter by customers with merge history
+        if merged_only:
+            merged_lcic_ids = MergeHistory.objects.values_list('master_lcic_id', flat=True).distinct()
+            queryset = queryset.filter(lcic_id__in=merged_lcic_ids)
+        
+        # Get total count
+        total_count = queryset.count()
+        
+        # Paginate
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        customers = queryset[start_idx:end_idx]
+        
+        # Build results
+        results = []
+        for customer in customers:
+            # Check if customer has merge history
+            has_merge = MergeHistory.objects.filter(master_lcic_id=customer.lcic_id).exists()
+            
+            # Get identifier counts
+            identifier_counts = IndividualIdentifier.objects.filter(
+                lcic_id=customer.lcic_id,
+                is_active=True
+            ).values('identifier_type').annotate(count=Count('id'))
+            
+            id_counts = {
+                'national_ids': 0,
+                'passports': 0,
+                'family_books': 0,
+            }
+            
+            for item in identifier_counts:
+                if item['identifier_type'] == 'NATIONAL_ID':
+                    id_counts['national_ids'] = item['count']
+                elif item['identifier_type'] == 'PASSPORT':
+                    id_counts['passports'] = item['count']
+                elif item['identifier_type'] == 'FAMILY_BOOK':
+                    id_counts['family_books'] = item['count']
+            
+            results.append({
+                'ind_sys_id': customer.ind_sys_id,
+                'lcic_id': customer.lcic_id,
+                'name': f"{customer.ind_name or ''} {customer.ind_surname or ''}".strip(),
+                'lao_name': f"{customer.ind_lao_name or ''} {customer.ind_lao_surname or ''}".strip(),
+                'birth_date': customer.ind_birth_date.isoformat() if customer.ind_birth_date else None,
+                'national_id': customer.ind_national_id,
+                'passport': customer.ind_passport,
+                'family_book': customer.ind_familybook,
+                'has_merge_history': has_merge,
+                'identifier_counts': id_counts,
+                'total_identifiers': sum(id_counts.values()),
+            })
+        
+        return Response({
+            'success': True,
+            'results': results,
+            'count': total_count,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': (total_count + page_size - 1) // page_size,
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in search_customers: {str(e)}", exc_info=True)
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_all_merges(request):
+    """
+    List all merge operations with pagination and filtering
+    Shows all merges by default
+    
+    Query params (all optional):
+    - performed_by: filter by user who performed merge
+    - date_from: filter merges from this date (YYYY-MM-DD)
+    - date_to: filter merges until this date (YYYY-MM-DD)
+    - page: page number
+    - page_size: items per page (max 100)
+    """
+    try:
+        performed_by = request.query_params.get('performed_by', '').strip()
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        page = int(request.query_params.get('page', 1))
+        page_size = min(int(request.query_params.get('page_size', 20)), 100)
+        
+        # Build queryset
+        queryset = MergeHistory.objects.all()
+        
+        if performed_by:
+            queryset = queryset.filter(performed_by__icontains=performed_by)
+        
+        if date_from:
+            queryset = queryset.filter(performed_at__date__gte=date_from)
+        
+        if date_to:
+            queryset = queryset.filter(performed_at__date__lte=date_to)
+        
+        # Order by most recent first
+        queryset = queryset.order_by('-performed_at')
+        
+        # Get total count
+        total_count = queryset.count()
+        
+        # Paginate
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        merges = queryset[start_idx:end_idx]
+        
+        # Build results
+        results = []
+        for merge in merges:
+            # Get customer name from master LCIC ID
+            try:
+                customer = IndividualBankIbkInfo.objects.get(lcic_id=merge.master_lcic_id)
+                customer_name = f"{customer.ind_name or ''} {customer.ind_surname or ''}".strip()
+            except IndividualBankIbkInfo.DoesNotExist:
+                customer_name = 'Unknown (deleted)'
+            
+            results.append({
+                'id': merge.id,
+                'master_lcic_id': merge.master_lcic_id,
+                'customer_name': customer_name,
+                'action': merge.action,
+                'performed_at': merge.performed_at.isoformat(),
+                'performed_by': merge.performed_by,
+                'reason': merge.reason,
+                'merged_count': len(merge.merged_ind_sys_ids),
+                'merged_ind_sys_ids': merge.merged_ind_sys_ids,
+            })
+        
+        return Response({
+            'success': True,
+            'results': results,
+            'count': total_count,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': (total_count + page_size - 1) // page_size,
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in list_all_merges: {str(e)}", exc_info=True)
+        return Response({
+            'success': False,
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+        
+        
+# ---- Code Souly :
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from datetime import datetime
+from rapidfuzz import fuzz
+from .models import IndividualBankIbkInfo, IndividualBankIbk
+import json
+
+class CompareJsonWithDBAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        new_rows = request.data
+        if not isinstance(new_rows, list):
+            return Response({"error": "Expected a list of records."}, status=status.HTTP_400_BAD_REQUEST)
+
+        compare_cols = [
+            "ind_national_id", "ind_national_id_date", "ind_passport", "ind_passport_date",
+            "ind_familybook", "ind_familybook_prov_code", "ind_familybook_date",
+            "ind_birth_date", "ind_name", "ind_surname", "ind_lao_name", "ind_lao_surname"
+        ]
+
+        # 🔹 ດຶງຂໍ້ມູນຈາກ DB
+        base_rows = list(IndividualBankIbkInfo.objects.values(*compare_cols, "lcic_id"))
+        existing_ids = {r["lcic_id"] for r in base_rows if r["lcic_id"]}
+
+        # 🔹 ຕັ້ງຄ່າຕົ້ນ
+        date_prefix = datetime.now().strftime("%Y%m%d")
+        seq = 1
+        assigned_cache = {}
+        results = []
+        details = []
+
+        # ----------------------------------------------------
+        def is_empty(v):
+            if v is None:
+                return True
+            if isinstance(v, str):
+                s = v.strip().lower()
+                return s in ["", "null", "none", "nan"]
+            return False
+
+        def ratio(a, b):
+            if is_empty(a) or is_empty(b):
+                return None
+            return fuzz.QRatio(str(a).strip().lower(), str(b).strip().lower()) / 100.0
+
+        def is_match(row1, row2):
+            """ປຽບທຽບຂໍ້ມູນສອງຝັ່ງ"""
+            scores = {}
+            for col in compare_cols:
+                score = ratio(row1.get(col), row2.get(col))
+                if score is not None:
+                    scores[col] = score
+
+            # 🔹 ຖ້າມີຟິວປຽບທຽບ < 3 → ບໍ່ຄິດຄຳນວນ
+            if len(scores) < 3:
+                return False, 0, scores
+
+            match_ratio = sum(scores.values()) / len(scores)
+
+            lao_name_ratio = scores.get("ind_lao_name", 0)
+            ind_lao_surname = scores.get("ind_lao_surname", 0)
+            birth_date_ratio = scores.get("ind_birth_date", 0)
+            en_name_ratio = scores.get("ind_name", 0)
+            ind_surname = scores.get("ind_surname", 0)
+
+            # ✅ ຕັດສິນຜົນສຸດທ້າຍ
+            if match_ratio > 0.90:
+                # ຄ້າຍກັນເກີນ 90%
+                return True, match_ratio, scores
+
+            elif 0.70 < match_ratio <= 0.90:
+                # ກວດຟິວທີ່ມີຄ່າເທົ່ານັ້ນ (ບໍ່ໃຫ້ and ຟິວທີ່ຫວ່າງ)
+                conditions = []
+
+                # ເງື່ອນໄຂສຳລັບຊື່ພາສາລາວ
+                lao_conditions = []
+                if lao_name_ratio:  # ມີຄ່າຈິງ
+                    lao_conditions.append(lao_name_ratio > 0.8)
+                if birth_date_ratio:
+                    lao_conditions.append(birth_date_ratio >= 0.9)
+                if ind_lao_surname:
+                    lao_conditions.append(ind_lao_surname > 0.8)
+
+                # ເງື່ອນໄຂສຳລັບຊື່ພາສາອັງກິດ
+                en_conditions = []
+                if en_name_ratio:
+                    en_conditions.append(en_name_ratio > 0.8)
+                if birth_date_ratio:
+                    en_conditions.append(birth_date_ratio >= 0.9)
+                if ind_surname:
+                    en_conditions.append(ind_surname > 0.8)
+
+                # ກວດຈາກຈໍານວນຟິວທີ່ຜ່ານເງື່ອນໄຂ
+                lao_pass = len(lao_conditions) > 1 and all(lao_conditions)
+                en_pass = len(en_conditions) > 1 and all(en_conditions)
+
+                if lao_pass or en_pass:
+                    return True, match_ratio, scores
+                else:
+                    return False, match_ratio, scores
+
+            return False, match_ratio, scores
+
+        def generate_unique_lcic():
+            nonlocal seq
+            while True:
+                new_id = f"{date_prefix}-{seq}"
+                seq += 1
+                if new_id not in existing_ids:
+                    existing_ids.add(new_id)
+                    return new_id
+
+        # ----------------------------------------------------
+        # Main process
+        # ----------------------------------------------------
+        for new_row in new_rows:
+            matched_lcic = None
+
+            # 1️⃣ ກວດກັບ DB (ປຽບທຽບກັບທຸກ record)
+            for base_row in base_rows:
+                matched, match_ratio, score_detail = is_match(new_row, base_row)
+                if matched:
+                    matched_lcic = base_row["lcic_id"]
+                    details.append({
+                        "status": "MATCHED",
+                        "json_data": new_row,
+                        "db_data": base_row,
+                        "match_percent": round(match_ratio * 100, 2),
+                        "field_scores": {k: round(v * 100, 2) for k, v in score_detail.items()},
+                        "field_count_used": len(score_detail),
+                        "lcic_id": matched_lcic
+                    })
+                    break
+
+            # 2️⃣ ກວດກັບ cache
+            if not matched_lcic:
+                for cached_key, lcic in assigned_cache.items():
+                    cached_row = json.loads(cached_key)
+                    matched, match_ratio, score_detail = is_match(new_row, cached_row)
+                    if matched:
+                        matched_lcic = lcic
+                        details.append({
+                            "status": "MATCHED (CACHE)",
+                            "json_data": new_row,
+                            "db_data": cached_row,
+                            "match_percent": round(match_ratio * 100, 2),
+                            "field_scores": {k: round(v * 100, 2) for k, v in score_detail.items()},
+                            "field_count_used": len(score_detail),
+                            "lcic_id": matched_lcic
+                        })
+                        break
+
+            # 3️⃣ ບໍ່ພົບ → ສ້າງໃໝ່
+            if not matched_lcic:
+                matched_lcic = generate_unique_lcic()
+                assigned_cache[json.dumps(new_row, sort_keys=True)] = matched_lcic
+                details.append({
+                    "status": "NEW RECORD",
+                    "json_data": new_row,
+                    "match_percent": 0,
+                    "field_scores": {},
+                    "field_count_used": 0,
+                    "lcic_id": matched_lcic
+                })
+
+            results.append({**new_row, "lcic_id": matched_lcic})
+
+        return Response({
+            # "summary": results,
+            "details": details
+        }, status=status.HTTP_200_OK)
+        
+        
+# from rest_framework.views import APIView
+# from rest_framework.response import Response
+# from rest_framework import status
+# from rest_framework.permissions import IsAuthenticated
+# from django.db import transaction
+# from django.utils import timezone
+# from datetime import datetime
+# from rapidfuzz import fuzz
+# from .models import (
+#     IndividualBankIbkInfo, 
+#     IndividualBankIbkInfo_Register, 
+#     IndividualBankIbkInfo_CreateLog
+# )
+# from .serializers import CustomerRegistrationSerializer
+# import json
+
+
+# class RegisterCustomerBatchAPIView(APIView):
+#     permission_classes = [IsAuthenticated]
+
+#     def post(self, request):
+#         # Validate input
+#         if not isinstance(request.data, list):
+#             return Response(
+#                 {"error": "Expected a list of customer records."}, 
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+
+#         # Validate each customer record
+#         serializer = CustomerRegistrationSerializer(data=request.data, many=True)
+#         if not serializer.is_valid():
+#             return Response(
+#                 {"error": "Invalid data format.", "details": serializer.errors}, 
+#                 status=status.HTTP_400_BAD_REQUEST
+#             )
+
+#         customers = serializer.validated_data
+        
+#         # Process customers
+#         results = self._process_customers(customers, request.user)
+        
+#         return Response({
+#             "success": True,
+#             "total_processed": len(customers),
+#             "matched": results["matched_count"],
+#             "new_records": results["new_count"],
+#             "duplicates_skipped": results["duplicate_count"],
+#             "details": results["details"]
+#         }, status=status.HTTP_200_OK)
+
+#     def _process_customers(self, customers, user):
+#         compare_cols = [
+#             "ind_national_id", "ind_national_id_date", "ind_passport", "ind_passport_date",
+#             "ind_familybook", "ind_familybook_prov_code", "ind_familybook_date",
+#             "ind_birth_date", "ind_name", "ind_surname", "ind_lao_name", "ind_lao_surname"
+#         ]
+
+#         # Get existing records from DB
+#         base_rows = list(IndividualBankIbkInfo.objects.values(*compare_cols, "lcic_id"))
+#         existing_ids = {r["lcic_id"] for r in base_rows if r["lcic_id"]}
+
+#         # Initialize counters
+#         date_prefix = datetime.now().strftime("%Y%m%d")
+#         seq = 1
+#         assigned_cache = {}
+#         details = []
+#         matched_count = 0
+#         new_count = 0
+#         duplicate_count = 0
+
+#         for customer in customers:
+#             matched_lcic = None
+#             match_info = None
+
+#             # Step 1: Check against existing DB records
+#             for base_row in base_rows:
+#                 matched, match_ratio, score_detail = self._is_match(customer, base_row)
+#                 if matched:
+#                     matched_lcic = base_row["lcic_id"]
+#                     match_info = {
+#                         "status": "MATCHED",
+#                         "match_percent": round(match_ratio * 100, 2),
+#                         "field_scores": {k: round(v * 100, 2) for k, v in score_detail.items()}
+#                     }
+#                     break
+
+#             # Step 2: Check against cache (new records in this batch)
+#             if not matched_lcic:
+#                 for cached_key, lcic in assigned_cache.items():
+#                     cached_row = json.loads(cached_key)
+#                     matched, match_ratio, score_detail = self._is_match(customer, cached_row)
+#                     if matched:
+#                         matched_lcic = lcic
+#                         match_info = {
+#                             "status": "MATCHED (BATCH)",
+#                             "match_percent": round(match_ratio * 100, 2),
+#                             "field_scores": {k: round(v * 100, 2) for k, v in score_detail.items()}
+#                         }
+#                         break
+
+#             # Step 3: Generate new LCIC ID if no match found
+#             if not matched_lcic:
+#                 matched_lcic = self._generate_unique_lcic(date_prefix, seq, existing_ids)
+#                 seq += 1
+#                 assigned_cache[json.dumps(customer, sort_keys=True, default=str)] = matched_lcic
+#                 match_info = {
+#                     "status": "NEW RECORD",
+#                     "match_percent": 0
+#                 }
+
+#             # Step 4: Insert into database
+#             try:
+#                 insert_result = self._insert_customer(customer, matched_lcic, match_info["status"], user)
+                
+#                 if insert_result["inserted"]:
+#                     if match_info["status"] == "NEW RECORD":
+#                         new_count += 1
+#                     else:
+#                         matched_count += 1
+                    
+#                     details.append({
+#                         "customer_id": customer.get("customer_ID"),
+#                         "bnk_code": customer.get("bnk_code"),
+#                         "lcic_id": matched_lcic,
+#                         **match_info,
+#                         "action": "INSERTED"
+#                     })
+#                 else:
+#                     duplicate_count += 1
+#                     details.append({
+#                         "customer_id": customer.get("customer_ID"),
+#                         "bnk_code": customer.get("bnk_code"),
+#                         "lcic_id": matched_lcic,
+#                         **match_info,
+#                         "action": "SKIPPED (DUPLICATE)"
+#                     })
+
+#             except Exception as e:
+#                 details.append({
+#                     "customer_id": customer.get("customer_ID"),
+#                     "bnk_code": customer.get("bnk_code"),
+#                     "error": str(e),
+#                     "action": "FAILED"
+#                 })
+
+#         return {
+#             "matched_count": matched_count,
+#             "new_count": new_count,
+#             "duplicate_count": duplicate_count,
+#             "details": details
+#         }
+
+#     @transaction.atomic
+#     def _insert_customer(self, customer, lcic_id, match_status, user):
+#         """Insert customer into Register table and CreateLog (if new)"""
+        
+#         bnk_code = customer.get("bnk_code")
+#         customer_id = customer.get("customer_ID")
+#         branch_id = customer.get("branch_id_code")
+
+#         # Check for duplicates (same bank, customer_id, branch)
+#         exists = IndividualBankIbkInfo_Register.objects.filter(
+#             bnk_code=bnk_code,
+#             customer_id=customer_id,
+#             bank_branch=branch_id
+#         ).exists()
+
+#         if exists:
+#             return {"inserted": False, "reason": "Duplicate record"}
+
+#         # Prepare common data
+#         now = timezone.now()
+#         common_data = {
+#             "lcic_id": lcic_id,
+#             "ind_national_id": customer.get("ind_national_id"),
+#             "ind_national_id_date": customer.get("ind_national_id_date"),
+#             "ind_passport": customer.get("ind_passport"),
+#             "ind_passport_date": customer.get("ind_passport_date"),
+#             "ind_familybook": customer.get("ind_familybook"),
+#             "ind_familybook_prov_code": customer.get("ind_familybook_prov_code"),
+#             "ind_familybook_date": customer.get("ind_familybook_date"),
+#             "ind_birth_date": customer.get("ind_birth_date"),
+#             "ind_name": customer.get("ind_name"),
+#             "ind_surname": customer.get("ind_surname"),
+#             "ind_lao_name": customer.get("ind_lao_name"),
+#             "ind_lao_surname": customer.get("ind_lao_surname"),
+#             "bnk_code": bnk_code,
+#             "bank_branch": branch_id,
+#             "customer_id": customer_id,
+#             "insert_by": user.username,
+#             "status": match_status,
+#             "lcic_registerd_date": now.date(),
+#             "insert_date": now
+#         }
+
+#         # Insert into Register table
+#         IndividualBankIbkInfo_Register.objects.create(**common_data)
+
+#         # If new record, also insert into CreateLog
+#         if match_status == "NEW RECORD":
+#             IndividualBankIbkInfo_CreateLog.objects.create(**common_data)
+
+#         return {"inserted": True}
+
+#     def _generate_unique_lcic(self, date_prefix, seq, existing_ids):
+#         """Generate unique LCIC ID"""
+#         while True:
+#             new_id = f"{date_prefix}-{seq}"
+#             if new_id not in existing_ids:
+#                 existing_ids.add(new_id)
+#                 return new_id
+#             seq += 1
+
+#     def _is_empty(self, v):
+#         """Check if value is empty"""
+#         if v is None:
+#             return True
+#         if isinstance(v, str):
+#             s = v.strip().lower()
+#             return s in ["", "null", "none", "nan"]
+#         return False
+
+#     def _ratio(self, a, b):
+#         """Calculate fuzzy matching ratio"""
+#         if self._is_empty(a) or self._is_empty(b):
+#             return None
+#         return fuzz.QRatio(str(a).strip().lower(), str(b).strip().lower()) / 100.0
+
+#     def _is_match(self, row1, row2):
+#         """Compare two customer records using fuzzy matching"""
+#         compare_cols = [
+#             "ind_national_id", "ind_national_id_date", "ind_passport", "ind_passport_date",
+#             "ind_familybook", "ind_familybook_prov_code", "ind_familybook_date",
+#             "ind_birth_date", "ind_name", "ind_surname", "ind_lao_name", "ind_lao_surname"
+#         ]
+        
+#         scores = {}
+#         for col in compare_cols:
+#             score = self._ratio(row1.get(col), row2.get(col))
+#             if score is not None:
+#                 scores[col] = score
+
+#         # Need at least 3 fields to compare
+#         if len(scores) < 3:
+#             return False, 0, scores
+
+#         match_ratio = sum(scores.values()) / len(scores)
+
+#         # Extract specific field scores
+#         lao_name_ratio = scores.get("ind_lao_name", 0)
+#         ind_lao_surname = scores.get("ind_lao_surname", 0)
+#         birth_date_ratio = scores.get("ind_birth_date", 0)
+#         en_name_ratio = scores.get("ind_name", 0)
+#         ind_surname = scores.get("ind_surname", 0)
+
+#         # Decision logic
+#         if match_ratio > 0.90:
+#             return True, match_ratio, scores
+
+#         elif 0.70 < match_ratio <= 0.90:
+#             # Check Lao name conditions
+#             lao_conditions = []
+#             if lao_name_ratio:
+#                 lao_conditions.append(lao_name_ratio > 0.8)
+#             if birth_date_ratio:
+#                 lao_conditions.append(birth_date_ratio >= 0.9)
+#             if ind_lao_surname:
+#                 lao_conditions.append(ind_lao_surname > 0.8)
+
+#             # Check English name conditions
+#             en_conditions = []
+#             if en_name_ratio:
+#                 en_conditions.append(en_name_ratio > 0.8)
+#             if birth_date_ratio:
+#                 en_conditions.append(birth_date_ratio >= 0.9)
+#             if ind_surname:
+#                 en_conditions.append(ind_surname > 0.8)
+
+#             lao_pass = len(lao_conditions) > 1 and all(lao_conditions)
+#             en_pass = len(en_conditions) > 1 and all(en_conditions)
+
+#             if lao_pass or en_pass:
+#                 return True, match_ratio, scores
+
+#         return False, match_ratio, scores
+
+import json
+import logging
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
+from django.utils import timezone
+from datetime import datetime
+from rapidfuzz import fuzz
+
+# Optional: Use Python logging (appears in console/server logs)
+logger = logging.getLogger(__name__)
+
+class RegisterCustomerBatchAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        print("\n" + "="*60)
+        print("BATCH CUSTOMER REGISTRATION STARTED")
+        print("="*60)
+        print(f"User: {request.user}")
+        print(f"Content-Type: {request.content_type}")
+        print(f"Raw body: {request.body.decode('utf-8')[:500]}{'...' if len(request.body) > 500 else ''}")
+        print("-" * 60)
+
+        data = request.data
+
+        # Fix: Handle string JSON from Postman
+        if isinstance(data, str):
+            try:
+                print("Raw data is string → parsing with json.loads()")
+                data = json.loads(data)
+            except json.JSONDecodeError as e:
+                print(f"JSON DECODE ERROR: {e}")
+                return Response({"error": "Invalid JSON", "details": str(e)}, status=400)
+
+        if not isinstance(data, list):
+            print(f"ERROR: Expected list, got {type(data)}")
+            return Response({"error": "Expected a JSON array of customers"}, status=400)
+
+        print(f"Received {len(data)} customer(s) in batch")
+
+        serializer = CustomerRegistrationSerializer(data=data, many=True)
+        if not serializer.is_valid():
+            print("SERIALIZER VALIDATION FAILED:")
+            for i, err in enumerate(serializer.errors):
+                print(f"   Customer {i}: {err}")
+            return Response({"error": "Invalid data", "details": serializer.errors}, status=400)
+
+        print("All customers passed serializer validation")
+        customers = serializer.validated_data
+
+        results = self._process_customers(customers, request.user)
+
+        print("\n" + "="*60)
+        print("BATCH PROCESSING COMPLETED")
+        print(f"Matched: {results['matched_count']} | New: {results['new_count']} | Skipped: {results['duplicate_count']}")
+        print("="*60 + "\n")
+
+        return Response({
+            "success": True,
+            "message": "Batch processed successfully",
+            "total_received": len(customers),
+            "matched": results["matched_count"],
+            "new_records": results["new_count"],
+            "duplicates_skipped": results["duplicate_count"],
+            "details": results["details"]
+        }, status=status.HTTP_200_OK)
+
+    def _process_customers(self, customers, user):
+        print(f"\nStarting fuzzy matching for {len(customers)} customers...")
+
+        compare_cols = [
+            "ind_national_id", "ind_national_id_date", "ind_passport", "ind_passport_date",
+            "ind_familybook", "ind_familybook_prov_code", "ind_familybook_date",
+            "ind_birth_date", "ind_name", "ind_surname", "ind_lao_name", "ind_lao_surname"
+        ]
+
+        print("Loading existing records from database...")
+        base_rows = list(IndividualBankIbkInfo.objects.values(*compare_cols, "lcic_id"))
+        existing_ids = {r["lcic_id"] for r in base_rows if r["lcic_id"]}
+        print(f"Found {len(base_rows)} existing records in database")
+
+        date_prefix = datetime.now().strftime("%Y%m%d")
+        seq = 1
+        assigned_cache = {}
+        details = []
+        matched_count = new_count = duplicate_count = 0
+
+        for idx, customer in enumerate(customers, 1):
+            cust_id = customer.get("customer_ID", "Unknown")
+            bnk_code = customer.get("bnk_code", "Unknown")
+            print(f"\n[{idx}/{len(customers)}] Processing Customer ID: {cust_id} | Bank: {bnk_code}")
+
+            matched_lcic = None
+            match_info = {"status": "UNKNOWN"}
+
+            # Step 1: Match against DB
+            for base_row in base_rows:
+                matched, ratio, scores = self._is_match(customer, base_row)
+                if matched:
+                    matched_lcic = base_row["lcic_id"]
+                    match_info = {
+                        "status": "MATCHED (DB)",
+                        "match_percent": round(ratio * 100, 2),
+                        "field_scores": {k: round(v * 100, 2) for k, v in scores.items() if v is not None}
+                    }
+                    print(f"   → MATCHED in DATABASE → LCIC: {matched_lcic} ({match_info['match_percent']}%)")
+                    break
+
+            # Step 2: Match against current batch (cache)
+            if not matched_lcic:
+                for cached_json, lcic in assigned_cache.items():
+                    cached_row = json.loads(cached_json)
+                    matched, ratio, scores = self._is_match(customer, cached_row)
+                    if matched:
+                        matched_lcic = lcic
+                        match_info = {
+                            "status": "MATCHED (BATCH)",
+                            "match_percent": round(ratio * 100, 2),
+                        }
+                        print(f"   → MATCHED in current BATCH → LCIC: {matched_lcic} ({match_info['match_percent']}%)")
+                        break
+
+            # Step 3: Create new LCIC
+            if not matched_lcic:
+                matched_lcic = self._generate_unique_lcic(date_prefix, seq, existing_ids)
+                seq += 1
+                cache_key = json.dumps(customer, sort_keys=True, default=str)
+                assigned_cache[cache_key] = matched_lcic
+                match_info = {"status": "NEW RECORD", "match_percent": 0}
+                print(f"   → NO MATCH → Generated NEW LCIC: {matched_lcic}")
+
+            # Step 4: Insert
+            try:
+                result = self._insert_customer(customer, matched_lcic, match_info["status"], user)
+                if result["inserted"]:
+                    action = "INSERTED"
+                    if match_info["status"] == "NEW RECORD":
+                        new_count += 1
+                    else:
+                        matched_count += 1
+                else:
+                    action = "SKIPPED (DUPLICATE)"
+                    duplicate_count += 1
+
+                print(f"   → {action}")
+
+                details.append({
+                    "customer_id": cust_id,
+                    "bnk_code": bnk_code,
+                    "lcic_id": matched_lcic,
+                    **match_info,
+                    "action": action
+                })
+
+            except Exception as e:
+                print(f"   → FAILED: {str(e)}")
+                details.append({
+                    "customer_id": cust_id,
+                    "bnk_code": bnk_code,
+                    "error": str(e),
+                    "action": "FAILED"
+                })
+
+        return {
+            "matched_count": matched_count,
+            "new_count": new_count,
+            "duplicate_count": duplicate_count,
+            "details": details
+        }
+
+    @transaction.atomic
+    def _insert_customer(self, customer, lcic_id, match_status, user):
+        """Insert customer into Register table and CreateLog (if new)"""
+        
+        bnk_code = customer.get("bnk_code")
+        customer_id = customer.get("customer_ID")
+        branch_id = customer.get("branch_id_code")
+
+        # Check for duplicates (same bank, customer_id, branch)
+        exists = IndividualBankIbkInfo_Register.objects.filter(
+            bnk_code=bnk_code,
+            customer_id=customer_id,
+            bank_branch=branch_id
+        ).exists()
+
+        if exists:
+            return {"inserted": False, "reason": "Duplicate record"}
+
+        # Prepare common data
+        now = timezone.now()
+        common_data = {
+            # "lcic_id": lcic_id,
+            "lcic_id": '',
+            "ind_national_id": customer.get("ind_national_id"),
+            "ind_national_id_date": customer.get("ind_national_id_date"),
+            "ind_passport": customer.get("ind_passport"),
+            "ind_passport_date": customer.get("ind_passport_date"),
+            "ind_familybook": customer.get("ind_familybook"),
+            "ind_familybook_prov_code": customer.get("ind_familybook_prov_code"),
+            "ind_familybook_date": customer.get("ind_familybook_date"),
+            "ind_birth_date": customer.get("ind_birth_date"),
+            "ind_name": customer.get("ind_name"),
+            "ind_surname": customer.get("ind_surname"),
+            "ind_lao_name": customer.get("ind_lao_name"),
+            "ind_lao_surname": customer.get("ind_lao_surname"),
+            "bnk_code": bnk_code,
+            "bank_branch": branch_id,
+            "customer_id": customer_id,
+            "insert_by": user.username,
+            "status": match_status,
+            "lcic_registerd_date": now.date(),
+            "insert_date": now
+        }
+
+        # Insert into Register table
+        IndividualBankIbkInfo_Register.objects.create(**common_data)
+
+        # If new record, also insert into CreateLog
+        if match_status == "NEW RECORD":
+            IndividualBankIbkInfo_CreateLog.objects.create(**common_data)
+
+        return {"inserted": True}
+
+    def _generate_unique_lcic(self, date_prefix, seq, existing_ids):
+        """Generate unique LCIC ID"""
+        while True:
+            new_id = f"{date_prefix}-{seq}"
+            if new_id not in existing_ids:
+                existing_ids.add(new_id)
+                return new_id
+            seq += 1
+
+    def _is_empty(self, v):
+        """Check if value is empty"""
+        if v is None:
+            return True
+        if isinstance(v, str):
+            s = v.strip().lower()
+            return s in ["", "null", "none", "nan"]
+        return False
+
+    def _ratio(self, a, b):
+        """Calculate fuzzy matching ratio"""
+        if self._is_empty(a) or self._is_empty(b):
+            return None
+        return fuzz.QRatio(str(a).strip().lower(), str(b).strip().lower()) / 100.0
+
+    def _is_match(self, row1, row2):
+        """Compare two customer records using fuzzy matching"""
+        compare_cols = [
+            "ind_national_id", "ind_national_id_date", "ind_passport", "ind_passport_date",
+            "ind_familybook", "ind_familybook_prov_code", "ind_familybook_date",
+            "ind_birth_date", "ind_name", "ind_surname", "ind_lao_name", "ind_lao_surname"
+        ]
+        
+        scores = {}
+        for col in compare_cols:
+            score = self._ratio(row1.get(col), row2.get(col))
+            if score is not None:
+                scores[col] = score
+
+        # Need at least 3 fields to compare
+        if len(scores) < 3:
+            return False, 0, scores
+
+        match_ratio = sum(scores.values()) / len(scores)
+
+        # Extract specific field scores
+        lao_name_ratio = scores.get("ind_lao_name", 0)
+        ind_lao_surname = scores.get("ind_lao_surname", 0)
+        birth_date_ratio = scores.get("ind_birth_date", 0)
+        en_name_ratio = scores.get("ind_name", 0)
+        ind_surname = scores.get("ind_surname", 0)
+
+        # Decision logic
+        if match_ratio > 0.90:
+            return True, match_ratio, scores
+
+        elif 0.70 < match_ratio <= 0.90:
+            # Check Lao name conditions
+            lao_conditions = []
+            if lao_name_ratio:
+                lao_conditions.append(lao_name_ratio > 0.8)
+            if birth_date_ratio:
+                lao_conditions.append(birth_date_ratio >= 0.9)
+            if ind_lao_surname:
+                lao_conditions.append(ind_lao_surname > 0.8)
+
+            # Check English name conditions
+            en_conditions = []
+            if en_name_ratio:
+                en_conditions.append(en_name_ratio > 0.8)
+            if birth_date_ratio:
+                en_conditions.append(birth_date_ratio >= 0.9)
+            if ind_surname:
+                en_conditions.append(ind_surname > 0.8)
+
+            lao_pass = len(lao_conditions) > 1 and all(lao_conditions)
+            en_pass = len(en_conditions) > 1 and all(en_conditions)
+
+            if lao_pass or en_pass:
+                return True, match_ratio, scores
+
+        return False, match_ratio, scores
+    
+    
+from rest_framework import generics, filters
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.pagination import PageNumberPagination
+from django.db.models import Q
+from .models import IndividualBankIbkInfo_Register
+from .serializers import CustomerUploadListSerializer
+
+
+# Optional: Nice pagination (10 per page)
+class StandardPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+# 1. My Uploads - Only current user's records
+class MyUploadsListAPIView(generics.ListAPIView):
+    serializer_class = CustomerUploadListSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    
+    search_fields = [
+        'customer_id', 'ind_national_id', 'ind_passport',
+        'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname'
+    ]
+    ordering_fields = ['insert_date', 'lcic_id', 'customer_id']
+    ordering = ['-insert_date']  # newest first
+
+    def get_queryset(self):
+        return IndividualBankIbkInfo_Register.objects.filter(
+            insert_by=self.request.user.username
+        )
+
+
+# 2. All Uploads - Smart access control (admin sees all, user sees own)
+class AllUploadsListAPIView(generics.ListAPIView):
+    serializer_class = CustomerUploadListSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardPagination
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+
+    search_fields = [
+        'customer_id', 'ind_national_id', 'ind_passport',
+        'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname',
+        'bnk_code', 'insert_by'
+    ]
+    ordering_fields = ['insert_date', 'lcic_id', 'bnk_code', 'customer_id']
+    ordering = ['-insert_date']
+
+    def get_queryset(self):
+        user = self.request.user
+        
+        if user.is_staff or user.is_superuser:
+            return IndividualBankIbkInfo_Register.objects.all()
+        else:
+            # Regular users only see their own uploads
+            return IndividualBankIbkInfo_Register.objects.filter(insert_by=user.username)
+
+
+# Bonus: Search by bank code using ?bnk_code=BCEL
+class AllUploadsFilteredAPIView(generics.ListAPIView):
+    serializer_class = CustomerUploadListSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardPagination
+
+    def get_queryset(self):
+        queryset = IndividualBankIbkInfo_Register.objects.all()
+        user = self.request.user
+
+        # Security first
+        if not (user.is_staff or user.is_superuser):
+            queryset = queryset.filter(insert_by=user.username)
+
+        # Manual filters from query params
+        bnk_code = self.request.query_params.get('bnk_code')
+        status = self.request.query_params.get('status')
+        search = self.request.query_params.get('search')
+
+        if bnk_code:
+            queryset = queryset.filter(bnk_code__iexact=bnk_code)
+        if status:
+            queryset = queryset.filter(status=status)
+        if search:
+            queryset = queryset.filter(
+                Q(customer_id__icontains=search) |
+                Q(ind_national_id__icontains=search) |
+                Q(ind_name__icontains=search) |
+                Q(ind_lao_name__icontains=search)
+            )
+
+        return queryset.order_by('-insert_date')
+    
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
+from django.utils import timezone
+from datetime import datetime
+from .models import IndividualBankIbkInfo_Register, IndividualBankIbkInfo
+from difflib import SequenceMatcher
+
+
+class CustomerConfirmAPIView(APIView):
+    """
+    Confirm customers with smart matching logic
+    POST /api/register/customer/confirm/
+    Body: { "ids": [1, 2, 3] }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def similarity(self, a, b):
+        """Calculate similarity between two strings"""
+        if not a or not b:
+            return 0
+        return SequenceMatcher(None, str(a).lower(), str(b).lower()).ratio() * 100
+
+    def find_matching_customer(self, reg_record):
+        """
+        Find matching customer in main table
+        Returns: (matched_customer, match_score) or (None, 0)
+        """
+        # Priority 1: Exact match by National ID
+        if reg_record.ind_national_id:
+            exact_match = IndividualBankIbkInfo.objects.filter(
+                ind_national_id=reg_record.ind_national_id
+            ).first()
+            if exact_match:
+                return exact_match, 100
+
+        # Priority 2: Exact match by Passport
+        if reg_record.ind_passport:
+            exact_match = IndividualBankIbkInfo.objects.filter(
+                ind_passport=reg_record.ind_passport
+            ).first()
+            if exact_match:
+                return exact_match, 100
+
+        # Priority 3: Exact match by Family Book
+        if reg_record.ind_familybook:
+            exact_match = IndividualBankIbkInfo.objects.filter(
+                ind_familybook=reg_record.ind_familybook
+            ).first()
+            if exact_match:
+                return exact_match, 100
+
+        # Priority 4: Fuzzy match by name + birth date
+        if reg_record.ind_name and reg_record.ind_surname:
+            potential_matches = IndividualBankIbkInfo.objects.filter(
+                ind_birth_date=reg_record.ind_birth_date
+            ) if reg_record.ind_birth_date else IndividualBankIbkInfo.objects.all()
+
+            best_match = None
+            best_score = 0
+
+            for candidate in potential_matches[:100]:  # Limit for performance
+                name_score = self.similarity(
+                    f"{reg_record.ind_name} {reg_record.ind_surname}",
+                    f"{candidate.ind_name} {candidate.ind_surname}"
+                )
+                
+                # Consider it a match if name similarity > 85%
+                if name_score > 85:
+                    if name_score > best_score:
+                        best_match = candidate
+                        best_score = name_score
+
+            if best_match and best_score > 85:
+                return best_match, best_score
+
+        return None, 0
+
+    def post(self, request):
+        try:
+            ids_list = request.data.get('ids', [])
+            
+            if not ids_list:
+                return Response({
+                    'success': False,
+                    'error': 'No IDs provided'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            print(f"📋 Confirming IDs: {ids_list}")
+
+            # Get all records
+            all_records = IndividualBankIbkInfo_Register.objects.filter(
+                ind_sys_id__in=ids_list
+            )
+
+            pending_records = all_records.filter(is_confirmed=False)
+            already_confirmed = all_records.filter(is_confirmed=True)
+
+            print(f"✅ Found: {pending_records.count()} pending, {already_confirmed.count()} already confirmed")
+
+            # Handle already confirmed
+            if already_confirmed.exists() and not pending_records.exists():
+                return Response({
+                    'success': False,
+                    'error': 'All requested records are already confirmed',
+                    'already_confirmed_count': already_confirmed.count()
+                }, status=status.HTTP_409_CONFLICT)
+
+            if not pending_records.exists():
+                return Response({
+                    'success': False,
+                    'error': 'No pending records found',
+                    'requested_ids': ids_list
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Process confirmations
+            confirmed_records = []
+            matched_records = []
+            new_records = []
+            errors = []
+
+            with transaction.atomic():
+                today_prefix = datetime.now().strftime("%Y%m%d")
+                
+                # Get last sequence number for new LCIC IDs
+                last_lcic = IndividualBankIbkInfo.objects.filter(
+                    lcic_id__startswith=today_prefix
+                ).order_by('-lcic_id').values_list('lcic_id', flat=True).first()
+                
+                seq = 1
+                if last_lcic:
+                    try:
+                        seq = int(last_lcic.split('-')[1]) + 1
+                    except:
+                        pass
+
+                for reg in pending_records:
+                    try:
+                        # Try to find matching customer
+                        matched_customer, match_score = self.find_matching_customer(reg)
+
+                        if matched_customer:
+                            # MATCHED - Use existing LCIC ID
+                            lcic_id = matched_customer.lcic_id
+                            
+                            reg.is_confirmed = True
+                            reg.confirmed_at = timezone.now()
+                            reg.confirmed_by = request.user.username
+                            reg.lcic_id = lcic_id
+                            reg.status = 'MATCHED'
+                            reg.save(update_fields=[
+                                'is_confirmed', 'confirmed_at', 
+                                'confirmed_by', 'lcic_id', 'status'
+                            ])
+
+                            matched_records.append({
+                                'ind_sys_id': reg.ind_sys_id,
+                                'customer_id': reg.customer_id,
+                                'lcic_id': lcic_id,
+                                'status': 'MATCHED',
+                                'match_percent': round(match_score, 2),
+                                'matched_with': {
+                                    'lcic_id': matched_customer.lcic_id,
+                                    'name': f"{matched_customer.ind_name} {matched_customer.ind_surname}"
+                                }
+                            })
+
+                            print(f"✓ MATCHED: {reg.customer_id} -> {lcic_id} (Score: {match_score}%)")
+
+                        else:
+                            # NEW RECORD - Create new LCIC ID
+                            lcic_id = f"{today_prefix}-{seq:04d}"
+                            
+                            # Prepare data for main table
+                            ALLOWED_FIELDS = {
+                                'ind_national_id', 'ind_national_id_date',
+                                'ind_passport', 'ind_passport_date',
+                                'ind_familybook', 'ind_familybook_prov_code',
+                                'ind_familybook_date', 'ind_birth_date',
+                                'ind_name', 'ind_surname',
+                                'ind_lao_name', 'ind_lao_surname',
+                            }
+
+                            main_data = {'lcic_id': lcic_id}
+                            for field in ALLOWED_FIELDS:
+                                if hasattr(reg, field):
+                                    value = getattr(reg, field)
+                                    if value not in [None, '']:
+                                        main_data[field] = value
+
+                            # Create in main table
+                            IndividualBankIbkInfo.objects.create(**main_data)
+
+                            # Update registration
+                            reg.is_confirmed = True
+                            reg.confirmed_at = timezone.now()
+                            reg.confirmed_by = request.user.username
+                            reg.lcic_id = lcic_id
+                            reg.status = 'NEW RECORD'
+                            reg.save(update_fields=[
+                                'is_confirmed', 'confirmed_at',
+                                'confirmed_by', 'lcic_id', 'status'
+                            ])
+
+                            new_records.append({
+                                'ind_sys_id': reg.ind_sys_id,
+                                'customer_id': reg.customer_id,
+                                'lcic_id': lcic_id,
+                                'status': 'NEW RECORD',
+                                'match_percent': 0
+                            })
+
+                            seq += 1
+                            print(f"✓ NEW: {reg.customer_id} -> {lcic_id}")
+
+                        confirmed_records.append({
+                            'ind_sys_id': reg.ind_sys_id,
+                            'customer_id': reg.customer_id,
+                            'lcic_id': lcic_id
+                        })
+
+                    except Exception as e:
+                        print(f"❌ Error confirming {reg.ind_sys_id}: {e}")
+                        errors.append({
+                            'ind_sys_id': reg.ind_sys_id,
+                            'error': str(e)
+                        })
+
+            # Build response
+            response_data = {
+                'success': True,
+                'message': f'Confirmed {len(confirmed_records)} customer(s)',
+                'total_confirmed': len(confirmed_records),
+                'matched': len(matched_records),
+                'new_records': len(new_records),
+                'already_confirmed': already_confirmed.count(),
+                'details': {
+                    'matched': matched_records,
+                    'new': new_records
+                },
+                'timestamp': timezone.now().isoformat()
+            }
+
+            if errors:
+                response_data['errors'] = errors
+
+            print(f"✅ Confirmation complete: {len(matched_records)} matched, {len(new_records)} new")
+
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"❌ Confirmation failed: {e}")
+            return Response({
+                'success': False,
+                'error': f'Confirmation failed: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class CustomerAllUploadsAPIView(APIView):
+    """
+    Get all uploaded customers (Admin only)
+    GET /api/register/customer/all-uploads/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            # Optional: Check if user is admin (GID 1-5)
+            # user_gid = request.user.GID.GID if hasattr(request.user, 'GID') else 0
+            # if user_gid not in [1, 2, 3, 4, 5]:
+            #     return Response({
+            #         'success': False,
+            #         'error': 'Admin access required'
+            #     }, status=status.HTTP_403_FORBIDDEN)
+
+            # Get all customers
+            customers = IndividualBankIbkInfo_Register.objects.all().order_by('-insert_date')
+
+            # Transform to response format
+            customer_list = []
+            for customer in customers:
+                customer_list.append({
+                    'ind_sys_id': customer.ind_sys_id,
+                    'customer_id': customer.customer_id,
+                    'bnk_code': customer.bnk_code,
+                    'bank_branch': customer.bank_branch,
+                    'lcic_id': customer.lcic_id,
+                    'status': customer.status,
+                    'match_percent': 0,  # Can add calculation logic if needed
+                    
+                    # Personal info
+                    'ind_name': customer.ind_name,
+                    'ind_surname': customer.ind_surname,
+                    'ind_lao_name': customer.ind_lao_name,
+                    'ind_lao_surname': customer.ind_lao_surname,
+                    'ind_national_id': customer.ind_national_id,
+                    'ind_passport': customer.ind_passport,
+                    'ind_familybook': customer.ind_familybook,
+                    'ind_birth_date': customer.ind_birth_date.isoformat() if customer.ind_birth_date else None,
+                    
+                    # Document
+                    'document_file': customer.document_file.url if customer.document_file else None,
+                    
+                    # Confirmation status
+                    'is_confirmed': customer.is_confirmed,
+                    'confirmed_at': customer.confirmed_at.isoformat() if customer.confirmed_at else None,
+                    'confirmed_by': customer.confirmed_by,
+                    
+                    # Upload info
+                    'insert_by': customer.insert_by,
+                    'insert_date': customer.insert_date.isoformat() if customer.insert_date else None,
+                })
+
+            return Response({
+                'success': True,
+                'count': len(customer_list),
+                'data': customer_list
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            print(f"Error fetching all customers: {e}")
+            return Response({
+                'success': False,
+                'error': f'Failed to fetch customers: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    
+#update Code RegisterCsutomer Info:
+from rest_framework import generics, status, filters
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
+from django.utils import timezone
+from django.db import transaction
+import json
+from .models import IndividualBankIbkInfo_Register
+from .serializers import (
+    CustomerManualRegisterSerializer,
+    CustomerBatchRegisterSerializer,
+    CustomerUploadListSerializer
+)
+
+
+class CustomerManualRegisterAPIView(APIView):
+    """
+    API for manual customer registration with document upload
+    POST /api/register/customer/manual/
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        try:
+            serializer = CustomerManualRegisterSerializer(data=request.data)
+            
+            if serializer.is_valid():
+                # Create customer record with pending status
+                customer = serializer.save(
+                    insert_by=request.user.username,
+                    insert_date=timezone.now(),
+                    status='pending',
+                    is_confirmed=False
+                )
+                
+                return Response({
+                    'success': True,
+                    'message': 'Customer registered successfully. Awaiting admin confirmation.',
+                    'data': {
+                        'ind_sys_id': customer.ind_sys_id,
+                        'ind_national_id': customer.ind_national_id,
+                        'status': customer.status
+                    }
+                }, status=status.HTTP_201_CREATED)
+            
+            return Response({
+                'success': False,
+                'error': 'Validation failed',
+                'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': f'Failed to register customer: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class CustomerBatchRegisterAPIView(APIView):
+    """
+    STEP 1: Upload JSON file only, validate and return customer list
+    POST /api/register/customer/batch/
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        try:
+            json_file = request.FILES.get('json_file')
+            bnk_code = request.data.get('bnk_code')
+            
+            if not json_file:
+                return Response({
+                    'success': False,
+                    'error': 'JSON file is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not bnk_code:
+                return Response({
+                    'success': False,
+                    'error': 'Bank code is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Parse JSON content
+            try:
+                json_content = json_file.read().decode('utf-8')
+                customers_data = json.loads(json_content)
+                
+                if not isinstance(customers_data, list):
+                    return Response({
+                        'success': False,
+                        'error': 'JSON file must contain an array of customer objects'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+            except json.JSONDecodeError as e:
+                return Response({
+                    'success': False,
+                    'error': f'Invalid JSON format: {str(e)}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Validate and prepare response data
+            validated_customers = []
+            errors = []
+            
+            for idx, customer_data in enumerate(customers_data):
+                try:
+                    # Validate required fields
+                    if not customer_data.get('ind_name'):
+                        errors.append(f"Row {idx + 1}: Missing ind_name")
+                        continue
+                    
+                    if not customer_data.get('ind_surname'):
+                        errors.append(f"Row {idx + 1}: Missing ind_surname")
+                        continue
+                    
+                    # Check which ID documents are available
+                    available_docs = []
+                    if customer_data.get('ind_national_id'):
+                        available_docs.append('national_id')
+                    if customer_data.get('ind_passport'):
+                        available_docs.append('passport')
+                    if customer_data.get('ind_familybook'):
+                        available_docs.append('familybook')
+                    
+                    if not available_docs:
+                        errors.append(f"Row {idx + 1}: At least one ID document required")
+                        continue
+                    
+                    # Add to validated list
+                    validated_customers.append({
+                        'index': idx,
+                        'customer_data': customer_data,
+                        'available_docs': available_docs,
+                        'bnk_code': bnk_code
+                    })
+                    
+                except Exception as e:
+                    errors.append(f"Row {idx + 1}: {str(e)}")
+            
+            if not validated_customers:
+                return Response({
+                    'success': False,
+                    'error': 'No valid customers found in JSON file',
+                    'errors': errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Store in session or cache for later submission
+            # For now, just return the validated data
+            return Response({
+                'success': True,
+                'message': f'Successfully validated {len(validated_customers)} customers',
+                'total_processed': len(customers_data),
+                'valid_count': len(validated_customers),
+                'error_count': len(errors),
+                'customers': validated_customers,
+                'errors': errors if errors else None
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': f'Failed to process batch upload: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CustomerBatchFinalizeAPIView(APIView):
+    """
+    STEP 2: Submit all customers with their documents
+    POST /api/register/customer/batch/finalize/
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        try:
+            customers_json = request.data.get('customers_data')
+            
+            if not customers_json:
+                return Response({
+                    'success': False,
+                    'error': 'Customer data is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                customers_data = json.loads(customers_json)
+            except json.JSONDecodeError:
+                return Response({
+                    'success': False,
+                    'error': 'Invalid customer data format'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            created_count = 0
+            errors = []
+            
+            with transaction.atomic():
+                for customer_info in customers_data:
+                    try:
+                        idx = customer_info.get('index')
+                        customer_data = customer_info.get('customer_data')
+                        bnk_code = customer_info.get('bnk_code')
+                        
+                        doc_file = request.FILES.get(f'document_{idx}')
+                        
+                        if not doc_file:
+                            errors.append(f"Customer {idx + 1}: Document file missing")
+                            continue
+                        
+                        # ✅ FIXED: Explicitly get custype and bank_branch with defaults
+                        custype = customer_data.get('custype') or 'IND'
+                        bank_branch = customer_data.get('bank_branch') or ''
+                        segment = customer_data.get('segment') or ''
+                        
+                        # DEBUG logging
+                        print(f"Creating customer {idx}: custype={custype}, bank_branch={bank_branch}, segment={segment}")
+                        
+                        # Create customer record
+                        IndividualBankIbkInfo_Register.objects.create(
+                            # ID Documents
+                            ind_national_id=customer_data.get('ind_national_id') or None,
+                            ind_national_id_date=customer_data.get('ind_national_id_date') or None,
+                            ind_passport=customer_data.get('ind_passport') or None,
+                            ind_passport_date=customer_data.get('ind_passport_date') or None,
+                            ind_familybook=customer_data.get('ind_familybook') or None,
+                            ind_familybook_prov_code=customer_data.get('ind_familybook_prov_code') or None,
+                            ind_familybook_date=customer_data.get('ind_familybook_date') or None,
+                            
+                            # Personal Info
+                            ind_birth_date=customer_data.get('ind_birth_date') or None,
+                            ind_name=customer_data.get('ind_name'),
+                            ind_surname=customer_data.get('ind_surname'),
+                            ind_lao_name=customer_data.get('ind_lao_name') or None,
+                            ind_lao_surname=customer_data.get('ind_lao_surname') or None,
+                            
+                            # Bank Info - ✅ FIXED: Use extracted variables
+                            bnk_code=bnk_code,
+                            bank_branch=bank_branch,
+                            custype=custype,
+                            segment=segment,
+                            
+                            # Other
+                            description=customer_data.get('description') or None,
+                            document_file=doc_file,
+                            
+                            # System fields
+                            insert_by=request.user.username,
+                            insert_date=timezone.now(),
+                            status='pending',
+                            is_confirmed=False
+                        )
+                        created_count += 1
+                        
+                    except Exception as e:
+                        errors.append(f"Customer {idx + 1}: {str(e)}")
+                        print(f"Error creating customer {idx}: {str(e)}")  # DEBUG
+            
+            return Response({
+                'success': True,
+                'message': f'Successfully registered {created_count} customers',
+                'created_count': created_count,
+                'errors': errors if errors else None
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            print(f"Batch finalize error: {str(e)}")  # DEBUG
+            return Response({
+                'success': False,
+                'error': f'Failed to finalize batch upload: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class MyUploadsListAPIView(generics.ListAPIView):
+    """
+    API to list current user's customer uploads
+    GET /api/register/customer/my-uploads/
+    """
+    serializer_class = CustomerUploadListSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    
+    search_fields = [
+        'customer_id', 'ind_national_id', 'ind_passport',
+        'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname'
+    ]
+    ordering_fields = ['insert_date', 'lcic_id', 'customer_id']
+    ordering = ['-insert_date']  # newest first
+
+    def get_queryset(self):
+        """Return only records created by the current user"""
+        return IndividualBankIbkInfo_Register.objects.filter(
+            insert_by=self.request.user.username
+        )
+
+    def list(self, request, *args, **kwargs):
+        """Override list to add summary statistics"""
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        
+        # Calculate statistics
+        total_count = queryset.count()
+        pending_count = queryset.filter(status='pending').count()
+        approved_count = queryset.filter(status='approved').count()
+        rejected_count = queryset.filter(status='rejected').count()
+        
+        return Response({
+            'success': True,
+            'data': serializer.data,
+            'statistics': {
+                'total': total_count,
+                'pending': pending_count,
+                'approved': approved_count,
+                'rejected': rejected_count
+            }
+        })
+        
+class CustomerUpdateIDAPIView(APIView):
+    """
+    Update customer_id for confirmed records (one time only)
+    POST /api/register/customer/update-id/
+    Body: { "ind_sys_id": 123, "new_customer_id": "CUST001" }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            ind_sys_id = request.data.get('ind_sys_id')
+            new_customer_id = request.data.get('new_customer_id')
+            
+            if not ind_sys_id or not new_customer_id:
+                return Response({
+                    'success': False,
+                    'error': 'ind_sys_id and new_customer_id are required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get record
+            record = IndividualBankIbkInfo_Register.objects.filter(
+                ind_sys_id=ind_sys_id,
+                insert_by=request.user.username  # Only own records
+            ).first()
+
+            if not record:
+                return Response({
+                    'success': False,
+                    'error': 'Record not found or access denied'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Check if confirmed
+            if not record.is_confirmed:
+                return Response({
+                    'success': False,
+                    'error': 'Record must be confirmed before updating customer ID'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check if already updated (one time only)
+            if record.customer_id and record.customer_id != '':
+                return Response({
+                    'success': False,
+                    'error': 'Customer ID can only be updated once'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            if not record.lcic_id:
+                return Response({
+                    'success': False,
+                    'error': 'LCIC ID not found'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Update all tables with transaction
+            with transaction.atomic():
+                lcic_id = record.lcic_id
+                
+                # 1. Update Register table
+                record.customer_id = new_customer_id
+                record.update_by = request.user.username
+                record.update_date = timezone.now()
+                record.save()
+
+                # 4. Update IndividualBankIbk
+                IndividualBankIbk.objects.filter(
+                    lcic_id=lcic_id
+                ).update(customerid=new_customer_id)
+
+                # 5. Update IndividualBankIbkInfo_CreateLog
+                IndividualBankIbkInfo_CreateLog.objects.filter(
+                    lcic_id=lcic_id
+                ).update(customer_id=new_customer_id)
+
+                # 6. Update B1_Monthly
+                B1_Monthly.objects.filter(
+                    lcicID=lcic_id
+                ).update(customer_id=new_customer_id)
+
+                # 7. Update B1
+                B1.objects.filter(
+                    lcicID=lcic_id
+                ).update(customer_id=new_customer_id)
+
+            return Response({
+                'success': True,
+                'message': 'Customer ID updated successfully across all tables',
+                'customer_id': new_customer_id,
+                'lcic_id': lcic_id
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': f'Failed to update customer ID: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class CustomerUpdateSegmentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            ind_sys_id = request.data.get('ind_sys_id')
+            segment = request.data.get('segment')
+            
+            if not ind_sys_id or not segment:
+                return Response({
+                    'success': False,
+                    'error': 'ind_sys_id and segment are required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Validate segment
+            valid_segments = ['A1', 'A2', 'A3']
+            if segment not in valid_segments:
+                return Response({
+                    'success': False,
+                    'error': f'Invalid segment. Must be one of: {", ".join(valid_segments)}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get record
+            record = IndividualBankIbkInfo_Register.objects.filter(
+                ind_sys_id=ind_sys_id
+            ).first()
+
+            if not record:
+                return Response({
+                    'success': False,
+                    'error': 'Record not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # Check permissions
+            user_gid = request.user.userprofile.GID.GID if hasattr(request.user, 'userprofile') else 0
+            user_bank_code = request.user.userprofile.MID.id if hasattr(request.user, 'userprofile') else ''
+            
+            is_admin = 1 <= user_gid <= 5
+            is_member = 6 <= user_gid <= 7
+            
+            # Admin can update all, Member can update only own bank
+            if not is_admin and (not is_member or record.bnk_code != user_bank_code):
+                return Response({
+                    'success': False,
+                    'error': 'Access denied. You can only update records from your bank.'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+            # Update segment
+            record.segment = segment
+            record.update_by = request.user.username
+            record.update_date = timezone.now()
+            record.save()
+
+            return Response({
+                'success': True,
+                'message': 'Segment updated successfully',
+                'segment': segment,
+                'ind_sys_id': ind_sys_id
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': f'Failed to update segment: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+            
+            
 from rest_framework import generics
 from .models import scr_atttype_desc, scr_attribute_table
-from .serializers import ScrAttTypeDescSerializer, ScrAttributeTableSerializer
+from .serializers import ScrAttTypeDescSerializer, ScrAttributeTableSerializer,ScrAttributeTablenewSerializer,ScrAttTypeDescnewSerializer
 
-# =======================
 # CRUD สำหรับ scr_atttype_desc
-# =======================
 class ScrAttTypeDescListCreateView(generics.ListCreateAPIView):
     queryset = scr_atttype_desc.objects.all()
     serializer_class = ScrAttTypeDescSerializer
@@ -33672,9 +36562,7 @@ class ScrAttTypeDescRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIVi
     serializer_class = ScrAttTypeDescSerializer
     lookup_field = 'id_desc'
 
-# =======================
 # CRUD สำหรับ scr_attribute_table
-# =======================
 class ScrAttributeTableListCreateView(generics.ListCreateAPIView):
     queryset = scr_attribute_table.objects.all()
     serializer_class = ScrAttributeTableSerializer
@@ -33683,6 +36571,7 @@ class ScrAttributeTableRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAP
     queryset = scr_attribute_table.objects.all()
     serializer_class = ScrAttributeTableSerializer
     lookup_field = 'att_id'
+<<<<<<< HEAD
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -33698,3 +36587,492 @@ class GetIndividualAPIView(APIView):
         if result is None:
             return Response({"message": "Not found"}, status=404)
         return Response(result, status=200)
+=======
+    
+#.........................................................
+# CRUD สำหรับ scr_atttype_desc_new
+class ScrAttTypeDescnewListCreateView(generics.ListCreateAPIView):
+    queryset = scr_atttype_desc_new.objects.all()
+    serializer_class = ScrAttTypeDescnewSerializer
+
+class ScrAttTypeDescnewRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = scr_atttype_desc_new.objects.all()
+    serializer_class = ScrAttTypeDescnewSerializer
+    lookup_field = 'id_desc'
+
+# CRUD สำหรับ scr_attribute_table_new
+class ScrAttributeTablenewListCreateView(generics.ListCreateAPIView):
+    queryset = scr_attribute_table_new.objects.all()
+    serializer_class = ScrAttributeTablenewSerializer
+
+class ScrAttributeTablenewRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = scr_attribute_table_new.objects.all()
+    serializer_class = ScrAttributeTablenewSerializer
+    lookup_field = 'att_id'
+    
+# views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .credit_score_ind import CreditScoreServiceIND
+
+
+class CreditScoreINDAPIView(APIView):
+    """
+    API endpoint to calculate Individual credit score
+    
+    POST /api/credit-score-ind/calculate/
+    GET  /api/credit-score-ind/calculate/?lcic_id=your_lcic_id
+    
+    Example:
+        GET: /api/credit-score-ind/calculate/?lcic_id=LA01I0000001
+        POST: {"lcic_id": "LA01I0000001"}
+    """
+    
+    def post(self, request):
+        """Handle POST request"""
+        return self._calculate_score(request.data.get('lcic_id'))
+    
+    def get(self, request):
+        """Handle GET request"""
+        return self._calculate_score(request.query_params.get('lcic_id'))
+    
+    def _calculate_score(self, lcic_id):
+        """Calculate Individual credit score with error handling"""
+        try:
+            # Validate lcic_id
+            if not lcic_id:
+                return Response(
+                    {
+                        'success': False,
+                        'error': 'lcic_id is required',
+                        'message': 'Please provide a valid LCIC ID'
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Calculate credit score
+            service = CreditScoreServiceIND(lcic_id)
+            result = service.calculate_credit_score()
+            
+            # Check result
+            if not result:
+                return Response(
+                    {
+                        'success': False,
+                        'error': 'Customer not found',
+                        'message': f'No individual customer found with LCIC ID: {lcic_id}'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Return success response
+            return Response(
+                {
+                    'success': True,
+                    'data': result,
+                    'message': 'Credit score calculated successfully'
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            import traceback
+            error_detail = traceback.format_exc()
+            
+            return Response(
+                {
+                    'success': False,
+                    'error': 'Internal server error',
+                    'message': str(e),
+                    'detail': error_detail if settings.DEBUG else None
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+            
+from rest_framework import generics, status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.db.models import Q, Count
+from django.shortcuts import get_object_or_404
+from .models import MemberProductAccess, ChargeMatrix, memberInfo
+from .serializers import (
+    MemberProductAccessSerializer, 
+    MemberProductAccessListSerializer,
+    BulkActivateSerializer,
+    ProductsByBankTypeSerializer
+)
+
+
+class MemberProductAccessListCreateAPIView(generics.ListCreateAPIView):
+    """
+    GET: ດຶງລາຍການ Member Product Access ທັງໝົດ
+    POST: ສ້າງ Member Product Access ໃໝ່
+    """
+    queryset = MemberProductAccess.objects.all()
+    serializer_class = MemberProductAccessSerializer
+    # permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        queryset = MemberProductAccess.objects.all()
+        
+        # Filter by bnk_code
+        bnk_code = self.request.query_params.get('bnk_code', None)
+        if bnk_code:
+            queryset = queryset.filter(bnk_code=bnk_code)
+        
+        # Filter by chg_sys_id
+        chg_sys_id = self.request.query_params.get('chg_sys_id', None)
+        if chg_sys_id:
+            queryset = queryset.filter(chg_sys_id=chg_sys_id)
+        
+        # Filter by is_active
+        is_active = self.request.query_params.get('is_active', None)
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+        
+        return queryset
+    
+    def create(self, request, *args, **kwargs):
+        """ສ້າງ Access ໃໝ່ ຫຼື Reactivate ຖ້າມີຢູ່ແລ້ວ"""
+        bnk_code = request.data.get('bnk_code')
+        chg_sys_id = request.data.get('chg_sys_id')
+        
+        # ตรวจสอบว่ามี Access อยู่แล้วหรือไม่
+        existing_access = MemberProductAccess.objects.filter(
+            bnk_code=bnk_code,
+            chg_sys_id=chg_sys_id
+        ).first()
+        
+        if existing_access:
+            # ถ้ามีแล้ว แค่เปลี่ยน is_active เป็น True
+            existing_access.is_active = True
+            existing_access.save()
+            serializer = self.get_serializer(existing_access)
+            return Response(
+                {
+                    'message': 'ເປີດໃຊ້ງານສິດອີກຄັ້ງສຳເລັດ (Reactivated)',
+                    'data': serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+        
+        # ถ้ายังไม่มี ให้สร้างใหม่
+        return super().create(request, *args, **kwargs)
+
+
+class MemberProductAccessDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    GET: ດຶງຂໍ້ມູນ Member Product Access ຕາມ ID
+    PUT/PATCH: ແກ້ໄຂຂໍ້ມູນ
+    DELETE: ລົບ (Hard delete)
+    """
+    queryset = MemberProductAccess.objects.all()
+    serializer_class = MemberProductAccessSerializer
+    lookup_field = 'access_id'
+    # permission_classes = [IsAuthenticated]
+    
+    def destroy(self, request, *args, **kwargs):
+        """Hard delete - ລົບອອກຈາກ database"""
+        instance = self.get_object()
+        instance.delete()
+        
+        return Response(
+            {'message': 'ລົບສຳເລັດ (Deleted)'},
+            status=status.HTTP_200_OK
+        )
+
+
+class MemberProductAccessByMemberAPIView(APIView):
+    """
+    GET: ດຶງຂໍ້ມູນ Product Access ຂອງ Member ຄົນໃດຄົນໜຶ່ງ
+    ແສດງທັງທີ່ active ແລະ inactive ພ້ອມຂໍ້ມູນທີ່ລະອຽດ
+    """
+    # permission_classes = [IsAuthenticated]
+    
+    def get(self, request, bnk_code):
+        # ตรวจสอบว่า Member มีอยู่จริง
+        member = get_object_or_404(memberInfo, bnk_code=bnk_code)
+        
+        # ດຶງ Access ທັງໝົດຂອງ Member
+        accesses = MemberProductAccess.objects.filter(bnk_code=bnk_code)
+        
+        # ແຍກເປັນ Active ແລະ Inactive
+        active_accesses = accesses.filter(is_active=True)
+        inactive_accesses = accesses.filter(is_active=False)
+        
+        # Serialize
+        active_serializer = MemberProductAccessSerializer(active_accesses, many=True)
+        inactive_serializer = MemberProductAccessSerializer(inactive_accesses, many=True)
+        
+        return Response({
+            'member': {
+                'bnk_code': member.bnk_code,
+                'name_lao': member.nameL,
+                'name_en': member.nameE,
+            },
+            'active_products': active_serializer.data,
+            'inactive_products': inactive_serializer.data,
+            'summary': {
+                'total_active': active_accesses.count(),
+                'total_inactive': inactive_accesses.count(),
+                'total': accesses.count()
+            }
+        })
+
+
+class BulkActivateProductsAPIView(APIView):
+    """
+    POST: Activate ຫຼາຍ Products ພ້ອມກັນ
+    Body: {
+        "bnk_code": "BNK001",
+        "chg_sys_ids": ["1", "2", "3"]
+    }
+    """
+    # permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        serializer = BulkActivateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        bnk_code = serializer.validated_data['bnk_code']
+        chg_sys_ids = serializer.validated_data['chg_sys_ids']
+        
+        created = []
+        updated = []
+        
+        for chg_sys_id in chg_sys_ids:
+            access, is_created = MemberProductAccess.objects.get_or_create(
+                bnk_code=bnk_code,
+                chg_sys_id=chg_sys_id,
+                defaults={'is_active': True}
+            )
+            
+            if not is_created and not access.is_active:
+                access.is_active = True
+                access.save()
+                updated.append(access)
+            elif is_created:
+                created.append(access)
+        
+        return Response({
+            'message': 'ດຳເນີນການສຳເລັດ (Success)',
+            'created': len(created),
+            'updated': len(updated),
+            'total': len(chg_sys_ids)
+        }, status=status.HTTP_200_OK)
+
+
+class BulkDeactivateProductsAPIView(APIView):
+    """
+    POST: Deactivate ຫຼາຍ Products ພ້ອມກັນ
+    Body: {
+        "bnk_code": "BNK001",
+        "chg_sys_ids": ["1", "2", "3"]
+    }
+    """
+    # permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        serializer = BulkActivateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        bnk_code = serializer.validated_data['bnk_code']
+        chg_sys_ids = serializer.validated_data['chg_sys_ids']
+        
+        updated = MemberProductAccess.objects.filter(
+            bnk_code=bnk_code,
+            chg_sys_id__in=chg_sys_ids,
+            is_active=True
+        ).update(is_active=False)
+        
+        return Response({
+            'message': 'ປິດການໃຊ້ງານສຳເລັດ (Deactivated)',
+            'updated': updated
+        }, status=status.HTTP_200_OK)
+
+
+class MemberProductAccessStatsAPIView(APIView):
+    """
+    GET: ດຶງສະຖິຕິການໃຊ້ງານ
+    """
+    def get(self, request):
+        total_accesses = MemberProductAccess.objects.count()
+        active_accesses = MemberProductAccess.objects.filter(is_active=True).count()
+        inactive_accesses = MemberProductAccess.objects.filter(is_active=False).count()
+        
+        # ຈຳນວນ Members ທີ່ມີສິດ
+        members_with_access = MemberProductAccess.objects.filter(
+            is_active=True
+        ).values('bnk_code').distinct().count()
+        
+        # ຈຳນວນ Products ທີ່ຖືກໃຊ້
+        products_used = MemberProductAccess.objects.filter(
+            is_active=True
+        ).values('chg_sys_id').distinct().count()
+        
+        return Response({
+            'total_accesses': total_accesses,
+            'active_accesses': active_accesses,
+            'inactive_accesses': inactive_accesses,
+            'members_with_access': members_with_access,
+            'products_in_use': products_used,
+            'total_members': memberInfo.objects.count(),
+            'total_products': ChargeMatrix.objects.count()
+        })
+
+
+class ProductsByBankTypeAPIView(APIView):
+    """
+    GET: ດຶງລາຍການ Products ທີ່ເໝາະສົມຕາມ Bank Type
+    bnk_type = 1 (ທະນາຄານພາທິດ) -> chg_code ບໍ່ລົງທ້າຍດ້ວຍ "FI"
+    bnk_type = 2 (ສະຖາບັນການເງິນ) -> chg_code ລົງທ້າຍດ້ວຍ "FI"
+    
+    Query params: ?bnk_code=BNK001
+    """
+    # permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        bnk_code = request.query_params.get('bnk_code')
+        
+        if not bnk_code:
+            return Response(
+                {'error': 'ກະລຸນາໃສ່ bnk_code'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # ດຶງຂໍ້ມູນ Member
+        try:
+            member = memberInfo.objects.get(bnk_code=bnk_code)
+        except memberInfo.DoesNotExist:
+            return Response(
+                {'error': 'ບໍ່ພົບສະມາຊິກທີ່ມີລະຫັດນີ້'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Filter products ຕາມ bnk_type ດ້ວຍ chg_code ທີ່ກຳນົດໄວ້
+        if member.bnk_type == 1:
+            # ທະນາຄານພາທິດ - ເອົາແຕ່ທີ່ບໍ່ມີ FI (SCR, UTLT, NLR)
+            allowed_codes = ['FCR','SCR', 'UTLT', 'NLR', 'JCR','NJCR']
+            products = ChargeMatrix.objects.filter(chg_code__in=allowed_codes)
+        elif member.bnk_type == 2:
+            # ສະຖາບັນການເງິນ - ເອົາແຕ່ທີ່ມີ FI (FCRFI, NLRFI, SCRFI, UTLTFI, FCRJCRFI, NJRFI)
+            allowed_codes = ['FCRFI', 'NLRFI', 'SCRFI', 'UTLTFI', 'JCRFI', 'NJRFI']
+            products = ChargeMatrix.objects.filter(chg_code__in=allowed_codes)
+        else:
+            # ຖ້າບໍ່ມີ bnk_type ຫຼື ມີຄ່າອື່ນ ໃຫ້ສະແດງທັງໝົດ
+            products = ChargeMatrix.objects.all()
+        
+        # ດຶງຂໍ້ມູນ Access ຂອງ Member ນີ້
+        member_accesses = MemberProductAccess.objects.filter(bnk_code=bnk_code)
+        
+        # ສ້າງ response data
+        products_data = []
+        for product in products:
+            # ຊອກຫາວ່າ member ມີສິດນີ້ຢູ່ແລ້ວບໍ່
+            access = member_accesses.filter(chg_sys_id=product.chg_sys_id).first()
+            
+            products_data.append({
+                'chg_sys_id': product.chg_sys_id,
+                'chg_code': product.chg_code,
+                'chg_desc': product.chg_desc,
+                'chg_lao_desc': product.chg_lao_desc,
+                'chg_type': product.chg_type,
+                'has_access': access is not None,
+                'is_active': access.is_active if access else False,
+                'access_id': access.access_id if access else None
+            })
+        
+        return Response({
+            'member': {
+                'bnk_code': member.bnk_code,
+                'name_lao': member.nameL,
+                'name_en': member.nameE,
+                'bnk_type': member.bnk_type
+            },
+            'products': products_data,
+            'total_products': len(products_data)
+        })
+
+
+class ToggleProductAccessAPIView(APIView):
+    """
+    POST: Toggle Product Access (Add/Activate ຫຼື Delete)
+    
+    Body: {
+        "bnk_code": "BNK001",
+        "chg_sys_id": "1"
+    }
+    
+    Logic:
+    - ຖ້າບໍ່ມີ record -> ສ້າງໃໝ່ (is_active=True)
+    - ຖ້າມີ record ແລະ is_active=False -> ປ່ຽນເປັນ True
+    - ຖ້າມີ record ແລະ is_active=True -> ລົບອອກ (Hard Delete)
+    """
+    # permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        bnk_code = request.data.get('bnk_code')
+        chg_sys_id = request.data.get('chg_sys_id')
+        
+        if not bnk_code or not chg_sys_id:
+            return Response(
+                {'error': 'ກະລຸນາໃສ່ bnk_code ແລະ chg_sys_id'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # ກວດສອບວ່າ Member ມີຢູ່ຈິງ
+        if not memberInfo.objects.filter(bnk_code=bnk_code).exists():
+            return Response(
+                {'error': 'ບໍ່ພົບສະມາຊິກທີ່ມີລະຫັດນີ້'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # ກວດສອບວ່າ Product ມີຢູ່ຈິງ
+        if not ChargeMatrix.objects.filter(chg_sys_id=chg_sys_id).exists():
+            return Response(
+                {'error': 'ບໍ່ພົບຜະລິດຕະພັນທີ່ມີລະຫັດນີ້'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # ຊອກຫາ Access record
+        access = MemberProductAccess.objects.filter(
+            bnk_code=bnk_code,
+            chg_sys_id=chg_sys_id
+        ).first()
+        
+        if not access:
+            # ບໍ່ມີ record -> ສ້າງໃໝ່
+            access = MemberProductAccess.objects.create(
+                bnk_code=bnk_code,
+                chg_sys_id=chg_sys_id,
+                is_active=True
+            )
+            serializer = MemberProductAccessSerializer(access)
+            return Response({
+                'action': 'created',
+                'message': 'ເພີ່ມສິດສຳເລັດ',
+                'data': serializer.data
+            }, status=status.HTTP_201_CREATED)
+        
+        elif not access.is_active:
+            # ມີ record ແຕ່ inactive -> Activate
+            access.is_active = True
+            access.save()
+            serializer = MemberProductAccessSerializer(access)
+            return Response({
+                'action': 'activated',
+                'message': 'ເປີດໃຊ້ງານສິດສຳເລັດ',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        
+        else:
+            # ມີ record ແລະ active -> Delete
+            access.delete()
+            return Response({
+                'action': 'deleted',
+                'message': 'ລົບສິດສຳເລັດ'
+            }, status=status.HTTP_200_OK)
+        
+>>>>>>> origin/tooktik

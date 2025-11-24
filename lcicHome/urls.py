@@ -49,6 +49,7 @@ from .views import UserLoginView
 from django.contrib.auth import views as auth_views
 from .views import UserProfileView
 from .views import UserManagementView, FCR_reportView, SidebarItemsView, RoleListView, SidebarItemListView, SidebarSubItemListView, AssignRoleView, ManageUserView,FCR_reportView,update_statussubmitc,confirm_uploadc
+from . import cleanup_views
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
@@ -159,14 +160,35 @@ from .views import (
     BorrowerFileListView,
     BorrowerFilePeriodListView,
     confirm_upload_borrower,
+    CustomerUnmergeViewSet,
+    CompareJsonWithDBAPIView,
+    RegisterCustomerBatchAPIView,
+    MyUploadsListAPIView,
+    AllUploadsListAPIView,
+    AllUploadsFilteredAPIView,
+    CustomerConfirmAPIView,
+    
+    CustomerManualRegisterAPIView,
+    CustomerBatchRegisterAPIView,
+    CustomerBatchFinalizeAPIView,
+    MyUploadsListAPIView,
+    CustomerAllUploadsAPIView,
+    ApproveEnterpriseMappingView,
+    CustomerUpdateIDAPIView,
+    CustomerUpdateSegmentAPIView,
+    CheckAndCreateEnterpriseViewList,
+    
+
     reject_borrower_loan_view,
     CollateralNewListView,
-    CheckEnterpriseView
+    CheckAndCreateEnterpriseView
 )
 #tik
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
-                    ,RequestChargeSummaryAPIView,RequestChargeReportAllAPIView,UserLogoutView,UserAccessLogListView,ScoringIndividualInfoSearchView,CreditScoreAPIView,ScrAttTypeDescListCreateView, ScrAttTypeDescRetrieveUpdateDeleteView,ScrAttributeTableListCreateView
-                    ,ScrAttributeTableRetrieveUpdateDeleteView)
+                    ,RequestChargeSummaryAPIView,RequestChargeReportAllAPIView,UserLogoutView,UserAccessLogListView,ScoringIndividualInfoSearchView,CreditScoreAPIView,ScrAttTypeDescnewListCreateView, ScrAttTypeDescnewRetrieveUpdateDeleteView,ScrAttributeTablenewListCreateView
+                    ,ScrAttributeTablenewRetrieveUpdateDeleteView,CreditScoreINDAPIView
+                    ,MemberProductAccessListCreateAPIView,MemberProductAccessDetailAPIView,MemberProductAccessByMemberAPIView,BulkActivateProductsAPIView,BulkDeactivateProductsAPIView,MemberProductAccessStatsAPIView
+                    ,ProductsByBankTypeAPIView,ToggleProductAccessAPIView,)
 
 from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView,process_dispute_notification, process_multiple_disputes,process_multiple_disputescollateral
 from .views import upload_json,MemberInfoViewSet
@@ -185,6 +207,7 @@ router.register(r'user-groups', UserGroupViewSet, basename='usergroup')
 router.register(r'maincatalog', SubCatalogCatViewSet, basename='categorymain')
 router.register(r'subcatalog', MainCatalogCatViewSet, basename='categorysub')
 router.register(r'enterprises', EnterpriseMemberSubmitViewSet, basename='enterprise')
+router.register(r'customer-unmerge', CustomerUnmergeViewSet, basename='customer-unmerge')
 @ensure_csrf_cookie
 def get_csrf_token(request):
     return JsonResponse({'csrfToken': request.META.get('CSRF_COOKIE')})
@@ -263,7 +286,12 @@ urlpatterns = [
    path('render_pdf_view/<slug:object_id>', render_pdf_view, name='render_pdf_view'),
    path('progress/<slug:object_id>', views.progress, name='progress'),
    path('tax_invoice', views.tax, name='tax'),
-   path('check-enterprise/', CheckEnterpriseView.as_view(), name='check-enterprise'),
+   path('check-enterprise/', CheckAndCreateEnterpriseView.as_view(), name='check-enterprise'),
+   path('check-enterprise_list/', CheckAndCreateEnterpriseViewList.as_view(), name='check-enterprise-list'),
+   path('api/company/create/', views.create_company_with_registration, name='create_company'),
+   path('api/register/list/', views.get_register_customer_list, name='register_list'),
+   path('api/company/info/<str:id_file>/', views.get_company_info_by_id_file, name='company_info'),
+   path('api/approve-enterprise-mapping/', ApproveEnterpriseMappingView.as_view(), name='approve-enterprise-mapping'),
 
   
    
@@ -373,6 +401,9 @@ urlpatterns = [
 
   #  path('upload_files/', upload_files, name='upload_files'),
    
+
+
+   
       #tik
     path('user/', UserListAPIView.as_view(), name='user-list'),
     path('user/<int:uid>/', UserDetailAPIView.as_view(), name='user-detail'),
@@ -392,10 +423,23 @@ urlpatterns = [
     path('access-logs/', UserAccessLogListView.as_view(), name='access-logs'),
     path('api/scoring-individual/', ScoringIndividualInfoSearchView.as_view(), name='scoring-individual'),
     path('credit-score/calculate/', CreditScoreAPIView.as_view(), name='credit-score-calculate'),
-    path('att-types/', ScrAttTypeDescListCreateView.as_view(), name='atttype-list-create'),
-    path('att-types/<int:id_desc>/', ScrAttTypeDescRetrieveUpdateDeleteView.as_view(), name='atttype-detail'),
-    path('attributes/', ScrAttributeTableListCreateView.as_view(), name='attribute-list-create'),
-    path('attributes/<int:att_id>/', ScrAttributeTableRetrieveUpdateDeleteView.as_view(), name='attribute-detail'),
+    # path('att-types/', ScrAttTypeDescListCreateView.as_view(), name='atttype-list-create'),
+    # path('att-types/<int:id_desc>/', ScrAttTypeDescRetrieveUpdateDeleteView.as_view(), name='atttype-detail'),
+    # path('attributes/', ScrAttributeTableListCreateView.as_view(), name='attribute-list-create'),
+    # path('attributes/<int:att_id>/', ScrAttributeTableRetrieveUpdateDeleteView.as_view(), name='attribute-detail'),
+    path('att-types/', ScrAttTypeDescnewListCreateView.as_view(), name='atttype-list-create'),
+    path('att-types/<int:id_desc>/', ScrAttTypeDescnewRetrieveUpdateDeleteView.as_view(), name='atttype-detail'),
+    path('attributes/', ScrAttributeTablenewListCreateView.as_view(), name='attribute-list-create'),
+    path('attributes/<int:att_id>/', ScrAttributeTablenewRetrieveUpdateDeleteView.as_view(), name='attribute-detail'),
+    path('credit-score-ind/calculate/', CreditScoreINDAPIView.as_view(), name='credit_score_ind_calculate'),
+    path('member-product-access/', MemberProductAccessListCreateAPIView.as_view(), name='member-product-access-list'),
+    path('member-product-access/<int:access_id>/',  MemberProductAccessDetailAPIView.as_view(), name='member-product-access-detail'),
+    path('member-product-access/member/<str:bnk_code>/', MemberProductAccessByMemberAPIView.as_view(), name='member-product-access-by-member'),
+    path('member-product-access/bulk-activate/', BulkActivateProductsAPIView.as_view(), name='bulk-activate'),
+    path('member-product-access/bulk-deactivate/', BulkDeactivateProductsAPIView.as_view(), name='bulk-deactivate'),
+    path('member-product-access/stats/', MemberProductAccessStatsAPIView.as_view(), name='member-product-access-stats'),
+    path('products-by-bank-type/', ProductsByBankTypeAPIView.as_view(), name='products-by-bank-type'),
+    path('toggle-product-access/', ToggleProductAccessAPIView.as_view(), name='toggle-product-access'),
     
     path('api/individual-files/', IndividualFileListView.as_view(), name='individual-file-list'),
     path('api/borrwor-files/', BorrowerFileListView.as_view(), name='borrwor-file-list'),
@@ -610,6 +654,81 @@ urlpatterns = [
     # Statistics
     path('statistics/', views.get_statistics, name='get_statistics'),
 
+    path('cleanup/duplicates/', cleanup_views.list_duplicate_info_records, name='list_duplicate_info_records'),
+    path('cleanup/merge/', cleanup_views.merge_info_records, name='merge_info_records'),
+    path('cleanup/statistics/', cleanup_views.get_cleanup_statistics, name='get_cleanup_statistics'),
+    
+    
+    # Customer Merge Information
+    path('customer/<str:lcic_id>/merge-info/', 
+         views.get_customer_merge_info, 
+         name='get_customer_merge_info'),
+    
+    # NEW: List all merged customers with optional filters
+    path('customers/merged/', 
+         views.list_merged_customers, 
+         name='list_merged_customers'),
+    
+    # NEW: Get merge statistics
+    path('customers/merged/statistics/', 
+         views.get_merge_statistics, 
+         name='get_merge_statistics'),
+    
+    # General customer search (requires search term)
+    path('customers/search/', 
+         views.search_customers, 
+         name='search_customers'),
+    
+    # List all merge operations
+    path('merges/history/', 
+         views.list_all_merges, 
+         name='list_all_merges'),
+    
+    #Create Customer With LCIC ID
+    path('new/customer/create/',CompareJsonWithDBAPIView.as_view(), name="create_customer_with_lcic_id"),
+    path('customer/register/batch/', RegisterCustomerBatchAPIView.as_view(), name="register_customer_batch"),
+    # Main endpoints
+    path('register/customer/my-uploads/', MyUploadsListAPIView.as_view(), name='my-uploads'),
+    # path('register/customer/all-uploads/', AllUploadsListAPIView.as_view(), name='all-uploads'),
+    # Optional: More powerful filtering
+    path('register/customer/uploads/', AllUploadsFilteredAPIView.as_view(), name='uploads-filtered'),
+    # path('register/customer/confirm/', CustomerConfirmAPIView.as_view(), name='customer-confirm'),
+    
+        # Manual customer registration
+    path('register/customer/manual/', 
+         CustomerManualRegisterAPIView.as_view(), 
+         name='customer-manual-register'),
+    
+    # Batch customer registration
+    path('register/customer/batch/', 
+         CustomerBatchRegisterAPIView.as_view(), 
+         name='customer-batch-register'),
+    path('register/customer/batch/finalize/', 
+         CustomerBatchFinalizeAPIView.as_view(), 
+         name='customer-batch-finalize'),
+    
+    # My uploads list
+    path('register/customer/my-uploads/', 
+         MyUploadsListAPIView.as_view(), 
+         name='my-uploads'),
+        # Get all uploaded customers (Admin)
+    path('register/customer/all-uploads/', 
+         CustomerAllUploadsAPIView.as_view(), 
+         name='customer-all-uploads'),
+    
+    # Confirm customers with matching
+    path('register/customer/confirm/', 
+         CustomerConfirmAPIView.as_view(), 
+         name='customer-confirm'),
+    
+    path('register/customer/update-id/', 
+     CustomerUpdateIDAPIView.as_view(), 
+     name='customer-update-id'),
+    
+    path('register/customer/update-segment/', 
+     CustomerUpdateSegmentAPIView.as_view(), 
+     name='customer-update-segment'),
+    
     #---------------------------------------------
     #----- END POINTS -----------------------------
     

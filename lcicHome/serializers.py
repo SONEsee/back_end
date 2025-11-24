@@ -7,6 +7,35 @@ from .models import Login, memberInfo, User_Group
 from django.core.validators import MaxValueValidator, MinLengthValidator
 
 
+# serializers.py
+from rest_framework import serializers
+from .models import RegisterCustomerWhitEnterprise, CompanyInfoMappingMemberSubmit
+
+class RegisterCustomerWhitEnterpriseSerializer(serializers.ModelSerializer):
+    InsertDate = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S", read_only=True)
+    UpdateDate = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S", read_only=True)
+    
+    class Meta:
+        model = RegisterCustomerWhitEnterprise
+        fields = '__all__'
+
+class CompanyInfoMappingMemberSubmitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CompanyInfoMappingMemberSubmit
+        fields = '__all__'
+
+from rest_framework import serializers
+from .models import CompanyInfoMappingMemberSubmit, RegisterCustomerWhitEnterprise
+
+class CompanyInfoMappingMemberSubmitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CompanyInfoMappingMemberSubmit
+        fields = '__all__'
+        read_only_fields = ['com_sys_id']  
+class CompanyInfoMappingMemberSubmitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CompanyInfoMappingMemberSubmit
+        fields = '__all__'
 
 
 class CustomerInfoINDSerializer(serializers.ModelSerializer):
@@ -2030,10 +2059,276 @@ class CreditScoreResponseSerializers(serializers.Serializer):
     # Final Credit Score
     final_credit_score = serializers.DecimalField(max_digits=10, decimal_places=2)
     credit_rating = serializers.CharField()
+
+
+from rest_framework import serializers
+from .models import IndividualBankIbkInfo_Register, IndividualBankIbkInfo_CreateLog
+
+
+class CustomerRegistrationSerializer(serializers.Serializer):
+    Custype = serializers.CharField(max_length=10)
+    segment = serializers.CharField(max_length=10)
+    bnk_code = serializers.CharField(max_length=150)
+    customer_ID = serializers.CharField(max_length=150)
+    branch_id_code = serializers.CharField(max_length=150)
+    ind_national_id = serializers.CharField(max_length=150, required=False, allow_null=True, allow_blank=True)
+    ind_national_id_date = serializers.DateTimeField(required=False, allow_null=True)
+    ind_passport = serializers.CharField(max_length=150, required=False, allow_null=True, allow_blank=True)
+    ind_passport_date = serializers.DateTimeField(required=False, allow_null=True)
+    ind_familybook = serializers.CharField(max_length=150, required=False, allow_null=True, allow_blank=True)
+    ind_familybook_prov_code = serializers.CharField(max_length=150, required=False, allow_null=True, allow_blank=True)
+    ind_familybook_date = serializers.DateTimeField(required=False, allow_null=True)
+    ind_birth_date = serializers.DateTimeField(required=False, allow_null=True)
+    ind_name = serializers.CharField(max_length=150, required=False, allow_null=True, allow_blank=True)
+    ind_surname = serializers.CharField(max_length=150, required=False, allow_null=True, allow_blank=True)
+    ind_lao_name = serializers.CharField(max_length=150, required=False, allow_null=True, allow_blank=True)
+    ind_lao_surname = serializers.CharField(max_length=150, required=False, allow_null=True, allow_blank=True)
+    verify_document = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+
+
+class RegisterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IndividualBankIbkInfo_Register
+        fields = '__all__'
+        read_only_fields = ['ind_sys_id', 'insert_date', 'update_date']
+
+
+class CreateLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IndividualBankIbkInfo_CreateLog
+        fields = '__all__'
+        read_only_fields = ['ind_sys_id', 'insert_date', 'update_date']
+        
+        
+from rest_framework import serializers
+from .models import IndividualBankIbkInfo_Register
+
+class CustomerUploadListSerializer(serializers.ModelSerializer):
+    upload_date = serializers.DateTimeField(source='insert_date', format="%Y-%m-%d %H:%M:%S")
+    uploaded_by = serializers.CharField(source='insert_by')
+    full_name_en = serializers.SerializerMethodField()
+    full_name_la = serializers.SerializerMethodField()
+
+    class Meta:
+        model = IndividualBankIbkInfo_Register
+        fields = [
+            'ind_sys_id',
+            'lcic_id',
+            'customer_id',
+            'bnk_code',
+            'bank_branch',
+            'ind_national_id',
+            'ind_passport',
+            'ind_birth_date',
+            'full_name_en',
+            'full_name_la',
+            'status',
+            'upload_date',
+            'uploaded_by',
+            'document_file'
+        ]
+
+    def get_full_name_en(self, obj):
+        name = obj.ind_name or ""
+        surname = obj.ind_surname or ""
+        return f"{name} {surname}".strip() or "-"
+
+    def get_full_name_la(self, obj):
+        name = obj.ind_lao_name or ""
+        surname = obj.ind_lao_surname or ""
+        return f"{name} {surname}".strip() or "-"
     
+
+class CustomerConfirmSerializer(serializers.Serializer):
+    """Validates customer confirmation request"""
+    ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+        max_length=100  # Prevent DOS with huge lists
+    )
+    
+    
+# # customer_registration_serializers.py
+# from rest_framework import serializers
+# from .models import IndividualBankIbkInfo_Register
+
+
+# class CustomerManualRegisterSerializer(serializers.ModelSerializer):
+#     """Serializer for manual customer registration with document upload"""
+    
+#     class Meta:
+#         model = IndividualBankIbkInfo_Register
+#         fields = [
+#             'ind_national_id', 'ind_national_id_date', 'ind_passport', 
+#             'ind_passport_date', 'ind_familybook', 'ind_familybook_prov_code',
+#             'ind_familybook_date', 'ind_birth_date', 'ind_name', 'ind_surname',
+#             'ind_lao_name', 'ind_lao_surname', 'bnk_code', 'bank_branch',
+#             'description', 'document_file'
+#         ]
+#         extra_kwargs = {
+#             'document_file': {'required': False}
+#         }
+
+#     def validate(self, data):
+#         """Validate required fields"""
+#         if not data.get('ind_national_id'):
+#             raise serializers.ValidationError({'ind_national_id': 'This field is required.'})
+#         if not data.get('ind_name'):
+#             raise serializers.ValidationError({'ind_name': 'This field is required.'})
+#         if not data.get('ind_surname'):
+#             raise serializers.ValidationError({'ind_surname': 'This field is required.'})
+#         return data
+
+# class CustomerBatchRegisterSerializer(serializers.Serializer):
+#     """Serializer for batch customer registration"""
+    
+#     json_file = serializers.FileField(required=True)
+#     document_file = serializers.FileField(required=False)
+#     bnk_code = serializers.CharField(max_length=150, required=True)
+
+#     def validate_json_file(self, value):
+#         """Validate JSON file format"""
+#         if not value.name.endswith('.json'):
+#             raise serializers.ValidationError('File must be a JSON file.')
+#         return value
+
+
+# class CustomerUploadListSerializer(serializers.ModelSerializer):
+#     """Serializer for listing customer uploads"""
+    
+#     status_display = serializers.SerializerMethodField()
+    
+#     class Meta:
+#         model = IndividualBankIbkInfo_Register
+#         fields = [
+#             'ind_sys_id', 'lcic_id', 'customer_id', 'ind_national_id',
+#             'ind_passport', 'ind_name', 'ind_surname', 'ind_lao_name',
+#             'ind_lao_surname', 'bnk_code', 'bank_branch', 'status',
+#             'status_display', 'is_confirmed', 'confirmed_at', 'confirmed_by',
+#             'insert_date', 'insert_by', 'description', 'document_file'
+#         ]
+#         read_only_fields = ['ind_sys_id', 'insert_date', 'insert_by']
+
+#     def get_status_display(self, obj):
+#         """Return human-readable status"""
+#         status_map = {
+#             'pending': 'Pending Approval',
+#             'approved': 'Approved',
+#             'rejected': 'Rejected',
+#         }
+#         return status_map.get(obj.status, obj.status)
+# serializers.py - Updated to match your model
+
+from rest_framework import serializers
+from .models import IndividualBankIbkInfo_Register
+
+class CustomerManualRegisterSerializer(serializers.ModelSerializer):
+    # Accept multiple document types from frontend
+    document_national_id = serializers.FileField(required=False, write_only=True)
+    document_passport = serializers.FileField(required=False, write_only=True)
+    document_familybook = serializers.FileField(required=False, write_only=True)
+    
+    class Meta:
+        model = IndividualBankIbkInfo_Register
+        fields = [
+            # Required fields
+            'custype',
+            'segment',
+            'bnk_code',
+            'bank_branch',
+            'customer_id',
+            
+            # National ID
+            'ind_national_id',
+            'ind_national_id_date',
+            
+            # Passport
+            'ind_passport',
+            'ind_passport_date',
+            
+            # Family Book
+            'ind_familybook',
+            'ind_familybook_prov_code',
+            'ind_familybook_date',
+            
+            # Personal Info
+            'ind_birth_date',
+            'ind_name',
+            'ind_surname',
+            'ind_lao_name',
+            'ind_lao_surname',
+            
+            # Other
+            'description',
+            
+            # Documents
+            'document_national_id',
+            'document_passport',
+            'document_familybook',
+        ]
+    
+    def validate(self, data):
+        # At least one document must be provided
+        has_doc = any([
+            data.get('document_national_id'),
+            data.get('document_passport'),
+            data.get('document_familybook')
+        ])
+        
+        if not has_doc:
+            raise serializers.ValidationError("At least one document is required")
+        
+        return data
+    
+    def create(self, validated_data):
+        # Extract document files
+        doc_national_id = validated_data.pop('document_national_id', None)
+        doc_passport = validated_data.pop('document_passport', None)
+        doc_familybook = validated_data.pop('document_familybook', None)
+        
+        # Create customer
+        customer = IndividualBankIbkInfo_Register.objects.create(**validated_data)
+        
+        # Save first available document to document_file field
+        if doc_national_id:
+            customer.document_file = doc_national_id
+        elif doc_passport:
+            customer.document_file = doc_passport
+        elif doc_familybook:
+            customer.document_file = doc_familybook
+        
+        customer.save()
+        return customer
+
+
+class CustomerBatchRegisterSerializer(serializers.Serializer):
+    json_file = serializers.FileField(required=True)
+    bnk_code = serializers.CharField(max_length=150, required=True)
+    document_file = serializers.FileField(required=False)
+
+
+class CustomerUploadListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IndividualBankIbkInfo_Register
+        fields = [
+            'ind_sys_id',
+            'lcic_id',
+            'customer_id',
+            'custype',
+            'segment',
+            'bnk_code',
+            'bank_branch',
+            'ind_national_id',
+            'ind_name',
+            'ind_surname',
+            'status',
+            'insert_date',
+            'document_file',
+            'is_confirmed',
+        ]
     
 from rest_framework import serializers
-from .models import scr_atttype_desc, scr_attribute_table
+from .models import scr_atttype_desc, scr_attribute_table,scr_atttype_desc_new, scr_attribute_table_new
 
 class ScrAttTypeDescSerializer(serializers.ModelSerializer):
     class Meta:
@@ -2045,4 +2340,158 @@ class ScrAttributeTableSerializer(serializers.ModelSerializer):
     class Meta:
         model = scr_attribute_table
         fields = '__all__'
+        
+class ScrAttTypeDescnewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = scr_atttype_desc_new
+        fields = '__all__'
+
+
+class ScrAttributeTablenewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = scr_attribute_table_new
+        fields = '__all__'
+
+# serializers.py
+from rest_framework import serializers
+from .models import MemberProductAccess, ChargeMatrix, memberInfo
+
+class MemberProductAccessSerializer(serializers.ModelSerializer):
+    # เพิ่ม fields สำหรับแสดงข้อมูล Member และ Product
+    member_name = serializers.SerializerMethodField()
+    member_name_en = serializers.SerializerMethodField()
+    product_code = serializers.SerializerMethodField()
+    product_name = serializers.SerializerMethodField()
+    product_lao_name = serializers.SerializerMethodField()
+    product_type = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = MemberProductAccess
+        fields = [
+            'access_id', 
+            'bnk_code', 
+            'chg_sys_id', 
+            'is_active',
+            'created_at', 
+            'updated_at',
+            'member_name',
+            'member_name_en',
+            'product_code',
+            'product_name',
+            'product_lao_name',
+            'product_type'
+        ]
+        read_only_fields = ['access_id', 'created_at', 'updated_at']
+    
+    def get_member_name(self, obj):
+        """ດຶງຊື່ສະມາຊິກພາສາລາວ"""
+        try:
+            member = memberInfo.objects.get(bnk_code=obj.bnk_code)
+            return member.nameL
+        except memberInfo.DoesNotExist:
+            return None
+    
+    def get_member_name_en(self, obj):
+        """ດຶງຊື່ສະມາຊິກພາສາອັງກິດ"""
+        try:
+            member = memberInfo.objects.get(bnk_code=obj.bnk_code)
+            return member.nameE
+        except memberInfo.DoesNotExist:
+            return None
+    
+    def get_product_code(self, obj):
+        """ດຶງລະຫັດຜະລິດຕະພັນ"""
+        try:
+            product = ChargeMatrix.objects.get(chg_sys_id=obj.chg_sys_id)
+            return product.chg_code
+        except ChargeMatrix.DoesNotExist:
+            return None
+    
+    def get_product_name(self, obj):
+        """ດຶງຊື່ຜະລິດຕະພັນພາສາອັງກິດ"""
+        try:
+            product = ChargeMatrix.objects.get(chg_sys_id=obj.chg_sys_id)
+            return product.chg_desc
+        except ChargeMatrix.DoesNotExist:
+            return None
+    
+    def get_product_lao_name(self, obj):
+        """ດຶງຊື່ຜະລິດຕະພັນພາສາລາວ"""
+        try:
+            product = ChargeMatrix.objects.get(chg_sys_id=obj.chg_sys_id)
+            return product.chg_lao_desc
+        except ChargeMatrix.DoesNotExist:
+            return None
+    
+    def get_product_type(self, obj):
+        """ດຶງປະເພດຜະລິດຕະພັນ"""
+        try:
+            product = ChargeMatrix.objects.get(chg_sys_id=obj.chg_sys_id)
+            return product.chg_type
+        except ChargeMatrix.DoesNotExist:
+            return None
+    
+    def validate(self, data):
+        """Validate ຂໍ້ມູນກ່ອນບັນທຶກ"""
+        bnk_code = data.get('bnk_code')
+        chg_sys_id = data.get('chg_sys_id')
+        
+        # ตรวจสอบว่า Member มีอยู่จริง
+        if not memberInfo.objects.filter(bnk_code=bnk_code).exists():
+            raise serializers.ValidationError({
+                'bnk_code': 'ບໍ່ພົບສະມາຊິກທີ່ມີລະຫັດນີ້ (Member not found)'
+            })
+        
+        # ตรวจสอบว่า Product มีอยู่จริง
+        if not ChargeMatrix.objects.filter(chg_sys_id=chg_sys_id).exists():
+            raise serializers.ValidationError({
+                'chg_sys_id': 'ບໍ່ພົບຜະລິດຕະພັນທີ່ມີລະຫັດນີ້ (Product not found)'
+            })
+        
+        return data
+
+
+class MemberProductAccessListSerializer(serializers.Serializer):
+    """Serializer ສຳລັບແສດງລາຍການ Access ຂອງ Member ແບບຈັດກຸ່ມ"""
+    bnk_code = serializers.CharField()
+    member_name = serializers.CharField()
+    member_name_en = serializers.CharField()
+    active_products = serializers.ListField()
+    inactive_products = serializers.ListField()
+    total_active = serializers.IntegerField()
+    total_inactive = serializers.IntegerField()
+
+
+class BulkActivateSerializer(serializers.Serializer):
+    """Serializer ສຳລັບ activate ຫຼາຍ products ພ້ອມກັນ"""
+    bnk_code = serializers.CharField(max_length=10)
+    chg_sys_ids = serializers.ListField(
+        child=serializers.CharField(max_length=5),
+        allow_empty=False
+    )
+    
+    def validate_bnk_code(self, value):
+        if not memberInfo.objects.filter(bnk_code=value).exists():
+            raise serializers.ValidationError('ບໍ່ພົບສະມາຊິກທີ່ມີລະຫັດນີ້')
+        return value
+    
+    def validate_chg_sys_ids(self, value):
+        for chg_sys_id in value:
+            if not ChargeMatrix.objects.filter(chg_sys_id=chg_sys_id).exists():
+                raise serializers.ValidationError(
+                    f'ບໍ່ພົບຜະລິດຕະພັນທີ່ມີລະຫັດ {chg_sys_id}'
+                )
+        return value
+
+
+class ProductsByBankTypeSerializer(serializers.Serializer):
+    """
+    Serializer ສຳລັບດຶງ Products ທີ່ເໝາະສົມຕາມ Bank Type
+    """
+    bnk_code = serializers.CharField(max_length=10)
+    
+    def validate_bnk_code(self, value):
+        if not memberInfo.objects.filter(bnk_code=value).exists():
+            raise serializers.ValidationError('ບໍ່ພົບສະມາຊິກທີ່ມີລະຫັດນີ້')
+        return value
 
