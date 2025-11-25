@@ -2352,4 +2352,15 @@ class ScrAttributeTablenewSerializer(serializers.ModelSerializer):
         model = scr_attribute_table_new
         fields = '__all__'
 
+from utility.models import TelecomCustomer, Telecom_Bill
+from rest_framework import serializers
+class TelecomCustomerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TelecomCustomer
+        fields = '__all__'
 
+
+class TelecomBillSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Telecom_Bill
+        fields = '__all__'

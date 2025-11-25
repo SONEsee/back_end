@@ -18186,6 +18186,12 @@ class SidebarItemListView(APIView):
         sidebar_items = SidebarItem.objects.all().order_by('order', 'id')
         serializer = SidebarItemSerializer(sidebar_items, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    def post(self, request):  # ✅ ADD THIS
+        serializer = RoleSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class SidebarSubItemListView(APIView):
@@ -36368,3 +36374,487 @@ class CreditScoreINDAPIView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+            
+import re
+import uuid
+import logging
+from django.utils import timezone
+from django.db.models import Q
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+
+from .models import memberInfo, ChargeMatrix
+from utility.models import TelecomCustomer, Telecom_Bill, searchlog_utility, request_charge_utility
+from .serializers import (
+    TelecomCustomerSerializer, TelecomBillSerializer, SearchLogUtilitySerializer
+)
+
+logger = logging.getLogger(__name__)
+
+
+class TelecomReportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def serialize_bills_safely(self, bills):
+        """Serialize bills one by one, skipping any that fail (safe fallback)"""
+        serialized_bills = []
+        
+        for bill in bills:
+            try:
+                serializer = TelecomBillSerializer(bill)
+                bill_data = serializer.data
+                serialized_bills.append(bill_data)
+                
+            except Exception as e:
+                logger.warning(f"Serialization failed for telecom bill {bill.BillID}: {str(e)}")
+                
+                safe_bill_data = {
+                    'BillID': bill.BillID or '',
+                    'Customer_ID': bill.Customer_ID or '',
+                    'InvoiceNo': bill.InvoiceNo or '',
+                    'TypeOfPro': bill.TypeOfPro or '',
+                    'Outstanding': float(bill.Outstanding or 0),
+                    'Basic_Tax': float(bill.Basic_Tax or 0),
+                    'Bill_Amount': float(bill.Bill_Amount or 0),
+                    'Debt_Amount': float(bill.Debt_Amount or 0),
+                    'Payment_ID': bill.Payment_ID or '',
+                    'PaymentType': bill.PaymentType or '',
+                    'Payment_Date': bill.Payment_Date or '',
+                    'InvoiceMonth': bill.InvoiceMonth or '',
+                    'InvoiceDate': bill.InvoiceDate or '',
+                    'DisID': bill.DisID or '',
+                    'ProID': bill.ProID or '',
+                    'telecomType': bill.telecomType or '',
+                    'UserID': bill.UserID or '',
+                    'InsertDate': bill.InsertDate.isoformat() if bill.InsertDate else None,
+                    'UpdateDate': bill.UpdateDate.isoformat() if bill.UpdateDate else None,
+                }
+                serialized_bills.append(safe_bill_data)
+        
+        return serialized_bills
+
+    def get(self, request):
+        try:
+            # === Required Parameters ===
+            customer_id = request.query_params.get('customer_id')
+            telecom_type = request.query_params.get('telecomType')
+
+            if not customer_id:
+                return Response({"error": "customer_id parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
+            if not telecom_type:
+                return Response({"error": "telecomType parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+            user = request.user
+            bank = user.MID
+            sys_usr = f"{str(user.UID)}-{str(bank.bnk_code)}"
+
+            # === Get Bank Charge Config (You can adjust chg_sys_id for telecom) ===
+            bank_info = memberInfo.objects.get(bnk_code=bank.bnk_code)
+            charge_bank_type = bank_info.bnk_type
+            if charge_bank_type == 1:
+                chargeType = ChargeMatrix.objects.get(chg_sys_id=9)
+            else:
+                chargeType = ChargeMatrix.objects.get(chg_sys_id=10)
+            charge_amount_com = chargeType.chg_amount
+
+            # === Get Customer with telecomType filter ===
+            try:
+                customer = TelecomCustomer.objects.get(
+                    Customer_ID=customer_id,
+                    telecomType=telecom_type
+                )
+            except TelecomCustomer.DoesNotExist:
+                return Response({
+                    "error": "Telecom customer not found or telecomType mismatch"
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # === Get Bills - filtered by Customer_ID AND telecomType ===
+            bills = Telecom_Bill.objects.filter(
+                Customer_ID=customer_id,
+                telecomType=telecom_type
+            ).exclude(
+                InvoiceMonth__isnull=True
+            ).exclude(
+                InvoiceMonth=""
+            )
+
+            # === Sort by InvoiceMonth (format: MM-YYYY) - Most recent first ===
+            bills_list = list(bills)
+            def sort_key(bill):
+                try:
+                    month_str = bill.InvoiceMonth or ""
+                    if re.match(r'^(0[1-9]|1[0-2])-\d{4}$', month_str):
+                        month, year = month_str.split('-')
+                        return f"{year}-{month}"
+                    return "0000-00"
+                except:
+                    return "0000-00"
+            
+            bills_list.sort(key=sort_key, reverse=True)
+
+            # === Log the search ===
+            search_log = searchlog_utility.objects.create(
+                bnk_code=bank.bnk_code,
+                sys_usr=sys_usr,
+                wt_cusid='',
+                edl_cusid='',
+                tel_cusid=customer_id,
+                proID_edl='',
+                proID_wt='',
+                proID_tel=telecom_type,  # Store telecomType here
+                credittype='telecom',
+                inquiry_date=timezone.now(),
+                inquiry_time=timezone.now()
+            )
+
+            # === Generate reference code ===
+            rec_insert_date = timezone.now()
+            date_str = rec_insert_date.strftime('%d%m%Y')
+            report_date = rec_insert_date.strftime('%d-%m-%Y')
+            rec_reference_code = f"{chargeType.chg_code}-0-{bank.bnk_code}-{date_str}-{search_log.search_id}"
+            rec_reference_code = rec_reference_code[:100]
+
+            # === Log charge request ===
+            request_charge_utility.objects.create(
+                usr_session_id=str(uuid.uuid4()),
+                search_id=search_log,
+                bnk_code=bank.bnk_code,
+                chg_code=chargeType.chg_code,
+                chg_amount=charge_amount_com,
+                chg_unit='LAK',
+                sys_usr=sys_usr,
+                credit_type='telecom',
+                wt_cusid='',
+                edl_cusid='',
+                tel_cusid=customer_id,
+                proID_edl='',
+                proID_wt='',
+                proID_tel=telecom_type,
+                rec_reference_code=rec_reference_code
+            )
+
+            # === Serialize data safely ===
+            customer_serializer = TelecomCustomerSerializer(customer)
+            bill_data = self.serialize_bills_safely(bills_list)
+            search_log_serializer = SearchLogUtilitySerializer(search_log)
+
+            # === Reference Data ===
+            reference_data = [
+                rec_reference_code,
+                customer_id,
+                telecom_type,           # Added for clarity
+                report_date,
+                search_log_serializer.data,
+                rec_insert_date.isoformat()
+            ]
+
+            logger.info(f"Telecom Report: {len(bill_data)} bills returned for {customer_id} ({telecom_type})")
+
+            return Response({
+                "reference_data": reference_data,
+                "customer": [customer_serializer.data],
+                "bill": bill_data
+            }, status=status.HTTP_200_OK)
+
+        except memberInfo.DoesNotExist:
+            return Response({"error": "Bank information not found"}, status=status.HTTP_400_BAD_REQUEST)
+        except ChargeMatrix.DoesNotExist:
+            return Response({"error": "Telecom charge configuration not found"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            logger.error(f"TelecomReportAPIView unexpected error: {str(e)}", exc_info=True)
+            return Response({"error": "An unexpected error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+import re
+from collections import defaultdict
+from django.db.models import Q
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from .models import IndividualBankIbk
+
+# ==============================================================
+# CLEANUP HELPERS
+# ==============================================================
+def normalize_id(s):
+    """Remove non-digits from ID strings"""
+    return re.sub(r'\D', '', str(s or '')).strip()
+
+def clean_lao_text(text: str) -> str:
+    """Clean and normalize Lao text for comparison"""
+    if not text:
+        return ""
+    # Remove honorifics
+    text = re.sub(r'^(ນາງ|ທ່ານ|ນາງສາວ|ທີ່ນາງ|ທີ່)\s*', '', text.strip(), flags=re.IGNORECASE)
+    # Remove all Lao tone marks and diacritics
+    text = text.translate(str.maketrans('', '', '່້໊໋ໍຯ໌ໆ'))
+    # Remove spaces, hyphens, underscores
+    text = re.sub(r'[\s\-_]+', '', text)
+    return text.lower()
+
+def calculate_match_strength(rec1, rec2):
+    """Calculate how strong the match is between two records"""
+    score = 0
+    
+    # Strong identifiers (each worth 3 points)
+    if rec1.get('ind_national_id') and rec1['ind_national_id'] == rec2.get('ind_national_id'):
+        score += 3
+    if rec1.get('ind_passport') and rec1['ind_passport'] == rec2.get('ind_passport'):
+        score += 3
+    
+    # Medium identifiers (each worth 2 points)
+    if (rec1.get('ind_familybook') and rec2.get('ind_familybook') and 
+        rec1['ind_familybook'] == rec2['ind_familybook']):
+        score += 2
+    if (rec1.get('ind_birth_date') and rec2.get('ind_birth_date') and
+        str(rec1['ind_birth_date']) == str(rec2['ind_birth_date'])):
+        score += 2
+    
+    # Weak identifiers (each worth 1 point)
+    if rec1.get('ind_gender') and rec1['ind_gender'] == rec2.get('ind_gender'):
+        score += 1
+    
+    # Name matching (worth 1 point)
+    name1 = clean_lao_text(f"{rec1.get('ind_lao_name', '')} {rec1.get('ind_lao_surname', '')}")
+    name2 = clean_lao_text(f"{rec2.get('ind_lao_name', '')} {rec2.get('ind_lao_surname', '')}")
+    if name1 and name2 and name1 == name2:
+        score += 1
+    
+    return score
+
+# ==============================================================
+# SUGGEST MERGE API - IMPROVED LOGIC
+# ==============================================================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def suggest_merge_candidates(request):
+    """
+    Suggest LCIC merge candidates with improved filtering logic
+    
+    Rules:
+    1. Name alone is NOT sufficient - requires additional identifiers
+    2. At least 2 matching criteria required for suggestion
+    3. Priority given to strong identifiers (national_id, passport)
+    
+    Filters:
+        ?name=Khunthong&birth_date=1986-10-13
+        ?familybook=49&prov_code=NKL
+        ?passport=P1449326&bnk_code=415
+        ?national_id=123456789
+    """
+    # Get parameters
+    name = request.query_params.get('name', '').strip()
+    birth_date = request.query_params.get('birth_date')
+    familybook = request.query_params.get('familybook')
+    prov_code = request.query_params.get('prov_code') or request.query_params.get('familybook_prov_code')
+    passport = request.query_params.get('passport')
+    national_id = request.query_params.get('national_id')
+    bnk_code = request.query_params.get('bnk_code')
+    
+    # Count active filters
+    active_filters = sum([
+        bool(name),
+        bool(birth_date),
+        bool(familybook),
+        bool(passport),
+        bool(national_id),
+        bool(bnk_code)
+    ])
+    
+    # Require at least 2 filters for meaningful results
+    if active_filters < 2:
+        return Response({
+            "error": "Please provide at least 2 search criteria for accurate matching",
+            "hint": "Combine name with birth_date, familybook, passport, or national_id"
+        }, status=400)
+    
+    # If only name and bank_code, require more info
+    if active_filters == 2 and name and bnk_code and not any([birth_date, familybook, passport, national_id]):
+        return Response({
+            "error": "Name and bank code alone are insufficient. Please add birth_date, familybook, passport, or national_id",
+            "filters_provided": {"name": name, "bnk_code": bnk_code}
+        }, status=400)
+    
+    # Build query with AND logic (not OR)
+    filters = Q()
+    
+    # Strong identifiers - exact match
+    if national_id:
+        filters &= Q(ind_national_id__exact=normalize_id(national_id))
+    
+    if passport:
+        filters &= Q(ind_passport__iexact=normalize_id(passport))
+    
+    # Date filter
+    if birth_date:
+        if len(birth_date) == 4:  # Year only
+            filters &= Q(ind_birth_date__year=int(birth_date))
+        elif len(birth_date) == 7:  # Year-month
+            y, m = birth_date.split('-')
+            filters &= Q(ind_birth_date__year=int(y)) & Q(ind_birth_date__month=int(m))
+        else:  # Full date
+            filters &= Q(ind_birth_date=birth_date)
+    
+    # Family book with optional province
+    if familybook:
+        fb_normalized = normalize_id(familybook)
+        filters &= Q(ind_familybook__icontains=fb_normalized)
+        
+        if prov_code:
+            filters &= Q(ind_familybook_prov_code__iexact=prov_code.upper())
+    
+    # Bank code filter
+    if bnk_code:
+        filters &= Q(bnk_code=bnk_code.strip())
+    
+    # Name filter - only apply if other filters exist
+    if name and (birth_date or familybook or passport or national_id):
+        clean_name = clean_lao_text(name)
+        name_q = (
+            Q(ind_name__icontains=name) |
+            Q(ind_surname__icontains=name) |
+            Q(ind_lao_name__icontains=name) |
+            Q(ind_lao_surname__icontains=name)
+        )
+        filters &= name_q
+    
+    # Execute query
+    queryset = IndividualBankIbk.objects.filter(filters)
+    
+    # Get results with limit
+    records = queryset.values(
+        'ind_sys_id', 'lcic_id', 'ind_name', 'ind_surname',
+        'ind_lao_name', 'ind_lao_surname', 'ind_birth_date',
+        'ind_national_id', 'ind_passport', 'ind_familybook',
+        'ind_familybook_prov_code', 'ind_gender', 'bnk_code'
+    )[:1000]  # Reduced limit for better performance
+    
+    records_list = list(records)
+    
+    if len(records_list) == 0:
+        return Response({
+            "message": "No matching records found",
+            "query": request.query_params,
+            "suggestions_found": 0,
+            "suggestions": []
+        })
+    
+    if len(records_list) >= 1000:
+        return Response({
+            "warning": "Too many results (1000+). Please add more specific filters",
+            "hint": "Add birth_date, national_id, or passport for better results",
+            "count": len(records_list)
+        }, status=400)
+    
+    # Group candidates by matching criteria
+    merge_groups = []
+    processed_ids = set()
+    
+    for i, rec1 in enumerate(records_list):
+        if rec1['ind_sys_id'] in processed_ids:
+            continue
+            
+        group = [rec1]
+        processed_ids.add(rec1['ind_sys_id'])
+        
+        # Find all records that match this one
+        for rec2 in records_list[i+1:]:
+            if rec2['ind_sys_id'] in processed_ids:
+                continue
+            
+            # Calculate match strength
+            match_score = calculate_match_strength(rec1, rec2)
+            
+            # Require minimum match score of 3 for merge suggestion
+            if match_score >= 3:
+                group.append(rec2)
+                processed_ids.add(rec2['ind_sys_id'])
+        
+        # Only suggest groups with 2+ records and different LCIC IDs
+        if len(group) >= 2:
+            lcic_ids = set(r['lcic_id'] for r in group if r['lcic_id'])
+            if len(lcic_ids) > 1:  # Different LCIC IDs exist
+                merge_groups.append(group)
+    
+    # Format suggestions
+    suggestions = []
+    for group in merge_groups:
+        # Group by LCIC
+        lcic_groups = defaultdict(list)
+        for r in group:
+            lcic_groups[r['lcic_id'] or 'NO_LCIC'].append(r)
+        
+        # Determine master LCIC (most records or earliest)
+        master_lcic = max(lcic_groups.items(), key=lambda x: (
+            len(x[1]),  # Most records
+            x[0] != 'NO_LCIC',  # Prefer existing LCIC
+            -min(r['ind_sys_id'] for r in x[1])  # Earliest record
+        ))[0]
+        
+        # Calculate match quality
+        sample_rec = group[0]
+        match_criteria = []
+        if sample_rec.get('ind_national_id'):
+            match_criteria.append('national_id')
+        if sample_rec.get('ind_passport'):
+            match_criteria.append('passport')
+        if sample_rec.get('ind_familybook'):
+            match_criteria.append('familybook')
+        if sample_rec.get('ind_birth_date'):
+            match_criteria.append('birth_date')
+        
+        suggestions.append({
+            "suggested_master_lcic": master_lcic,
+            "match_quality": "HIGH" if len(match_criteria) >= 3 else "MEDIUM",
+            "match_criteria": match_criteria,
+            "total_records": len(group),
+            "different_lcic_count": len(lcic_groups),
+            "birth_date": str(sample_rec['ind_birth_date']) if sample_rec['ind_birth_date'] else None,
+            "familybook": sample_rec['ind_familybook'],
+            "prov_code": sample_rec['ind_familybook_prov_code'],
+            "national_id": sample_rec['ind_national_id'],
+            "passport": sample_rec['ind_passport'],
+            "name_variants": list({
+                f"{r['ind_name'] or ''} {r['ind_surname'] or ''}".strip()
+                for r in group if r['ind_name']
+            })[:5],  # Limit variants
+            "lao_name_variants": list({
+                f"{r['ind_lao_name'] or ''} {r['ind_lao_surname'] or ''}".strip()
+                for r in group if r['ind_lao_name']
+            })[:5],  # Limit variants
+            "genders": list({r['ind_gender'] for r in group if r['ind_gender']}),
+            "lcic_groups": [
+                {
+                    "lcic_id": lcic,
+                    "count": len(recs),
+                    "bnk_codes": list({r['bnk_code'] for r in recs if r['bnk_code']}),
+                    "sample": [
+                        {
+                            "ind_sys_id": r['ind_sys_id'],
+                            "name": f"{r['ind_name'] or ''} {r['ind_surname'] or ''}".strip(),
+                            "lao_name": f"{r['ind_lao_name'] or ''} {r['ind_lao_surname'] or ''}".strip(),
+                            "gender": r['ind_gender'],
+                            "bnk_code": r['bnk_code']
+                        } for r in recs[:2]  # Only 2 samples per LCIC
+                    ]
+                }
+                for lcic, recs in sorted(lcic_groups.items(), key=lambda x: len(x[1]), reverse=True)
+            ]
+        })
+    
+    # Sort by match quality and record count
+    suggestions.sort(key=lambda x: (
+        x['match_quality'] == 'HIGH',
+        x['total_records']
+    ), reverse=True)
+    
+    return Response({
+        "query": request.query_params,
+        "filters_applied": active_filters,
+        "suggestions_found": len(suggestions),
+        "suggestions": suggestions[:20],  # Limit to top 20 suggestions
+        "total_matching_records": len(records_list),
+        "message": f"Found {len(suggestions)} potential merge groups from {len(records_list)} matching records"
+    })

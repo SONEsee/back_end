@@ -176,6 +176,8 @@ from .views import (
     ApproveEnterpriseMappingView,
     CustomerUpdateIDAPIView,
     CustomerUpdateSegmentAPIView,
+    TelecomReportAPIView,
+    suggest_merge_candidates,
     
 
     reject_borrower_loan_view,
@@ -545,6 +547,8 @@ urlpatterns = [
     path('utility-report/', UtilityReportAPIView.as_view(), name='credit-report-query'),
     path('edl-report/<str:customer_id>/', ElectricReportAPIView.as_view(), name='credit-report'),
     path('edl-report/', ElectricReportAPIView.as_view(), name='credit-report-query'),
+    path('telecom-report/<str:customer_id>/', TelecomReportAPIView.as_view(), name='telecom-report'),
+    path('telecom-report/', TelecomReportAPIView.as_view(), name='telecom-report-query'),
     
     # Dashboard LCIC 
     path('dashboard/bank-user/', BankUsersView.as_view(), name='bankuser'),
@@ -671,6 +675,8 @@ urlpatterns = [
     path('merges/history/', 
          views.list_all_merges, 
          name='list_all_merges'),
+    
+    path('merges/suggest-merge/', suggest_merge_candidates),
     
     #Create Customer With LCIC ID
     path('new/customer/create/',CompareJsonWithDBAPIView.as_view(), name="create_customer_with_lcic_id"),
