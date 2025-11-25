@@ -32120,7 +32120,512 @@ def get_collateral_status(request, collateral_id):
             'success': False,
             'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)    
-# views.py
+
+
+# views.py (ສະບັບສຸດທ້າຍ — ສະແດງຂໍ້ມູນລາຍລະອຽດທັນທີ!)
+from django.db import connection
+from django.core.paginator import Paginator
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+
+TABLE_NAME = '"lcicHome_companyinfomapping"'
+
+# ຟິວທີ່ຕ້ອງການສະແດງໃນລາຍລະອຽດ (ຕົງກັບ Model)
+DISPLAY_FIELDS = [
+    'com_sys_id', 
+    'mm_com_sys_id', 
+    'bnk_code', 
+    'customerid',
+    'com_enterprise_code', 
+    'com_tax_no', 
+    'com_name', 
+    'com_lao_name',
+    'com_registration_date', 
+    'com_registration_place_issue',
+    'com_lao_name_code', 
+    '"LCIC_code"',  # ຕົວພິມໃຫຍ່ ຕ້ອງໃສ່ quotes
+    'enterprise_code', 
+    'status',
+    'com_regulatory_capital', 
+    'com_regulatory_capital_unit'
+]
+
+# ສຳລັບ dict keys (ບໍ່ມີ quotes)
+FIELD_NAMES = [
+    'com_sys_id', 
+    'mm_com_sys_id', 
+    'bnk_code', 
+    'customerid',
+    'com_enterprise_code', 
+    'com_tax_no', 
+    'com_name', 
+    'com_lao_name',
+    'com_registration_date', 
+    'com_registration_place_issue',
+    'com_lao_name_code', 
+    'LCIC_code',  # ບໍ່ມີ quotes ໃນ dict
+    'enterprise_code', 
+    'status',
+    'com_regulatory_capital', 
+    'com_regulatory_capital_unit'
+]
+
+
+@api_view(['GET'])
+def group_enterprise_by_code(request):
+    """
+    ຈັດກຸ່ມພ້ອມສະແດງລາຍລະອຽດທັນທີ
+    Parameters:
+        - code: ct/ce/cl/clc/ctt
+        - page: ເລກໜ້າ (default: 1)
+        - limit: ຈຳນວນກຸ່ມຕໍ່ໜ້າ (default: 20)
+        - group_type: all/similar (default: all)
+    """
+    code = request.GET.get('code', 'ct').lower()
+    page = max(1, int(request.GET.get('page', 1)))
+    limit = min(100, max(1, int(request.GET.get('limit', 20))))
+    group_type = request.GET.get('group_type', 'all')
+
+    valid_codes = ['ct', 'ce', 'cl', 'clc', 'ctt']
+    if code not in valid_codes:
+        return Response({
+            "error": f"code ຕ້ອງເປັນ: {', '.join(valid_codes)}"
+        }, status=400)
+
+    # 1. ສ້າງ SQL ສຳລັບດຶງກຸ່ມ
+    group_sql = ""
+    
+    if code == 'ct':
+        # ຈັດກຸ່ມຕາມເລກພາສີ
+        group_sql = f"""
+            SELECT com_tax_no, COUNT(*), MIN(mm_com_sys_id)
+            FROM {TABLE_NAME}
+            WHERE com_tax_no IS NOT NULL AND TRIM(com_tax_no) != ''
+            GROUP BY com_tax_no 
+            HAVING COUNT(*) >= 2
+            ORDER BY COUNT(*) DESC
+        """
+    
+    elif code == 'ce':
+        # ຈັດກຸ່ມຕາມລະຫັດວິສາຫະກິດ
+        group_sql = f"""
+            SELECT com_enterprise_code, COUNT(*), MIN(mm_com_sys_id)
+            FROM {TABLE_NAME}
+            WHERE com_enterprise_code IS NOT NULL AND TRIM(com_enterprise_code) != ''
+            GROUP BY com_enterprise_code 
+            HAVING COUNT(*) >= 2
+            ORDER BY COUNT(*) DESC
+        """
+    
+    elif code == 'cl':
+        # ຈັດກຸ່ມຕາມຊື່ລາວ (exact match)
+        group_sql = f"""
+            SELECT com_lao_name, COUNT(*), MIN(mm_com_sys_id)
+            FROM {TABLE_NAME}
+            WHERE com_lao_name IS NOT NULL AND TRIM(com_lao_name) != ''
+            GROUP BY com_lao_name 
+            HAVING COUNT(*) >= 2
+            ORDER BY COUNT(*) DESC
+        """
+    
+    elif code == 'clc':
+        # ຈັດກຸ່ມຕາມຊື່ລາວທີ່ normalized
+        group_sql = f"""
+            WITH cleaned AS (
+                SELECT 
+                    mm_com_sys_id,
+                    com_lao_name,
+                    TRIM(REGEXP_REPLACE(
+                        REGEXP_REPLACE(LOWER(com_lao_name),
+                            '^(ທ້າວ|ທາວ|ນາງ|ນາຍ|ທ່ານ|ບໍລິສັດ|ຮ້ານ|ຈຳກັດ|ສຳນັກ|ສູນ|ສາຂາ)\\s*', '', 'g'
+                        ), '\\s+', '', 'g'
+                    )) AS clean_name
+                FROM {TABLE_NAME}
+                WHERE com_lao_name IS NOT NULL AND TRIM(com_lao_name) != ''
+            )
+            SELECT clean_name, COUNT(*), MIN(mm_com_sys_id)
+            FROM cleaned 
+            WHERE clean_name != ''
+            GROUP BY clean_name 
+            HAVING COUNT(*) >= 2
+            ORDER BY COUNT(*) DESC
+        """
+    
+    elif code == 'ctt':
+        # ຈັດກຸ່ມຕາມຄວາມຄ້າຍຄື > 50%
+        # ໝາຍເຫດ: ຕ້ອງເປີດ pg_trgm extension ກ່ອນ
+        group_sql = f"""
+            WITH similarity_pairs AS (
+                SELECT DISTINCT
+                    LEAST(a.com_sys_id, b.com_sys_id) as id1,
+                    GREATEST(a.com_sys_id, b.com_sys_id) as id2,
+                    GREATEST(
+                        CASE WHEN a.mm_com_sys_id = b.mm_com_sys_id 
+                             AND a.mm_com_sys_id IS NOT NULL THEN 1.0 ELSE 0 END,
+                        CASE WHEN a.com_enterprise_code = b.com_enterprise_code 
+                             AND TRIM(a.com_enterprise_code) != '' THEN 1.0 ELSE 0 END,
+                        CASE WHEN a.com_tax_no = b.com_tax_no 
+                             AND TRIM(a.com_tax_no) != '' THEN 1.0 ELSE 0 END,
+                        COALESCE(similarity(a.com_name, b.com_name), 0),
+                        COALESCE(similarity(a.com_lao_name, b.com_lao_name), 0)
+                    ) AS max_sim
+                FROM {TABLE_NAME} a
+                CROSS JOIN {TABLE_NAME} b
+                WHERE a.com_sys_id < b.com_sys_id
+                  AND (
+                    (a.mm_com_sys_id = b.mm_com_sys_id AND a.mm_com_sys_id IS NOT NULL)
+                    OR (a.com_enterprise_code = b.com_enterprise_code AND TRIM(a.com_enterprise_code) != '')
+                    OR (a.com_tax_no = b.com_tax_no AND TRIM(a.com_tax_no) != '')
+                    OR similarity(a.com_name, b.com_name) > 0.5
+                    OR similarity(a.com_lao_name, b.com_lao_name) > 0.5
+                  )
+            ),
+            grouped AS (
+                SELECT 
+                    id1 as com_sys_id,
+                    COUNT(*) + 1 as cnt,
+                    ROUND(AVG(max_sim)::numeric, 3) as avg_sim
+                FROM similarity_pairs
+                WHERE max_sim > 0.5
+                GROUP BY id1
+            )
+            SELECT 
+                'group_' || g.com_sys_id as group_key,
+                g.cnt,
+                c.mm_com_sys_id,
+                g.avg_sim
+            FROM grouped g
+            JOIN {TABLE_NAME} c ON g.com_sys_id = c.com_sys_id
+            ORDER BY g.cnt DESC, g.avg_sim DESC
+            LIMIT 500
+        """
+
+    try:
+        # ດຶງກຸ່ມ
+        with connection.cursor() as cursor:
+            cursor.execute(group_sql)
+            group_rows = cursor.fetchall()
+
+        # 2. ສຳລັບແຕ່ລະກຸ່ມ ດຶງຂໍ້ມູນລາຍລະອຽດທັນທີ
+        final_groups = []
+        fields_str = ", ".join(DISPLAY_FIELDS)
+
+        for idx, row in enumerate(group_rows):
+            matched_value = str(row[0] or "").strip()
+            count = row[1]
+            sample_mm_id = row[2]
+            
+            # ສຳລັບ ctt ມີ similarity score
+            similarity_score = None
+            if code == 'ctt' and len(row) > 3:
+                similarity_score = float(row[3])
+
+            # ສ້າງ SQL ດຶງລາຍລະອຽດຂອງກຸ່ມນີ້
+            if code == 'ct':
+                detail_sql = f"""
+                    SELECT {fields_str} 
+                    FROM {TABLE_NAME} 
+                    WHERE com_tax_no = %s 
+                    ORDER BY mm_com_sys_id, com_sys_id
+                """
+                params = [matched_value]
+            
+            elif code == 'ce':
+                detail_sql = f"""
+                    SELECT {fields_str} 
+                    FROM {TABLE_NAME} 
+                    WHERE com_enterprise_code = %s 
+                    ORDER BY mm_com_sys_id, com_sys_id
+                """
+                params = [matched_value]
+            
+            elif code == 'cl':
+                detail_sql = f"""
+                    SELECT {fields_str} 
+                    FROM {TABLE_NAME} 
+                    WHERE com_lao_name = %s 
+                    ORDER BY mm_com_sys_id, com_sys_id
+                """
+                params = [matched_value]
+            
+            elif code == 'clc':
+                detail_sql = f"""
+                    SELECT {fields_str} 
+                    FROM {TABLE_NAME}
+                    WHERE TRIM(REGEXP_REPLACE(
+                        REGEXP_REPLACE(LOWER(com_lao_name),
+                            '^(ທ້າວ|ທາວ|ນາງ|ນາຍ|ທ່ານ|ບໍລິສັດ|ຮ້ານ|ຈຳກັດ|ສຳນັກ|ສູນ|ສາຂາ)\\s*', '', 'g'
+                        ), '\\s+', '', 'g'
+                    )) = %s
+                    ORDER BY mm_com_sys_id, com_sys_id
+                """
+                params = [matched_value.lower()]
+            
+            elif code == 'ctt':
+                # ສຳລັບ ctt ຕ້ອງຫາທຸກຕົວທີ່ຄ້າຍກັບກຸ່ມນີ້
+                group_id = matched_value.replace('group_', '')
+                detail_sql = f"""
+                    WITH base AS (
+                        SELECT * FROM {TABLE_NAME} WHERE com_sys_id = %s
+                    ),
+                    similar_records AS (
+                        SELECT DISTINCT t.*
+                        FROM {TABLE_NAME} t, base b
+                        WHERE (
+                            (t.mm_com_sys_id = b.mm_com_sys_id AND t.mm_com_sys_id IS NOT NULL)
+                            OR (t.com_enterprise_code = b.com_enterprise_code AND TRIM(t.com_enterprise_code) != '')
+                            OR (t.com_tax_no = b.com_tax_no AND TRIM(t.com_tax_no) != '')
+                            OR similarity(t.com_name, b.com_name) > 0.5
+                            OR similarity(t.com_lao_name, b.com_lao_name) > 0.5
+                        )
+                    )
+                    SELECT {fields_str}
+                    FROM similar_records
+                    ORDER BY mm_com_sys_id, com_sys_id
+                """
+                params = [int(group_id)]
+
+            # ດຶງຂໍ້ມູນລາຍລະອຽດ
+            with connection.cursor() as cursor:
+                cursor.execute(detail_sql, params)
+                detail_rows = cursor.fetchall()
+
+            # ສ້າງ dict ສຳລັບແຕ່ລະ item
+            items = [dict(zip(FIELD_NAMES, r)) for r in detail_rows]
+
+            # ສ້າງກຸ່ມ
+            group_data = {
+                "group_order": idx + 1,
+                "count": count,
+                "matched_value": matched_value,
+                "sample_mm_id": sample_mm_id,
+                "items": items  # ຂໍ້ມູນລາຍລະອຽດທັງໝົດ!
+            }
+            
+            # ເພີ່ມ similarity score ຖ້າເປັນ ctt
+            if similarity_score is not None:
+                group_data["similarity_score"] = similarity_score
+            
+            final_groups.append(group_data)
+
+        # ກັ່ນຕອງຕາມ group_type
+        if group_type == 'similar':
+            final_groups = [g for g in final_groups if g["count"] >= 2]
+
+        # Pagination
+        paginator = Paginator(final_groups, limit)
+        page_obj = paginator.get_page(page)
+
+        # ນັບສະຖິຕິ
+        with connection.cursor() as cursor:
+            cursor.execute(f"SELECT COUNT(*) FROM {TABLE_NAME}")
+            total_records = cursor.fetchone()[0]
+        
+        grouped_records = sum(g["count"] for g in final_groups)
+        ungrouped_records = total_records - grouped_records
+
+        return Response({
+            "code": code,
+            "code_description": {
+                "ct": "ຈັດກຸ່ມຕາມເລກທະບຽນພາສີ",
+                "ce": "ຈັດກຸ່ມຕາມລະຫັດວິສາຫະກິດ",
+                "cl": "ຈັດກຸ່ມຕາມຊື່ລາວ (exact)",
+                "clc": "ຈັດກຸ່ມຕາມຊື່ລາວ (normalized)",
+                "ctt": "ຈັດກຸ່ມຕາມຄວາມຄ້າຍຄື > 50%"
+            }.get(code, ""),
+            "group_type": group_type,
+            "summary": {
+                "total_groups": len(final_groups),
+                "total_records": total_records,
+                "grouped_records": grouped_records,
+                "ungrouped_records": ungrouped_records
+            },
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total_pages": paginator.num_pages,
+                "has_next": page_obj.has_next(),
+                "has_previous": page_obj.has_previous()
+            },
+            "display_fields": FIELD_NAMES,
+            "groups": list(page_obj)
+        })
+    
+    except Exception as e:
+        return Response({
+            "error": str(e),
+            "code": code,
+            "hint": "ຖ້າເປັນ ctt ໃຫ້ຮັນ: CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+        }, status=500)
+@api_view(['GET'])
+def group_detail(request):
+    """
+    ເບິ່ງລາຍລະອຽດຂອງກຸ່ມ
+    Parameters:
+        - code: ct/ce/cl/clc/ctt
+        - value: ຄ່າທີ່ຕ້ອງການຄົ້ນຫາ
+        - page: ເລກໜ້າ (default: 1)
+        - limit: ຈຳນວນຕໍ່ໜ້າ (default: 50, max: 100)
+    """
+    code = request.GET.get('code', 'ct').lower()
+    value = request.GET.get('value', '').strip()
+    page = max(1, int(request.GET.get('page', 1)))
+    limit = min(100, max(1, int(request.GET.get('limit', 50))))
+
+    if not value:
+        return Response({
+            "error": "ກະລຸນາສົ່ງ ?value=... ມາ"
+        }, status=400)
+
+    fields_str = ", ".join([f'"{f}"' if f == 'LCIC_code' else f for f in DISPLAY_FIELDS])
+    
+    sql = ""
+    params = []
+
+    if code == 'ct':
+        sql = f"""
+            SELECT {fields_str} 
+            FROM {TABLE_NAME} 
+            WHERE com_tax_no = %s 
+            ORDER BY mm_com_sys_id, com_sys_id
+        """
+        params = [value]
+    
+    elif code == 'ce':
+        sql = f"""
+            SELECT {fields_str} 
+            FROM {TABLE_NAME} 
+            WHERE com_enterprise_code = %s 
+            ORDER BY mm_com_sys_id, com_sys_id
+        """
+        params = [value]
+    
+    elif code == 'cl':
+        sql = f"""
+            SELECT {fields_str} 
+            FROM {TABLE_NAME} 
+            WHERE com_lao_name = %s 
+            ORDER BY mm_com_sys_id, com_sys_id
+        """
+        params = [value]
+    
+    elif code == 'clc':
+        # ຫາຂໍ້ມູນທີ່ຊື່ລາວ normalized ຄືກັນ
+        sql = f"""
+            WITH target_clean AS (
+                SELECT TRIM(REGEXP_REPLACE(
+                    REGEXP_REPLACE(LOWER(%s),
+                        '^(ທ້າວ|ທາວ|ນາງ|ນາຍ|ທ່ານ|ບໍລິສັດ|ຮ້ານ|ຈຳກັດ|ສຳນັກ|ສູນ|ສາຂາ)\\s*', '', 'g'
+                    ), '\\s+', '', 'g'
+                )) as clean_val
+            )
+            SELECT {fields_str}
+            FROM {TABLE_NAME}, target_clean
+            WHERE TRIM(REGEXP_REPLACE(
+                REGEXP_REPLACE(LOWER(com_lao_name),
+                    '^(ທ້າວ|ທາວ|ນາງ|ນາຍ|ທ່ານ|ບໍລິສັດ|ຮ້ານ|ຈຳກັດ|ສຳນັກ|ສູນ|ສາຂາ)\\s*', '', 'g'
+                ), '\\s+', '', 'g'
+            )) = target_clean.clean_val
+            ORDER BY mm_com_sys_id, com_sys_id
+        """
+        params = [value]
+    
+    elif code == 'ctt':
+        # ຫາຂໍ້ມູນທີ່ຄ້າຍຄືກັບ value
+        like_val = f"%{value}%"
+        sql = f"""
+            SELECT {fields_str}
+            FROM {TABLE_NAME}
+            WHERE com_tax_no ILIKE %s
+               OR com_enterprise_code ILIKE %s
+               OR com_name ILIKE %s
+               OR com_lao_name ILIKE %s
+            ORDER BY mm_com_sys_id, com_sys_id
+        """
+        params = [like_val] * 4
+    
+    else:
+        return Response({
+            "error": "code ບໍ່ຮອງຮັບ"
+        }, status=400)
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+
+        # ສ້າງ dict
+        items = []
+        for row in rows:
+            item = {}
+            for i, field in enumerate(DISPLAY_FIELDS):
+                item[field] = row[i]
+            items.append(item)
+
+        # Pagination
+        paginator = Paginator(items, limit)
+        page_obj = paginator.get_page(page)
+
+        return Response({
+            "code": code,
+            "matched_value": value,
+            "total_items": len(items),
+            "display_fields": DISPLAY_FIELDS,
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total_pages": paginator.num_pages,
+                "has_next": page_obj.has_next(),
+                "has_previous": page_obj.has_previous()
+            },
+            "items": list(page_obj)
+        })
+    
+    except Exception as e:
+        return Response({
+            "error": str(e),
+            "code": code,
+            "value": value
+        }, status=500)
+
+
+# ================================
+# API 3: ກວດສອບຊື່ column (ສຳລັບ debug)
+# ================================
+@api_view(['GET'])
+def check_table_info(request):
+    """ກວດສອບຂໍ້ມູນຕາຕະລາງ"""
+    
+    # ກວດສອບຊື່ column
+    sql = f"""
+        SELECT column_name, data_type, character_maximum_length
+        FROM information_schema.columns 
+        WHERE table_name = 'lcicHome_companyinfomapping'
+        ORDER BY ordinal_position
+    """
+    
+    with connection.cursor() as cursor:
+        cursor.execute(sql)
+        columns = cursor.fetchall()
+    
+    # ນັບຈຳນວນຂໍ້ມູນ
+    with connection.cursor() as cursor:
+        cursor.execute(f"SELECT COUNT(*) FROM {TABLE_NAME}")
+        total = cursor.fetchone()[0]
+    
+    return Response({
+        "table_name": "lcicHome_companyinfomapping",
+        "total_records": total,
+        "columns": [
+            {
+                "name": col[0], 
+                "type": col[1],
+                "max_length": col[2]
+            } for col in columns
+        ],
+        "display_fields_configured": DISPLAY_FIELDS
+    })
+
 from django.db.models import Q
 from rest_framework import generics
 from rest_framework.parsers import MultiPartParser, FormParser
