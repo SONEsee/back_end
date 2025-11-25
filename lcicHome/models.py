@@ -2689,7 +2689,7 @@ class CompanyInfoMapping(models.Model):
     enterprise_code = models.CharField(max_length=255, null=True, blank=True)
     status = models.CharField(max_length=255, null=True, blank=True)
     class Meta:
-            db_table = '"lcicHome_companyinfomapping"'  # ສຳຄັນທີ່ສຸດ!
+            db_table = '"lcicHome_companyinfomapping"'  
             managed = False
 class CompanyInfoMappingMemberSubmit(models.Model):
     com_sys_id = models.AutoField(primary_key=True) 

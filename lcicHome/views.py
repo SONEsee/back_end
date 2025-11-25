@@ -32161,7 +32161,7 @@ FIELD_NAMES = [
     'com_registration_date', 
     'com_registration_place_issue',
     'com_lao_name_code', 
-    'LCIC_code',  # ບໍ່ມີ quotes ໃນ dict
+    'LCIC_code',  
     'enterprise_code', 
     'status',
     'com_regulatory_capital', 
