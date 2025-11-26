@@ -186,7 +186,7 @@ from .views import (
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
                     ,RequestChargeSummaryAPIView,RequestChargeReportAllAPIView,UserLogoutView,UserAccessLogListView,ScoringIndividualInfoSearchView,CreditScoreAPIView,ScrAttTypeDescnewListCreateView, ScrAttTypeDescnewRetrieveUpdateDeleteView,ScrAttributeTablenewListCreateView
                     ,ScrAttributeTablenewRetrieveUpdateDeleteView,CreditScoreINDAPIView,ProductsByBankTypeAPIView,ToggleProductAccessAPIView
-                    ,MemberListWithActiveCountAPIView)
+                    ,MemberListWithActiveCountAPIView,ScoreFactorChargeView)
                     
 
 from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView,process_dispute_notification, process_multiple_disputes,process_multiple_disputescollateral
@@ -436,6 +436,8 @@ urlpatterns = [
     path('products-by-bank-type/', ProductsByBankTypeAPIView.as_view(), name='products-by-bank-type'),
     path('toggle-product-access/', ToggleProductAccessAPIView.as_view(), name='toggle-product-access'),
     path('members-with-count/', MemberListWithActiveCountAPIView.as_view()),    
+     path('charge-score-factors/', ScoreFactorChargeView.as_view(), name='charge_score_factors'),
+    
     path('api/individual-files/', IndividualFileListView.as_view(), name='individual-file-list'),
     path('api/borrwor-files/', BorrowerFileListView.as_view(), name='borrwor-file-list'),
     path('api/files-individual-collateral/', IndividualCollateralFileListView.as_view(), name='files-individual-collateral'),

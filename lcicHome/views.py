@@ -37555,3 +37555,133 @@ class MemberListWithActiveCountAPIView(APIView):
         
         return Response(members_data) 
 #
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import AllowAny
+from django.utils import timezone
+from django.db import transaction
+import traceback
+
+class ScoreFactorChargeView(APIView):
+    permission_classes = [AllowAny]
+
+    @transaction.atomic
+    def post(self, request):
+        try:
+            # รับข้อมูลจาก frontend
+            lcic_id = request.data.get('lcic_id', '').strip()
+            user_uid = request.data.get('user_uid')
+            bank_code = request.data.get('bank_code', '').strip()
+            
+            # ตรวจสอบข้อมูลที่จำเป็น
+            if not lcic_id:
+                return Response({
+                    'success': False,
+                    'error': 'lcic_id is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not user_uid:
+                return Response({
+                    'success': False,
+                    'error': 'user_uid is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not bank_code:
+                return Response({
+                    'success': False,
+                    'error': 'bank_code is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # ดึงข้อมูลธนาคาร
+            try:
+                bank_info = memberInfo.objects.get(bnk_code=bank_code)
+            except memberInfo.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'error': f'Bank not found with code: {bank_code}'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            # ⭐ ดึง ChargeMatrix จาก chg_sys_id = 21
+            try:
+                chargeType = ChargeMatrix.objects.get(chg_sys_id=21)
+                chg_code = chargeType.chg_code
+                chg_amount = chargeType.chg_amount
+                chg_unit = chargeType.chg_unit
+            except ChargeMatrix.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'error': 'Charge type not found (chg_sys_id=21)'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            now = timezone.now()
+            inquiry_month_charge = now.strftime('%d%m%Y')
+            sys_usr = f"{user_uid}-{bank_code}"
+
+            # สร้าง searchLog
+            search_log = searchLog.objects.create(
+                enterprise_ID='',
+                LCIC_ID=lcic_id,
+                LCIC_code=lcic_id,
+                bnk_code=bank_info.bnk_code,
+                bnk_type=bank_info.bnk_type,
+                branch='',
+                cus_ID='',
+                cusType='A1',
+                credit_type=chg_code,
+                inquiry_month=now.strftime('%Y-%m'),
+                com_tel='',
+                com_location='',
+                rec_loan_amount=0.0,
+                rec_loan_amount_currency='LAK',
+                rec_loan_purpose='',
+                rec_enquiry_type='1',
+                sys_usr=sys_usr
+            )
+
+            # สร้าง request_charge
+            charge = request_charge.objects.create(
+                bnk_code=bank_info.bnk_code,
+                bnk_type=bank_info.bnk_type,
+                chg_amount=chg_amount,
+                chg_code=chg_code,
+                status='pending',
+                rtp_code='1',
+                lon_purpose='',
+                chg_unit=chg_unit,
+                user_sys_id=sys_usr,
+                LCIC_code=lcic_id,
+                cusType='A1',
+                user_session_id='',
+                rec_reference_code='',
+                search_log=search_log
+            )
+            
+            # สร้าง rec_reference_code
+            charge.rec_reference_code = f"{chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
+            charge.save()
+
+            return Response({
+                'success': True,
+                'message': 'Charge created successfully',
+                'data': {
+                    'search_log_id': search_log.search_ID,
+                    'charge_id': charge.rec_charge_ID,
+                    'rec_reference_code': charge.rec_reference_code,
+                    'chg_code': chg_code,
+                    'chg_amount': float(chg_amount),
+                    'chg_unit': chg_unit,
+                    'lcic_id': lcic_id,
+                    'user_uid': user_uid,
+                    'bank_code': bank_code,
+                    'charged_at': now.isoformat()
+                }
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': 'Internal server error',
+                'details': str(e),
+                'traceback': traceback.format_exc()
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
