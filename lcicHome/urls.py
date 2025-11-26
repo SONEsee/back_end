@@ -177,8 +177,7 @@ from .views import (
     CustomerUpdateIDAPIView,
     CustomerUpdateSegmentAPIView,
     CheckAndCreateEnterpriseViewList,
-    
-
+    group_enterprise_by_code,
     reject_borrower_loan_view,
     CollateralNewListView,
     CheckAndCreateEnterpriseView
@@ -292,6 +291,8 @@ urlpatterns = [
    path('api/register/list/', views.get_register_customer_list, name='register_list'),
    path('api/company/info/<str:id_file>/', views.get_company_info_by_id_file, name='company_info'),
    path('api/approve-enterprise-mapping/', ApproveEnterpriseMappingView.as_view(), name='approve-enterprise-mapping'),
+   path('api/group-by-code/', group_enterprise_by_code, name='group-by-code'),
+   path('api/group/detail/', views.group_detail, name='group_detail'),
 
   
    
