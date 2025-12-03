@@ -136,6 +136,7 @@ DATABASES = {
          'connect_timeout': 30,  
             'options': '-c statement_timeout=600000'  
     },
+    
     # sql_server.pyodbc
     'utility': {
         'ENGINE': 'django.db.backends.postgresql',

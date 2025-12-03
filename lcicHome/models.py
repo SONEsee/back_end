@@ -1362,20 +1362,20 @@ class col_real_estates(models.Model):
     land_document_no = models.CharField(max_length=50)  # ໃບທີ່ດີນເລກທີ່
     land_out_time = models.CharField(max_length=50)  # ອອກຄັ້ງທີ່ດີນເລກທີ່
     land_area = models.CharField(max_length=255)  # ເນື້ອທີ
-    land_regis_date = models.CharField(null=True)  # ວັນທີອອກໃບຕທດິນ
+    land_regis_date = models.CharField(max_length=100,null=True)  # ວັນທີອອກໃບຕທດິນ
     land_type = models.CharField(max_length=255)  # ປະເພດດິນ
     land_unit = models.CharField(max_length=255)  # ມາດຕາສວນ
     land_insert_date = models.CharField(max_length=255)
     place_regist_no = models.CharField(max_length=255)  # ສະຖານທີ່ອອກໃບຕາດິນ
     owner_name = models.CharField(max_length=255)  # ອອກໃຫ້ແກ່
-    owner_birth_date = models.CharField()  # ວັນ.ເດືອນ.ປີເກີດ
+    owner_birth_date = models.CharField(max_length=100)  # ວັນ.ເດືອນ.ປີເກີດ
     owner_gender = models.CharField(max_length=255)
     owner_nationality = models.CharField(max_length=255)  # ສັນຊາດ
     owner_occupation = models.CharField(max_length=255)  # ອາຊີບ
     current_unit = models.CharField(max_length=50)  # ໜວ່ຍ ປະຈຸບັນ
     current_vilid = models.CharField(max_length=50)  # ລະຫັດບ້ານ ປະຈຸບັນ
     spouse_name = models.CharField(max_length=255, blank=True, null=True)  # ຊື່ຜົວ ຫຼື ເມຍ
-    spouse_birth_date = models.CharField(blank=True, null=True)  # ວັນ.ເດືອນ.ປີເກີດ (ຊື່ຜົວ ຫຼື ເມຍ)
+    spouse_birth_date = models.CharField(blank=True, null=True,max_length=100)  # ວັນ.ເດືອນ.ປີເກີດ (ຊື່ຜົວ ຫຼື ເມຍ)
     spouse_nationality = models.CharField(max_length=30, blank=True, null=True)  # ສັນຊາດ (ຊື່ຜົວ ຫຼື ເມຍ)
     spouse_occupation = models.CharField(max_length=255, blank=True, null=True)  # ອາຊີບ (ຊື່ຜົວ ຫຼື ເມຍ)
     land_acquisition = models.CharField(max_length=255)  # ການໄດ້ມາຂອງສິດນຳໃຊ້ດິນ
@@ -1385,8 +1385,8 @@ class col_real_estates(models.Model):
     owner_name_lao = models.CharField(max_length=255)
     owner_surname_lao = models.CharField(max_length=255)
     data_status = models.CharField(max_length=100, blank=True, null=True)
-    insert_date = models.CharField()
-    update_date = models.CharField()
+    insert_date = models.CharField(max_length=100)
+    update_date = models.CharField(max_length=100)
 
     # def __str__(self):
     #     return f"{self.col_provin} - {self.col_district} - {self.col_village}"
@@ -1423,8 +1423,8 @@ class col_money_mia (models.Model):  #ເອກະສານມີຄ່າ C2.2
     value = models.CharField(max_length=255)
     user_id = models.CharField(max_length=255)
     data_status = models.CharField(max_length=100, blank=True, null=True)
-    insert_date = models.CharField()
-    update_date = models.CharField()
+    insert_date = models.CharField(max_length=100)
+    update_date = models.CharField(max_length=100)
 
     def __str__(self):
         return f"{self.id} - {self.com_enterprise_code}"
@@ -1460,8 +1460,8 @@ class col_equipment_eqi (models.Model):  # ເຄື່ອງຈັກ ແລະ
     user_id = models.CharField(max_length=255)
     data_status = models.CharField(max_length=100, blank=True, null=True)
 
-    insert_date = models.DateField()
-    update_date = models.DateField()
+    insert_date = models.DateField(max_length=20)
+    update_date = models.DateField(max_length=20)
 
     def __str__(self):
         return f"{self.id} - {self.com_enterprise_code}"

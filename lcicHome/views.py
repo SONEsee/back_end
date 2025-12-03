@@ -37685,3 +37685,97 @@ class ScoreFactorChargeView(APIView):
                 'details': str(e),
                 'traceback': traceback.format_exc()
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+class CheckMemberProductAccessAPIView(APIView):
+    """
+    GET: ຕ້ອງສອບສິດການເຂົ້າເຖິງ Product ຂອງ Member ຕາມ bnk_code
+    """
+    
+    def get(self, request):
+        # ✅ ຮັບ bnk_code ຈາກ query parameter
+        bnk_code = request.query_params.get('bnk_code')
+        
+        if not bnk_code:
+            return Response(
+                {
+                    'success': False,
+                    'message': 'ກະລຸນາລະບຸ bnk_code',
+                    'has_access': False
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # ✅ ກວດສອບວ່າມີ member ນີ້ບໍ່
+            member = memberInfo.objects.filter(bnk_code=bnk_code).first()
+            
+            if not member:
+                return Response(
+                    {
+                        'success': False,
+                        'message': f'ບໍ່ພົບຂໍ້ມູນ Member ລະຫັດ: {bnk_code}',
+                        'has_access': False
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # ✅ ດຶງ active products ທັງໝົດຂອງ member ນີ້
+            active_products = MemberProductAccess.objects.filter(
+                bnk_code=bnk_code,
+                is_active=True
+            ).values_list('chg_sys_id', flat=True)  # ← ດຶງແຕ່ chg_sys_id
+            
+            # ✅ ແປງເປັນ list ຂອງ integers
+            available_chg_sys_ids = [int(chg_id) for chg_id in active_products if chg_id]
+            
+            # ✅ ດຶງລາຍລະອຽດ ChargeMatrix
+            charge_matrices = ChargeMatrix.objects.filter(
+                chg_sys_id__in=available_chg_sys_ids
+            )
+            
+            products_detail = []
+            for charge in charge_matrices:
+                products_detail.append({
+                    'chg_sys_id': charge.chg_sys_id,
+                    'chg_code': charge.chg_code,
+                    'chg_type': charge.chg_type,
+                    'chg_lao_type': charge.chg_lao_type,
+                    'chg_amount': charge.chg_amount,
+                    'chg_unit': charge.chg_unit,
+                })
+            
+            # ✅ ກຳນົດເງື່ອນໄຂຕາມຄວາມຍາວຂອງ bnk_code
+            bnk_code_length = len(bnk_code)
+            has_access = False
+            required_products = []
+            
+            if bnk_code_length == 2:
+                # ສຳລັບ bnk_code ຍາວ 2 ຕົວ → ຕ້ອງມີ chg_sys_id = 24 ຫຼື 25
+                required_products = [24, 25]
+                has_access = any(chg_id in available_chg_sys_ids for chg_id in required_products)
+                
+            elif bnk_code_length == 3:
+                # ສຳລັບ bnk_code ຍາວ 3 ຕົວ → ຕ້ອງມີ chg_sys_id = 22 ຫຼື 23
+                required_products = [22, 23]
+                has_access = any(chg_id in available_chg_sys_ids for chg_id in required_products)
+            
+            # ✅ ສົ່ງ response ກັບໄປ
+            return Response({
+                'success': True,
+                'has_access': has_access,
+                'bnk_code': bnk_code,
+                'required_chg_sys_ids': required_products,
+                'available_chg_sys_ids': available_chg_sys_ids,
+                'products_detail': products_detail,
+                'message': 'ມີສິດໃຊ້ງານ' if has_access else 'ກະລຸນາລົງທະບຽນ Product ກ່ອນ'
+            })
+            
+        except Exception as e:
+            return Response(
+                {
+                    'success': False,
+                    'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}',
+                    'has_access': False
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
