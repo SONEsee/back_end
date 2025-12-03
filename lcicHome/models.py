@@ -1362,20 +1362,20 @@ class col_real_estates(models.Model):
     land_document_no = models.CharField(max_length=50)  # ໃບທີ່ດີນເລກທີ່
     land_out_time = models.CharField(max_length=50)  # ອອກຄັ້ງທີ່ດີນເລກທີ່
     land_area = models.CharField(max_length=255)  # ເນື້ອທີ
-    land_regis_date = models.CharField(null=True)  # ວັນທີອອກໃບຕທດິນ
+    land_regis_date = models.CharField(max_length=100,null=True)  # ວັນທີອອກໃບຕທດິນ
     land_type = models.CharField(max_length=255)  # ປະເພດດິນ
     land_unit = models.CharField(max_length=255)  # ມາດຕາສວນ
     land_insert_date = models.CharField(max_length=255)
     place_regist_no = models.CharField(max_length=255)  # ສະຖານທີ່ອອກໃບຕາດິນ
     owner_name = models.CharField(max_length=255)  # ອອກໃຫ້ແກ່
-    owner_birth_date = models.CharField()  # ວັນ.ເດືອນ.ປີເກີດ
+    owner_birth_date = models.CharField(max_length=100)  # ວັນ.ເດືອນ.ປີເກີດ
     owner_gender = models.CharField(max_length=255)
     owner_nationality = models.CharField(max_length=255)  # ສັນຊາດ
     owner_occupation = models.CharField(max_length=255)  # ອາຊີບ
     current_unit = models.CharField(max_length=50)  # ໜວ່ຍ ປະຈຸບັນ
     current_vilid = models.CharField(max_length=50)  # ລະຫັດບ້ານ ປະຈຸບັນ
     spouse_name = models.CharField(max_length=255, blank=True, null=True)  # ຊື່ຜົວ ຫຼື ເມຍ
-    spouse_birth_date = models.CharField(blank=True, null=True)  # ວັນ.ເດືອນ.ປີເກີດ (ຊື່ຜົວ ຫຼື ເມຍ)
+    spouse_birth_date = models.CharField(blank=True, null=True,max_length=100)  # ວັນ.ເດືອນ.ປີເກີດ (ຊື່ຜົວ ຫຼື ເມຍ)
     spouse_nationality = models.CharField(max_length=30, blank=True, null=True)  # ສັນຊາດ (ຊື່ຜົວ ຫຼື ເມຍ)
     spouse_occupation = models.CharField(max_length=255, blank=True, null=True)  # ອາຊີບ (ຊື່ຜົວ ຫຼື ເມຍ)
     land_acquisition = models.CharField(max_length=255)  # ການໄດ້ມາຂອງສິດນຳໃຊ້ດິນ
@@ -1385,8 +1385,8 @@ class col_real_estates(models.Model):
     owner_name_lao = models.CharField(max_length=255)
     owner_surname_lao = models.CharField(max_length=255)
     data_status = models.CharField(max_length=100, blank=True, null=True)
-    insert_date = models.CharField()
-    update_date = models.CharField()
+    insert_date = models.CharField(max_length=100)
+    update_date = models.CharField(max_length=100)
 
     # def __str__(self):
     #     return f"{self.col_provin} - {self.col_district} - {self.col_village}"
@@ -1423,8 +1423,8 @@ class col_money_mia (models.Model):  #ເອກະສານມີຄ່າ C2.2
     value = models.CharField(max_length=255)
     user_id = models.CharField(max_length=255)
     data_status = models.CharField(max_length=100, blank=True, null=True)
-    insert_date = models.CharField()
-    update_date = models.CharField()
+    insert_date = models.CharField(max_length=100)
+    update_date = models.CharField(max_length=100)
 
     def __str__(self):
         return f"{self.id} - {self.com_enterprise_code}"
@@ -1460,8 +1460,8 @@ class col_equipment_eqi (models.Model):  # ເຄື່ອງຈັກ ແລະ
     user_id = models.CharField(max_length=255)
     data_status = models.CharField(max_length=100, blank=True, null=True)
 
-    insert_date = models.DateField()
-    update_date = models.DateField()
+    insert_date = models.DateField(max_length=20)
+    update_date = models.DateField(max_length=20)
 
     def __str__(self):
         return f"{self.id} - {self.com_enterprise_code}"
@@ -3107,100 +3107,6 @@ class scr_attribute_table_new(models.Model):
 
     def __str__(self):
         return f"{self.att_name} ({self.att_code})"
-
-class scr_atttype_desc_dy(models.Model):
-    """
-    ⭐ PARAMETER DEFINITION TABLE (Dynamic Scoring Parameters)
-    เก็บ fields เดิมไว้ + เพิ่ม fields ใหม่สำหรับ Dynamic Scoring
-    """
-    
-    # ========== EXISTING FIELDS (ไม่เปลี่ยนแปลง) ==========
-    id_desc = models.AutoField(primary_key=True) 
-    att_type = models.CharField(max_length=50, blank=False, null=False, unique=True)
-    att_type_desc = models.CharField(max_length=100, blank=True, null=True)
-    att_type_lao_desc = models.CharField(max_length=100, blank=True, null=True)
-    att_weight = models.IntegerField()
-    
-    # ========== NEW FIELDS (เพิ่มเข้ามา) ==========
-    
-    calculation_method = models.CharField(
-        max_length=20,
-        choices=[
-            ('simple', 'Simple Match - Direct code match'),
-            ('range', 'Range Match - Value falls in range'),
-            ('min_max', 'MIN/MAX - Get min or max from multiple loans'),
-            ('custom', 'Custom Logic - Special calculation')
-        ],
-        default='simple',
-        help_text="How to calculate score for this parameter"
-    )
-    
-    is_active = models.BooleanField(
-        default=True,
-        help_text="Enable or disable this parameter"
-    )
-    
-    display_order = models.IntegerField(
-        default=0,
-        help_text="Order to display in report (1, 2, 3...)"
-    )
-    
-    group_name = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        choices=[
-            ('Personal Info', 'Personal Info'),
-            ('Payment History', 'Payment History'),
-            ('Amount Owned', 'Amount Owned'),
-            ('Inquiries', 'Inquiries & Purpose'),
-            ('Collateral', 'Collateral')
-        ],
-        help_text="Group for dashboard display"
-    )
-    
-    data_source = models.CharField(
-        max_length=50,
-        blank=True,
-        null=True,
-        choices=[
-            ('customer', 'Customer Info'),
-            ('loan', 'Loan Summary'),
-            ('collateral', 'Collateral Summary'),
-            ('inquiry', 'Inquiry Data')
-        ],
-        help_text="Where to get the input value from"
-    )
-    
-    field_name = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        help_text="Field name in data source (e.g., 'age', 'civil_status')"
-    )
-    
-    description = models.TextField(
-        blank=True,
-        null=True,
-        help_text="Description of what this parameter measures"
-    )
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        ordering = ['display_order']
-        verbose_name = 'Scoring Parameter'
-        verbose_name_plural = 'Scoring Parameters'
-    
-    def __str__(self):
-        # ⭐ ใช้ field เดิม
-        return f"{self.att_type_desc} ({self.att_type})"
-    
-    @property
-    def att_name(self):
-        """Alias for backward compatibility"""
-        return self.att_type_desc
 
 class MemberProductAccess(models.Model):
     access_id = models.AutoField(primary_key=True)

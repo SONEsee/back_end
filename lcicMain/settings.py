@@ -136,6 +136,7 @@ DATABASES = {
          'connect_timeout': 30,  
             'options': '-c statement_timeout=600000'  
     },
+    
     # sql_server.pyodbc
     'utility': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -147,7 +148,7 @@ DATABASES = {
        
     },
     'ned_sql': {
-        'ENGINE': 'sql_server.pyodbc',
+        'ENGINE': 'mssql',
         'NAME': 'LCIC_Fingers_old',
         'USER': 'sa',
         'PASSWORD': 'Lcic@12345',
