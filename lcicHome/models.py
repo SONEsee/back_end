@@ -1951,7 +1951,7 @@ class EnterpriseMemberSubmit(models.Model):
     CancellationDate = models.DateTimeField(blank=True, null=True)
     InsertDate = models.DateTimeField(blank=True, null=True, auto_now_add=True)
     UpdateDate = models.DateTimeField(blank=True, null=True)
-    LCIC_code = models.CharField(max_length=255, blank=True, null=True, unique=True,  db_index=True )
+    LCIC_code = models.CharField(max_length=255, blank=True, null=True, unique=False,  db_index=True )
     
     class Meta:
         db_table = 'enterprisemember_submit'  
@@ -2688,7 +2688,9 @@ class CompanyInfoMapping(models.Model):
     LCIC_code = models.CharField(max_length=255, null=True, blank=True)
     enterprise_code = models.CharField(max_length=255, null=True, blank=True)
     status = models.CharField(max_length=255, null=True, blank=True)
-    
+    class Meta:
+            db_table = '"lcicHome_companyinfomapping"'  
+            managed = False
 class CompanyInfoMappingMemberSubmit(models.Model):
     com_sys_id = models.AutoField(primary_key=True) 
     segment = models.CharField(max_length=5, null=True, blank=True)
@@ -2719,6 +2721,237 @@ class CompanyInfoMappingMemberSubmit(models.Model):
     enterprise_code = models.CharField(max_length=255, null=True, blank=True)
     status = models.CharField(max_length=255, null=True, blank=True)
     id_file = models.CharField(max_length=50, null=True, blank=True)
+
+class EnterprisCodeMaping(models.Model):
+    com_sys_id = models.AutoField(primary_key=True) 
+    segment = models.CharField(max_length=5, null=True, blank=True)
+    mm_com_sys_id = models.IntegerField(null=True, blank=True)
+    bnk_code = models.CharField(max_length=10, null=True, blank=True)
+    branchcode = models.CharField(max_length=30, null=True, blank=True)
+    customerid = models.CharField(max_length=30, null=True, blank=True)
+    com_enterprise_code = models.CharField(max_length=30, null=True, blank=True)
+    com_registration_date = models.CharField(max_length=30, null=True, blank=True)
+    com_registration_place_issue = models.TextField(null=True, blank=True)
+    com_name = models.CharField(max_length=100, null=True, blank=True)
+    com_lao_name = models.TextField(null=True, blank=True)
+    com_tax_no = models.CharField(max_length=25, null=True, blank=True)
+    com_category = models.CharField(max_length=50, null=True, blank=True)
+    com_regulatory_capital = models.CharField(max_length=50, null=True, blank=True)
+    com_regulatory_capital_unit = models.CharField(max_length=10, null=True, blank=True)
+    com_insert_date = models.CharField(max_length=30, null=True, blank=True)
+    com_update_date = models.CharField(max_length=30, null=True, blank=True)
+    mm_action_date = models.CharField(max_length=30, null=True, blank=True)
+    mm_log = models.CharField(max_length=50, null=True, blank=True)
+    mm_comment = models.TextField(null=True, blank=True)
+    mm_by = models.CharField(max_length=50, null=True, blank=True)
+    blk_sys_id = models.IntegerField(null=True, blank=True)
+    mm_status = models.CharField(max_length=1, null=True, blank=True)
+    is_manual = models.CharField(max_length=1, null=True, blank=True)
+    com_lao_name_code = models.CharField(max_length=255, null=True, blank=True)
+    LCIC_code = models.CharField(max_length=255, null=True, blank=True)
+    enterprise_code = models.CharField(max_length=255, null=True, blank=True)
+    status = models.CharField(max_length=255, null=True, blank=True)
+    user = models.CharField(max_length=15 ,null=True ,blank=True)
+    main_map = models.CharField(max_length=15 ,null=True ,blank=True)
+    status_action = models.CharField(max_length=15 ,null=True ,blank=True)
+
+class LCICCodeMaping(models.Model):
+    com_sys_id = models.AutoField(primary_key=True) 
+    segment = models.CharField(max_length=5, null=True, blank=True)
+    mm_com_sys_id = models.IntegerField(null=True, blank=True)
+    bnk_code = models.CharField(max_length=10, null=True, blank=True)
+    branchcode = models.CharField(max_length=30, null=True, blank=True)
+    customerid = models.CharField(max_length=30, null=True, blank=True)
+    com_enterprise_code = models.CharField(max_length=30, null=True, blank=True)
+    com_registration_date = models.CharField(max_length=30, null=True, blank=True)
+    com_registration_place_issue = models.TextField(null=True, blank=True)
+    com_name = models.CharField(max_length=100, null=True, blank=True)
+    com_lao_name = models.TextField(null=True, blank=True)
+    com_tax_no = models.CharField(max_length=25, null=True, blank=True)
+    com_category = models.CharField(max_length=50, null=True, blank=True)
+    com_regulatory_capital = models.CharField(max_length=50, null=True, blank=True)
+    com_regulatory_capital_unit = models.CharField(max_length=10, null=True, blank=True)
+    com_insert_date = models.CharField(max_length=30, null=True, blank=True)
+    com_update_date = models.CharField(max_length=30, null=True, blank=True)
+    mm_action_date = models.CharField(max_length=30, null=True, blank=True)
+    mm_log = models.CharField(max_length=50, null=True, blank=True)
+    mm_comment = models.TextField(null=True, blank=True)
+    mm_by = models.CharField(max_length=50, null=True, blank=True)
+    blk_sys_id = models.IntegerField(null=True, blank=True)
+    mm_status = models.CharField(max_length=1, null=True, blank=True)
+    is_manual = models.CharField(max_length=1, null=True, blank=True)
+    com_lao_name_code = models.CharField(max_length=255, null=True, blank=True)
+    LCIC_code = models.CharField(max_length=255, null=True, blank=True)
+    enterprise_code = models.CharField(max_length=255, null=True, blank=True)
+    status = models.CharField(max_length=255, null=True, blank=True)
+    user = models.CharField(max_length=15 ,null=True ,blank=True)
+    main_map = models.CharField(max_length=15 ,null=True ,blank=True)
+    status_action = models.CharField(max_length=15 ,null=True ,blank=True)
+
+class TaxNoMaping(models.Model):
+    com_sys_id = models.AutoField(primary_key=True) 
+    segment = models.CharField(max_length=5, null=True, blank=True)
+    mm_com_sys_id = models.IntegerField(null=True, blank=True)
+    bnk_code = models.CharField(max_length=10, null=True, blank=True)
+    branchcode = models.CharField(max_length=30, null=True, blank=True)
+    customerid = models.CharField(max_length=30, null=True, blank=True)
+    com_enterprise_code = models.CharField(max_length=30, null=True, blank=True)
+    com_registration_date = models.CharField(max_length=30, null=True, blank=True)
+    com_registration_place_issue = models.TextField(null=True, blank=True)
+    com_name = models.CharField(max_length=100, null=True, blank=True)
+    com_lao_name = models.TextField(null=True, blank=True)
+    com_tax_no = models.CharField(max_length=25, null=True, blank=True)
+    com_category = models.CharField(max_length=50, null=True, blank=True)
+    com_regulatory_capital = models.CharField(max_length=50, null=True, blank=True)
+    com_regulatory_capital_unit = models.CharField(max_length=10, null=True, blank=True)
+    com_insert_date = models.CharField(max_length=30, null=True, blank=True)
+    com_update_date = models.CharField(max_length=30, null=True, blank=True)
+    mm_action_date = models.CharField(max_length=30, null=True, blank=True)
+    mm_log = models.CharField(max_length=50, null=True, blank=True)
+    mm_comment = models.TextField(null=True, blank=True)
+    mm_by = models.CharField(max_length=50, null=True, blank=True)
+    blk_sys_id = models.IntegerField(null=True, blank=True)
+    mm_status = models.CharField(max_length=1, null=True, blank=True)
+    is_manual = models.CharField(max_length=1, null=True, blank=True)
+    com_lao_name_code = models.CharField(max_length=255, null=True, blank=True)
+    LCIC_code = models.CharField(max_length=255, null=True, blank=True)
+    enterprise_code = models.CharField(max_length=255, null=True, blank=True)
+    status = models.CharField(max_length=255, null=True, blank=True)
+    user = models.CharField(max_length=15 ,null=True ,blank=True)
+    main_map = models.CharField(max_length=15 ,null=True ,blank=True)
+    status_action = models.CharField(max_length=15 ,null=True ,blank=True)
+
+class NameEnterpresEnMaping(models.Model):
+    com_sys_id = models.AutoField(primary_key=True) 
+    segment = models.CharField(max_length=5, null=True, blank=True)
+    mm_com_sys_id = models.IntegerField(null=True, blank=True)
+    bnk_code = models.CharField(max_length=10, null=True, blank=True)
+    branchcode = models.CharField(max_length=30, null=True, blank=True)
+    customerid = models.CharField(max_length=30, null=True, blank=True)
+    com_enterprise_code = models.CharField(max_length=30, null=True, blank=True)
+    com_registration_date = models.CharField(max_length=30, null=True, blank=True)
+    com_registration_place_issue = models.TextField(null=True, blank=True)
+    com_name = models.CharField(max_length=100, null=True, blank=True)
+    com_lao_name = models.TextField(null=True, blank=True)
+    com_tax_no = models.CharField(max_length=25, null=True, blank=True)
+    com_category = models.CharField(max_length=50, null=True, blank=True)
+    com_regulatory_capital = models.CharField(max_length=50, null=True, blank=True)
+    com_regulatory_capital_unit = models.CharField(max_length=10, null=True, blank=True)
+    com_insert_date = models.CharField(max_length=30, null=True, blank=True)
+    com_update_date = models.CharField(max_length=30, null=True, blank=True)
+    mm_action_date = models.CharField(max_length=30, null=True, blank=True)
+    mm_log = models.CharField(max_length=50, null=True, blank=True)
+    mm_comment = models.TextField(null=True, blank=True)
+    mm_by = models.CharField(max_length=50, null=True, blank=True)
+    blk_sys_id = models.IntegerField(null=True, blank=True)
+    mm_status = models.CharField(max_length=1, null=True, blank=True)
+    is_manual = models.CharField(max_length=1, null=True, blank=True)
+    com_lao_name_code = models.CharField(max_length=255, null=True, blank=True)
+    LCIC_code = models.CharField(max_length=255, null=True, blank=True)
+    enterprise_code = models.CharField(max_length=255, null=True, blank=True)
+    status = models.CharField(max_length=255, null=True, blank=True)
+    user = models.CharField(max_length=15 ,null=True ,blank=True)
+    main_map = models.CharField(max_length=15 ,null=True ,blank=True)
+    status_action = models.CharField(max_length=15 ,null=True ,blank=True)
+
+class NameEnterpresLaMaping(models.Model):
+    com_sys_id = models.AutoField(primary_key=True) 
+    segment = models.CharField(max_length=5, null=True, blank=True)
+    mm_com_sys_id = models.IntegerField(null=True, blank=True)
+    bnk_code = models.CharField(max_length=10, null=True, blank=True)
+    branchcode = models.CharField(max_length=30, null=True, blank=True)
+    customerid = models.CharField(max_length=30, null=True, blank=True)
+    com_enterprise_code = models.CharField(max_length=30, null=True, blank=True)
+    com_registration_date = models.CharField(max_length=30, null=True, blank=True)
+    com_registration_place_issue = models.TextField(null=True, blank=True)
+    com_name = models.CharField(max_length=100, null=True, blank=True)
+    com_lao_name = models.TextField(null=True, blank=True)
+    com_tax_no = models.CharField(max_length=25, null=True, blank=True)
+    com_category = models.CharField(max_length=50, null=True, blank=True)
+    com_regulatory_capital = models.CharField(max_length=50, null=True, blank=True)
+    com_regulatory_capital_unit = models.CharField(max_length=10, null=True, blank=True)
+    com_insert_date = models.CharField(max_length=30, null=True, blank=True)
+    com_update_date = models.CharField(max_length=30, null=True, blank=True)
+    mm_action_date = models.CharField(max_length=30, null=True, blank=True)
+    mm_log = models.CharField(max_length=50, null=True, blank=True)
+    mm_comment = models.TextField(null=True, blank=True)
+    mm_by = models.CharField(max_length=50, null=True, blank=True)
+    blk_sys_id = models.IntegerField(null=True, blank=True)
+    mm_status = models.CharField(max_length=1, null=True, blank=True)
+    is_manual = models.CharField(max_length=1, null=True, blank=True)
+    com_lao_name_code = models.CharField(max_length=255, null=True, blank=True)
+    LCIC_code = models.CharField(max_length=255, null=True, blank=True)
+    enterprise_code = models.CharField(max_length=255, null=True, blank=True)
+    status = models.CharField(max_length=255, null=True, blank=True)
+    user = models.CharField(max_length=15 ,null=True ,blank=True)
+    main_map = models.CharField(max_length=15 ,null=True ,blank=True)
+    status_action = models.CharField(max_length=15 ,null=True ,blank=True)
+    
+class NameLaCodeEnterpriseMaping(models.Model):
+    com_sys_id = models.AutoField(primary_key=True) 
+    segment = models.CharField(max_length=5, null=True, blank=True)
+    mm_com_sys_id = models.IntegerField(null=True, blank=True)
+    bnk_code = models.CharField(max_length=10, null=True, blank=True)
+    branchcode = models.CharField(max_length=30, null=True, blank=True)
+    customerid = models.CharField(max_length=30, null=True, blank=True)
+    com_enterprise_code = models.CharField(max_length=30, null=True, blank=True)
+    com_registration_date = models.CharField(max_length=30, null=True, blank=True)
+    com_registration_place_issue = models.TextField(null=True, blank=True)
+    com_name = models.CharField(max_length=100, null=True, blank=True)
+    com_lao_name = models.TextField(null=True, blank=True)
+    com_tax_no = models.CharField(max_length=25, null=True, blank=True)
+    com_category = models.CharField(max_length=50, null=True, blank=True)
+    com_regulatory_capital = models.CharField(max_length=50, null=True, blank=True)
+    com_regulatory_capital_unit = models.CharField(max_length=10, null=True, blank=True)
+    com_insert_date = models.CharField(max_length=30, null=True, blank=True)
+    com_update_date = models.CharField(max_length=30, null=True, blank=True)
+    mm_action_date = models.CharField(max_length=30, null=True, blank=True)
+    mm_log = models.CharField(max_length=50, null=True, blank=True)
+    mm_comment = models.TextField(null=True, blank=True)
+    mm_by = models.CharField(max_length=50, null=True, blank=True)
+    blk_sys_id = models.IntegerField(null=True, blank=True)
+    mm_status = models.CharField(max_length=1, null=True, blank=True)
+    is_manual = models.CharField(max_length=1, null=True, blank=True)
+    com_lao_name_code = models.CharField(max_length=255, null=True, blank=True)
+    LCIC_code = models.CharField(max_length=255, null=True, blank=True)
+    enterprise_code = models.CharField(max_length=255, null=True, blank=True)
+    status = models.CharField(max_length=255, null=True, blank=True)
+    user = models.CharField(max_length=15 ,null=True ,blank=True)
+    main_map = models.CharField(max_length=15 ,null=True ,blank=True)
+    status_action = models.CharField(max_length=15 ,null=True ,blank=True)
+    
+class EnterpriseLookLikeMaping(models.Model):
+    com_sys_id = models.AutoField(primary_key=True) 
+    segment = models.CharField(max_length=5, null=True, blank=True)
+    mm_com_sys_id = models.IntegerField(null=True, blank=True)
+    bnk_code = models.CharField(max_length=10, null=True, blank=True)
+    branchcode = models.CharField(max_length=30, null=True, blank=True)
+    customerid = models.CharField(max_length=30, null=True, blank=True)
+    com_enterprise_code = models.CharField(max_length=30, null=True, blank=True)
+    com_registration_date = models.CharField(max_length=30, null=True, blank=True)
+    com_registration_place_issue = models.TextField(null=True, blank=True)
+    com_name = models.CharField(max_length=100, null=True, blank=True)
+    com_lao_name = models.TextField(null=True, blank=True)
+    com_tax_no = models.CharField(max_length=25, null=True, blank=True)
+    com_category = models.CharField(max_length=50, null=True, blank=True)
+    com_regulatory_capital = models.CharField(max_length=50, null=True, blank=True)
+    com_regulatory_capital_unit = models.CharField(max_length=10, null=True, blank=True)
+    com_insert_date = models.CharField(max_length=30, null=True, blank=True)
+    com_update_date = models.CharField(max_length=30, null=True, blank=True)
+    mm_action_date = models.CharField(max_length=30, null=True, blank=True)
+    mm_log = models.CharField(max_length=50, null=True, blank=True)
+    mm_comment = models.TextField(null=True, blank=True)
+    mm_by = models.CharField(max_length=50, null=True, blank=True)
+    blk_sys_id = models.IntegerField(null=True, blank=True)
+    mm_status = models.CharField(max_length=1, null=True, blank=True)
+    is_manual = models.CharField(max_length=1, null=True, blank=True)
+    com_lao_name_code = models.CharField(max_length=255, null=True, blank=True)
+    LCIC_code = models.CharField(max_length=255, null=True, blank=True)
+    enterprise_code = models.CharField(max_length=255, null=True, blank=True)
+    status = models.CharField(max_length=255, null=True, blank=True)
+    user = models.CharField(max_length=15 ,null=True ,blank=True)
+    main_map = models.CharField(max_length=15 ,null=True ,blank=True)
+    status_action = models.CharField(max_length=15 ,null=True ,blank=True)
     
     
 class UserAccessLog(models.Model):
@@ -2875,5 +3108,112 @@ class scr_attribute_table_new(models.Model):
     def __str__(self):
         return f"{self.att_name} ({self.att_code})"
 
+class scr_atttype_desc_dy(models.Model):
+    """
+    ⭐ PARAMETER DEFINITION TABLE (Dynamic Scoring Parameters)
+    เก็บ fields เดิมไว้ + เพิ่ม fields ใหม่สำหรับ Dynamic Scoring
+    """
+    
+    # ========== EXISTING FIELDS (ไม่เปลี่ยนแปลง) ==========
+    id_desc = models.AutoField(primary_key=True) 
+    att_type = models.CharField(max_length=50, blank=False, null=False, unique=True)
+    att_type_desc = models.CharField(max_length=100, blank=True, null=True)
+    att_type_lao_desc = models.CharField(max_length=100, blank=True, null=True)
+    att_weight = models.IntegerField()
+    
+    # ========== NEW FIELDS (เพิ่มเข้ามา) ==========
+    
+    calculation_method = models.CharField(
+        max_length=20,
+        choices=[
+            ('simple', 'Simple Match - Direct code match'),
+            ('range', 'Range Match - Value falls in range'),
+            ('min_max', 'MIN/MAX - Get min or max from multiple loans'),
+            ('custom', 'Custom Logic - Special calculation')
+        ],
+        default='simple',
+        help_text="How to calculate score for this parameter"
+    )
+    
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Enable or disable this parameter"
+    )
+    
+    display_order = models.IntegerField(
+        default=0,
+        help_text="Order to display in report (1, 2, 3...)"
+    )
+    
+    group_name = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        choices=[
+            ('Personal Info', 'Personal Info'),
+            ('Payment History', 'Payment History'),
+            ('Amount Owned', 'Amount Owned'),
+            ('Inquiries', 'Inquiries & Purpose'),
+            ('Collateral', 'Collateral')
+        ],
+        help_text="Group for dashboard display"
+    )
+    
+    data_source = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        choices=[
+            ('customer', 'Customer Info'),
+            ('loan', 'Loan Summary'),
+            ('collateral', 'Collateral Summary'),
+            ('inquiry', 'Inquiry Data')
+        ],
+        help_text="Where to get the input value from"
+    )
+    
+    field_name = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Field name in data source (e.g., 'age', 'civil_status')"
+    )
+    
+    description = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Description of what this parameter measures"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['display_order']
+        verbose_name = 'Scoring Parameter'
+        verbose_name_plural = 'Scoring Parameters'
+    
+    def __str__(self):
+        # ⭐ ใช้ field เดิม
+        return f"{self.att_type_desc} ({self.att_type})"
+    
+    @property
+    def att_name(self):
+        """Alias for backward compatibility"""
+        return self.att_type_desc
 
-
+class MemberProductAccess(models.Model):
+    access_id = models.AutoField(primary_key=True)
+    bnk_code = models.CharField(max_length=10)
+    chg_sys_id = models.CharField(max_length=5, blank=False, null=False)  # เก็บแค่ ID ไม่ใช้ FK
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)  
+    updated_at = models.DateTimeField(auto_now=True)      
+    
+    class Meta:
+        unique_together = ['bnk_code', 'chg_sys_id']
+        ordering = ['-created_at']
+        verbose_name_plural = 'Member Product Accesses'
+    
+    def __str__(self):
+        return f"{self.bnk_code} - Product ID: {self.chg_sys_id}"

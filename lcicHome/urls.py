@@ -20,7 +20,7 @@ from .views import LoginView1
 from rest_framework.routers import DefaultRouter
 from .views import EnterpriseInfoViewSet
 from rest_framework.routers import DefaultRouter
-from .views import EnterpriseInfoViewSet
+from .views import EnterpriseInfoViewSet, GetIndividualAPIView
 from .views import Search
 from .views import EnterpriseInfoSearch
 from .views import EnterpriseInfoViewSet, InvestorInfoViewSet
@@ -178,16 +178,24 @@ from .views import (
     CustomerUpdateSegmentAPIView,
     TelecomReportAPIView,
     suggest_merge_candidates,
-    
+    auto_suggest_merge_all,
+    one_click_merge,
+    get_merge_group_details,
+    selective_merge,
+    auto_suggest_merge_by_filter,
 
+    CheckAndCreateEnterpriseViewList,
+    group_enterprise_by_code,
     reject_borrower_loan_view,
     CollateralNewListView,
-    CheckEnterpriseView
+    CheckAndCreateEnterpriseView
 )
 #tik
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
                     ,RequestChargeSummaryAPIView,RequestChargeReportAllAPIView,UserLogoutView,UserAccessLogListView,ScoringIndividualInfoSearchView,CreditScoreAPIView,ScrAttTypeDescnewListCreateView, ScrAttTypeDescnewRetrieveUpdateDeleteView,ScrAttributeTablenewListCreateView
-                    ,ScrAttributeTablenewRetrieveUpdateDeleteView,CreditScoreINDAPIView)
+                    ,ScrAttributeTablenewRetrieveUpdateDeleteView,CreditScoreINDAPIView,ProductsByBankTypeAPIView,ToggleProductAccessAPIView
+                    ,MemberListWithActiveCountAPIView)
+                    
 
 from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView,process_dispute_notification, process_multiple_disputes,process_multiple_disputescollateral
 from .views import upload_json,MemberInfoViewSet
@@ -285,11 +293,14 @@ urlpatterns = [
    path('render_pdf_view/<slug:object_id>', render_pdf_view, name='render_pdf_view'),
    path('progress/<slug:object_id>', views.progress, name='progress'),
    path('tax_invoice', views.tax, name='tax'),
-   path('check-enterprise/', CheckEnterpriseView.as_view(), name='check-enterprise'),
+   path('check-enterprise/', CheckAndCreateEnterpriseView.as_view(), name='check-enterprise'),
+   path('check-enterprise_list/', CheckAndCreateEnterpriseViewList.as_view(), name='check-enterprise-list'),
    path('api/company/create/', views.create_company_with_registration, name='create_company'),
    path('api/register/list/', views.get_register_customer_list, name='register_list'),
    path('api/company/info/<str:id_file>/', views.get_company_info_by_id_file, name='company_info'),
    path('api/approve-enterprise-mapping/', ApproveEnterpriseMappingView.as_view(), name='approve-enterprise-mapping'),
+   path('api/group-by-code/', group_enterprise_by_code, name='group-by-code'),
+   path('api/group/detail/', views.group_detail, name='group_detail'),
 
   
    
@@ -430,7 +441,9 @@ urlpatterns = [
     path('attributes/', ScrAttributeTablenewListCreateView.as_view(), name='attribute-list-create'),
     path('attributes/<int:att_id>/', ScrAttributeTablenewRetrieveUpdateDeleteView.as_view(), name='attribute-detail'),
     path('credit-score-ind/calculate/', CreditScoreINDAPIView.as_view(), name='credit_score_ind_calculate'),
-    
+    path('products-by-bank-type/', ProductsByBankTypeAPIView.as_view(), name='products-by-bank-type'),
+    path('toggle-product-access/', ToggleProductAccessAPIView.as_view(), name='toggle-product-access'),
+    path('members-with-count/', MemberListWithActiveCountAPIView.as_view()),    
     path('api/individual-files/', IndividualFileListView.as_view(), name='individual-file-list'),
     path('api/borrwor-files/', BorrowerFileListView.as_view(), name='borrwor-file-list'),
     path('api/files-individual-collateral/', IndividualCollateralFileListView.as_view(), name='files-individual-collateral'),
@@ -677,7 +690,8 @@ urlpatterns = [
          name='list_all_merges'),
     
     path('merges/suggest-merge/', suggest_merge_candidates),
-    
+    path('merges/auto-suggest-all/', auto_suggest_merge_all, name='auto-suggest-merge'), # Sai Get Phuak t tong merge all
+    path('merges/auto-suggest-by-filter/', auto_suggest_merge_by_filter, name='suggest-by-filter'),
     #Create Customer With LCIC ID
     path('new/customer/create/',CompareJsonWithDBAPIView.as_view(), name="create_customer_with_lcic_id"),
     path('customer/register/batch/', RegisterCustomerBatchAPIView.as_view(), name="register_customer_batch"),
@@ -708,20 +722,24 @@ urlpatterns = [
         # Get all uploaded customers (Admin)
     path('register/customer/all-uploads/', 
          CustomerAllUploadsAPIView.as_view(), 
-         name='customer-all-uploads'),
+         name='customer-all-uploads'), # New
     
     # Confirm customers with matching
     path('register/customer/confirm/', 
          CustomerConfirmAPIView.as_view(), 
-         name='customer-confirm'),
+         name='customer-confirm'), # New
     
     path('register/customer/update-id/', 
      CustomerUpdateIDAPIView.as_view(), 
-     name='customer-update-id'),
+     name='customer-update-id'), # New
     
     path('register/customer/update-segment/', 
      CustomerUpdateSegmentAPIView.as_view(), 
-     name='customer-update-segment'),
+     name='customer-update-segment'), # New
+
+     path('merges/one-click-merge/', one_click_merge, name='one-click-merge'), # New
+     path('merges/get-details/', get_merge_group_details), # New
+     path('merges/selective-merge/', selective_merge), # New
     
     #---------------------------------------------
     #----- END POINTS -----------------------------
@@ -749,7 +767,9 @@ urlpatterns = [
     path('api/investors/statistics/', views.get_investor_statistics_api, name='investor_statistics'),
     path('api/investors/enterprise/<str:enterprise_id>/', views.get_investors_by_enterprise_api, name='get_investors_by_enterprise'),
     path('api/investors/nationality/<str:nationality>/', views.get_investors_by_nationality_api, name='get_investors_by_nationality'),
+#   sssss
     path('match/', CompareJsonWithDBAPIView.as_view(), name='compare_json_with_db'),
+    path('creditscore/', GetIndividualAPIView.as_view(), name="individual_api"),
 
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 if settings.DEBUG:

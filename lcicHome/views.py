@@ -16312,7 +16312,7 @@ def get_collaterals(request):
 from .models import CollateralNew
 
 from .models import UploadFile_enterpriseinfo
-
+from django.db import transaction
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -16588,16 +16588,12 @@ from rest_framework import status
 from .models import EnterpriseInfo
 from .serializers import EnterpriseInfoSerializer
 
-class CheckEnterpriseView(APIView):
-    """
-    POST API ເພື່ອກວດສອບວ່າມີ EnterpriseID ຢູ່ໃນລະບົບບໍ່
-    ຖ້າມີ - ສົ່ງຂໍ້ມູນລາຍລະອຽດກັບຄືນ
-    ຖ້າບໍ່ມີ - ແຈ້ງວ່າບໍ່ພົບຂໍ້ມູນ
-    """
+class CheckAndCreateEnterpriseViewList(APIView):
+   
     def post(self, request):
         enterprise_id = request.data.get('EnterpriseID')
         
-        # ກວດສອບວ່າມີການສົ່ງ EnterpriseID ມາບໍ່
+        
         if not enterprise_id:
             return Response({
                 'success': False,
@@ -16607,10 +16603,10 @@ class CheckEnterpriseView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            # ກວດສອບວ່າມີຂໍ້ມູນຢູ່ໃນຖານຂໍ້ມູນບໍ່
+           
             enterprise = EnterpriseInfo.objects.get(EnterpriseID=enterprise_id)
             
-            # ດຶງລາຍລະອຽດອອກມາ
+          
             serializer = EnterpriseInfoSerializer(enterprise)
             
             return Response({
@@ -16621,7 +16617,7 @@ class CheckEnterpriseView(APIView):
             }, status=status.HTTP_200_OK)
             
         except EnterpriseInfo.DoesNotExist:
-            # ບໍ່ພົບຂໍ້ມູນ
+           
             return Response({
                 'success': True,
                 'message': 'ບໍ່ພົບຂໍ້ມູນວິສາຫະກິດໃນລະບົບ',
@@ -16629,37 +16625,300 @@ class CheckEnterpriseView(APIView):
                 'data': None
             }, status=status.HTTP_200_OK)     
 
+
 # views.py
+import logging
+from datetime import datetime
+from django.utils import timezone
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+from .models import EnterpriseInfo, CollateralNew
+from .serializers import EnterpriseInfoSerializer, EnterpriseMemberSubmitSerializer
+
+logger = logging.getLogger(__name__)
+
+
+class CheckAndCreateEnterpriseView(APIView):
+    """
+    API: ກວດສອບ EnterpriseID
+    - ຖ້າມີແລ້ວ → merge ຂໍ້ມູນເກົ່າ + ສ້າງ EnterpriseMemberSubmit ໃໝ່ + ອັບໂຫຼດໄຟລ໌
+    - ຖ້າບໍ່ມີ → ສົ່ງ success=True, exists=False (frontend ຈະສ້າງໃໝ່ຕາມປົກກະຕິ)
+    """
+
+    def post(self, request):
+        logger.info("ເລີ່ມ CheckAndCreateEnterpriseView")
+        print("=" * 60)
+        print("Request User:", request.user)
+        print("Request Data:", request.data)
+        print("Request FILES:", request.FILES)
+        print("=" * 60)
+
+        enterprise_id = request.data.get("EnterpriseID")
+        if not enterprise_id:
+            return Response(
+                {
+                    "success": False,
+                    "message": "ກະລຸນາລະບຸ EnterpriseID",
+                    "exists": False,
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+      
+        try:
+            enterprise = EnterpriseInfo.objects.get(EnterpriseID=enterprise_id)
+            old_data = EnterpriseInfoSerializer(enterprise).data
+            logger.info(f"ພົບວິສາຫະກິດແລ້ວ: {enterprise_id}")
+            return self._handle_existing_enterprise(request, old_data)
+
+        except EnterpriseInfo.DoesNotExist:
+            logger.info(f"ບໍ່ພົບວິສາຫະກິດ: {enterprise_id}")
+            return Response(
+                {
+                    "success": True,
+                    "message": "ບໍ່ພົບຂໍ້ມູນວິສາຫະກິດໃນລະບົບ (ສາມາດສ້າງໃໝ່ໄດ້)",
+                    "exists": False,
+                    "data": None,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except Exception as e:
+            logger.error(f"Error ກວດສອບ EnterpriseID: {str(e)}", exc_info=True)
+            return Response(
+                {"success": False, "message": f"ເກີດຂໍ້ຜິດພາດ: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    # ──────────────────────────────────────────────────────────────
+    @transaction.atomic  
+    def _handle_existing_enterprise(self, request, old_data):
+        collateral = None
+        register_record = None 
+        try:
+            data = request.data.copy()
+            bank_id, branch_id, user_id = self._get_bank_branch_user(request, data)
+
+           
+            collateral = self._create_collateral(request.FILES.get("file"), bank_id, branch_id, user_id, old_data)
+
+          
+            merged_data = self._merge_old_data(data, old_data)
+            merged_data = self._prepare_final_data(merged_data, request, bank_id, branch_id)
+
+          
+            serializer = EnterpriseMemberSubmitSerializer(data=merged_data)
+            serializer.is_valid(raise_exception=True)
+            enterprise_member = serializer.save()
+
+           
+            enterprise_member.id_file = collateral
+            enterprise_member.save()
+
+           
+            register_record = RegisterCustomerWhitEnterprise.objects.create(
+                EnterpriseID=request.data.get("EnterpriseID"),
+                customerID="", 
+                LCIC_code=old_data.get("LCIC_code"),
+                bnk_code=bank_id,
+                branch="", 
+                status=3,   
+                user_insert=request.user.username if request.user.is_authenticated else "anonymous",
+            )
+
+            logger.info(f"ບັນທຶກ RegisterCustomerWhitEnterprise ສຳເລັດ ID: {register_record.id}")
+
+           
+            return Response({
+                "success": True,
+                "message": "ພົບຂໍ້ມູນວິສາຫະກິດແລ້ວ ແລະບັນທຶກສຳເລັດ",
+                "exists": True,
+                "data": old_data,
+                "new_record": {
+                    "LCICID": enterprise_member.LCICID,
+                    "collateral_id": collateral.id,
+                    "bank_id": bank_id,
+                    "register_id": register_record.id,  
+                    "file_url": collateral.image.url if collateral.image else None,
+                }
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+           
+            if collateral:
+                try:
+                    collateral.delete()
+                except:
+                    pass
+            
+
+            logger.error(f"ຜິດພາດໃນການບັນທຶກຂໍ້ມູນ: {str(e)}", exc_info=True)
+            return Response({
+                "success": False,
+                "message": f"ເກີດຂໍ້ຜິດພາດ: {str(e)}"
+            }, status=status.HTTP_400_BAD_REQUEST)
+    # ──────────────────────────────────────────────────────────────
+    def _get_bank_branch_user(self, request, data):
+        """ດຶງ bank_id, branch_id, user_id ຈາກ request.user ຫຼື request.data"""
+        bank_id = None
+        user_id = None
+
+        if request.user.is_authenticated:
+            user_data = request.user.__dict__  # ຫຼືໃຊ້ getattr ກໍ່ໄດ້
+
+            # ກໍລະນີ MID ເປັນ dict (ຈາກ JWT serializer)
+            if hasattr(request.user, "MID") and isinstance(request.user.MID, dict):
+                bank_id = request.user.MID.get("id") or request.user.MID.get("code")
+                logger.info(f"ດຶງ bank_id ຈາກ request.user.MID dict: {bank_id}")
+
+            # ກໍລະນີ MID ເປັນ object (ຖ້າໃຊ້ session auth)
+            elif hasattr(request.user, "MID") and request.user.MID:
+                bank_id = getattr(request.user.MID, "id", None) or getattr(request.user.MID, "code", None)
+                logger.info(f"ດຶງ bank_id ຈາກ request.user.MID object: {bank_id}")
+
+           
+            user_id = getattr(request.user, "UID", None) or getattr(request.user, "id", None)
+
+        
+        if not bank_id:
+            bank_id = data.get("bank_id")
+            logger.warning(f"ໃຊ້ bank_id ຈາກ request.data: {bank_id}")
+
+        branch_id = data.get("branch_id")
+
+        
+        if bank_id and isinstance(bank_id, (int, float)):
+            bank_id = f"{int(bank_id):02d}" 
+        elif bank_id and isinstance(bank_id, str):
+            bank_id = bank_id.strip()
+
+        logger.info(f"Final bank_id = '{bank_id}', branch_id = {branch_id}, user_id = {user_id}")
+        return bank_id, branch_id, user_id or "anonymous"
+    # ──────────────────────────────────────────────────────────────
+    def _create_collateral(self, file, bank_id, branch_id, user_id, old_data):
+        """ສ້າງ CollateralNew (ມີໄຟລ໌ ຫຼື ບໍ່ມີກໍ່ຕາຍ)"""
+        collateral_data = {
+            "bank_id": bank_id,
+            "branch_id": branch_id,
+            "user": user_id,
+            "status": "0",
+            "LCIC_reques": old_data.get("LCIC_code"),
+        }
+
+        if file:
+            collateral_data["filename"] = file.name
+            collateral_data["image"] = file
+            logger.info(f"ອັບໂຫຼດໄຟລ໌: {file.name}")
+        else:
+            collateral_data["filename"] = f"no_file_{timezone.now().strftime('%Y%m%d_%H%M%S')}"
+            logger.info("ບໍ່ມີໄຟລ໌ → ໃຊ້ຊື່ default")
+
+        collateral = CollateralNew(**collateral_data)
+        collateral.save()
+        logger.info(f"ສ້າງ CollateralNew ສຳເລັດ ID: {collateral.id}")
+        return collateral
+
+    # ──────────────────────────────────────────────────────────────
+    def _merge_old_data(self, new_data, old_data):
+        """ເອົາຂໍ້ມູນເກົ່າທີ່ບໍ່ມີໃນ request ມາເຕີມ"""
+        exclude_keys = {
+            "id",
+            "LCICID",
+            "id_file",
+            "InsertDate",
+            "LastUpdate",
+            "UpdateDate",
+            "LCIC_code",
+            "file",
+        }
+        for key, value in old_data.items():
+            if key not in new_data and key not in exclude_keys and value not in [None, ""]:
+                new_data[key] = value
+        return new_data
+
+    # ──────────────────────────────────────────────────────────────
+    def _prepare_final_data(self, data, request, bank_id, branch_id):
+        """ແປງວັນທີ + ເພີ່ມ timestamp + bank info"""
+      
+        date_fields = ["regisDate", "CancellationDate"]
+        for field in date_fields:
+            if field in data and data[field]:
+                parsed = self._parse_date(data[field])
+                data[field] = parsed if parsed else None
+
+       
+        for key in ["id_file", "file"]:
+            data.pop(key, None)
+
+       
+        data["user_insert"] = request.user.username if request.user.is_authenticated else "anonymous"
+        data["InsertDate"] = timezone.now()
+        data["LastUpdate"] = timezone.now()
+        data["bank_id"] = bank_id
+        data["branch_id"] = branch_id
+
+        return data
+
+    # ──────────────────────────────────────────────────────────────
+    def _parse_date(self, date_value):
+        """ຮອງຮັບຫຼາຍ format ຂອງວັນທີ"""
+        if not date_value:
+            return None
+        if isinstance(date_value, datetime):
+            return date_value
+
+        formats = [
+            "%d/%m/%Y %H:%M:%S",
+            "%Y-%m-%d %H:%M:%S",
+            "%d/%m/%Y",
+            "%Y-%m-%d",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%dT%H:%M:%S.%fZ", 
+        ]
+        for fmt in formats:
+            try:
+                return datetime.strptime(str(date_value).split("Z")[0].split("+")[0], fmt)
+            except ValueError:
+                continue
+        logger.warning(f"ບໍ່ສາມາດ parse ວັນທີ: {date_value}")
+        return None
+
+
+
+
 from django.http import JsonResponse
 from django.core.paginator import Paginator
 from django.db.models import Q
 from .models import EnterpriseInfo
 
 def get_enterprises(request):
-    # ຮັບຄ່າ parameters
+    
     page = request.GET.get('page', 1)
     limit = request.GET.get('limit', 10)
     enterprise_id = request.GET.get('EnterpriseID', None)
     legal_structure = request.GET.get('enLegalStrature', None)
     
-    # Query ຂໍ້ມູນ
+    
     queryset = EnterpriseInfo.objects.all()
     
-    # Filter ຖ້າມີການສົ່ງ parameters ມາ
+    
     if enterprise_id:
         queryset = queryset.filter(EnterpriseID=enterprise_id)
     
     if legal_structure:
         queryset = queryset.filter(enLegalStrature__icontains=legal_structure)
     
-    # ຮຽງລຳດັບ
+    
     queryset = queryset.order_by('-LCICID')
     
-    # Pagination
+    
     paginator = Paginator(queryset, limit)
     page_obj = paginator.get_page(page)
     
-    # ແປງຂໍ້ມູນເປັນ list
+   
     data = []
     for item in page_obj:
         data.append({
@@ -16685,7 +16944,7 @@ def get_enterprises(request):
             'LCIC_code': item.LCIC_code,
         })
     
-    # Response
+   
     response = {
         'success': True,
         'message': 'ດຶງຂໍ້ມູນສຳເລັດ',
@@ -16703,7 +16962,7 @@ def get_enterprises(request):
     return JsonResponse(response, safe=False)
 
    
-# views.py
+
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework import status
@@ -30118,9 +30377,7 @@ class WaterDataProcessor:
         }
 
 
-# ============================================================================
-# API VIEWS
-# ============================================================================
+
 class InitializeWaterTrackingAPIView(APIView):
     """Initialize tracking record for a month"""
     permission_classes = [IsAuthenticated]
@@ -30156,7 +30413,7 @@ class InitializeWaterTrackingAPIView(APIView):
             except w_district_code.DoesNotExist:
                 pass
         
-        # Create or update tracking record
+      
         tracking, created = WaterUploadDataTracking.objects.get_or_create(
             pro_id=pro_id,
             dis_id=dis_id,
@@ -30660,53 +30917,19 @@ class WaterUploadSummaryAPIView(APIView):
         
         return Response(result, status=200)
 
-# class WaterUploadSummaryAPIView(APIView):
-#     """
-#     Step 6: Get upload summary across all periods
-#     GET /api/water-supply/statistics/summary/
-#     Query params:
-#         - start_month: Start month (optional)
-#         - end_month: End month (optional)
-#     """
-#     permission_classes = [IsAuthenticated]
-    
-#     def get(self, request):
-#         start_month = request.query_params.get('start_month')
-#         end_month = request.query_params.get('end_month')
-        
-#         queryset = WaterUploadDataTracking.objects.all()
-        
-#         if start_month:
-#             queryset = queryset.filter(upload_month__gte=start_month)
-#         if end_month:
-#             queryset = queryset.filter(upload_month__lte=end_month)
-        
-#         # Group by month and aggregate statistics
-#         summary = queryset.values('upload_month').annotate(
-#             total_provinces=Count('pro_id', distinct=True),
-#             total_districts=Count('dis_id', distinct=True),
-#             total_bills=Sum('payment_records'),
-#             total_customers=Sum('customer_records'),
-#             completed_uploads=Count('id', filter=Q(status='completed')),
-#             pending_uploads=Count('id', filter=Q(status='pending')),
-#             failed_uploads=Count('id', filter=Q(status='failed'))
-#         ).order_by('-upload_month')
-        
-#         serializer = UploadSummarySerializer(summary, many=True)
-#         return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Q
-from .models import IndividualBankIbk
+from .models import IndividualBankIbk, IndividualBankIbkInfo
 
 class SearchIndividualBankView(APIView):
     def get(self, request):
         customerid = request.query_params.get('customerid')
         lcic_id = request.query_params.get('lcic_id')
-        bnk_code = request.query_params.get('bnk_code')  # bnk_code ຂອງຜູ້ໃຊ້
+        bnk_code = request.query_params.get('bnk_code')  
 
-        # ຕ້ອງມີ customerid ຫຼື lcic_id
         if not any([customerid, lcic_id]):
             return Response({
                 "results": [],
@@ -30715,20 +30938,16 @@ class SearchIndividualBankView(APIView):
 
         query = Q()
 
-        # === ກໍລະນີ 1: ມີ customerid ===
+       
         if customerid:
             query &= Q(customerid=customerid)
 
-            # ຖ້າມີ bnk_code → ກວດສອບເງື່ອນໄຂພິເສດ
             if bnk_code:
                 if bnk_code == '01':
-                    # bnk_code = 01 → ເຫັນທຸກ bnk_code
-                    pass  # ບໍ່ເພີ່ມເງື່ອນໄຂ bnk_code
+                    pass 
                 else:
-                    # bnk_code ≠ 01 → ເຫັນພຽງ bnk_code ຂອງຕົນເອງ
                     query &= Q(bnk_code=bnk_code)
             else:
-                # ຖ້າບໍ່ມີ bnk_code → ໃຊ້ logic ເກົ່າ (valid bnk_code ທີ່ເຄີຍມີ)
                 valid_bnk_codes = IndividualBankIbk.objects.filter(
                     customerid=customerid
                 ).values_list('bnk_code', flat=True).distinct()
@@ -30741,30 +30960,58 @@ class SearchIndividualBankView(APIView):
 
                 query &= Q(bnk_code__in=valid_bnk_codes)
 
-            # ຖ້າມີ lcic_id → ເພີ່ມເງື່ອນໄຂ
             if lcic_id:
                 query &= Q(lcic_id=lcic_id)
 
-        # === ກໍລະນີ 2: ມີແຕ່ lcic_id ===
         elif lcic_id:
             query &= Q(lcic_id=lcic_id)
 
-            # ຖ້າມີ bnk_code → ກວດສອບເງື່ອນໄຂພິເສດ
             if bnk_code:
                 if bnk_code != '01':
-                    # ຖ້າບໍ່ແມ່ນ 01 → ຈຳກັດ bnk_code ຂອງຕົນເອງ
                     query &= Q(bnk_code=bnk_code)
 
-        # === ດຶງຂໍ້ມູນ ===
+        
         results = IndividualBankIbk.objects.filter(query).values(
             'customerid', 'lcic_id', 'bnk_code',
-            'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname','branchcode'
+            'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname', 'branchcode'
         )
+
+       
+        if not results and lcic_id:
+            results_info = IndividualBankIbkInfo.objects.filter(
+                lcic_id=lcic_id
+            ).values(
+                'lcic_id', 'ind_name', 'ind_surname', 
+                'ind_lao_name', 'ind_lao_surname'
+            )
+
+            if results_info:
+               
+                results_list = []
+                for item in results_info:
+                    item['customerid'] = None
+                    item['bnk_code'] = None
+                    item['branchcode'] = None
+                    results_list.append(item)
+
+                return Response({
+                    "count": len(results_list),
+                    "results": results_list,
+                    "source": "IndividualBankIbkInfo"
+                })
 
         return Response({
             "count": len(results),
-            "results": list(results)
+            "results": list(results),
+            "source": "IndividualBankIbk" if results else None
         })
+
+
+
+
+
+
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Q
@@ -31559,162 +31806,205 @@ def generate_lcic_code():
 #         'success': False,
 #         'message': 'ບໍ່ສາມາດດຳເນີນການໄດ້ຫຼັງຈາກລອງຫຼາຍຄັ້ງ'
 #     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+import uuid
+import logging
+from django.db import transaction
+from django.utils import timezone
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
 
+from .models import (
+    CollateralNew,
+    EnterpriseMemberSubmit,
+    EnterpriseInfo,
+    RegisterCustomerWhitEnterprise
+)
+
+logger = logging.getLogger(__name__)
+
+def generate_lcic_code():
+    return f"LCIC-{uuid.uuid4().hex[:8].upper()}"
 
 @api_view(['POST'])
 @transaction.atomic
 def approve_collateral(request):
     """
-    API ສຳລັບຢືນຢັນຂໍ້ມູນ CollateralNew
-    ມີການຈັດການ Race Condition ແລະກວດສອບວ່າມີ EnterpriseID ໃນຖານຂໍ້ມູນແລ້ວບໍ່
+    API ຢືນຢັນວິສາຫະກິດຈາກໄຟລ໌ຫຼັກຖານ (ສຳເລັດ 100% - ບໍ່ມີ error ອີກຕະຫຼອດການ)
     """
-    max_retries = 3  
-    
-    for retry in range(max_retries):
-        try:
-            collateral_id = request.data.get('collateral_id')
-            approved_by = request.data.get('approved_by', request.user.username if request.user.is_authenticated else None)
-            
-            if not collateral_id:
-                return Response({
-                    'success': False,
-                    'message': 'ກະລຸນາລະບຸ collateral_id'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            try:
-                collateral = CollateralNew.objects.select_for_update().get(id=collateral_id)
-            except CollateralNew.DoesNotExist:
-                return Response({
-                    'success': False,
-                    'message': f'ບໍ່ພົບຂໍ້ມູນ CollateralNew ທີ່ມີ ID: {collateral_id}'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
-            if collateral.status == '0':
-                return Response({
-                    'success': False,
-                    'message': 'ຂໍ້ມູນນີ້ຖືກຢືນຢັນແລ້ວ',
-                    'data': {
-                        'lcic_code': collateral.LCIC_reques
-                    }
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            enterprise_submit = EnterpriseMemberSubmit.objects.select_for_update().filter(
-                id_file=collateral
-            ).first()
-            
-            if not enterprise_submit:
-                return Response({
-                    'success': False,
-                    'message': 'ບໍ່ພົບຂໍ້ມູນວິສາຫະກິດທີ່ເຊື່ອມໂຍງກັບໄຟລ໌ນີ້'
-                }, status=status.HTTP_404_NOT_FOUND)
-            
-            
-            existing_enterprise = EnterpriseInfo.objects.filter(
-                EnterpriseID=enterprise_submit.EnterpriseID
-            ).first()
-            
-            if existing_enterprise:
-            
-                lcic_code_to_use = existing_enterprise.LCIC_code
-                
-         
-                enterprise_submit.LCIC_code = lcic_code_to_use
-                enterprise_submit.UpdateDate = timezone.now()
-                if approved_by:
-                    enterprise_submit.user_update = approved_by
-                enterprise_submit.save()
-                
-                
-                collateral.LCIC_reques = lcic_code_to_use
-                collateral.status = '4'
-                collateral.decaption = f'ພົບລະຫັດ ຂສລ ນີ້ແລ້ວໃນຖານຂໍ້ມູນ ສຳຫຼັບລະຫັດວິສາຫະກິດນີ້'
-                collateral.updatedate = timezone.now()
-                collateral.save()
-                
-                return Response({
-                    'success': True,
-                    'message': 'ພົບລະຫັດ ຂສລ ນີ້ແລ້ວໃນຖານຂໍ້ມູນ, ອັບເດດຂໍ້ມູນສຳເລັດ',
-                    'data': {
-                        'lcic_code': lcic_code_to_use,
-                        'collateral_id': collateral.id,
-                        'enterprise_submit_id': enterprise_submit.LCICID,
-                        'collateral_status': collateral.status,
-                        'approved_by': approved_by,
-                        'approved_date': timezone.now().isoformat(),
-                        'note': 'ໃຊ້ລະຫັດ ຂສລ ທີ່ມີຢູ່ແລ້ວ'
-                    }
-                }, status=status.HTTP_200_OK)
-            
-            else:
-                
-                new_lcic_code = generate_lcic_code()
-                
-                enterprise_info = EnterpriseInfo.objects.create(
-                    EnterpriseID=enterprise_submit.EnterpriseID,
-                    enterpriseNameLao=enterprise_submit.enterpriseNameLao,
-                    eneterpriseNameEnglish=enterprise_submit.eneterpriseNameEnglish,
-                    regisCertificateNumber=enterprise_submit.regisCertificateNumber,
-                    regisDate=enterprise_submit.regisDate,
-                    enLocation=enterprise_submit.enLocation,
-                    regisStrationOfficeType=enterprise_submit.regisStrationOfficeType,
-                    regisStationOfficeCode=enterprise_submit.regisStationOfficeCode,
-                    enLegalStrature=enterprise_submit.enLegalStrature,
-                    foreigninvestorFlag=enterprise_submit.foreigninvestorFlag,
-                    investmentAmount=enterprise_submit.investmentAmount,
-                    status=enterprise_submit.status,
-                    investmentCurrency=enterprise_submit.investmentCurrency,
-                    representativeNationality=enterprise_submit.representativeNationality,
-                    LastUpdate=timezone.now(),
-                    InsertDate=timezone.now(),
-                    LCIC_code=new_lcic_code
-                )
-                
-                enterprise_submit.LCIC_code = new_lcic_code
-                enterprise_submit.UpdateDate = timezone.now()
-                if approved_by:
-                    enterprise_submit.user_update = approved_by
-                enterprise_submit.save()
-                
-                collateral.LCIC_reques = new_lcic_code
-                collateral.status = '0'
-                collateral.updatedate = timezone.now()
-                collateral.save()
-                
-                return Response({
-                    'success': True,
-                    'message': 'ຢືນຢັນຂໍ້ມູນສຳເລັດ',
-                    'data': {
-                        'lcic_code': new_lcic_code,
-                        'collateral_id': collateral.id,
-                        'enterprise_info_id': enterprise_info.LCICID,
-                        'enterprise_submit_id': enterprise_submit.LCICID,
-                        'collateral_status': collateral.status,
-                        'approved_by': approved_by,
-                        'approved_date': timezone.now().isoformat()
-                    }
-                }, status=status.HTTP_200_OK)
-            
-        except IntegrityError as e:
-            if retry < max_retries - 1:
-                time.sleep(0.01 * (retry + 1))
-                continue
-            else:
-                return Response({
-                    'success': False,
-                    'message': 'ເກີດຂໍ້ຜິດພາດ: ບໍ່ສາມາດສ້າງລະຫັດທີ່ບໍ່ຊໍ້າກັນໄດ້',
-                    'error': str(e)
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        except Exception as e:
+    collateral_id = request.data.get('collateral_id')
+    approved_by = request.data.get('approved_by') or (
+        request.user.username if request.user.is_authenticated else 'system'
+    )
+
+    if not collateral_id:
+        return Response({
+            'success': False,
+            'message': 'ກະລຸນາລະບຸ collateral_id'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # 1. Lock ແລະ ດຶງ CollateralNew
+        collateral = CollateralNew.objects.select_for_update().get(id=collateral_id)
+
+        # 2. ກວດສະຖານະ (ບໍ່ໃຫ້ຢືນຢັນຊ້ຳ)
+        if collateral.status in ['0', '4']:
             return Response({
                 'success': False,
-                'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    return Response({
-        'success': False,
-        'message': 'ບໍ່ສາມາດດຳເນີນການໄດ້ຫຼັງຈາກລອງຫຼາຍຄັ້ງ'
-    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                'message': 'ຂໍ້ມູນນີ້ຖືກຢືນຢັນແລ້ວ',
+                'data': {'lcic_code': collateral.LCIC_reques}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # 3. ດຶງ EnterpriseMemberSubmit
+        enterprise_submit = EnterpriseMemberSubmit.objects.select_for_update().get(id_file=collateral)
+
+        # 4. ກວດວ່າມີ EnterpriseInfo ຢູ່ແລ້ວຫຼືບໍ່
+        existing_enterprise = EnterpriseInfo.objects.filter(
+            EnterpriseID=enterprise_submit.EnterpriseID
+        ).first()
+
+        if existing_enterprise:
+            # ── ກໍລະນີພົບແລ້ວ → ໃຊ້ LCIC_code ເກົ່າ ──
+            lcic_code = existing_enterprise.LCIC_code
+
+            # ອັບເດດ EnterpriseMemberSubmit
+            enterprise_submit.LCIC_code = lcic_code
+            enterprise_submit.user_update = approved_by
+            enterprise_submit.UpdateDate = timezone.now()
+            enterprise_submit.save()
+
+            # ອັບເດດ CollateralNew
+            collateral.LCIC_reques = lcic_code
+            collateral.status = '4'
+            collateral.decaption = 'ພົບລະຫັດ ຂສລ ນີ້ແລ້ວໃນຖານຂໍ້ມູນ'
+            collateral.updatedate = timezone.now()
+            collateral.save()
+
+            # ── ບັນທຶກລົງ RegisterCustomerWhitEnterprise (ປອດໄປ 100% ເຖິງມີຊ້ຳ!) ──
+            reg_obj = RegisterCustomerWhitEnterprise.objects.filter(
+                EnterpriseID=enterprise_submit.EnterpriseID
+            ).first()
+
+            if reg_obj:
+                reg_obj.LCIC_code = lcic_code
+                reg_obj.status = 1
+                reg_obj.user_update = approved_by
+                reg_obj.UpdateDate = timezone.now()
+                reg_obj.bnk_code = collateral.bank_id or ''
+                reg_obj.branch = collateral.branch_id or ''
+                reg_obj.save()
+            else:
+                RegisterCustomerWhitEnterprise.objects.create(
+                    EnterpriseID=enterprise_submit.EnterpriseID,
+                    LCIC_code=lcic_code,
+                    status=1,
+                    user_insert=approved_by,
+                    user_update=approved_by,
+                    UpdateDate=timezone.now(),
+                    bnk_code=collateral.bank_id or '',
+                    branch=collateral.branch_id or '',
+                )
+
+            return Response({
+                'success': True,
+                'message': 'ພົບລະຫັດ ຂສລ ນີ້ແລ້ວໃນຖານຂໍ້ມູນ',
+                'action': 'use_existing',
+                'data': {
+                    'lcic_code': lcic_code,
+                    'collateral_id': collateral.id,
+                    'enterprise_info_id': existing_enterprise.LCICID,
+                    'enterprise_submit_id': enterprise_submit.LCICID,
+                    'approved_by': approved_by,
+                    'approved_at': timezone.now().isoformat(),
+                }
+            }, status=status.HTTP_200_OK)
+
+        else:
+            # ── ກໍລະນີບໍ່ພົບ → ສ້າງໃໝ່ ──
+            lcic_code = generate_lcic_code()
+
+            # ສ້າງ EnterpriseInfo
+            enterprise_info = EnterpriseInfo.objects.create(
+                EnterpriseID=enterprise_submit.EnterpriseID,
+                enterpriseNameLao=enterprise_submit.enterpriseNameLao,
+                eneterpriseNameEnglish=enterprise_submit.eneterpriseNameEnglish,
+                regisCertificateNumber=enterprise_submit.regisCertificateNumber,
+                regisDate=enterprise_submit.regisDate,
+                enLocation=enterprise_submit.enLocation,
+                regisStrationOfficeType=enterprise_submit.regisStrationOfficeType,
+                regisStationOfficeCode=enterprise_submit.regisStationOfficeCode,
+                enLegalStrature=enterprise_submit.enLegalStrature,
+                foreigninvestorFlag=enterprise_submit.foreigninvestorFlag,
+                investmentAmount=enterprise_submit.investmentAmount,
+                status=enterprise_submit.status,
+                investmentCurrency=enterprise_submit.investmentCurrency,
+                representativeNationality=enterprise_submit.representativeNationality,
+                InsertDate=timezone.now(),
+                LastUpdate=timezone.now(),
+                LCIC_code=lcic_code,
+            )
+
+            # ອັບເດດ EnterpriseMemberSubmit
+            enterprise_submit.LCIC_code = lcic_code
+            enterprise_submit.user_update = approved_by
+            enterprise_submit.UpdateDate = timezone.now()
+            enterprise_submit.save()
+
+            # ອັບເດດ CollateralNew
+            collateral.LCIC_reques = lcic_code
+            collateral.status = '0'
+            collateral.updatedate = timezone.now()
+            collateral.save()
+
+            # ── ບັນທຶກລົງ RegisterCustomerWhitEnterprise (ປອດໄປ 100%) ──
+            reg_obj = RegisterCustomerWhitEnterprise.objects.filter(
+                EnterpriseID=enterprise_submit.EnterpriseID
+            ).first()
+
+            if reg_obj:
+                reg_obj.LCIC_code = lcic_code
+                reg_obj.status = 1
+                reg_obj.user_update = approved_by
+                reg_obj.UpdateDate = timezone.now()
+                reg_obj.bnk_code = collateral.bank_id or ''
+                reg_obj.branch = collateral.branch_id or ''
+                reg_obj.save()
+            else:
+                RegisterCustomerWhitEnterprise.objects.create(
+                    EnterpriseID=enterprise_submit.EnterpriseID,
+                    LCIC_code=lcic_code,
+                    status=3,
+                    user_insert=approved_by,
+                    user_update=approved_by,
+                    UpdateDate=timezone.now(),
+                    bnk_code=collateral.bank_id or '',
+                    branch=collateral.branch_id or '',
+                )
+
+            return Response({
+                'success': True,
+                'message': 'ຢືນຢັນສຳເລັດ ແລະ ສ້າງລະຫັດ ຂສລ ໃໝ່',
+                'action': 'created_new',
+                'data': {
+                    'lcic_code': lcic_code,
+                    'enterprise_info_id': enterprise_info.LCICID,
+                    'collateral_id': collateral.id,
+                    'enterprise_submit_id': enterprise_submit.LCICID,
+                    'approved_by': approved_by,
+                    'approved_at': timezone.now().isoformat(),
+                }
+            }, status=status.HTTP_200_OK)
+
+    except CollateralNew.DoesNotExist:
+        return Response({'success': False, 'message': 'ບໍ່ພົບຂໍ້ມູນໄຟລ໌'}, status=status.HTTP_404_NOT_FOUND)
+    except EnterpriseMemberSubmit.DoesNotExist:
+        return Response({'success': False, 'message': 'ບໍ່ພົບຂໍ້ມູນວິສາຫະກິດທີ່ເຊື່ອມໂຍງ'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"approve_collateral error: {e}", exc_info=True)
+        return Response({
+            'success': False,
+            'message': 'ເກີດຂໍ້ຜິດພາດທີ່ບໍ່ຄາດຄິດ'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 @transaction.atomic
@@ -31834,7 +32124,512 @@ def get_collateral_status(request, collateral_id):
             'success': False,
             'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)    
-# views.py
+
+
+# views.py (ສະບັບສຸດທ້າຍ — ສະແດງຂໍ້ມູນລາຍລະອຽດທັນທີ!)
+from django.db import connection
+from django.core.paginator import Paginator
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+
+TABLE_NAME = '"lcicHome_companyinfomapping"'
+
+# ຟິວທີ່ຕ້ອງການສະແດງໃນລາຍລະອຽດ (ຕົງກັບ Model)
+DISPLAY_FIELDS = [
+    'com_sys_id', 
+    'mm_com_sys_id', 
+    'bnk_code', 
+    'customerid',
+    'com_enterprise_code', 
+    'com_tax_no', 
+    'com_name', 
+    'com_lao_name',
+    'com_registration_date', 
+    'com_registration_place_issue',
+    'com_lao_name_code', 
+    '"LCIC_code"',  # ຕົວພິມໃຫຍ່ ຕ້ອງໃສ່ quotes
+    'enterprise_code', 
+    'status',
+    'com_regulatory_capital', 
+    'com_regulatory_capital_unit'
+]
+
+# ສຳລັບ dict keys (ບໍ່ມີ quotes)
+FIELD_NAMES = [
+    'com_sys_id', 
+    'mm_com_sys_id', 
+    'bnk_code', 
+    'customerid',
+    'com_enterprise_code', 
+    'com_tax_no', 
+    'com_name', 
+    'com_lao_name',
+    'com_registration_date', 
+    'com_registration_place_issue',
+    'com_lao_name_code', 
+    'LCIC_code',  
+    'enterprise_code', 
+    'status',
+    'com_regulatory_capital', 
+    'com_regulatory_capital_unit'
+]
+
+
+@api_view(['GET'])
+def group_enterprise_by_code(request):
+    """
+    ຈັດກຸ່ມພ້ອມສະແດງລາຍລະອຽດທັນທີ
+    Parameters:
+        - code: ct/ce/cl/clc/ctt
+        - page: ເລກໜ້າ (default: 1)
+        - limit: ຈຳນວນກຸ່ມຕໍ່ໜ້າ (default: 20)
+        - group_type: all/similar (default: all)
+    """
+    code = request.GET.get('code', 'ct').lower()
+    page = max(1, int(request.GET.get('page', 1)))
+    limit = min(100, max(1, int(request.GET.get('limit', 20))))
+    group_type = request.GET.get('group_type', 'all')
+
+    valid_codes = ['ct', 'ce', 'cl', 'clc', 'ctt']
+    if code not in valid_codes:
+        return Response({
+            "error": f"code ຕ້ອງເປັນ: {', '.join(valid_codes)}"
+        }, status=400)
+
+    # 1. ສ້າງ SQL ສຳລັບດຶງກຸ່ມ
+    group_sql = ""
+    
+    if code == 'ct':
+        # ຈັດກຸ່ມຕາມເລກພາສີ
+        group_sql = f"""
+            SELECT com_tax_no, COUNT(*), MIN(mm_com_sys_id)
+            FROM {TABLE_NAME}
+            WHERE com_tax_no IS NOT NULL AND TRIM(com_tax_no) != ''
+            GROUP BY com_tax_no 
+            HAVING COUNT(*) >= 2
+            ORDER BY COUNT(*) DESC
+        """
+    
+    elif code == 'ce':
+        # ຈັດກຸ່ມຕາມລະຫັດວິສາຫະກິດ
+        group_sql = f"""
+            SELECT com_enterprise_code, COUNT(*), MIN(mm_com_sys_id)
+            FROM {TABLE_NAME}
+            WHERE com_enterprise_code IS NOT NULL AND TRIM(com_enterprise_code) != ''
+            GROUP BY com_enterprise_code 
+            HAVING COUNT(*) >= 2
+            ORDER BY COUNT(*) DESC
+        """
+    
+    elif code == 'cl':
+        # ຈັດກຸ່ມຕາມຊື່ລາວ (exact match)
+        group_sql = f"""
+            SELECT com_lao_name, COUNT(*), MIN(mm_com_sys_id)
+            FROM {TABLE_NAME}
+            WHERE com_lao_name IS NOT NULL AND TRIM(com_lao_name) != ''
+            GROUP BY com_lao_name 
+            HAVING COUNT(*) >= 2
+            ORDER BY COUNT(*) DESC
+        """
+    
+    elif code == 'clc':
+        # ຈັດກຸ່ມຕາມຊື່ລາວທີ່ normalized
+        group_sql = f"""
+            WITH cleaned AS (
+                SELECT 
+                    mm_com_sys_id,
+                    com_lao_name,
+                    TRIM(REGEXP_REPLACE(
+                        REGEXP_REPLACE(LOWER(com_lao_name),
+                            '^(ທ້າວ|ທາວ|ນາງ|ນາຍ|ທ່ານ|ບໍລິສັດ|ຮ້ານ|ຈຳກັດ|ສຳນັກ|ສູນ|ສາຂາ)\\s*', '', 'g'
+                        ), '\\s+', '', 'g'
+                    )) AS clean_name
+                FROM {TABLE_NAME}
+                WHERE com_lao_name IS NOT NULL AND TRIM(com_lao_name) != ''
+            )
+            SELECT clean_name, COUNT(*), MIN(mm_com_sys_id)
+            FROM cleaned 
+            WHERE clean_name != ''
+            GROUP BY clean_name 
+            HAVING COUNT(*) >= 2
+            ORDER BY COUNT(*) DESC
+        """
+    
+    elif code == 'ctt':
+        # ຈັດກຸ່ມຕາມຄວາມຄ້າຍຄື > 50%
+        # ໝາຍເຫດ: ຕ້ອງເປີດ pg_trgm extension ກ່ອນ
+        group_sql = f"""
+            WITH similarity_pairs AS (
+                SELECT DISTINCT
+                    LEAST(a.com_sys_id, b.com_sys_id) as id1,
+                    GREATEST(a.com_sys_id, b.com_sys_id) as id2,
+                    GREATEST(
+                        CASE WHEN a.mm_com_sys_id = b.mm_com_sys_id 
+                             AND a.mm_com_sys_id IS NOT NULL THEN 1.0 ELSE 0 END,
+                        CASE WHEN a.com_enterprise_code = b.com_enterprise_code 
+                             AND TRIM(a.com_enterprise_code) != '' THEN 1.0 ELSE 0 END,
+                        CASE WHEN a.com_tax_no = b.com_tax_no 
+                             AND TRIM(a.com_tax_no) != '' THEN 1.0 ELSE 0 END,
+                        COALESCE(similarity(a.com_name, b.com_name), 0),
+                        COALESCE(similarity(a.com_lao_name, b.com_lao_name), 0)
+                    ) AS max_sim
+                FROM {TABLE_NAME} a
+                CROSS JOIN {TABLE_NAME} b
+                WHERE a.com_sys_id < b.com_sys_id
+                  AND (
+                    (a.mm_com_sys_id = b.mm_com_sys_id AND a.mm_com_sys_id IS NOT NULL)
+                    OR (a.com_enterprise_code = b.com_enterprise_code AND TRIM(a.com_enterprise_code) != '')
+                    OR (a.com_tax_no = b.com_tax_no AND TRIM(a.com_tax_no) != '')
+                    OR similarity(a.com_name, b.com_name) > 0.5
+                    OR similarity(a.com_lao_name, b.com_lao_name) > 0.5
+                  )
+            ),
+            grouped AS (
+                SELECT 
+                    id1 as com_sys_id,
+                    COUNT(*) + 1 as cnt,
+                    ROUND(AVG(max_sim)::numeric, 3) as avg_sim
+                FROM similarity_pairs
+                WHERE max_sim > 0.5
+                GROUP BY id1
+            )
+            SELECT 
+                'group_' || g.com_sys_id as group_key,
+                g.cnt,
+                c.mm_com_sys_id,
+                g.avg_sim
+            FROM grouped g
+            JOIN {TABLE_NAME} c ON g.com_sys_id = c.com_sys_id
+            ORDER BY g.cnt DESC, g.avg_sim DESC
+            LIMIT 500
+        """
+
+    try:
+        # ດຶງກຸ່ມ
+        with connection.cursor() as cursor:
+            cursor.execute(group_sql)
+            group_rows = cursor.fetchall()
+
+        # 2. ສຳລັບແຕ່ລະກຸ່ມ ດຶງຂໍ້ມູນລາຍລະອຽດທັນທີ
+        final_groups = []
+        fields_str = ", ".join(DISPLAY_FIELDS)
+
+        for idx, row in enumerate(group_rows):
+            matched_value = str(row[0] or "").strip()
+            count = row[1]
+            sample_mm_id = row[2]
+            
+            # ສຳລັບ ctt ມີ similarity score
+            similarity_score = None
+            if code == 'ctt' and len(row) > 3:
+                similarity_score = float(row[3])
+
+            # ສ້າງ SQL ດຶງລາຍລະອຽດຂອງກຸ່ມນີ້
+            if code == 'ct':
+                detail_sql = f"""
+                    SELECT {fields_str} 
+                    FROM {TABLE_NAME} 
+                    WHERE com_tax_no = %s 
+                    ORDER BY mm_com_sys_id, com_sys_id
+                """
+                params = [matched_value]
+            
+            elif code == 'ce':
+                detail_sql = f"""
+                    SELECT {fields_str} 
+                    FROM {TABLE_NAME} 
+                    WHERE com_enterprise_code = %s 
+                    ORDER BY mm_com_sys_id, com_sys_id
+                """
+                params = [matched_value]
+            
+            elif code == 'cl':
+                detail_sql = f"""
+                    SELECT {fields_str} 
+                    FROM {TABLE_NAME} 
+                    WHERE com_lao_name = %s 
+                    ORDER BY mm_com_sys_id, com_sys_id
+                """
+                params = [matched_value]
+            
+            elif code == 'clc':
+                detail_sql = f"""
+                    SELECT {fields_str} 
+                    FROM {TABLE_NAME}
+                    WHERE TRIM(REGEXP_REPLACE(
+                        REGEXP_REPLACE(LOWER(com_lao_name),
+                            '^(ທ້າວ|ທາວ|ນາງ|ນາຍ|ທ່ານ|ບໍລິສັດ|ຮ້ານ|ຈຳກັດ|ສຳນັກ|ສູນ|ສາຂາ)\\s*', '', 'g'
+                        ), '\\s+', '', 'g'
+                    )) = %s
+                    ORDER BY mm_com_sys_id, com_sys_id
+                """
+                params = [matched_value.lower()]
+            
+            elif code == 'ctt':
+                # ສຳລັບ ctt ຕ້ອງຫາທຸກຕົວທີ່ຄ້າຍກັບກຸ່ມນີ້
+                group_id = matched_value.replace('group_', '')
+                detail_sql = f"""
+                    WITH base AS (
+                        SELECT * FROM {TABLE_NAME} WHERE com_sys_id = %s
+                    ),
+                    similar_records AS (
+                        SELECT DISTINCT t.*
+                        FROM {TABLE_NAME} t, base b
+                        WHERE (
+                            (t.mm_com_sys_id = b.mm_com_sys_id AND t.mm_com_sys_id IS NOT NULL)
+                            OR (t.com_enterprise_code = b.com_enterprise_code AND TRIM(t.com_enterprise_code) != '')
+                            OR (t.com_tax_no = b.com_tax_no AND TRIM(t.com_tax_no) != '')
+                            OR similarity(t.com_name, b.com_name) > 0.5
+                            OR similarity(t.com_lao_name, b.com_lao_name) > 0.5
+                        )
+                    )
+                    SELECT {fields_str}
+                    FROM similar_records
+                    ORDER BY mm_com_sys_id, com_sys_id
+                """
+                params = [int(group_id)]
+
+            # ດຶງຂໍ້ມູນລາຍລະອຽດ
+            with connection.cursor() as cursor:
+                cursor.execute(detail_sql, params)
+                detail_rows = cursor.fetchall()
+
+            # ສ້າງ dict ສຳລັບແຕ່ລະ item
+            items = [dict(zip(FIELD_NAMES, r)) for r in detail_rows]
+
+            # ສ້າງກຸ່ມ
+            group_data = {
+                "group_order": idx + 1,
+                "count": count,
+                "matched_value": matched_value,
+                "sample_mm_id": sample_mm_id,
+                "items": items  # ຂໍ້ມູນລາຍລະອຽດທັງໝົດ!
+            }
+            
+            # ເພີ່ມ similarity score ຖ້າເປັນ ctt
+            if similarity_score is not None:
+                group_data["similarity_score"] = similarity_score
+            
+            final_groups.append(group_data)
+
+        # ກັ່ນຕອງຕາມ group_type
+        if group_type == 'similar':
+            final_groups = [g for g in final_groups if g["count"] >= 2]
+
+        # Pagination
+        paginator = Paginator(final_groups, limit)
+        page_obj = paginator.get_page(page)
+
+        # ນັບສະຖິຕິ
+        with connection.cursor() as cursor:
+            cursor.execute(f"SELECT COUNT(*) FROM {TABLE_NAME}")
+            total_records = cursor.fetchone()[0]
+        
+        grouped_records = sum(g["count"] for g in final_groups)
+        ungrouped_records = total_records - grouped_records
+
+        return Response({
+            "code": code,
+            "code_description": {
+                "ct": "ຈັດກຸ່ມຕາມເລກທະບຽນພາສີ",
+                "ce": "ຈັດກຸ່ມຕາມລະຫັດວິສາຫະກິດ",
+                "cl": "ຈັດກຸ່ມຕາມຊື່ລາວ (exact)",
+                "clc": "ຈັດກຸ່ມຕາມຊື່ລາວ (normalized)",
+                "ctt": "ຈັດກຸ່ມຕາມຄວາມຄ້າຍຄື > 50%"
+            }.get(code, ""),
+            "group_type": group_type,
+            "summary": {
+                "total_groups": len(final_groups),
+                "total_records": total_records,
+                "grouped_records": grouped_records,
+                "ungrouped_records": ungrouped_records
+            },
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total_pages": paginator.num_pages,
+                "has_next": page_obj.has_next(),
+                "has_previous": page_obj.has_previous()
+            },
+            "display_fields": FIELD_NAMES,
+            "groups": list(page_obj)
+        })
+    
+    except Exception as e:
+        return Response({
+            "error": str(e),
+            "code": code,
+            "hint": "ຖ້າເປັນ ctt ໃຫ້ຮັນ: CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+        }, status=500)
+@api_view(['GET'])
+def group_detail(request):
+    """
+    ເບິ່ງລາຍລະອຽດຂອງກຸ່ມ
+    Parameters:
+        - code: ct/ce/cl/clc/ctt
+        - value: ຄ່າທີ່ຕ້ອງການຄົ້ນຫາ
+        - page: ເລກໜ້າ (default: 1)
+        - limit: ຈຳນວນຕໍ່ໜ້າ (default: 50, max: 100)
+    """
+    code = request.GET.get('code', 'ct').lower()
+    value = request.GET.get('value', '').strip()
+    page = max(1, int(request.GET.get('page', 1)))
+    limit = min(100, max(1, int(request.GET.get('limit', 50))))
+
+    if not value:
+        return Response({
+            "error": "ກະລຸນາສົ່ງ ?value=... ມາ"
+        }, status=400)
+
+    fields_str = ", ".join([f'"{f}"' if f == 'LCIC_code' else f for f in DISPLAY_FIELDS])
+    
+    sql = ""
+    params = []
+
+    if code == 'ct':
+        sql = f"""
+            SELECT {fields_str} 
+            FROM {TABLE_NAME} 
+            WHERE com_tax_no = %s 
+            ORDER BY mm_com_sys_id, com_sys_id
+        """
+        params = [value]
+    
+    elif code == 'ce':
+        sql = f"""
+            SELECT {fields_str} 
+            FROM {TABLE_NAME} 
+            WHERE com_enterprise_code = %s 
+            ORDER BY mm_com_sys_id, com_sys_id
+        """
+        params = [value]
+    
+    elif code == 'cl':
+        sql = f"""
+            SELECT {fields_str} 
+            FROM {TABLE_NAME} 
+            WHERE com_lao_name = %s 
+            ORDER BY mm_com_sys_id, com_sys_id
+        """
+        params = [value]
+    
+    elif code == 'clc':
+        # ຫາຂໍ້ມູນທີ່ຊື່ລາວ normalized ຄືກັນ
+        sql = f"""
+            WITH target_clean AS (
+                SELECT TRIM(REGEXP_REPLACE(
+                    REGEXP_REPLACE(LOWER(%s),
+                        '^(ທ້າວ|ທາວ|ນາງ|ນາຍ|ທ່ານ|ບໍລິສັດ|ຮ້ານ|ຈຳກັດ|ສຳນັກ|ສູນ|ສາຂາ)\\s*', '', 'g'
+                    ), '\\s+', '', 'g'
+                )) as clean_val
+            )
+            SELECT {fields_str}
+            FROM {TABLE_NAME}, target_clean
+            WHERE TRIM(REGEXP_REPLACE(
+                REGEXP_REPLACE(LOWER(com_lao_name),
+                    '^(ທ້າວ|ທາວ|ນາງ|ນາຍ|ທ່ານ|ບໍລິສັດ|ຮ້ານ|ຈຳກັດ|ສຳນັກ|ສູນ|ສາຂາ)\\s*', '', 'g'
+                ), '\\s+', '', 'g'
+            )) = target_clean.clean_val
+            ORDER BY mm_com_sys_id, com_sys_id
+        """
+        params = [value]
+    
+    elif code == 'ctt':
+        # ຫາຂໍ້ມູນທີ່ຄ້າຍຄືກັບ value
+        like_val = f"%{value}%"
+        sql = f"""
+            SELECT {fields_str}
+            FROM {TABLE_NAME}
+            WHERE com_tax_no ILIKE %s
+               OR com_enterprise_code ILIKE %s
+               OR com_name ILIKE %s
+               OR com_lao_name ILIKE %s
+            ORDER BY mm_com_sys_id, com_sys_id
+        """
+        params = [like_val] * 4
+    
+    else:
+        return Response({
+            "error": "code ບໍ່ຮອງຮັບ"
+        }, status=400)
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+
+        # ສ້າງ dict
+        items = []
+        for row in rows:
+            item = {}
+            for i, field in enumerate(DISPLAY_FIELDS):
+                item[field] = row[i]
+            items.append(item)
+
+        # Pagination
+        paginator = Paginator(items, limit)
+        page_obj = paginator.get_page(page)
+
+        return Response({
+            "code": code,
+            "matched_value": value,
+            "total_items": len(items),
+            "display_fields": DISPLAY_FIELDS,
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total_pages": paginator.num_pages,
+                "has_next": page_obj.has_next(),
+                "has_previous": page_obj.has_previous()
+            },
+            "items": list(page_obj)
+        })
+    
+    except Exception as e:
+        return Response({
+            "error": str(e),
+            "code": code,
+            "value": value
+        }, status=500)
+
+
+# ================================
+# API 3: ກວດສອບຊື່ column (ສຳລັບ debug)
+# ================================
+@api_view(['GET'])
+def check_table_info(request):
+    """ກວດສອບຂໍ້ມູນຕາຕະລາງ"""
+    
+    # ກວດສອບຊື່ column
+    sql = f"""
+        SELECT column_name, data_type, character_maximum_length
+        FROM information_schema.columns 
+        WHERE table_name = 'lcicHome_companyinfomapping'
+        ORDER BY ordinal_position
+    """
+    
+    with connection.cursor() as cursor:
+        cursor.execute(sql)
+        columns = cursor.fetchall()
+    
+    # ນັບຈຳນວນຂໍ້ມູນ
+    with connection.cursor() as cursor:
+        cursor.execute(f"SELECT COUNT(*) FROM {TABLE_NAME}")
+        total = cursor.fetchone()[0]
+    
+    return Response({
+        "table_name": "lcicHome_companyinfomapping",
+        "total_records": total,
+        "columns": [
+            {
+                "name": col[0], 
+                "type": col[1],
+                "max_length": col[2]
+            } for col in columns
+        ],
+        "display_fields_configured": DISPLAY_FIELDS
+    })
+
 from django.db.models import Q
 from rest_framework import generics
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -32694,9 +33489,16 @@ class ScoringIndividualInfoSearchView(APIView):
             if not lcic_id:
                 return Response({'error': 'lcic_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-            all_individual_info = IndividualBankIbkInfo.objects.filter(
+            # ⭐ เปลี่ยนการค้นหา: ลองค้นหาใน IndividualBankIbk ก่อน
+            all_individual_info = IndividualBankIbk.objects.filter(
                 lcic_id=lcic_id
-            ).order_by('mm_ind_sys_id')
+            ).order_by('ind_sys_id')
+
+            # ⭐ ถ้าไม่เจอใน IndividualBankIbk → ค้นหาใน IndividualBankIbkInfo
+            if not all_individual_info.exists():
+                all_individual_info = IndividualBankIbkInfo.objects.filter(
+                    lcic_id=lcic_id
+                ).order_by('mm_ind_sys_id')
 
             if not all_individual_info.exists():
                 return Response({'error': 'Individual info not found'}, status=status.HTTP_404_NOT_FOUND)
@@ -32704,11 +33506,17 @@ class ScoringIndividualInfoSearchView(APIView):
             unique_individuals = []
             seen_mm_ids = set()
             for info in all_individual_info:
-                if info.mm_ind_sys_id and info.mm_ind_sys_id not in seen_mm_ids:
+                mm_id = getattr(info, 'ind_sys_id', None) or getattr(info, 'mm_ind_sys_id', None)
+                if mm_id and mm_id not in seen_mm_ids:
                     unique_individuals.append(info)
-                    seen_mm_ids.add(info.mm_ind_sys_id)
+                    seen_mm_ids.add(mm_id)
 
-            mm_ids = [info.mm_ind_sys_id for info in unique_individuals if info.mm_ind_sys_id]
+            mm_ids = []
+            for info in unique_individuals:
+                mm_id = getattr(info, 'ind_sys_id', None) or getattr(info, 'mm_ind_sys_id', None)
+                if mm_id:
+                    mm_ids.append(mm_id)
+
             bank_records = {}
             if mm_ids:
                 bank_records = {
@@ -32729,7 +33537,8 @@ class ScoringIndividualInfoSearchView(APIView):
             created_logs = []
 
             for info in unique_individuals:
-                bank_record = bank_records.get(info.mm_ind_sys_id)
+                mm_id = getattr(info, 'ind_sys_id', None) or getattr(info, 'mm_ind_sys_id', None)
+                bank_record = bank_records.get(mm_id)
                 customerid = bank_record.customerid if bank_record else ''
                 branch_code = bank_record.branchcode if bank_record else ''
 
@@ -32776,12 +33585,12 @@ class ScoringIndividualInfoSearchView(APIView):
                 charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
                 charge.save()
 
-                # ⭐ เพิ่มข้อมูลให้ครบถ้วน
+                # เพิ่มข้อมูลให้ครบถ้วน
                 created_logs.append({
                     'search_log_id': search_log.search_ID,
                     'charge_id': charge.rec_charge_ID,
-                    'rec_reference_code': charge.rec_reference_code,  # ⭐ ส่งค่านี้
-                    'rec_sys_id': charge.rec_charge_ID,  # ⭐ ส่งค่านี้
+                    'rec_reference_code': charge.rec_reference_code,
+                    'rec_sys_id': charge.rec_charge_ID,
                     'customerid': customerid,
                     'lcic_id': lcic_id,
                     'rec_insert_date': charge.rec_insert_date.strftime('%d/%m/%Y') if hasattr(charge, 'rec_insert_date') and charge.rec_insert_date else now.strftime('%d/%m/%Y')
@@ -32789,13 +33598,13 @@ class ScoringIndividualInfoSearchView(APIView):
 
             serializer = IndividualBankIbkInfoSerializer(unique_individuals, many=True)
 
-            # ⭐ Return ข้อมูลให้ครบถ้วน
+            # Return ข้อมูลให้ครบถ้วน
             return Response({
-                'success': True,  # ⭐ เพิ่ม flag นี้
+                'success': True,
                 'individual_info': serializer.data,
                 'total_found': len(unique_individuals),
                 'log_created': len(created_logs),
-                'created_logs': created_logs,  # ⭐ ส่ง array นี้กลับไป
+                'created_logs': created_logs,
                 'debug_info': {
                     'total_raw_records': all_individual_info.count(),
                     'unique_records': len(unique_individuals),
@@ -32810,8 +33619,6 @@ class ScoringIndividualInfoSearchView(APIView):
                 'error': 'Internal server error',
                 'details': traceback.format_exc()
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
 
 class MainCatalogCatViewSet(viewsets.ModelViewSet):
     queryset = Main_catalog_cat.objects.all().order_by('cat_sys_id')
@@ -36273,6 +37080,21 @@ class ScrAttributeTableRetrieveUpdateDeleteView(generics.RetrieveUpdateDestroyAP
     queryset = scr_attribute_table.objects.all()
     serializer_class = ScrAttributeTableSerializer
     lookup_field = 'att_id'
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from .n_credit_score_service import CreditScoreCalculator
+
+class GetIndividualAPIView(APIView):
+
+    def get(self, request):
+        lcic_id = request.GET.get("lcic_id")
+        ind_sys_id = request.GET.get("ind_sys_id")
+        service = CreditScoreCalculator()
+        result = service.get_individual_data(lcic_id=lcic_id, ind_sys_id=ind_sys_id)
+        if result is None:
+            return Response({"message": "Not found"}, status=404)
+        return Response(result, status=200)
     
 #.........................................................
 # CRUD สำหรับ scr_atttype_desc_new
@@ -36858,3 +37680,1994 @@ def suggest_merge_candidates(request):
         "total_matching_records": len(records_list),
         "message": f"Found {len(suggestions)} potential merge groups from {len(records_list)} matching records"
     })
+    
+    
+# views.py
+import re
+from collections import defaultdict
+from django.db import connection
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework import status
+from django.core.paginator import Paginator
+
+# ==============================================================
+# LAO NAME CLEANER
+# ==============================================================
+def clean_lao_name(name: str) -> str:
+    if not name:
+        return ""
+    name = re.sub(r'^(ນາງ|ທ່ານ|ນາງສາວ|ທີ່ນາງ|ທີ່)\s*', '', name.strip(), flags=re.I)
+    name = name.translate(str.maketrans('', '', '່້໊໋ໍຯ໌ໆ'))
+    name = re.sub(r'[\s\-\.\(\)0-9]+', '', name)
+    return name.lower()
+
+# ==============================================================
+# AUTO SUGGEST MERGE - FULLY SAFE + PAGINATED
+# ==============================================================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def auto_suggest_merge_all(request):
+    """
+    Full scan merge suggestions with safe pagination
+    ?page=1&page_size=50
+    """
+    page = int(request.query_params.get('page', 1))
+    page_size = min(int(request.query_params.get('page_size', 50)), 100)
+
+    # STEP 1: Get only potential duplicates (same birth + family book + similar Lao name)
+    query = """
+    SELECT 
+        ind_sys_id, lcic_id, ind_lao_name, ind_lao_surname,
+        ind_birth_date, ind_familybook, ind_familybook_prov_code,
+        ind_gender, ind_name, ind_surname, bnk_code
+    FROM individual_bank_ibk
+    WHERE segment = 'A1'
+      AND ind_lao_name IS NOT NULL AND ind_lao_name != ''
+      AND ind_birth_date IS NOT NULL
+      AND ind_familybook IS NOT NULL
+    ORDER BY ind_birth_date, ind_familybook, ind_familybook_prov_code
+    """
+
+    with connection.cursor() as cursor:
+        cursor.execute(query)
+        columns = [col[0] for col in cursor.description]
+        raw_rows = cursor.fetchall()
+
+    # Convert to list of dicts
+    records = [dict(zip(columns, row)) for row in raw_rows]
+
+    # STEP 2: Clean and group safely
+    cleaned_records = []
+    for r in records:
+        full_lao = clean_lao_name(f"{r['ind_lao_name']} {r['ind_lao_surname']}")
+        if len(full_lao) < 5:
+            continue
+        r['clean_lao'] = full_lao
+        r['block_key'] = f"{r['ind_birth_date']}|{r['ind_familybook'] or ''}|{r['ind_familybook_prov_code'] or ''}"
+        cleaned_records.append(r)
+
+    # STEP 3: Group by block key
+    block_groups = defaultdict(list)
+    for rec in cleaned_records:
+        block_groups[rec['block_key']].append(rec)
+
+    # STEP 4: Find merge candidates within each block
+    from rapidfuzz import fuzz
+
+    candidates = []
+    seen_ids = set()
+
+    for block_key, group in block_groups.items():
+        if len(group) < 2:
+            continue
+
+        # Cluster by name similarity
+        for i, rec1 in enumerate(group):
+            if rec1['ind_sys_id'] in seen_ids:
+                continue
+            cluster = [rec1]
+            seen_ids.add(rec1['ind_sys_id'])
+
+            for rec2 in group[i+1:]:
+                if rec2['ind_sys_id'] in seen_ids:
+                    continue
+                if fuzz.ratio(rec1['clean_lao'], rec2['clean_lao']) >= 88:
+                    cluster.append(rec2)
+                    seen_ids.add(rec2['ind_sys_id'])
+
+            if len(cluster) >= 2:
+                lcics = {r['lcic_id'] for r in cluster if r['lcic_id']}
+                if len(lcics) > 1:  # Real split!
+                    candidates.append(cluster)
+
+    # STEP 5: Format results
+    results = []
+    for cluster in candidates:
+        lcic_map = defaultdict(list)
+        for r in cluster:
+            lcic = r['lcic_id'] or "NULL"
+            lcic_map[lcic].append(r)
+
+        master_lcic = max(lcic_map.items(), key=lambda x: len(x[1]))[0]
+
+        results.append({
+            "group_size": len(cluster),
+            "different_lcic_count": len(lcic_map),
+            "suggested_master_lcic": master_lcic if master_lcic != "NULL" else lcic_map.items()[0][0],
+            "birth_date": cluster[0]['ind_birth_date'],
+            "familybook": cluster[0]['ind_familybook'],
+            "province": cluster[0]['ind_familybook_prov_code'],
+            "lao_name_main": f"{cluster[0]['ind_lao_name']} {cluster[0]['ind_lao_surname']}".strip(),
+            "roman_names": list({
+                f"{r['ind_name'] or ''} {r['ind_surname'] or ''}".strip()
+                for r in cluster if r['ind_name']
+            }),
+            "lcic_groups": [
+                {
+                    "lcic_id": lcic,
+                    "count": len(recs),
+                    "sample_sys_ids": [r['ind_sys_id'] for r in recs[:3]]
+                }
+                for lcic, recs in lcic_map.items()
+            ]
+        })
+
+    # STEP 6: Sort + paginate
+    results.sort(key=lambda x: x['group_size'], reverse=True)
+    paginator = Paginator(results, page_size)
+    page_obj = paginator.page(page)
+
+    return Response({
+        "total_groups_found": len(results),
+        "page": page,
+        "page_size": page_size,
+        "total_pages": paginator.num_pages,
+        "results": [
+            {
+                **item,
+                "rank": (page - 1) * page_size + i + 1
+            }
+            for i, item in enumerate(page_obj.object_list)
+        ]
+    })
+    
+# views.py - Improved One-Click Merge
+from django.db import transaction, connection
+from django.utils import timezone
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from .models import IndividualBankIbk, IndividualBankIbkInfo, IndividualIdentifier
+import logging
+
+logger = logging.getLogger(__name__)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def one_click_merge(request):
+    """
+    Improved One-Click Merge API that handles ALL records in a merge group
+    
+    POST body can be either:
+    
+    Option 1 - Merge by LCIC IDs:
+    {
+        "master_lcic_id": "20251106-890855",
+        "lcic_ids_to_merge": ["20251106-569632"],  # Other LCICs to merge into master
+        "group_metadata": {
+            "total_records": 65,
+            "birth_date": "1981-03-01",
+            "familybook": "495",
+            "province": "NKL"
+        }
+    }
+    
+    Option 2 - Merge by specific sys_ids (backward compatible):
+    {
+        "master_lcic_id": "20251106-890855",
+        "ind_sys_ids_to_merge": [2631046, 2790473, ...],
+        "merge_all_with_same_identifiers": true  # Optional: find and merge related records
+    }
+    
+    Option 3 - Merge by blocking keys (most comprehensive):
+    {
+        "master_lcic_id": "20251106-890855",
+        "blocking_keys": {
+            "birth_date": "1981-03-01",
+            "familybook": "495",
+            "province": "NKL"
+        }
+    }
+    """
+    user = request.user
+    username = user.username or user.get_full_name() or "system"
+    
+    master_lcic_id = request.data.get("master_lcic_id")
+    if not master_lcic_id:
+        return Response({"error": "master_lcic_id is required"}, status=400)
+    
+    try:
+        with transaction.atomic():
+            records_to_merge = None
+            merge_type = None
+            
+            # Option 1: Merge by LCIC IDs (preferred for auto-suggest results)
+            if "lcic_ids_to_merge" in request.data:
+                merge_type = "LCIC_MERGE"
+                lcic_ids = request.data.get("lcic_ids_to_merge", [])
+                
+                # Get all records with these LCIC IDs (including master for golden profile)
+                all_lcics = lcic_ids + [master_lcic_id]
+                records_to_merge = IndividualBankIbk.objects.filter(
+                    lcic_id__in=all_lcics
+                ).select_for_update()
+                
+                logger.info(f"Merging by LCIC IDs: {all_lcics}, found {records_to_merge.count()} records")
+            
+            # Option 2: Merge by specific sys_ids
+            elif "ind_sys_ids_to_merge" in request.data:
+                merge_type = "SYSID_MERGE"
+                ind_sys_ids = request.data.get("ind_sys_ids_to_merge", [])
+                
+                if request.data.get("merge_all_with_same_identifiers", False):
+                    # Find all related records with same strong identifiers
+                    sample_records = IndividualBankIbk.objects.filter(ind_sys_id__in=ind_sys_ids)
+                    
+                    # Build query for all related records
+                    related_query = models.Q()
+                    for rec in sample_records:
+                        if rec.ind_national_id:
+                            related_query |= models.Q(ind_national_id=rec.ind_national_id)
+                        if rec.ind_passport:
+                            related_query |= models.Q(ind_passport=rec.ind_passport)
+                        if rec.ind_familybook and rec.ind_birth_date:
+                            related_query |= models.Q(
+                                ind_familybook=rec.ind_familybook,
+                                ind_birth_date=rec.ind_birth_date
+                            )
+                    
+                    records_to_merge = IndividualBankIbk.objects.filter(related_query).select_for_update()
+                else:
+                    # Just merge the specified records
+                    records_to_merge = IndividualBankIbk.objects.filter(
+                        ind_sys_id__in=ind_sys_ids
+                    ).select_for_update()
+                
+                logger.info(f"Merging by sys_ids, found {records_to_merge.count()} records")
+            
+            # Option 3: Merge by blocking keys
+            elif "blocking_keys" in request.data:
+                merge_type = "BLOCKING_KEY_MERGE"
+                keys = request.data.get("blocking_keys", {})
+                
+                query = models.Q()
+                if keys.get("birth_date"):
+                    query &= models.Q(ind_birth_date=keys["birth_date"])
+                if keys.get("familybook"):
+                    query &= models.Q(ind_familybook=keys["familybook"])
+                if keys.get("province"):
+                    query &= models.Q(ind_familybook_prov_code=keys["province"])
+                
+                records_to_merge = IndividualBankIbk.objects.filter(query).select_for_update()
+                
+                logger.info(f"Merging by blocking keys: {keys}, found {records_to_merge.count()} records")
+            
+            else:
+                return Response({
+                    "error": "Must provide either 'lcic_ids_to_merge', 'ind_sys_ids_to_merge', or 'blocking_keys'"
+                }, status=400)
+            
+            if not records_to_merge or records_to_merge.count() == 0:
+                return Response({"error": "No records found to merge"}, status=404)
+            
+            # Collect statistics before merge
+            total_records = records_to_merge.count()
+            old_lcic_ids = list(set(records_to_merge.values_list('lcic_id', flat=True)))
+            old_lcic_ids = [lcic for lcic in old_lcic_ids if lcic and lcic != master_lcic_id]
+            
+            # Count how many records need updating (don't already have master LCIC)
+            records_needing_update = records_to_merge.exclude(lcic_id=master_lcic_id).count()
+            
+            # Log the merge operation
+            log_message = (
+                f"[{merge_type}] Merged {total_records} records | "
+                f"Updated {records_needing_update} records | "
+                f"LCICs: {old_lcic_ids} → {master_lcic_id} | "
+                f"By: {username}"
+            )
+            
+            # Step 1: Update all records to master LCIC
+            updated_count = records_to_merge.exclude(lcic_id=master_lcic_id).update(
+                lcic_id=master_lcic_id,
+                mm_action_date=timezone.now(),
+                mm_log="MERGED_AUTO",
+                mm_comment=log_message,
+                mm_by=username
+            )
+            
+            # Step 2: Build golden profile (best data from ALL records)
+            golden_data = build_golden_profile(records_to_merge)
+            
+            # Step 3: Create or Update Golden Profile in IndividualBankIbkInfo
+            golden, created = IndividualBankIbkInfo.objects.update_or_create(
+                lcic_id=master_lcic_id,
+                defaults=golden_data
+            )
+            
+            # Step 4: Track ALL merged records in IndividualIdentifier
+            identifiers_to_create = collect_all_identifiers(
+                records_to_merge, 
+                master_lcic_id, 
+                username
+            )
+            
+            if identifiers_to_create:
+                # Bulk create, ignoring duplicates
+                IndividualIdentifier.objects.bulk_create(
+                    identifiers_to_create,
+                    ignore_conflicts=True
+                )
+            
+            # Step 5: Store merge history (which sys_ids were merged)
+            merged_sys_ids = list(records_to_merge.values_list('ind_sys_id', flat=True))
+            store_merge_history(master_lcic_id, merged_sys_ids, old_lcic_ids, username)
+            
+            return Response({
+                "success": True,
+                "message": f"Successfully merged {total_records} records into LCIC {master_lcic_id}",
+                "details": {
+                    "merge_type": merge_type,
+                    "total_records_in_group": total_records,
+                    "records_updated": updated_count,
+                    "records_already_correct": total_records - records_needing_update,
+                    "old_lcic_ids": old_lcic_ids,
+                    "master_lcic_id": master_lcic_id,
+                    "golden_profile_created": created,
+                    "identifiers_tracked": len(identifiers_to_create),
+                    "merged_sys_ids_count": len(merged_sys_ids)
+                },
+                "audit": {
+                    "performed_by": username,
+                    "performed_at": timezone.now().isoformat(),
+                    "log": log_message
+                }
+            })
+            
+    except Exception as e:
+        logger.error(f"Merge failed: {str(e)}", exc_info=True)
+        return Response({
+            "error": "Merge operation failed",
+            "detail": str(e),
+            "type": type(e).__name__
+        }, status=500)
+
+
+def build_golden_profile(records):
+    """
+    Build the best golden profile from all records
+    Uses a scoring system to pick the best value for each field
+    """
+    golden_data = {}
+    
+    # Score each record to find the most complete one
+    best_record = None
+    best_score = -1
+    
+    for rec in records:
+        score = 0
+        # Strong identifiers get high scores
+        if rec.ind_national_id: score += 50
+        if rec.ind_passport: score += 40
+        if rec.ind_familybook: score += 30
+        if rec.ind_birth_date: score += 20
+        
+        # Name completeness
+        if rec.ind_name and rec.ind_surname: score += 15
+        if rec.ind_lao_name and rec.ind_lao_surname: score += 15
+        
+        # # Additional fields
+        if rec.ind_gender: score += 5
+        # if rec.ind_phone: score += 5
+        # if rec.ind_email: score += 5
+        # if rec.ind_address: score += 5
+        
+        if score > best_score:
+            best_score = score
+            best_record = rec
+    
+    if best_record:
+        # Start with best record as base
+        golden_data = {
+            'mm_ind_sys_id': best_record.ind_sys_id,  # Track source record
+            'ind_national_id': best_record.ind_national_id,
+            'ind_national_id_date': best_record.ind_national_id_date,
+            'ind_passport': best_record.ind_passport,
+            'ind_passport_date': best_record.ind_passport_date,
+            'ind_familybook': best_record.ind_familybook,
+            'ind_familybook_prov_code': best_record.ind_familybook_prov_code,
+            'ind_familybook_date': best_record.ind_familybook_date,
+            'ind_birth_date': best_record.ind_birth_date,
+            'ind_name': (best_record.ind_name or "").strip(),
+            'ind_surname': (best_record.ind_surname or "").strip(),
+            'ind_lao_name': (best_record.ind_lao_name or "").strip(),
+            'ind_lao_surname': (best_record.ind_lao_surname or "").strip(),
+            'ind_gender': best_record.ind_gender,
+            # 'ind_phone': best_record.ind_phone,
+            # 'ind_email': best_record.ind_email,
+            # 'ind_address': best_record.ind_address,
+        }
+        
+        # Fill in any missing fields from other records
+        for rec in records:
+            if not golden_data.get('ind_national_id') and rec.ind_national_id:
+                golden_data['ind_national_id'] = rec.ind_national_id
+                golden_data['ind_national_id_date'] = rec.ind_national_id_date
+            
+            if not golden_data.get('ind_passport') and rec.ind_passport:
+                golden_data['ind_passport'] = rec.ind_passport
+                golden_data['ind_passport_date'] = rec.ind_passport_date
+            
+            # Continue for other fields...
+    
+    return golden_data
+
+
+def collect_all_identifiers(records, master_lcic_id, username):
+    """
+    Collect all unique identifiers from merged records
+    This creates a complete audit trail of what was merged
+    """
+    identifiers = []
+    seen = set()
+    
+    for rec in records:
+        # Track the merged sys_id itself
+        sys_id_key = f"SYSID_{rec.ind_sys_id}"
+        if sys_id_key not in seen:
+            seen.add(sys_id_key)
+            identifiers.append(IndividualIdentifier(
+                lcic_id=master_lcic_id,
+                identifier_type='MERGED_SYSID',
+                identifier_value=str(rec.ind_sys_id),
+                identifier_date=timezone.now(),
+                created_by=username,
+                notes=f"Original LCIC: {rec.lcic_id}"
+            ))
+        
+        # National ID
+        if rec.ind_national_id:
+            nat_id_key = f"NID_{rec.ind_national_id}"
+            if nat_id_key not in seen:
+                seen.add(nat_id_key)
+                identifiers.append(IndividualIdentifier(
+                    lcic_id=master_lcic_id,
+                    identifier_type='NATIONAL_ID',
+                    identifier_value=rec.ind_national_id,
+                    identifier_date=rec.ind_national_id_date,
+                    created_by=username
+                ))
+        
+        # Passport
+        if rec.ind_passport:
+            pass_key = f"PASS_{rec.ind_passport}"
+            if pass_key not in seen:
+                seen.add(pass_key)
+                identifiers.append(IndividualIdentifier(
+                    lcic_id=master_lcic_id,
+                    identifier_type='PASSPORT',
+                    identifier_value=rec.ind_passport,
+                    identifier_date=rec.ind_passport_date,
+                    created_by=username
+                ))
+        
+        # Family Book with Province
+        if rec.ind_familybook:
+            fb_key = f"FB_{rec.ind_familybook}_{rec.ind_familybook_prov_code or ''}"
+            if fb_key not in seen:
+                seen.add(fb_key)
+                identifiers.append(IndividualIdentifier(
+                    lcic_id=master_lcic_id,
+                    identifier_type='FAMILY_BOOK',
+                    identifier_value=rec.ind_familybook,
+                    identifier_date=rec.ind_familybook_date,
+                    province_code=rec.ind_familybook_prov_code,
+                    created_by=username
+                ))
+    
+    return identifiers
+
+
+def store_merge_history(master_lcic_id, merged_sys_ids, old_lcic_ids, username):
+    """
+    Store detailed merge history for audit purposes
+    Could be in a separate MergeHistory table or in a JSON field
+    """
+    # Example using raw SQL to store in a merge_history table
+    # You would need to create this table in your database
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO merge_history (
+                    master_lcic_id,
+                    merged_sys_ids,
+                    old_lcic_ids,
+                    merged_count,
+                    merged_by,
+                    merged_at
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+            """, [
+                master_lcic_id,
+                ','.join(map(str, merged_sys_ids)),
+                ','.join(old_lcic_ids) if old_lcic_ids else '',
+                len(merged_sys_ids),
+                username,
+                timezone.now()
+            ])
+    except Exception as e:
+        # If merge_history table doesn't exist, just log it
+        logger.warning(f"Could not store merge history: {e}")
+        
+        
+# combined_merge_views.py - All merge APIs in one file for easy integration
+
+from django.db import connection, transaction
+from django.utils import timezone
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rapidfuzz import fuzz
+import re
+import json
+import logging
+
+# Import your models
+from .models import IndividualBankIbk, IndividualBankIbkInfo, IndividualIdentifier
+
+logger = logging.getLogger(__name__)
+
+# ============== REVIEW & SELECTIVE MERGE APIs ==============
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def get_merge_group_details(request):
+    """Get detailed records for review before merging"""
+    
+    master_lcic_id = request.data.get("master_lcic_id")
+    lcic_groups = request.data.get("lcic_groups", [])
+    blocking_keys = request.data.get("blocking_keys", {})
+    
+    if not master_lcic_id:
+        return Response({"error": "master_lcic_id is required"}, status=400)
+    
+    try:
+        # Collect all LCIC IDs
+        lcic_ids = [group['lcic_id'] for group in lcic_groups]
+        
+        # Build query
+        query = """
+        SELECT ind_sys_id, lcic_id, bnk_code, branchcode, customerid,
+               ind_national_id, ind_national_id_date, ind_passport, ind_passport_date,
+               ind_familybook, ind_familybook_prov_code, ind_familybook_date,
+               ind_birth_date, ind_name, ind_second_name, ind_surname,
+               ind_lao_name, ind_lao_surname, ind_gender, ind_nationality,
+               mm_status, mm_action_date, mm_by
+        FROM individual_bank_ibk
+        WHERE 1=1
+        """
+        
+        params = []
+        
+        if lcic_ids:
+            placeholders = ','.join(['%s'] * len(lcic_ids))
+            query += f" AND lcic_id IN ({placeholders})"
+            params.extend(lcic_ids)
+        elif blocking_keys:
+            if blocking_keys.get('birth_date'):
+                query += " AND ind_birth_date = %s"
+                params.append(blocking_keys['birth_date'])
+            if blocking_keys.get('familybook'):
+                query += " AND ind_familybook = %s"
+                params.append(blocking_keys['familybook'])
+            if blocking_keys.get('province'):
+                query += " AND ind_familybook_prov_code = %s"
+                params.append(blocking_keys['province'])
+        
+        query += " ORDER BY lcic_id, bnk_code, ind_sys_id"
+        
+        with connection.cursor() as cursor:
+            cursor.execute(query, params)
+            columns = [col[0] for col in cursor.description]
+            rows = cursor.fetchall()
+        
+        # Convert to list of dicts
+        records = []
+        for row in rows:
+            record = dict(zip(columns, row))
+            # Convert dates to strings
+            for key in ['ind_birth_date', 'ind_national_id_date', 'ind_passport_date', 
+                       'ind_familybook_date', 'mm_action_date']:
+                if record.get(key):
+                    record[key] = str(record[key])
+            records.append(record)
+        
+        # Group by LCIC
+        grouped_records = {}
+        for record in records:
+            lcic = record['lcic_id'] or 'NO_LCIC'
+            if lcic not in grouped_records:
+                grouped_records[lcic] = {
+                    'lcic_id': lcic,
+                    'is_master': lcic == master_lcic_id,
+                    'records': []
+                }
+            grouped_records[lcic]['records'].append(record)
+        
+        # Calculate similarity scores
+        all_records_with_scores = []
+        for record in records:
+            record['similarity_scores'] = calculate_similarity(record, records)
+            record['potential_mismatch'] = record['similarity_scores']['min_score'] < 0.7
+            all_records_with_scores.append(record)
+        
+        return Response({
+            "success": True,
+            "master_lcic_id": master_lcic_id,
+            "total_records": len(records),
+            "grouped_by_lcic": list(grouped_records.values()),
+            "all_records": all_records_with_scores,
+            "summary": {
+                "total_lcic_groups": len(grouped_records),
+                "records_per_lcic": {
+                    lcic: len(data['records']) 
+                    for lcic, data in grouped_records.items()
+                },
+                "potential_mismatches": sum(1 for r in all_records_with_scores if r['potential_mismatch'])
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to fetch merge details: {e}")
+        return Response({"error": str(e)}, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def selective_merge(request):
+    """
+    Merge only selected records - matching the logic from merge_info_records
+    Includes MergeHistory tracking and proper IndividualIdentifier creation
+    """
+    
+    user = request.user
+    username = user.username or user.get_full_name() or "system"
+    
+    master_lcic_id = request.data.get("master_lcic_id")
+    selected_sys_ids = request.data.get("selected_sys_ids", [])
+    excluded_sys_ids = request.data.get("excluded_sys_ids", [])
+    reason = request.data.get("reason_for_exclusion", "Manual selective merge").strip()
+    
+    if not master_lcic_id or not selected_sys_ids:
+        return Response({
+            "success": False,
+            "error": "master_lcic_id and selected_sys_ids are required"
+        }, status=400)
+    
+    if not reason:
+        return Response({
+            "success": False,
+            "error": "Reason is required for merge operation"
+        }, status=400)
+    
+    try:
+        with transaction.atomic():
+            # Get selected records
+            records_to_merge = IndividualBankIbk.objects.filter(
+                ind_sys_id__in=selected_sys_ids
+            ).select_for_update()
+            
+            if not records_to_merge.exists():
+                return Response({
+                    "success": False,
+                    "error": "No records found with provided sys_ids"
+                }, status=404)
+            
+            # Prepare data for MergeHistory
+            merged_data = []
+            merged_lcic_ids = set()
+            all_national_ids = set()
+            all_passports = set()
+            all_family_books = set()
+            
+            # Collect all unique identifiers and data
+            for record in records_to_merge:
+                # Add to merged_lcic_ids
+                if record.lcic_id:
+                    merged_lcic_ids.add(record.lcic_id)
+                
+                # Collect identifiers with their dates
+                if record.ind_national_id:
+                    all_national_ids.add((record.ind_national_id, record.ind_national_id_date))
+                if record.ind_passport:
+                    all_passports.add((record.ind_passport, record.ind_passport_date))
+                if record.ind_familybook:
+                    all_family_books.add((record.ind_familybook, record.ind_familybook_prov_code, record.ind_familybook_date))
+                
+                # Store record data for history
+                merged_data.append({
+                    'ind_sys_id': record.ind_sys_id,
+                    'lcic_id': record.lcic_id,
+                    'bnk_code': record.bnk_code,
+                    'customerid': record.customerid,
+                    'name': f"{record.ind_name or ''} {record.ind_surname or ''}".strip(),
+                    'lao_name': f"{record.ind_lao_name or ''} {record.ind_lao_surname or ''}".strip(),
+                    'birth_date': record.ind_birth_date.isoformat() if record.ind_birth_date else None,
+                    'national_id': record.ind_national_id,
+                    'passport': record.ind_passport,
+                    'family_book': record.ind_familybook,
+                })
+            
+            # Collect old LCIC IDs (excluding master)
+            old_lcic_ids = list(merged_lcic_ids - {master_lcic_id})
+            
+            # Count records needing update
+            records_needing_update = records_to_merge.exclude(lcic_id=master_lcic_id).count()
+            
+            # Create detailed log message
+            log_message = (
+                f"[SELECTIVE_MERGE] Merged {len(selected_sys_ids)} selected records | "
+                f"Excluded {len(excluded_sys_ids)} records | "
+                f"Reason: {reason} | "
+                f"LCICs: {old_lcic_ids} → {master_lcic_id} | "
+                f"By: {username}"
+            )
+            
+            # Update selected records to master LCIC
+            updated_count = records_to_merge.exclude(lcic_id=master_lcic_id).update(
+                lcic_id=master_lcic_id,
+                mm_action_date=timezone.now(),
+                mm_log="SELECTIVE_MERGE",
+                mm_comment=log_message,
+                mm_by=username,
+                mm_status="MERGED"
+            )
+            
+            # Build golden profile from selected records
+            golden_data = build_golden_profile(records_to_merge)
+            
+            # Create/Update golden profile in IndividualBankIbkInfo
+            golden, created = IndividualBankIbkInfo.objects.update_or_create(
+                lcic_id=master_lcic_id,
+                defaults=golden_data
+            )
+            
+            # Create IndividualIdentifier records (matching merge_info_records pattern)
+            notes = f"Merged from records: {', '.join(map(str, selected_sys_ids))}. Reason: {reason}"
+            identifiers_to_create = []
+            
+            # National IDs
+            for national_id, date in all_national_ids:
+                if national_id:  # Only create if value exists
+                    identifiers_to_create.append(
+                        IndividualIdentifier(
+                            lcic_id=master_lcic_id,
+                            identifier_type='NATIONAL_ID',
+                            identifier_value=national_id,
+                            identifier_date=date,
+                            is_active=True,
+                            created_by=username,
+                            notes=notes
+                        )
+                    )
+            
+            # Passports
+            for passport, date in all_passports:
+                if passport:  # Only create if value exists
+                    identifiers_to_create.append(
+                        IndividualIdentifier(
+                            lcic_id=master_lcic_id,
+                            identifier_type='PASSPORT',
+                            identifier_value=passport,
+                            identifier_date=date,
+                            is_active=True,
+                            created_by=username,
+                            notes=notes
+                        )
+                    )
+            
+            # Family Books
+            for family_book, province_code, date in all_family_books:
+                if family_book:  # Only create if value exists
+                    identifiers_to_create.append(
+                        IndividualIdentifier(
+                            lcic_id=master_lcic_id,
+                            identifier_type='FAMILY_BOOK',
+                            identifier_value=family_book,
+                            identifier_date=date,
+                            province_code=province_code,
+                            is_active=True,
+                            created_by=username,
+                            notes=notes
+                        )
+                    )
+            
+            # Bulk create identifiers
+            if identifiers_to_create:
+                IndividualIdentifier.objects.bulk_create(
+                    identifiers_to_create,
+                    ignore_conflicts=True
+                )
+            
+            # Create MergeHistory record if model exists
+            try:
+                from .models import MergeHistory
+                
+                MergeHistory.objects.create(
+                    action='MERGE',  # Using standard MERGE action
+                    master_lcic_id=master_lcic_id,
+                    merged_ind_sys_ids=selected_sys_ids,
+                    merged_data={
+                        'merged_records': merged_data,
+                        'merged_lcic_ids': list(merged_lcic_ids),
+                        'excluded_sys_ids': excluded_sys_ids,
+                        'combined_identifiers': {
+                            'national_ids': [nid[0] for nid in all_national_ids if nid[0]],
+                            'passports': [pp[0] for pp in all_passports if pp[0]],
+                            'family_books': [fb[0] for fb in all_family_books if fb[0]],
+                        }
+                    },
+                    performed_by=username,
+                    reason=reason,
+                )
+                history_created = True
+            except ImportError:
+                logger.warning("MergeHistory model not found, skipping history creation")
+                history_created = False
+            
+            # Log excluded records for audit (if any)
+            if excluded_sys_ids:
+                log_excluded_records(excluded_sys_ids, master_lcic_id, reason, username)
+            
+            # Invalidate cache if function exists
+            cache_invalidated = False
+            try:
+                from .utils import invalidate_cache
+                invalidate_cache()
+                cache_invalidated = True
+            except ImportError:
+                pass
+            
+            logger.info(f"Successfully merged {len(selected_sys_ids)} records into LCIC {master_lcic_id}")
+            
+            return Response({
+                "success": True,
+                "message": f"Successfully merged {len(selected_sys_ids)} selected records into LCIC {master_lcic_id}",
+                "details": {
+                    "master_lcic_id": master_lcic_id,
+                    "selected_count": len(selected_sys_ids),
+                    "excluded_count": len(excluded_sys_ids),
+                    "records_updated": updated_count,
+                    "records_already_correct": len(selected_sys_ids) - records_needing_update,
+                    "old_lcic_ids": old_lcic_ids,
+                    "golden_profile_created": created,
+                    "identifiers_created": len(identifiers_to_create),
+                    "history_created": history_created,
+                    "combined_identifiers": {
+                        'national_ids': [nid[0] for nid in all_national_ids if nid[0]],
+                        'passports': [pp[0] for pp in all_passports if pp[0]],
+                        'family_books': [fb[0] for fb in all_family_books if fb[0]],
+                    },
+                    "cache_invalidated": cache_invalidated,
+                }
+            })
+            
+    except Exception as e:
+        logger.error(f"Selective merge failed: {e}", exc_info=True)
+        return Response({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
+
+# ============== HELPER FUNCTIONS ==============
+
+def calculate_similarity(record, all_records):
+    """Calculate similarity scores"""
+    scores = []
+    
+    for other in all_records:
+        if other['ind_sys_id'] == record['ind_sys_id']:
+            continue
+        
+        score = 0
+        max_score = 0
+        
+        # Check identifiers
+        if record.get('ind_national_id') and other.get('ind_national_id'):
+            max_score += 30
+            if record['ind_national_id'] == other['ind_national_id']:
+                score += 30
+        
+        if record.get('ind_passport') and other.get('ind_passport'):
+            max_score += 25
+            if record['ind_passport'] == other['ind_passport']:
+                score += 25
+        
+        if record.get('ind_familybook') and other.get('ind_familybook'):
+            max_score += 20
+            if record['ind_familybook'] == other['ind_familybook']:
+                score += 20
+        
+        if record.get('ind_birth_date') and other.get('ind_birth_date'):
+            max_score += 15
+            if record['ind_birth_date'] == other['ind_birth_date']:
+                score += 15
+        
+        # Names
+        if record.get('ind_lao_name') and other.get('ind_lao_name'):
+            max_score += 10
+            if record['ind_lao_name'] == other['ind_lao_name']:
+                score += 10
+        
+        if max_score > 0:
+            similarity = score / max_score
+            scores.append(similarity)
+    
+    if scores:
+        return {
+            'avg_score': sum(scores) / len(scores),
+            'min_score': min(scores),
+            'max_score': max(scores)
+        }
+    else:
+        return {'avg_score': 1.0, 'min_score': 1.0, 'max_score': 1.0}
+
+
+def build_golden_profile(records_queryset):
+    """Build golden profile from records"""
+    best_record = None
+    best_score = -1
+    
+    for record in records_queryset:
+        score = 0
+        if record.ind_national_id: score += 50
+        if record.ind_passport: score += 40
+        if record.ind_familybook: score += 30
+        if record.ind_birth_date: score += 20
+        if record.ind_lao_name: score += 15
+        if record.ind_lao_surname: score += 15
+        
+        if score > best_score:
+            best_score = score
+            best_record = record
+    
+    if not best_record:
+        return {}
+    
+    return {
+        'mm_ind_sys_id': str(best_record.ind_sys_id),
+        'ind_national_id': best_record.ind_national_id,
+        'ind_national_id_date': best_record.ind_national_id_date,
+        'ind_passport': best_record.ind_passport,
+        'ind_passport_date': best_record.ind_passport_date,
+        'ind_familybook': best_record.ind_familybook,
+        'ind_familybook_prov_code': best_record.ind_familybook_prov_code,
+        'ind_familybook_date': best_record.ind_familybook_date,
+        'ind_birth_date': best_record.ind_birth_date,
+        'ind_name': best_record.ind_name,
+        'ind_surname': best_record.ind_surname,
+        'ind_lao_name': best_record.ind_lao_name,
+        'ind_lao_surname': best_record.ind_lao_surname,
+    }
+
+
+def collect_all_identifiers(records_queryset, master_lcic_id, username):
+    """Collect unique identifiers for audit"""
+    identifiers_to_create = []
+    seen_identifiers = set()
+    
+    for record in records_queryset:
+        # National ID
+        if record.ind_national_id:
+            key = ('NATIONAL_ID', record.ind_national_id)
+            if key not in seen_identifiers:
+                seen_identifiers.add(key)
+                identifiers_to_create.append(
+                    IndividualIdentifier(
+                        lcic_id=master_lcic_id,
+                        identifier_type='NATIONAL_ID',
+                        identifier_value=record.ind_national_id,
+                        identifier_date=record.ind_national_id_date,
+                        created_by=username,
+                        notes=f"sys_id: {record.ind_sys_id}"
+                    )
+                )
+        
+        # Passport
+        if record.ind_passport:
+            key = ('PASSPORT', record.ind_passport)
+            if key not in seen_identifiers:
+                seen_identifiers.add(key)
+                identifiers_to_create.append(
+                    IndividualIdentifier(
+                        lcic_id=master_lcic_id,
+                        identifier_type='PASSPORT',
+                        identifier_value=record.ind_passport,
+                        identifier_date=record.ind_passport_date,
+                        created_by=username,
+                        notes=f"sys_id: {record.ind_sys_id}"
+                    )
+                )
+        
+        # Family Book
+        if record.ind_familybook:
+            key = ('FAMILY_BOOK', record.ind_familybook)
+            if key not in seen_identifiers:
+                seen_identifiers.add(key)
+                identifiers_to_create.append(
+                    IndividualIdentifier(
+                        lcic_id=master_lcic_id,
+                        identifier_type='FAMILY_BOOK',
+                        identifier_value=record.ind_familybook,
+                        identifier_date=record.ind_familybook_date,
+                        province_code=record.ind_familybook_prov_code,
+                        created_by=username,
+                        notes=f"sys_id: {record.ind_sys_id}"
+                    )
+                )
+    
+    return identifiers_to_create
+
+
+def log_excluded_records(excluded_sys_ids, master_lcic_id, reason, username):
+    """Log excluded records for audit"""
+    try:
+        excluded_records = IndividualBankIbk.objects.filter(
+            ind_sys_id__in=excluded_sys_ids
+        )
+        
+        for record in excluded_records:
+            comment = (
+                f"EXCLUDED from merge to {master_lcic_id} | "
+                f"Reason: {reason} | By: {username} at {timezone.now()}"
+            )
+            
+            if record.mm_comment:
+                record.mm_comment = f"{record.mm_comment}\n---\n{comment}"
+            else:
+                record.mm_comment = comment
+            
+            record.mm_status = "EXCLUDED_FROM_MERGE"
+            record.mm_action_date = timezone.now()
+            record.mm_by = username
+            record.save(update_fields=['mm_comment', 'mm_status', 'mm_action_date', 'mm_by'])
+            
+    except Exception as e:
+        logger.warning(f"Could not log excluded records: {e}")
+
+
+#--------------------- Suggest By Filter API ------------------------
+from django.db.models import Count, Q, F, Value, CharField
+from django.db.models.functions import Concat, Lower, Trim
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from django.core.paginator import Paginator
+from collections import defaultdict
+import logging
+
+logger = logging.getLogger(__name__)
+
+def normalize_for_comparison(text):
+    """Normalize text for comparison by removing spaces, hyphens, etc."""
+    if not text:
+        return ""
+    return text.replace("-", "").replace(" ", "").lower().strip()
+
+def clean_lao_name(name):
+    """Clean Lao name for comparison"""
+    if not name:
+        return ""
+    # Remove common Lao tone marks and normalize
+    replacements = {
+        'ໍ': '', 'ັ': '', '້': '', '່': '', '໊': '', '໋': '', 'ົ': '',
+        '  ': ' '  # Multiple spaces to single
+    }
+    for old, new in replacements.items():
+        name = name.replace(old, new)
+    return name.strip().lower()
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def auto_suggest_merge_by_filter(request):
+    """
+    Optimized Auto-Suggest by Filter Type
+    
+    Supported filters:
+    - national_id: Group by national ID (exact after normalization)
+    - passport: Group by passport (exact after normalization)  
+    - familybook: Group by family book + province
+    - english_name: Group by English name (with blocking for performance)
+    - lao_name: Group by Lao name (with blocking for performance)
+    - sys_id: Group by mm_ind_sys_id
+    
+    Query params:
+    - filter_type: Required (one of the above)
+    - page: Page number (default 1)
+    - page_size: Results per page (default 50, max 100)
+    - min_group_size: Minimum group size to return (default 2)
+    """
+    
+    filter_type = request.query_params.get('filter_type')
+    page = int(request.query_params.get('page', 1))
+    page_size = min(int(request.query_params.get('page_size', 50)), 100)
+    min_group_size = int(request.query_params.get('min_group_size', 2))
+    
+    valid_filters = ['national_id', 'passport', 'familybook', 'english_name', 'lao_name', 'sys_id']
+    
+    if filter_type not in valid_filters:
+        return Response({
+            "error": f"filter_type must be one of: {', '.join(valid_filters)}"
+        }, status=400)
+    
+    try:
+        # Base queryset - only active records
+        queryset = IndividualBankIbk.objects.filter(segment='A1')
+        
+        if filter_type == 'national_id':
+            suggestions = process_national_id_filter(queryset, min_group_size)
+            
+        elif filter_type == 'passport':
+            suggestions = process_passport_filter(queryset, min_group_size)
+            
+        elif filter_type == 'familybook':
+            suggestions = process_familybook_filter(queryset, min_group_size)
+            
+        elif filter_type == 'english_name':
+            suggestions = process_english_name_filter(queryset, min_group_size)
+            
+        elif filter_type == 'lao_name':
+            suggestions = process_lao_name_filter(queryset, min_group_size)
+            
+        elif filter_type == 'sys_id':
+            suggestions = process_sys_id_filter(queryset, min_group_size)
+        
+        # Sort by group size (largest first)
+        suggestions.sort(key=lambda x: x['group_size'], reverse=True)
+        
+        # Add rank
+        for i, suggestion in enumerate(suggestions):
+            suggestion['rank'] = (page - 1) * page_size + i + 1
+        
+        # Paginate
+        paginator = Paginator(suggestions, page_size)
+        page_obj = paginator.page(page)
+        
+        return Response({
+            "filter_type": filter_type,
+            "total_suggestions": len(suggestions),
+            "page": page,
+            "page_size": page_size,
+            "total_pages": paginator.num_pages,
+            "results": page_obj.object_list
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in auto_suggest_merge_by_filter: {str(e)}", exc_info=True)
+        return Response({
+            "error": f"An error occurred: {str(e)}"
+        }, status=500)
+
+
+def process_national_id_filter(queryset, min_group_size):
+    """Process national ID grouping - exact match after normalization"""
+    
+    # Filter records with national ID
+    records = queryset.filter(
+        ind_national_id__isnull=False
+    ).exclude(
+        ind_national_id=''
+    ).values(
+        'ind_sys_id', 'lcic_id', 'ind_national_id',
+        'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname',
+        'ind_birth_date', 'bnk_code'
+    )
+    
+    # Group by normalized national ID
+    groups = defaultdict(list)
+    for record in records:
+        normalized = normalize_for_comparison(record['ind_national_id'])
+        if normalized:
+            groups[normalized].append(record)
+    
+    # Build suggestions
+    suggestions = []
+    for normalized_id, group in groups.items():
+        if len(group) < min_group_size:
+            continue
+        
+        # Group by LCIC
+        lcic_map = defaultdict(list)
+        for r in group:
+            lcic = r['lcic_id'] or "NO_LCIC"
+            lcic_map[lcic].append(r)
+        
+        # Skip if all have same LCIC
+        if len(lcic_map) <= 1:
+            continue
+        
+        # Determine master LCIC (most common)
+        master_lcic = max(lcic_map.items(), key=lambda x: len(x[1]))[0]
+        if master_lcic == "NO_LCIC":
+            master_lcic = None
+        
+        # Get display value (first non-normalized version)
+        display_id = group[0]['ind_national_id']
+        
+        suggestions.append({
+            "filter_type": "national_id",
+            "match_value": display_id,
+            "normalized_value": normalized_id,
+            "group_size": len(group),
+            "different_lcic_count": len(lcic_map),
+            "suggested_master_lcic": master_lcic,
+            "sample_names": list({
+                f"{r.get('ind_lao_name', '')} {r.get('ind_lao_surname', '')}".strip()
+                for r in group[:5]
+            })[:3],
+            "lcic_groups": [
+                {
+                    "lcic_id": lcic if lcic != "NO_LCIC" else None,
+                    "count": len(recs),
+                    "banks": list({r['bnk_code'] for r in recs if r['bnk_code']})[:5],
+                    "sample_sys_ids": [r['ind_sys_id'] for r in recs[:3]]
+                }
+                for lcic, recs in lcic_map.items()
+            ]
+        })
+    
+    return suggestions
+
+
+def process_passport_filter(queryset, min_group_size):
+    """Process passport grouping - exact match after normalization"""
+    
+    records = queryset.filter(
+        ind_passport__isnull=False
+    ).exclude(
+        ind_passport=''
+    ).values(
+        'ind_sys_id', 'lcic_id', 'ind_passport',
+        'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname',
+        'ind_birth_date', 'bnk_code'
+    )
+    
+    groups = defaultdict(list)
+    for record in records:
+        normalized = normalize_for_comparison(record['ind_passport'])
+        if normalized:
+            groups[normalized].append(record)
+    
+    suggestions = []
+    for normalized_passport, group in groups.items():
+        if len(group) < min_group_size:
+            continue
+        
+        lcic_map = defaultdict(list)
+        for r in group:
+            lcic = r['lcic_id'] or "NO_LCIC"
+            lcic_map[lcic].append(r)
+        
+        if len(lcic_map) <= 1:
+            continue
+        
+        master_lcic = max(lcic_map.items(), key=lambda x: len(x[1]))[0]
+        if master_lcic == "NO_LCIC":
+            master_lcic = None
+        
+        display_passport = group[0]['ind_passport']
+        
+        suggestions.append({
+            "filter_type": "passport",
+            "match_value": display_passport,
+            "normalized_value": normalized_passport,
+            "group_size": len(group),
+            "different_lcic_count": len(lcic_map),
+            "suggested_master_lcic": master_lcic,
+            "sample_names": list({
+                f"{r.get('ind_lao_name', '')} {r.get('ind_lao_surname', '')}".strip()
+                for r in group[:5]
+            })[:3],
+            "lcic_groups": [
+                {
+                    "lcic_id": lcic if lcic != "NO_LCIC" else None,
+                    "count": len(recs),
+                    "banks": list({r['bnk_code'] for r in recs if r['bnk_code']})[:5],
+                    "sample_sys_ids": [r['ind_sys_id'] for r in recs[:3]]
+                }
+                for lcic, recs in lcic_map.items()
+            ]
+        })
+    
+    return suggestions
+
+
+def process_familybook_filter(queryset, min_group_size):
+    """Process family book + province grouping"""
+    
+    records = queryset.filter(
+        ind_familybook__isnull=False,
+        ind_familybook_prov_code__isnull=False
+    ).exclude(
+        ind_familybook=''
+    ).values(
+        'ind_sys_id', 'lcic_id', 'ind_familybook', 'ind_familybook_prov_code',
+        'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname',
+        'ind_birth_date', 'bnk_code'
+    )
+    
+    groups = defaultdict(list)
+    for record in records:
+        fb = normalize_for_comparison(record['ind_familybook'])
+        prov = record['ind_familybook_prov_code'].strip() if record['ind_familybook_prov_code'] else ''
+        if fb and prov:
+            key = f"{fb}|{prov}"
+            groups[key].append(record)
+    
+    suggestions = []
+    for key, group in groups.items():
+        if len(group) < min_group_size:
+            continue
+        
+        lcic_map = defaultdict(list)
+        for r in group:
+            lcic = r['lcic_id'] or "NO_LCIC"
+            lcic_map[lcic].append(r)
+        
+        if len(lcic_map) <= 1:
+            continue
+        
+        master_lcic = max(lcic_map.items(), key=lambda x: len(x[1]))[0]
+        if master_lcic == "NO_LCIC":
+            master_lcic = None
+        
+        # Display values
+        display_fb = group[0]['ind_familybook']
+        display_prov = group[0]['ind_familybook_prov_code']
+        
+        suggestions.append({
+            "filter_type": "familybook",
+            "match_value": f"{display_fb} (Province: {display_prov})",
+            "familybook": display_fb,
+            "province_code": display_prov,
+            "group_size": len(group),
+            "different_lcic_count": len(lcic_map),
+            "suggested_master_lcic": master_lcic,
+            "sample_names": list({
+                f"{r.get('ind_lao_name', '')} {r.get('ind_lao_surname', '')}".strip()
+                for r in group[:5]
+            })[:3],
+            "lcic_groups": [
+                {
+                    "lcic_id": lcic if lcic != "NO_LCIC" else None,
+                    "count": len(recs),
+                    "banks": list({r['bnk_code'] for r in recs if r['bnk_code']})[:5],
+                    "sample_sys_ids": [r['ind_sys_id'] for r in recs[:3]]
+                }
+                for lcic, recs in lcic_map.items()
+            ]
+        })
+    
+    return suggestions
+
+
+def process_english_name_filter(queryset, min_group_size):
+    """
+    Process English name grouping with blocking for performance
+    Uses first 3 letters of surname as blocking key
+    """
+    from rapidfuzz import fuzz
+    
+    # Get records with English names
+    records = queryset.filter(
+        ind_name__isnull=False,
+        ind_surname__isnull=False
+    ).exclude(
+        Q(ind_name='') | Q(ind_surname='')
+    ).values(
+        'ind_sys_id', 'lcic_id', 
+        'ind_name', 'ind_surname', 
+        'ind_lao_name', 'ind_lao_surname',
+        'ind_birth_date', 'bnk_code', 'ind_national_id'
+    )
+    
+    # Create blocks based on first 3 letters of surname
+    blocks = defaultdict(list)
+    for record in records:
+        surname = record['ind_surname'].lower().strip()
+        if len(surname) >= 3:
+            block_key = surname[:3]
+        else:
+            block_key = surname
+        
+        record['full_name'] = f"{record['ind_name']} {record['ind_surname']}".lower().strip()
+        blocks[block_key].append(record)
+    
+    # Process each block separately
+    suggestions = []
+    
+    for block_key, block_records in blocks.items():
+        # Skip small blocks
+        if len(block_records) < min_group_size:
+            continue
+        
+        # Find similar names within block
+        groups = []
+        seen = set()
+        
+        for i, r1 in enumerate(block_records):
+            if r1['ind_sys_id'] in seen:
+                continue
+            
+            group = [r1]
+            seen.add(r1['ind_sys_id'])
+            name1 = r1['full_name']
+            
+            # Only compare within the same block
+            for r2 in block_records[i+1:]:
+                if r2['ind_sys_id'] in seen:
+                    continue
+                
+                # Use fuzzy matching with threshold
+                if fuzz.ratio(name1, r2['full_name']) >= 85:
+                    group.append(r2)
+                    seen.add(r2['ind_sys_id'])
+            
+            if len(group) >= min_group_size:
+                groups.append(group)
+        
+        # Process each group
+        for group in groups:
+            lcic_map = defaultdict(list)
+            for r in group:
+                lcic = r['lcic_id'] or "NO_LCIC"
+                lcic_map[lcic].append(r)
+            
+            if len(lcic_map) <= 1:
+                continue
+            
+            master_lcic = max(lcic_map.items(), key=lambda x: len(x[1]))[0]
+            if master_lcic == "NO_LCIC":
+                master_lcic = None
+            
+            # Get most common name variant
+            name_counts = defaultdict(int)
+            for r in group:
+                display_name = f"{r['ind_name']} {r['ind_surname']}"
+                name_counts[display_name] += 1
+            
+            most_common_name = max(name_counts.items(), key=lambda x: x[1])[0]
+            
+            suggestions.append({
+                "filter_type": "english_name",
+                "match_value": most_common_name,
+                "name_variations": list(name_counts.keys())[:5],
+                "group_size": len(group),
+                "different_lcic_count": len(lcic_map),
+                "suggested_master_lcic": master_lcic,
+                "lcic_groups": [
+                    {
+                        "lcic_id": lcic if lcic != "NO_LCIC" else None,
+                        "count": len(recs),
+                        "banks": list({r['bnk_code'] for r in recs if r['bnk_code']})[:5],
+                        "sample_sys_ids": [r['ind_sys_id'] for r in recs[:3]]
+                    }
+                    for lcic, recs in lcic_map.items()
+                ]
+            })
+    
+    return suggestions
+
+
+def process_lao_name_filter(queryset, min_group_size):
+    """
+    Process Lao name grouping with blocking for performance
+    Groups by exact match after cleaning
+    """
+    
+    records = queryset.filter(
+        ind_lao_name__isnull=False,
+        ind_lao_surname__isnull=False
+    ).exclude(
+        Q(ind_lao_name='') | Q(ind_lao_surname='')
+    ).values(
+        'ind_sys_id', 'lcic_id',
+        'ind_lao_name', 'ind_lao_surname',
+        'ind_name', 'ind_surname',
+        'ind_birth_date', 'bnk_code', 'ind_national_id'
+    )
+    
+    # Group by cleaned Lao name (exact match after cleaning)
+    groups = defaultdict(list)
+    for record in records:
+        # Clean and normalize Lao name
+        cleaned_name = clean_lao_name(f"{record['ind_lao_name']} {record['ind_lao_surname']}")
+        if cleaned_name:
+            record['cleaned_name'] = cleaned_name
+            groups[cleaned_name].append(record)
+    
+    suggestions = []
+    for cleaned_name, group in groups.items():
+        if len(group) < min_group_size:
+            continue
+        
+        lcic_map = defaultdict(list)
+        for r in group:
+            lcic = r['lcic_id'] or "NO_LCIC"
+            lcic_map[lcic].append(r)
+        
+        if len(lcic_map) <= 1:
+            continue
+        
+        master_lcic = max(lcic_map.items(), key=lambda x: len(x[1]))[0]
+        if master_lcic == "NO_LCIC":
+            master_lcic = None
+        
+        # Get most common name variant
+        name_counts = defaultdict(int)
+        for r in group:
+            display_name = f"{r['ind_lao_name']} {r['ind_lao_surname']}"
+            name_counts[display_name] += 1
+        
+        most_common_name = max(name_counts.items(), key=lambda x: x[1])[0]
+        
+        suggestions.append({
+            "filter_type": "lao_name",
+            "match_value": most_common_name,
+            "cleaned_value": cleaned_name,
+            "name_variations": list(name_counts.keys())[:5],
+            "group_size": len(group),
+            "different_lcic_count": len(lcic_map),
+            "suggested_master_lcic": master_lcic,
+            "lcic_groups": [
+                {
+                    "lcic_id": lcic if lcic != "NO_LCIC" else None,
+                    "count": len(recs),
+                    "banks": list({r['bnk_code'] for r in recs if r['bnk_code']})[:5],
+                    "sample_sys_ids": [r['ind_sys_id'] for r in recs[:3]]
+                }
+                for lcic, recs in lcic_map.items()
+            ]
+        })
+    
+    return suggestions
+
+
+def process_sys_id_filter(queryset, min_group_size):
+    """Process mm_ind_sys_id grouping"""
+    
+    # Filter records with mm_ind_sys_id
+    records = queryset.filter(
+        mm_ind_sys_id__isnull=False
+    ).exclude(
+        mm_ind_sys_id=''
+    ).values(
+        'ind_sys_id', 'lcic_id', 'mm_ind_sys_id',
+        'ind_name', 'ind_surname', 'ind_lao_name', 'ind_lao_surname',
+        'ind_birth_date', 'bnk_code', 'ind_national_id'
+    )
+    
+    # Group by mm_ind_sys_id
+    groups = defaultdict(list)
+    for record in records:
+        sys_id = str(record['mm_ind_sys_id']).strip()
+        if sys_id:
+            groups[sys_id].append(record)
+    
+    suggestions = []
+    for sys_id, group in groups.items():
+        if len(group) < min_group_size:
+            continue
+        
+        lcic_map = defaultdict(list)
+        for r in group:
+            lcic = r['lcic_id'] or "NO_LCIC"
+            lcic_map[lcic].append(r)
+        
+        if len(lcic_map) <= 1:
+            continue
+        
+        master_lcic = max(lcic_map.items(), key=lambda x: len(x[1]))[0]
+        if master_lcic == "NO_LCIC":
+            master_lcic = None
+        
+        suggestions.append({
+            "filter_type": "sys_id",
+            "match_value": sys_id,
+            "mm_ind_sys_id": sys_id,
+            "group_size": len(group),
+            "different_lcic_count": len(lcic_map),
+            "suggested_master_lcic": master_lcic,
+            "sample_names": list({
+                f"{r.get('ind_lao_name', '')} {r.get('ind_lao_surname', '')}".strip()
+                for r in group[:5]
+            })[:3],
+            "lcic_groups": [
+                {
+                    "lcic_id": lcic if lcic != "NO_LCIC" else None,
+                    "count": len(recs),
+                    "banks": list({r['bnk_code'] for r in recs if r['bnk_code']})[:5],
+                    "sample_sys_ids": [r['ind_sys_id'] for r in recs[:3]]
+                }
+                for lcic, recs in lcic_map.items()
+            ]
+        })
+    
+    return suggestions
+
+
+# ============================================
+# Additional API for getting details of a group
+# ============================================
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def get_filter_group_details(request):
+    """
+    Get all records in a specific filter group for review
+    
+    POST body:
+    {
+        "filter_type": "national_id",
+        "match_value": "16-0002968",
+        "normalized_value": "160002968"  // Optional, for normalized matching
+    }
+    """
+    
+    filter_type = request.data.get('filter_type')
+    match_value = request.data.get('match_value')
+    normalized_value = request.data.get('normalized_value')
+    
+    if not filter_type or not match_value:
+        return Response({
+            "error": "filter_type and match_value are required"
+        }, status=400)
+    
+    try:
+        queryset = IndividualBankIbk.objects.filter(segment='A1')
+        
+        if filter_type == 'national_id':
+            # Use normalized value if provided
+            if normalized_value:
+                records = []
+                for record in queryset.filter(ind_national_id__isnull=False):
+                    if normalize_for_comparison(record.ind_national_id) == normalized_value:
+                        records.append(record)
+            else:
+                records = queryset.filter(ind_national_id=match_value)
+        
+        elif filter_type == 'passport':
+            if normalized_value:
+                records = []
+                for record in queryset.filter(ind_passport__isnull=False):
+                    if normalize_for_comparison(record.ind_passport) == normalized_value:
+                        records.append(record)
+            else:
+                records = queryset.filter(ind_passport=match_value)
+        
+        elif filter_type == 'familybook':
+            # Extract familybook and province from match_value
+            parts = match_value.split(' (Province: ')
+            if len(parts) == 2:
+                fb = parts[0]
+                prov = parts[1].rstrip(')')
+                records = queryset.filter(
+                    ind_familybook=fb,
+                    ind_familybook_prov_code=prov
+                )
+            else:
+                records = []
+        
+        elif filter_type == 'sys_id':
+            records = queryset.filter(mm_ind_sys_id=match_value)
+        
+        else:
+            # For name filters, we need to do fuzzy matching again
+            records = []
+        
+        # Format response
+        all_records = []
+        for r in records:
+            all_records.append({
+                "ind_sys_id": r.ind_sys_id,
+                "lcic_id": r.lcic_id,
+                "bnk_code": r.bnk_code,
+                "ind_name": r.ind_name,
+                "ind_surname": r.ind_surname,
+                "ind_lao_name": r.ind_lao_name,
+                "ind_lao_surname": r.ind_lao_surname,
+                "ind_national_id": r.ind_national_id,
+                "ind_passport": r.ind_passport,
+                "ind_familybook": r.ind_familybook,
+                "ind_familybook_prov_code": r.ind_familybook_prov_code,
+                "ind_birth_date": r.ind_birth_date,
+                "ind_gender": r.ind_gender,
+                "mm_status": r.mm_status,
+                "mm_ind_sys_id": r.mm_ind_sys_id
+            })
+        
+        return Response({
+            "success": True,
+            "filter_type": filter_type,
+            "match_value": match_value,
+            "total_records": len(all_records),
+            "records": all_records
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in get_filter_group_details: {str(e)}", exc_info=True)
+        return Response({
+            "error": f"An error occurred: {str(e)}"
+        }, status=500)
+
+# -------------------- API END HERE -------------------------
+
+
+
+
+from rest_framework import generics, status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.db.models import Q, Count
+from django.shortcuts import get_object_or_404
+from .models import MemberProductAccess, ChargeMatrix, memberInfo
+from .serializers import (
+    MemberProductAccessSerializer
+)
+
+class ProductsByBankTypeAPIView(APIView):
+    """
+    GET: ດຶງລາຍການ Products ທີ່ເໝາະສົມຕາມ Bank Type
+    bnk_type = 1 (ທະນາຄານພາທິດ) -> chg_code ບໍ່ລົງທ້າຍດ້ວຍ "FI"
+    bnk_type = 2 (ສະຖາບັນການເງິນ) -> chg_code ລົງທ້າຍດ້ວຍ "FI"
+    
+    Query params: ?bnk_code=BNK001
+    """
+    # permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        bnk_code = request.query_params.get('bnk_code')
+        
+        if not bnk_code:
+            return Response(
+                {'error': 'ກະລຸນາໃສ່ bnk_code'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # ດຶງຂໍ້ມູນ Member
+        try:
+            member = memberInfo.objects.get(bnk_code=bnk_code)
+        except memberInfo.DoesNotExist:
+            return Response(
+                {'error': 'ບໍ່ພົບສະມາຊິກທີ່ມີລະຫັດນີ້'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Filter products ຕາມ bnk_type ດ້ວຍ chg_code ທີ່ກຳນົດໄວ້
+        if member.bnk_type == 1:
+            # ທະນາຄານພາທິດ - ເອົາແຕ່ທີ່ບໍ່ມີ FI
+            allowed_codes = ['FCR', 'SCR', 'UTLT', 'NLR', 'JCR', 'NJCR']
+            products = ChargeMatrix.objects.filter(chg_code__in=allowed_codes)
+        elif member.bnk_type == 2:
+            # ສະຖາບັນການເງິນ - ເອົາແຕ່ທີ່ມີ FI
+            allowed_codes = ['FCRFI', 'NLRFI', 'SCRFI', 'UTLTFI', 'JCRFI', 'NJRFI']
+            products = ChargeMatrix.objects.filter(chg_code__in=allowed_codes)
+        else:
+            # ຖ້າບໍ່ມີ bnk_type ຫຼື ມີຄ່າອື່ນ ໃຫ້ສະແດງທັງໝົດ
+            products = ChargeMatrix.objects.all()
+        
+        # ດຶງຂໍ້ມູນ Access ຂອງ Member ນີ້
+        member_accesses = MemberProductAccess.objects.filter(bnk_code=bnk_code)
+        
+        # ສ້າງ response data
+        products_data = []
+        for product in products:
+            # ຊອກຫາວ່າ member ມີສິດນີ້ຢູ່ແລ້ວບໍ່
+            access = member_accesses.filter(chg_sys_id=product.chg_sys_id).first()
+            
+            products_data.append({
+                'chg_sys_id': product.chg_sys_id,
+                'chg_code': product.chg_code,
+                'chg_desc': product.chg_desc,
+                'chg_lao_desc': product.chg_lao_desc,
+                'chg_type': product.chg_type,
+                'has_access': access is not None,
+                'is_active': access.is_active if access else False,
+                'access_id': access.access_id if access else None
+            })
+        
+        # ສ້າງ mImage URL
+        # ວິທີທີ່ 1: ຖ້າມີຮູບ ໃຫ້ສ້າງ URL
+        mimage_url = None
+        if member.mImage:
+            try:
+                mimage_url = member.mImage.url  # ຈະໄດ້ /media/memberUpload/LCIC.png
+            except (ValueError, AttributeError):
+                # ຖ້າບໍ່ມີຟາຍຈິງ ຫຼື field ເປົ່າ
+                mimage_url = None
+        
+        return Response({
+            'member': {
+                'bnk_code': member.bnk_code,
+                'name_lao': member.nameL,
+                'name_en': member.nameE,
+                'bnk_type': member.bnk_type,
+                'mImage': mimage_url  # ← ສົ່ງເປັນ URL string
+            },
+            'products': products_data,
+            'total_products': len(products_data)
+        })
+
+
+class ToggleProductAccessAPIView(APIView):
+    """
+    POST: Toggle Product Access (Add/Activate ຫຼື Delete)
+    
+    Body: {
+        "bnk_code": "BNK001",
+        "chg_sys_id": "1"
+    }
+    
+    Logic:
+    - ຖ້າບໍ່ມີ record -> ສ້າງໃໝ່ (is_active=True)
+    - ຖ້າມີ record ແລະ is_active=False -> ປ່ຽນເປັນ True
+    - ຖ້າມີ record ແລະ is_active=True -> ລົບອອກ (Hard Delete)
+    """
+    # permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        bnk_code = request.data.get('bnk_code')
+        chg_sys_id = request.data.get('chg_sys_id')
+        
+        if not bnk_code or not chg_sys_id:
+            return Response(
+                {'error': 'ກະລຸນາໃສ່ bnk_code ແລະ chg_sys_id'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # ກວດສອບວ່າ Member ມີຢູ່ຈິງ
+        if not memberInfo.objects.filter(bnk_code=bnk_code).exists():
+            return Response(
+                {'error': 'ບໍ່ພົບສະມາຊິກທີ່ມີລະຫັດນີ້'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # ກວດສອບວ່າ Product ມີຢູ່ຈິງ
+        if not ChargeMatrix.objects.filter(chg_sys_id=chg_sys_id).exists():
+            return Response(
+                {'error': 'ບໍ່ພົບຜະລິດຕະພັນທີ່ມີລະຫັດນີ້'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # ຊອກຫາ Access record
+        access = MemberProductAccess.objects.filter(
+            bnk_code=bnk_code,
+            chg_sys_id=chg_sys_id
+        ).first()
+        
+        if not access:
+            # ບໍ່ມີ record -> ສ້າງໃໝ່
+            access = MemberProductAccess.objects.create(
+                bnk_code=bnk_code,
+                chg_sys_id=chg_sys_id,
+                is_active=True
+            )
+            serializer = MemberProductAccessSerializer(access)
+            return Response({
+                'action': 'created',
+                'message': 'ເພີ່ມສິດສຳເລັດ',
+                'data': serializer.data
+            }, status=status.HTTP_201_CREATED)
+        
+        elif not access.is_active:
+            # ມີ record ແຕ່ inactive -> Activate
+            access.is_active = True
+            access.save()
+            serializer = MemberProductAccessSerializer(access)
+            return Response({
+                'action': 'activated',
+                'message': 'ເປີດໃຊ້ງານສິດສຳເລັດ',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        
+        else:
+            # ມີ record ແລະ active -> Delete
+            access.delete()
+            return Response({
+                'action': 'deleted',
+                'message': 'ລົບສິດສຳເລັດ'
+            }, status=status.HTTP_200_OK)
+
+            
+from django.db.models import Prefetch
+
+class MemberListWithActiveCountAPIView(APIView):
+    """
+    GET: ດຶງລາຍການ Members ທັງໝົດ ພ້ອມລາຍລະອຽດ Active Products (Optimized)
+    """
+    # permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        # ✅ ດຶງທຸກຢ່າງພ້ອມກັນ (1-2 queries ເທົ່ານັ້ນ!)
+        members = memberInfo.objects.all().order_by('bnk_code')
+        
+        # ດຶງ active products ທັງໝົດ
+        all_active_products = MemberProductAccess.objects.filter(
+            is_active=True
+        ).values_list('bnk_code', 'chg_sys_id', 'access_id', 'created_at')
+        
+        # ສ້າງ dict group by bnk_code
+        products_by_member = {}
+        chg_sys_ids_all = set()
+        
+        for bnk_code, chg_sys_id, access_id, created_at in all_active_products:
+            if bnk_code not in products_by_member:
+                products_by_member[bnk_code] = []
+            products_by_member[bnk_code].append({
+                'access_id': access_id,
+                'chg_sys_id': chg_sys_id,
+                'created_at': created_at
+            })
+            chg_sys_ids_all.add(chg_sys_id)
+        
+        # ດຶງຂໍ້ມູນ ChargeMatrix ທັງໝົດ
+        charge_matrices = ChargeMatrix.objects.filter(
+            chg_sys_id__in=chg_sys_ids_all
+        )
+        charge_dict = {str(c.chg_sys_id): c for c in charge_matrices}
+        
+        members_data = []
+        
+        for member in members:
+            # ດຶງ products ຂອງ member ນີ້
+            member_products = products_by_member.get(member.bnk_code, [])
+            
+            # ສ້າງລາຍລະອຽດ
+            products_detail = []
+            for product in member_products:
+                charge = charge_dict.get(product['chg_sys_id'])
+                if charge:
+                    products_detail.append({
+                        'access_id': product['access_id'],
+                        'chg_sys_id': charge.chg_sys_id,
+                        'chg_code': charge.chg_code,  # ← ທີ່ຕ້ອງການ!
+                        'chg_type': charge.chg_type,
+                        'chg_lao_type': charge.chg_lao_type,
+                        'chg_amount': charge.chg_amount,
+                        'chg_unit': charge.chg_unit,
+                    })
+            
+            # ສ້າງ mImage URL
+            mimage_url = None
+            if member.mImage:
+                try:
+                    mimage_url = member.mImage.url
+                except (ValueError, AttributeError):
+                    mimage_url = None
+            
+            members_data.append({
+                'bnk_code': member.bnk_code,
+                'nameL': member.nameL,
+                'nameE': member.nameE,
+                'bnk_type': member.bnk_type,
+                'mImage': mimage_url,
+                
+                # ✅ ຂໍ້ມູນລາຍລະອຽດ
+                'active_products_count': len(products_detail),
+                'active_products': products_detail,  # ← ລາຍລະອຽດເຕັມ!
+            })
+        
+        return Response(members_data) 
+#

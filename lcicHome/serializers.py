@@ -2358,6 +2358,103 @@ class TelecomCustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = TelecomCustomer
         fields = '__all__'
+# serializers.py
+from rest_framework import serializers
+from .models import MemberProductAccess, ChargeMatrix, memberInfo
+
+class MemberProductAccessSerializer(serializers.ModelSerializer):
+    # เพิ่ม fields สำหรับแสดงข้อมูล Member และ Product
+    member_name = serializers.SerializerMethodField()
+    member_name_en = serializers.SerializerMethodField()
+    product_code = serializers.SerializerMethodField()
+    product_name = serializers.SerializerMethodField()
+    product_lao_name = serializers.SerializerMethodField()
+    product_type = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = MemberProductAccess
+        fields = [
+            'access_id', 
+            'bnk_code', 
+            'chg_sys_id', 
+            'is_active',
+            'created_at', 
+            'updated_at',
+            'member_name',
+            'member_name_en',
+            'product_code',
+            'product_name',
+            'product_lao_name',
+            'product_type'
+        ]
+        read_only_fields = ['access_id', 'created_at', 'updated_at']
+    
+    def get_member_name(self, obj):
+        """ດຶງຊື່ສະມາຊິກພາສາລາວ"""
+        try:
+            member = memberInfo.objects.get(bnk_code=obj.bnk_code)
+            return member.nameL
+        except memberInfo.DoesNotExist:
+            return None
+    
+    def get_member_name_en(self, obj):
+        """ດຶງຊື່ສະມາຊິກພາສາອັງກິດ"""
+        try:
+            member = memberInfo.objects.get(bnk_code=obj.bnk_code)
+            return member.nameE
+        except memberInfo.DoesNotExist:
+            return None
+    
+    def get_product_code(self, obj):
+        """ດຶງລະຫັດຜະລິດຕະພັນ"""
+        try:
+            product = ChargeMatrix.objects.get(chg_sys_id=obj.chg_sys_id)
+            return product.chg_code
+        except ChargeMatrix.DoesNotExist:
+            return None
+    
+    def get_product_name(self, obj):
+        """ດຶງຊື່ຜະລິດຕະພັນພາສາອັງກິດ"""
+        try:
+            product = ChargeMatrix.objects.get(chg_sys_id=obj.chg_sys_id)
+            return product.chg_desc
+        except ChargeMatrix.DoesNotExist:
+            return None
+    
+    def get_product_lao_name(self, obj):
+        """ດຶງຊື່ຜະລິດຕະພັນພາສາລາວ"""
+        try:
+            product = ChargeMatrix.objects.get(chg_sys_id=obj.chg_sys_id)
+            return product.chg_lao_desc
+        except ChargeMatrix.DoesNotExist:
+            return None
+    
+    def get_product_type(self, obj):
+        """ດຶງປະເພດຜະລິດຕະພັນ"""
+        try:
+            product = ChargeMatrix.objects.get(chg_sys_id=obj.chg_sys_id)
+            return product.chg_type
+        except ChargeMatrix.DoesNotExist:
+            return None
+    
+    def validate(self, data):
+        """Validate ຂໍ້ມູນກ່ອນບັນທຶກ"""
+        bnk_code = data.get('bnk_code')
+        chg_sys_id = data.get('chg_sys_id')
+        
+        # ตรวจสอบว่า Member มีอยู่จริง
+        if not memberInfo.objects.filter(bnk_code=bnk_code).exists():
+            raise serializers.ValidationError({
+                'bnk_code': 'ບໍ່ພົບສະມາຊິກທີ່ມີລະຫັດນີ້ (Member not found)'
+            })
+        
+        # ตรวจสอบว่า Product มีอยู่จริง
+        if not ChargeMatrix.objects.filter(chg_sys_id=chg_sys_id).exists():
+            raise serializers.ValidationError({
+                'chg_sys_id': 'ບໍ່ພົບຜະລິດຕະພັນທີ່ມີລະຫັດນີ້ (Product not found)'
+            })
+        
+        return data
 
 
 class TelecomBillSerializer(serializers.ModelSerializer):
