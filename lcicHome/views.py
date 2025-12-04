@@ -32108,75 +32108,13 @@ def get_collateral_status(request, collateral_id):
 
 
 
+from django.core.cache import cache
 from django.db import connection
-from django.core.paginator import Paginator
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from django.core.cache import cache
 import hashlib
-import json
 
-TABLE_NAME = '"lcicHome_companyinfomapping"'
-
-DISPLAY_FIELDS = [
-    'com_sys_id', 
-    'mm_com_sys_id', 
-    'bnk_code', 
-    'customerid',
-    'com_enterprise_code', 
-    'com_tax_no', 
-    'com_name', 
-    'com_lao_name',
-    'com_registration_date', 
-    'com_registration_place_issue',
-    'com_lao_name_code', 
-    '"LCIC_code"', 
-    'enterprise_code', 
-    'status',
-    'com_regulatory_capital', 
-    'com_regulatory_capital_unit'
-]
-
-FIELD_NAMES = [
-    'com_sys_id', 
-    'mm_com_sys_id', 
-    'bnk_code', 
-    'customerid',
-    'com_enterprise_code', 
-    'com_tax_no', 
-    'com_name', 
-    'com_lao_name',
-    'com_registration_date', 
-    'com_registration_place_issue',
-    'com_lao_name_code', 
-    'LCIC_code',  
-    'enterprise_code', 
-    'status',
-    'com_regulatory_capital', 
-    'com_regulatory_capital_unit'
-]
-
-
-def cache_key_generator(request, prefix='group'):
-    """ສ້າງ cache key ຈາກ request parameters"""
-    params = {
-        'code': request.GET.get('code', 'ct'),
-        'page': request.GET.get('page', '1'),
-        'limit': request.GET.get('limit', '20'),
-        'group_type': request.GET.get('group_type', 'all'),
-    }
-    params_str = json.dumps(params, sort_keys=True)
-    hash_key = hashlib.md5(params_str.encode()).hexdigest()
-    return f"{prefix}_{hash_key}"
-
-    
-from django.core.cache import cache
-from django.db import connection
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from datetime import datetime
-
-# ກຳນົດຕົວແປຄົງທີ່ - ເພີ່ມ double quotes
+# ກຳນົດຕົວແປຄົງທີ່
 TABLE_NAME = '"lcicHome_companyinfomapping"'
 DISPLAY_FIELDS = [
     'com_sys_id', 'segment', 'mm_com_sys_id', 'bnk_code', 'branchcode',
@@ -32197,7 +32135,6 @@ FIELD_NAMES = [
     'com_lao_name_code', 'LCIC_code', 'enterprise_code', 'status', 'user_id'
 ]
 
-
 @api_view(['GET'])
 def group_enterprise_by_code(request):
     code = request.GET.get('code', 'ct').lower()
@@ -32212,161 +32149,98 @@ def group_enterprise_by_code(request):
             "error": f"code ຕ້ອງເປັນ: {', '.join(valid_codes)}"
         }, status=400)
 
-    # ===== ກວດສອບການປ່ຽນແປງຂໍ້ມູນ =====
-    data_version_key = f"data_version_companyinfomapping"
-    
+    # ===== ກວດສອບການປ່ຽນແປງຂໍ້ມູນ ດ້ວຍ Version ແທ້ 100% =====
+    data_version_key = "companyinfomapping_data_version"
+    current_data_version = None
+
     try:
         with connection.cursor() as cursor:
-            # ໃຊ້ double quotes ອ້ອມຊື່ຕາຕະລາງ
-            cursor.execute(f"""
-                SELECT 
-                    MAX(com_update_date) as max_update,
-                    MAX(mm_action_date) as max_action,
-                    COUNT(*) as total_count
-                FROM {TABLE_NAME}
+            cursor.execute("""
+                SELECT version::text 
+                FROM cache_version 
+                WHERE table_name = 'lcicHome_companyinfomapping'
             """)
-            result = cursor.fetchone()
-            max_update = result[0] or ''
-            max_action = result[1] or ''
-            total_count = result[2]
-            
-            # ສ້າງ version string ທີ່ລວມທັງ update_date, action_date ແລະ count
-            current_data_version = f"{max_update}|{max_action}|{total_count}"
-        
-        # ດຶງ version ທີ່ບັນທຶກໄວ້
-        cached_data_version = cache.get(data_version_key)
-        
-        # ຖ້າຂໍ້ມູນປ່ຽນແປງ, ລຶບ cache ທັງໝົດ
-        if cached_data_version != current_data_version:
-            print(f"🔄 ຂໍ້ມູນປ່ຽນແປງ! ລຶບ cache ທັງໝົດ")
-            print(f"   ເກົ່າ: {cached_data_version}")
-            print(f"   ໃໝ່: {current_data_version}")
-            
-            # ລຶບ cache ທັງໝົດ
-            for c in valid_codes:
-                try:
-                    pattern = f"group_enterprise:code={c}:*"
-                    keys = cache.keys(pattern)
-                    for key in keys:
-                        cache.delete(key)
-                except:
-                    # Fallback: ລຶບແບບ manual
-                    for p in range(1, 101):
-                        for l in [20, 50, 100]:
-                            for gt in ['all', 'active', 'inactive']:
-                                k = f"group_enterprise:code={c}:page={p}:limit={l}:type={gt}"
-                                cache.delete(k)
-                
-                cache.delete(f"stats_{c}")
-            
-            # ບັນທຶກ version ໃໝ່
-            cache.set(data_version_key, current_data_version, None)  # None = ບໍ່ໝົດອາຍຸ
-    
-    except Exception as e:
-        print(f"⚠️ ເກີດຂໍ້ຜິດພາດໃນການກວດສອບ version: {e}")
+            row = cursor.fetchone()
+            if row:
+                current_data_version = row[0]
+            else:
+                # ສ້າງໃໝ່ອັດຕະໂນມັດ
+                cursor.execute("""
+                    INSERT INTO cache_version (table_name, version) 
+                    VALUES ('lcicHome_companyinfomapping', 1)
+                    ON CONFLICT (table_name) DO UPDATE SET version = 1
+                """)
+                current_data_version = "1"
 
-    # ===== Cache Check =====
+        cached_version = cache.get(data_version_key)
+
+        if cached_version and cached_version != current_data_version:
+            print(f"ຂໍ້ມູນປ່ຽນແປງ! ລຶບ cache ທັງໝົດ (v{cached_version} → v{current_data_version})")
+
+            # ລຶບດ້ວຍ pattern (Redis ໄວທີ່ສຸດ)
+            try:
+                cache.delete_pattern("group_enterprise:*")
+                cache.delete_pattern("stats_*")
+            except:
+                pass
+
+            # Fallback: ລຶບ manual (ເຮັດວຽກກັບ FileCache, LocMem ທຸກຢ່າງ)
+            for c in valid_codes:
+                cache.delete(f"stats_{c}")
+                for p in range(1, 501):
+                    for l in [20, 50, 100]:
+                        for gt in ['all', 'similar', 'active', 'inactive']:
+                            key = f"group_enterprise:code={c}:page={p}:limit={l}:type={gt}"
+                            cache.delete(key)
+
+        # ອັບເດດ version ໃນ cache
+        cache.set(data_version_key, current_data_version, timeout=None)
+
+    except Exception as e:
+        print(f"ການກວດສອບ version ຜິດພາດ: {e}")
+        import traceback
+        traceback.print_exc()
+
+    # ===== Cache Check (ປົກກະຕິ) =====
     cache_key = None
     if not no_cache and code != 'ctt':
         cache_key = f"group_enterprise:code={code}:page={page}:limit={limit}:type={group_type}"
         cached_result = cache.get(cache_key)
         if cached_result:
-            print(f"📦 ໃຊ້ cache: {cache_key}")
+            print(f"ໃຊ້ cache: {cache_key}")
             return Response(cached_result)
 
-    print(f"🔍 Query ຖານຂໍ້ມູນ: code={code}, page={page}")
+    print(f"Query ຖານຂໍ້ມູນ: code={code}, page={page}")
 
-    # ສ້າງ group_sql
-    group_sql = ""
-    
+    # === ສ້າງ group_sql (ຄົງເກົ່າ) ===
     if code == 'mm':
-        group_sql = f"""
-            SELECT mm_com_sys_id, COUNT(*), MIN(mm_com_sys_id)
-            FROM {TABLE_NAME}
-            WHERE mm_com_sys_id IS NOT NULL
-            GROUP BY mm_com_sys_id 
-            HAVING COUNT(*) >= 2
-            ORDER BY COUNT(*) DESC
-        """
-    
+        group_sql = f"SELECT mm_com_sys_id, COUNT(*), MIN(mm_com_sys_id) FROM {TABLE_NAME} WHERE mm_com_sys_id IS NOT NULL GROUP BY mm_com_sys_id HAVING COUNT(*) >= 2 ORDER BY COUNT(*) DESC"
     elif code == 'ci':
-        group_sql = f"""
-            SELECT com_enterprise_code, COUNT(*), MIN(mm_com_sys_id)
-            FROM {TABLE_NAME}
-            WHERE com_enterprise_code IS NOT NULL AND com_enterprise_code != ''
-            GROUP BY com_enterprise_code 
-            HAVING COUNT(*) >= 2
-            ORDER BY COUNT(*) DESC
-        """
-    
+        group_sql = f"SELECT com_enterprise_code, COUNT(*), MIN(mm_com_sys_id) FROM {TABLE_NAME} WHERE com_enterprise_code IS NOT NULL AND com_enterprise_code != '' GROUP BY com_enterprise_code HAVING COUNT(*) >= 2 ORDER BY COUNT(*) DESC"
     elif code == 'ct':
-        group_sql = f"""
-            SELECT com_tax_no, COUNT(*), MIN(mm_com_sys_id)
-            FROM {TABLE_NAME}
-            WHERE com_tax_no IS NOT NULL AND com_tax_no != ''
-            GROUP BY com_tax_no 
-            HAVING COUNT(*) >= 2
-            ORDER BY COUNT(*) DESC
-        """
-    
+        group_sql = f"SELECT com_tax_no, COUNT(*), MIN(mm_com_sys_id) FROM {TABLE_NAME} WHERE com_tax_no IS NOT NULL AND com_tax_no != '' GROUP BY com_tax_no HAVING COUNT(*) >= 2 ORDER BY COUNT(*) DESC"
     elif code == 'ce':
-        group_sql = f"""
-            SELECT com_name, COUNT(*), MIN(mm_com_sys_id)
-            FROM {TABLE_NAME}
-            WHERE com_name IS NOT NULL AND com_name != ''
-            GROUP BY com_name 
-            HAVING COUNT(*) >= 2
-            ORDER BY COUNT(*) DESC
-        """
-    
+        group_sql = f"SELECT com_name, COUNT(*), MIN(mm_com_sys_id) FROM {TABLE_NAME} WHERE com_name IS NOT NULL AND com_name != '' GROUP BY com_name HAVING COUNT(*) >= 2 ORDER BY COUNT(*) DESC"
     elif code == 'cl':
-        group_sql = f"""
-            SELECT com_lao_name, COUNT(*), MIN(mm_com_sys_id)
-            FROM {TABLE_NAME}
-            WHERE com_lao_name IS NOT NULL AND com_lao_name != ''
-            GROUP BY com_lao_name 
-            HAVING COUNT(*) >= 2
-            ORDER BY COUNT(*) DESC
-        """
-    
+        group_sql = f"SELECT com_lao_name, COUNT(*), MIN(mm_com_sys_id) FROM {TABLE_NAME} WHERE com_lao_name IS NOT NULL AND com_lao_name != '' GROUP BY com_lao_name HAVING COUNT(*) >= 2 ORDER BY COUNT(*) DESC"
     elif code == 'clc':
-        group_sql = f"""
-            SELECT com_lao_name_code, COUNT(*), MIN(mm_com_sys_id)
-            FROM {TABLE_NAME}
-            WHERE com_lao_name_code IS NOT NULL AND com_lao_name_code != ''
-            GROUP BY com_lao_name_code 
-            HAVING COUNT(*) >= 2
-            ORDER BY COUNT(*) DESC
-        """
-    
+        group_sql = f"SELECT com_lao_name_code, COUNT(*), MIN(mm_com_sys_id) FROM {TABLE_NAME} WHERE com_lao_name_code IS NOT NULL AND com_lao_name_code != '' GROUP BY com_lao_name_code HAVING COUNT(*) >= 2 ORDER BY COUNT(*) DESC"
     elif code == 'cc':
-        group_sql = f"""
-            SELECT "LCIC_code", COUNT(*), MIN(mm_com_sys_id)
-            FROM {TABLE_NAME}
-            WHERE "LCIC_code" IS NOT NULL AND "LCIC_code" != ''
-            GROUP BY "LCIC_code" 
-            HAVING COUNT(*) >= 2
-            ORDER BY COUNT(*) DESC
-        """
-    
+        group_sql = f"SELECT \"LCIC_code\", COUNT(*), MIN(mm_com_sys_id) FROM {TABLE_NAME} WHERE \"LCIC_code\" IS NOT NULL AND \"LCIC_code\" != '' GROUP BY \"LCIC_code\" HAVING COUNT(*) >= 2 ORDER BY COUNT(*) DESC"
     elif code == 'ctt':
         group_sql = f"""
             WITH limited_data AS (
                 SELECT com_sys_id, mm_com_sys_id, com_enterprise_code, com_tax_no, com_name, com_lao_name
-                FROM {TABLE_NAME}
-                LIMIT 10000
+                FROM {TABLE_NAME} LIMIT 10000
             ),
             similarity_pairs AS (
                 SELECT DISTINCT
                     LEAST(a.com_sys_id, b.com_sys_id) as id1,
                     GREATEST(a.com_sys_id, b.com_sys_id) as id2,
                     GREATEST(
-                        CASE WHEN a.mm_com_sys_id = b.mm_com_sys_id 
-                             AND a.mm_com_sys_id IS NOT NULL THEN 1.0 ELSE 0 END,
-                        CASE WHEN a.com_enterprise_code = b.com_enterprise_code 
-                             AND a.com_enterprise_code != '' THEN 1.0 ELSE 0 END,
-                        CASE WHEN a.com_tax_no = b.com_tax_no 
-                             AND a.com_tax_no != '' THEN 1.0 ELSE 0 END,
+                        CASE WHEN a.mm_com_sys_id = b.mm_com_sys_id AND a.mm_com_sys_id IS NOT NULL THEN 1.0 ELSE 0 END,
+                        CASE WHEN a.com_enterprise_code = b.com_enterprise_code AND a.com_enterprise_code != '' THEN 1.0 ELSE 0 END,
+                        CASE WHEN a.com_tax_no = b.com_tax_no AND a.com_tax_no != '' THEN 1.0 ELSE 0 END,
                         COALESCE(similarity(a.com_name, b.com_name), 0),
                         COALESCE(similarity(a.com_lao_name, b.com_lao_name), 0)
                     ) AS max_sim
@@ -32382,27 +32256,16 @@ def group_enterprise_by_code(request):
                   )
             ),
             grouped AS (
-                SELECT 
-                    id1 as com_sys_id,
-                    COUNT(*) + 1 as cnt,
-                    ROUND(AVG(max_sim)::numeric, 3) as avg_sim
-                FROM similarity_pairs
-                WHERE max_sim > 0.5
-                GROUP BY id1
+                SELECT id1 as com_sys_id, COUNT(*) + 1 as cnt, ROUND(AVG(max_sim)::numeric, 3) as avg_sim
+                FROM similarity_pairs WHERE max_sim > 0.5 GROUP BY id1
             )
-            SELECT 
-                'group_' || g.com_sys_id as group_key,
-                g.cnt,
-                c.mm_com_sys_id,
-                g.avg_sim
+            SELECT 'group_' || g.com_sys_id, g.cnt, c.mm_com_sys_id, g.avg_sim
             FROM grouped g
             JOIN {TABLE_NAME} c ON g.com_sys_id = c.com_sys_id
-            ORDER BY g.cnt DESC, g.avg_sim DESC
-            LIMIT 200
+            ORDER BY g.cnt DESC, g.avg_sim DESC LIMIT 200
         """
 
     try:
-        # ດຶງກຸ່ມ
         with connection.cursor() as cursor:
             cursor.execute(group_sql)
             group_rows = cursor.fetchall()
@@ -32411,7 +32274,6 @@ def group_enterprise_by_code(request):
         start_idx = (page - 1) * limit
         end_idx = start_idx + limit
         page_groups = group_rows[start_idx:end_idx]
-
         final_groups = []
         fields_str = ", ".join(DISPLAY_FIELDS)
 
@@ -32420,272 +32282,136 @@ def group_enterprise_by_code(request):
             count = int(row[1])
             sample_mm_id = row[2]
             actual_idx = start_idx + idx_in_page + 1
-            
-            similarity_score = None
-            if code == 'ctt' and len(row) > 3:
-                similarity_score = float(row[3])
+            similarity_score = float(row[3]) if code == 'ctt' and len(row) > 3 else None
 
             detail_limit = 100
-            
-            # ສ້າງ detail_sql
             if code == 'mm':
-                detail_sql = f"""
-                    SELECT {fields_str} 
-                    FROM {TABLE_NAME} 
-                    WHERE mm_com_sys_id = %s 
-                    ORDER BY com_sys_id
-                    LIMIT {detail_limit}
-                """
+                detail_sql = f"SELECT {fields_str} FROM {TABLE_NAME} WHERE mm_com_sys_id = %s ORDER BY com_sys_id LIMIT {detail_limit}"
                 params = [int(matched_value)]
-            
             elif code == 'ci':
-                detail_sql = f"""
-                    SELECT {fields_str} 
-                    FROM {TABLE_NAME} 
-                    WHERE com_enterprise_code = %s 
-                    ORDER BY com_sys_id
-                    LIMIT {detail_limit}
-                """
+                detail_sql = f"SELECT {fields_str} FROM {TABLE_NAME} WHERE com_enterprise_code = %s ORDER BY com_sys_id LIMIT {detail_limit}"
                 params = [matched_value]
-            
             elif code == 'ct':
-                detail_sql = f"""
-                    SELECT {fields_str} 
-                    FROM {TABLE_NAME} 
-                    WHERE com_tax_no = %s 
-                    ORDER BY com_sys_id
-                    LIMIT {detail_limit}
-                """
+                detail_sql = f"SELECT {fields_str} FROM {TABLE_NAME} WHERE com_tax_no = %s ORDER BY com_sys_id LIMIT {detail_limit}"
                 params = [matched_value]
-            
             elif code == 'ce':
-                detail_sql = f"""
-                    SELECT {fields_str} 
-                    FROM {TABLE_NAME} 
-                    WHERE com_name = %s 
-                    ORDER BY com_sys_id
-                    LIMIT {detail_limit}
-                """
+                detail_sql = f"SELECT {fields_str} FROM {TABLE_NAME} WHERE com_name = %s ORDER BY com_sys_id LIMIT {detail_limit}"
                 params = [matched_value]
-            
             elif code == 'cl':
-                detail_sql = f"""
-                    SELECT {fields_str} 
-                    FROM {TABLE_NAME} 
-                    WHERE com_lao_name = %s 
-                    ORDER BY com_sys_id
-                    LIMIT {detail_limit}
-                """
+                detail_sql = f"SELECT {fields_str} FROM {TABLE_NAME} WHERE com_lao_name = %s ORDER BY com_sys_id LIMIT {detail_limit}"
                 params = [matched_value]
-            
             elif code == 'clc':
-                detail_sql = f"""
-                    SELECT {fields_str} 
-                    FROM {TABLE_NAME}
-                    WHERE com_lao_name_code = %s
-                    ORDER BY com_sys_id
-                    LIMIT {detail_limit}
-                """
+                detail_sql = f"SELECT {fields_str} FROM {TABLE_NAME} WHERE com_lao_name_code = %s ORDER BY com_sys_id LIMIT {detail_limit}"
                 params = [matched_value]
-            
             elif code == 'cc':
-                detail_sql = f"""
-                    SELECT {fields_str} 
-                    FROM {TABLE_NAME} 
-                    WHERE "LCIC_code" = %s 
-                    ORDER BY com_sys_id
-                    LIMIT {detail_limit}
-                """
+                detail_sql = f"SELECT {fields_str} FROM {TABLE_NAME} WHERE \"LCIC_code\" = %s ORDER BY com_sys_id LIMIT {detail_limit}"
                 params = [matched_value]
-            
             elif code == 'ctt':
                 group_id = matched_value.replace('group_', '')
                 detail_sql = f"""
-                    WITH base AS (
-                        SELECT com_sys_id, mm_com_sys_id, com_enterprise_code, com_tax_no, com_name, com_lao_name
-                        FROM {TABLE_NAME} 
-                        WHERE com_sys_id = %s
-                    ),
+                    WITH base AS (SELECT com_sys_id, mm_com_sys_id, com_enterprise_code, com_tax_no, com_name, com_lao_name FROM {TABLE_NAME} WHERE com_sys_id = %s),
                     similar_records AS (
-                        SELECT DISTINCT t.com_sys_id
-                        FROM {TABLE_NAME} t, base b
-                        WHERE (
+                        SELECT DISTINCT t.com_sys_id FROM {TABLE_NAME} t, base b WHERE (
                             (t.mm_com_sys_id = b.mm_com_sys_id AND t.mm_com_sys_id IS NOT NULL)
                             OR (t.com_enterprise_code = b.com_enterprise_code AND t.com_enterprise_code != '')
                             OR (t.com_tax_no = b.com_tax_no AND t.com_tax_no != '')
                             OR similarity(t.com_name, b.com_name) > 0.5
                             OR similarity(t.com_lao_name, b.com_lao_name) > 0.5
-                        )
-                        LIMIT {detail_limit}
+                        ) LIMIT {detail_limit}
                     )
-                    SELECT {fields_str}
-                    FROM {TABLE_NAME} t
-                    WHERE t.com_sys_id IN (SELECT com_sys_id FROM similar_records)
-                    ORDER BY t.com_sys_id
+                    SELECT {fields_str} FROM {TABLE_NAME} t WHERE t.com_sys_id IN (SELECT com_sys_id FROM similar_records) ORDER BY t.com_sys_id
                 """
                 params = [int(group_id)]
 
-            # ດຶງລາຍລະອຽດ
             with connection.cursor() as cursor:
                 cursor.execute(detail_sql, params)
                 detail_rows = cursor.fetchall()
 
             items = [dict(zip(FIELD_NAMES, r)) for r in detail_rows]
 
-            # ດຶງຂໍ້ມູນ EnterpriseInfo
-            
-            # 1. ເກັບ com_enterprise_code ທີ່ບໍ່ຊ້ຳກັນ
-            unique_enterprise_codes = set()
-            for item in items:
-                enterprise_code = item.get('com_enterprise_code')
-                if enterprise_code and str(enterprise_code).strip():
-                    unique_enterprise_codes.add(str(enterprise_code).strip())
-            
-            # 2. ດຶງຂໍ້ມູນຈາກ EnterpriseInfo
+            # EnterpriseInfo
+            unique_enterprise_codes = {str(item.get('com_enterprise_code') or "").strip() for item in items if item.get('com_enterprise_code')}
             enterprise_info_list = []
             if unique_enterprise_codes:
-                enterprise_info_sql = """
-                    SELECT 
-                        "EnterpriseID",
-                        "enterpriseNameLao",
-                        "eneterpriseNameEnglish",
-                        "regisCertificateNumber",
-                        "regisDate",
-                        "enLocation",
-                        "regisStrationOfficeType",
-                        "regisStationOfficeCode",
-                        "enLegalStrature",
-                        "foreigninvestorFlag",
-                        "investmentAmount",
-                        "investmentCurrency",
-                        "representativeNationality",
-                        "status",
-                        "LCIC_code",
-                        "LastUpdate",
-                        "CancellationDate"
-                    FROM enterpriseinfo
-                    WHERE "EnterpriseID" IN %s
-                """
-                
                 with connection.cursor() as cursor:
-                    cursor.execute(enterprise_info_sql, [tuple(unique_enterprise_codes)])
-                    enterprise_info_rows = cursor.fetchall()
-                    
-                    # ສ້າງລິສຂໍ້ມູນ EnterpriseInfo
-                    for row in enterprise_info_rows:
+                    cursor.execute("""
+                        SELECT "EnterpriseID", "enterpriseNameLao", "eneterpriseNameEnglish",
+                               "regisCertificateNumber", "regisDate", "enLocation",
+                               "regisStrationOfficeType", "regisStationOfficeCode", "enLegalStrature",
+                               "foreigninvestorFlag", "investmentAmount", "investmentCurrency",
+                               "representativeNationality", "status", "LCIC_code",
+                               "LastUpdate", "CancellationDate"
+                        FROM enterpriseinfo WHERE "EnterpriseID" IN %s
+                    """, [tuple(unique_enterprise_codes)])
+                    for row in cursor.fetchall():
                         enterprise_info_list.append({
-                            'enterprise_id': row[0],
-                            'enterprise_name_lao': row[1],
-                            'enterprise_name_english': row[2],
-                            'regis_certificate_number': row[3],
-                            'regis_date': str(row[4]) if row[4] else None,
-                            'en_location': row[5],
-                            'regis_office_type': row[6],
-                            'regis_office_code': row[7],
-                            'legal_structure': row[8],
-                            'foreign_investor_flag': row[9],
-                            'investment_amount': float(row[10]) if row[10] else None,
-                            'investment_currency': row[11],
-                            'representative_nationality': row[12],
-                            'status': row[13],
-                            'lcic_code': row[14],
-                            'last_update': str(row[15]) if row[15] else None,
-                            'cancellation_date': str(row[16]) if row[16] else None
+                            'enterprise_id': row[0], 'enterprise_name_lao': row[1], 'enterprise_name_english': row[2],
+                            'regis_certificate_number': row[3], 'regis_date': str(row[4]) if row[4] else None,
+                            'en_location': row[5], 'regis_office_type': row[6], 'regis_office_code': row[7],
+                            'legal_structure': row[8], 'foreign_investor_flag': row[9],
+                            'investment_amount': float(row[10]) if row[10] else None, 'investment_currency': row[11],
+                            'representative_nationality': row[12], 'status': row[13], 'lcic_code': row[14],
+                            'last_update': str(row[15]) if row[15] else None, 'cancellation_date': str(row[16]) if row[16] else None
                         })
 
-            # ກຳນົດສະຖານະກຸ່ມ
-            group_status = 'T'
-            for item in items:
-                item_status = item.get('status', '').upper()
-                if item_status != 'T':
-                    group_status = 'F'
-                    break
+            group_status = 'T' if all(item.get('status', '').upper() == 'T' for item in items) else 'F'
 
-            # ສ້າງ group_data
             group_data = {
-                "group_order": actual_idx,
-                "count": count,
-                "matched_value": matched_value,
-                "sample_mm_id": sample_mm_id,
-                "status": group_status,
-                "enterprise_info": enterprise_info_list,
-                "unique_enterprise_codes": sorted(list(unique_enterprise_codes)),
-                "enterprise_info_count": len(enterprise_info_list),
-                "items": items,
+                "group_order": actual_idx, "count": count, "matched_value": matched_value,
+                "sample_mm_id": sample_mm_id, "status": group_status,
+                "enterprise_info": enterprise_info_list, "unique_enterprise_codes": sorted(list(unique_enterprise_codes)),
+                "enterprise_info_count": len(enterprise_info_list), "items": items,
                 "items_truncated": len(items) >= detail_limit
             }
-            
             if similarity_score is not None:
                 group_data["similarity_score"] = similarity_score
-            
             final_groups.append(group_data)
 
         # Stats
         stats_cache_key = f"stats_{code}"
         cached_stats = cache.get(stats_cache_key) if not no_cache else None
-        
         if cached_stats:
-            total_records = cached_stats['total_records']
-            grouped_records = cached_stats['grouped_records']
+            total_records, grouped_records = cached_stats['total_records'], cached_stats['grouped_records']
         else:
             with connection.cursor() as cursor:
                 cursor.execute(f"SELECT COUNT(*) FROM {TABLE_NAME}")
                 total_records = cursor.fetchone()[0]
-            
             grouped_records = sum(int(row[1]) for row in group_rows)
-            
             if not no_cache:
-                cache.set(stats_cache_key, {
-                    'total_records': total_records,
-                    'grouped_records': grouped_records
-                }, 300)
-        
+                cache.set(stats_cache_key, {'total_records': total_records, 'grouped_records': grouped_records}, 300)
+
         ungrouped_records = total_records - grouped_records
         total_pages = (total_groups + limit - 1) // limit
 
         result = {
             "code": code,
             "code_description": {
-                "mm": "ຈັດກຸ່ມຕາມ MM COM SYS ID",
-                "ci": "ຈັດກຸ່ມຕາມລະຫັດວິສາຫະກິດ",
-                "ct": "ຈັດກຸ່ມຕາມເລກທະບຽນພາສີ",
-                "ce": "ຈັດກຸ່ມຕາມຊື່ອັງກິດ",
-                "cl": "ຈັດກຸ່ມຕາມຊື່ລາວ",
-                "clc": "ຈັດກຸ່ມຕາມລະຫັດຊື່ລາວ",
-                "cc": "ຈັດກຸ່ມຕາມ LCIC CODE",
-                "ctt": "ຈັດກຸ່ມຕາມຄວາມຄ້າຍຄື > 50%"
+                "mm": "ຈັດກຸ່ມຕາມ MM COM SYS ID", "ci": "ຈັດກຸ່ມຕາມລະຫັດວິສາຫະກິດ",
+                "ct": "ຈັດກຸ່ມຕາມເລກທະບຽນພາສີ", "ce": "ຈັດກຸ່ມຕາມຊື່ອັງກິດ",
+                "cl": "ຈັດກຸ່ມຕາມຊື່ລາວ", "clc": "ຈັດກຸ່ມຕາມລະຫັດຊື່ລາວ",
+                "cc": "ຈັດກຸ່ມຕາມ LCIC CODE", "ctt": "ຈັດກຸ່ມຕາມຄວາມຄ້າຍຄື > 50%"
             }.get(code, ""),
             "group_type": group_type,
-            "summary": {
-                "total_groups": total_groups,
-                "total_records": total_records,
-                "grouped_records": grouped_records,
-                "ungrouped_records": ungrouped_records
-            },
-            "pagination": {
-                "page": page,
-                "limit": limit,
-                "total_pages": total_pages,
-                "has_next": page < total_pages,
-                "has_previous": page > 1
-            },
+            "summary": {"total_groups": total_groups, "total_records": total_records,
+                        "grouped_records": grouped_records, "ungrouped_records": ungrouped_records},
+            "pagination": {"page": page, "limit": limit, "total_pages": total_pages,
+                           "has_next": page < total_pages, "has_previous": page > 1},
             "display_fields": FIELD_NAMES,
             "groups": final_groups
         }
 
-        # ===== ບັນທຶກ Cache (10 ນາທີ) =====
+        # ບັນທຶກ Cache (ຍົກເວັ້ນ ctt)
         if cache_key and code != 'ctt':
             cache.set(cache_key, result, 600)
-            print(f"💾 ບັນທຶກ cache: {cache_key}")
+            print(f"ບັນທຶກ cache: {cache_key}")
 
         return Response(result)
-    
+
     except Exception as e:
         import traceback
         return Response({
             "error": str(e),
             "traceback": traceback.format_exc(),
-            "code": code,
             "hint": "ຖ້າເປັນ ctt ໃຫ້ຮັນ: CREATE EXTENSION IF NOT EXISTS pg_trgm;"
         }, status=500)
 
@@ -33230,7 +32956,33 @@ def group_detail(request):
             "code": code,
             "value": value
         }, status=500)
-
+    
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .services import CompanyMappingService 
+class MergeCompanyMappingsView(APIView):
+    
+    def post(self, request):
+        serializer = MergeCompanyMappingsSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response({
+                'success': False,
+                'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        result = CompanyMappingService.merge_company_mappings_with_logging(
+            mapping_pairs=serializer.validated_data['mapping_pairs'],
+            master_pair=serializer.validated_data['master_pair'],
+            code=serializer.validated_data['code'],
+            user=serializer.validated_data.get('user')
+        )
+        
+        if result['success']:
+            return Response(result, status=status.HTTP_200_OK)
+        else:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
 from django.db import transaction
 from rest_framework.decorators import api_view
 from rest_framework.response import Response

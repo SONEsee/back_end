@@ -181,7 +181,8 @@ from .views import (
     reject_borrower_loan_view,
     CollateralNewListView,
     CheckAndCreateEnterpriseView,
-    update_group_status
+    update_group_status,
+    MergeCompanyMappingsView
 )
 #tik
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
@@ -292,6 +293,7 @@ urlpatterns = [
    path('api/register/list/', views.get_register_customer_list, name='register_list'),
    path('api/company/info/<str:id_file>/', views.get_company_info_by_id_file, name='company_info'),
    path('api/approve-enterprise-mapping/', ApproveEnterpriseMappingView.as_view(), name='approve-enterprise-mapping'),
+   path('merge-company-mappings/', MergeCompanyMappingsView.as_view(), name='merge-company-mappings'),
    path('api/group-by-code/', group_enterprise_by_code, name='group-by-code'),
    path('api/update_group_status/', update_group_status, name='update_group_status'),
    path('api/group/detail/', views.group_detail, name='group_detail'),

@@ -2692,6 +2692,9 @@ class CompanyInfoMapping(models.Model):
     class Meta:
             db_table = '"lcicHome_companyinfomapping"'  
             managed = False
+
+
+
 class CompanyInfoMappingMemberSubmit(models.Model):
     com_sys_id = models.AutoField(primary_key=True) 
     segment = models.CharField(max_length=5, null=True, blank=True)

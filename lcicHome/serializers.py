@@ -36,7 +36,17 @@ class CompanyInfoMappingMemberSubmitSerializer(serializers.ModelSerializer):
     class Meta:
         model = CompanyInfoMappingMemberSubmit
         fields = '__all__'
+from rest_framework import serializers
 
+class MappingPairSerializer(serializers.Serializer):
+    com_enterprise_code = serializers.CharField(max_length=30)
+    LCIC_code = serializers.CharField(max_length=255)
+
+class MergeCompanyMappingsSerializer(serializers.Serializer):
+    mapping_pairs = MappingPairSerializer(many=True)
+    master_pair = MappingPairSerializer()
+    code = serializers.ChoiceField(choices=['ci', 'ct', 'ce', 'cl', 'clc', 'ctt'])
+    user = serializers.CharField(max_length=15, required=False, allow_null=True)
 
 class CustomerInfoINDSerializer(serializers.ModelSerializer):
     class Meta:
