@@ -3264,4 +3264,29 @@ class FinalScoring_JSON(models.Model):
     def __str__(self):
         return f"Score Breakdown - {self.report.lcic_id} - Final Score: {self.final_score}"
     
-
+class loan_lon_compare (models.Model):
+    id = models.AutoField(primary_key=True)
+    lon_sys_id = models.CharField(max_length=50, null=True, blank=True)
+    bnk_code = models.CharField(max_length=10, null=True, blank=True)
+    customer_id = models.CharField(max_length=30, null=True, blank=True)
+    branch_id = models.CharField(max_length=30, null=True, blank=True)
+    loan_id = models.CharField(max_length=50, null=True, blank=True)
+    lon_open_date = models.CharField(max_length=50, null=True, blank=True)
+    lon_exp_date = models.CharField(max_length=50, null=True, blank=True)
+    lon_ext_date = models.CharField(max_length=50, null=True, blank=True)
+    lon_int_rate = models.CharField(max_length=50, null=True, blank=True)
+    lon_purpose_code = models.CharField(max_length=50, null=True, blank=True)
+    lon_credit_line = models.CharField(max_length=100, null=True, blank=True)
+    lon_currency_code = models.CharField(max_length=3, null=True, blank=True)
+    lon_outstanding_balance = models.CharField(max_length=100, null=True, blank=True)
+    lon_account_no = models.CharField(max_length=35, null=True, blank=True)
+    lon_no_days_slow = models.CharField(max_length=50, null=True, blank=True)
+    lon_class = models.CharField(max_length=5, null=True, blank=True)
+    lon_type = models.CharField(max_length=10, null=True, blank=True)
+    lon_term = models.CharField(max_length=10, null=True, blank=True)
+    lon_status = models.CharField(max_length=20, null=True, blank=True)
+    lon_insert_date = models.CharField(max_length=50, null=True, blank=True)
+    lon_update_date = models.CharField(max_length=50, null=True, blank=True)
+    lon_applied_date = models.CharField(max_length=50, null=True, blank=True)
+    is_disputed = models.CharField(max_length=50, null=True, blank=True)
+    detail = models.CharField(max_length=50, null=True, blank=True)
