@@ -3123,3 +3123,145 @@ class MemberProductAccess(models.Model):
     
     def __str__(self):
         return f"{self.bnk_code} - Product ID: {self.chg_sys_id}"
+
+#json_score
+class CreditScoringReport_JSON(models.Model):
+    """
+    ตารางหลักสำหรับเก็บรายงานคะแนนเครดิต JSON
+    """
+    SCJ_id = models.AutoField(primary_key=True)
+    lcic_id = models.CharField(max_length=50, db_index=True)
+    user_id = models.CharField(max_length=10, null=True, blank=True)  # get from frontend
+    bnk_code = models.CharField(max_length=10, null=True, blank=True)  # ⭐ เพิ่ม field นี้
+    # final_credit_score = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    # credit_rating = models.CharField(max_length=50, null=True, blank=True)
+    reference_scr = models.CharField(max_length=100, null=True, blank=True)
+    file_name = models.CharField(max_length=255, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['lcic_id', '-created_at']),
+            models.Index(fields=['bnk_code', '-created_at']),  # ⭐ เพิ่ม index
+        ]
+    
+    def __str__(self):
+        return f"{self.lcic_id} - {self.file_name}"
+
+
+class CustomerInfoScoring_JSON(models.Model):
+    """
+    ข้อมูลลูกค้า
+    """
+    id = models.AutoField(primary_key=True)
+    report = models.OneToOneField(CreditScoringReport_JSON,on_delete=models.CASCADE,related_name='customer_info')
+    customer_id = models.CharField(max_length=50, null=True, blank=True)
+    bnk_code = models.CharField(max_length=10, null=True, blank=True)
+    branch_code = models.CharField(max_length=10, null=True, blank=True)
+    national_id = models.CharField(max_length=50, null=True, blank=True)
+    passport = models.CharField(max_length=50, null=True, blank=True)
+    familybook = models.CharField(max_length=50, null=True, blank=True)
+    familybook_prov_code = models.CharField(max_length=10, null=True, blank=True)
+    name = models.CharField(max_length=100, null=True, blank=True)
+    surname = models.CharField(max_length=100, null=True, blank=True)
+    lao_name = models.CharField(max_length=100, null=True, blank=True)
+    lao_surname = models.CharField(max_length=100, null=True, blank=True)
+    birth_date = models.DateField(null=True, blank=True)
+    gender = models.CharField(max_length=10, null=True, blank=True)
+    nationality = models.CharField(max_length=50, null=True, blank=True)
+    civil_status = models.CharField(max_length=20, null=True, blank=True)
+    ind_insert_date = models.DateField(null=True, blank=True)
+    
+    def __str__(self):
+        return f"{self.name} {self.surname} - {self.report.lcic_id}"
+
+
+class LoanDetailScoring_JSON(models.Model):
+    """
+    รายละเอียดแต่ละสินเชื่อ
+    """
+    id = models.AutoField(primary_key=True)
+    report = models.ForeignKey(CreditScoringReport_JSON,on_delete=models.CASCADE,related_name='loan_details')
+    loan_id = models.CharField(max_length=50)
+    bnk_code = models.CharField(max_length=10, null=True, blank=True)
+    branch_id = models.CharField(max_length=10, null=True, blank=True)
+    customer_id = models.CharField(max_length=50, null=True, blank=True)
+    loan_status = models.CharField(max_length=20, null=True, blank=True)
+    loan_open_date = models.DateField(null=True, blank=True)
+    loan_exp_date = models.DateField(null=True, blank=True)
+    loan_term = models.CharField(max_length=10, null=True, blank=True)
+    loan_purpose = models.CharField(max_length=50, null=True, blank=True)
+    credit_line = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    outstanding_balance = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    currency = models.CharField(max_length=10, null=True, blank=True)
+    days_slow = models.IntegerField(null=True, blank=True)
+    loan_class = models.CharField(max_length=20, null=True, blank=True)
+    loan_type = models.CharField(max_length=50, null=True, blank=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['report', 'loan_status']),
+            models.Index(fields=['loan_id']),
+        ]
+    
+    def __str__(self):
+        return f"Loan {self.loan_id} - {self.report.lcic_id}"
+
+
+class CollateralDetailScoring_JSON(models.Model):
+    """
+    รายละเอียดแต่ละหลักประกัน
+    """
+    id = models.AutoField(primary_key=True)
+    report = models.ForeignKey(CreditScoringReport_JSON,on_delete=models.CASCADE,related_name='collateral_details')
+    loan_detail = models.ForeignKey(LoanDetailScoring_JSON,on_delete=models.CASCADE,related_name='collaterals',null=True,blank=True,)
+    col_type = models.CharField(max_length=10, null=True, blank=True)
+    col_type_name_eng = models.CharField(max_length=100, null=True, blank=True)
+    col_type_name_lao = models.CharField(max_length=100, null=True, blank=True)
+    col_id = models.CharField(max_length=50, null=True, blank=True)
+    lcic_id = models.CharField(max_length=50, null=True, blank=True)
+    loan_id = models.CharField(max_length=50, null=True, blank=True)
+    value = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    value_unit = models.CharField(max_length=10, null=True, blank=True)
+    status = models.CharField(max_length=50, null=True, blank=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['report', 'col_type']),
+            models.Index(fields=['col_id']),
+        ]
+    
+    def __str__(self):
+        return f"{self.col_type} - {self.col_id} - {self.report.lcic_id}"
+
+
+# models.py
+
+class FinalScoring_JSON(models.Model):
+    """
+    คะแนนแต่ละด้าน พร้อม Final Score Calculation
+    ⭐ ใช้ TextField แทน JSONField ทั้งหมด
+    """
+    id = models.AutoField(primary_key=True)
+    report = models.OneToOneField(CreditScoringReport_JSON,on_delete=models.CASCADE,related_name='score_breakdown')
+    province_score = models.CharField(max_length=10, null=True, blank=True)
+    marital_status_score = models.CharField(max_length=10, null=True, blank=True)
+    age_score = models.CharField(max_length=10, null=True, blank=True)
+    registration_year_score = models.CharField(max_length=10, null=True, blank=True)
+    loan_purpose_score = models.CharField(max_length=10, null=True, blank=True)
+    loan_term_score = models.CharField(max_length=10, null=True, blank=True)
+    credit_line_score =models.CharField(max_length=10, null=True, blank=True)
+    inquiries_score = models.CharField(max_length=10, null=True, blank=True)
+    overdue_class_score = models.CharField(max_length=10, null=True, blank=True)
+    collateral_type_score = models.CharField(max_length=10, null=True, blank=True)
+    collateral_value_score = models.CharField(max_length=10, null=True, blank=True)
+    outstanding_balance_score = models.CharField(max_length=10, null=True, blank=True)
+    raw_score = models.IntegerField(default=0, null=True, blank=True)
+    final_calculation = models.TextField(null=True,blank=True)
+    final_score = models.DecimalField(max_digits=10, decimal_places=2, default=0,)
+    credit_text = models.CharField(max_length=20,null=True,blank=True,)
+    
+    def __str__(self):
+        return f"Score Breakdown - {self.report.lcic_id} - Final Score: {self.final_score}"
+    
+

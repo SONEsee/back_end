@@ -761,7 +761,7 @@ class CreditScoreServiceIND:
                 col_type_info = self.get_collateral_type_name('C2.1')
                 
                 for item in real_estates:
-                    value_lak = self.convert_to_lak(item.value, item.value_unit)
+                    value_lak = self.convert_to_lak(item.col_value, item.value_unit)
                     total_rel += value_lak
                     items.append({
                         'col_id': item.col_id,

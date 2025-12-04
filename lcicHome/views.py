@@ -33572,6 +33572,8 @@ from .models import (
 )
 from .serializers import IndividualBankIbkInfoSerializer
 
+# views.py
+
 class ScoringIndividualInfoSearchView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -33592,12 +33594,11 @@ class ScoringIndividualInfoSearchView(APIView):
             if not lcic_id:
                 return Response({'error': 'lcic_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # ⭐ เปลี่ยนการค้นหา: ลองค้นหาใน IndividualBankIbk ก่อน
+            # ✅ ค้นหาข้อมูล
             all_individual_info = IndividualBankIbk.objects.filter(
                 lcic_id=lcic_id
             ).order_by('ind_sys_id')
 
-            # ⭐ ถ้าไม่เจอใน IndividualBankIbk → ค้นหาใน IndividualBankIbkInfo
             if not all_individual_info.exists():
                 all_individual_info = IndividualBankIbkInfo.objects.filter(
                     lcic_id=lcic_id
@@ -33606,6 +33607,7 @@ class ScoringIndividualInfoSearchView(APIView):
             if not all_individual_info.exists():
                 return Response({'error': 'Individual info not found'}, status=status.HTTP_404_NOT_FOUND)
 
+            # ✅ ดึง unique individuals
             unique_individuals = []
             seen_mm_ids = set()
             for info in all_individual_info:
@@ -33614,19 +33616,21 @@ class ScoringIndividualInfoSearchView(APIView):
                     unique_individuals.append(info)
                     seen_mm_ids.add(mm_id)
 
-            mm_ids = []
-            for info in unique_individuals:
-                mm_id = getattr(info, 'ind_sys_id', None) or getattr(info, 'mm_ind_sys_id', None)
-                if mm_id:
-                    mm_ids.append(mm_id)
+            # ✅ ดึงข้อมูล customer จาก record แรก
+            first_info = unique_individuals[0] if unique_individuals else None
+            mm_id = getattr(first_info, 'ind_sys_id', None) or getattr(first_info, 'mm_ind_sys_id', None)
+            
+            bank_record = None
+            if mm_id:
+                try:
+                    bank_record = IndividualBankIbk.objects.filter(ind_sys_id=mm_id).first()
+                except:
+                    pass
+            
+            customerid = bank_record.customerid if bank_record else ''
+            branch_code = bank_record.branchcode if bank_record else ''
 
-            bank_records = {}
-            if mm_ids:
-                bank_records = {
-                    rec.ind_sys_id: rec
-                    for rec in IndividualBankIbk.objects.filter(ind_sys_id__in=mm_ids)
-                }
-
+            # ✅ ดึง ChargeMatrix
             charge_sys_id = 7 if bank_info.bnk_type == 1 else 8
             try:
                 chargeType = ChargeMatrix.objects.get(chg_sys_id=charge_sys_id)
@@ -33637,81 +33641,74 @@ class ScoringIndividualInfoSearchView(APIView):
             inquiry_month_charge = now.strftime('%d%m%Y')
             sys_usr = f"{UID}-{bank.bnk_code}"
 
-            created_logs = []
+            # ⭐ สร้าง searchLog เพียง 1 ครั้ง (ไม่ loop)
+            search_log = searchLog.objects.create(
+                enterprise_ID='',
+                LCIC_ID=lcic_id,
+                LCIC_code=lcic_id,
+                bnk_code=bank_info.bnk_code,
+                bnk_type=bank_info.bnk_type,
+                branch=branch_code,  # ใช้ branch จาก record แรก
+                cus_ID=customerid,  # ใช้ customer จาก record แรก
+                cusType='A1',
+                credit_type=chargeType.chg_code,
+                inquiry_month=now.strftime('%Y-%m'),
+                com_tel='',
+                com_location='',
+                rec_loan_amount=0.0,
+                rec_loan_amount_currency='LAK',
+                rec_loan_purpose=loan_purpose or '',
+                rec_enquiry_type='1',
+                sys_usr=sys_usr
+            )
 
-            for info in unique_individuals:
-                mm_id = getattr(info, 'ind_sys_id', None) or getattr(info, 'mm_ind_sys_id', None)
-                bank_record = bank_records.get(mm_id)
-                customerid = bank_record.customerid if bank_record else ''
-                branch_code = bank_record.branchcode if bank_record else ''
+            # ⭐ สร้าง request_charge เพียง 1 ครั้ง (ไม่ loop)
+            charge = request_charge.objects.create(
+                bnk_code=bank_info.bnk_code,
+                bnk_type=bank_info.bnk_type,
+                chg_amount=chargeType.chg_amount,
+                chg_code=chargeType.chg_code,
+                status='pending',
+                rtp_code='1',
+                lon_purpose=loan_purpose or '',
+                chg_unit=chargeType.chg_unit,
+                user_sys_id=sys_usr,
+                LCIC_code=lcic_id,
+                cusType='A1',
+                user_session_id='',
+                rec_reference_code='',
+                search_log=search_log
+            )
+            
+            # สร้าง rec_reference_code
+            charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
+            charge.save()
 
-                # สร้าง search_log
-                search_log = searchLog.objects.create(
-                    enterprise_ID='',
-                    LCIC_ID=lcic_id,
-                    LCIC_code=lcic_id,
-                    bnk_code=bank_info.bnk_code,
-                    bnk_type=bank_info.bnk_type,
-                    branch=branch_code,
-                    cus_ID=customerid,
-                    cusType='A1',
-                    credit_type=chargeType.chg_code,
-                    inquiry_month=now.strftime('%Y-%m'),
-                    com_tel='',
-                    com_location='',
-                    rec_loan_amount=0.0,
-                    rec_loan_amount_currency='LAK',
-                    rec_loan_purpose=loan_purpose or '',
-                    rec_enquiry_type='1',
-                    sys_usr=sys_usr
-                )
-
-                # สร้าง charge
-                charge = request_charge.objects.create(
-                    bnk_code=bank_info.bnk_code,
-                    bnk_type=bank_info.bnk_type,
-                    chg_amount=chargeType.chg_amount,
-                    chg_code=chargeType.chg_code,
-                    status='pending',
-                    rtp_code='1',
-                    lon_purpose=loan_purpose or '',
-                    chg_unit=chargeType.chg_unit,
-                    user_sys_id=sys_usr,
-                    LCIC_code=lcic_id,
-                    cusType='A1',
-                    user_session_id='',
-                    rec_reference_code='',
-                    search_log=search_log
-                )
-                
-                # สร้าง rec_reference_code
-                charge.rec_reference_code = f"{chargeType.chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
-                charge.save()
-
-                # เพิ่มข้อมูลให้ครบถ้วน
-                created_logs.append({
-                    'search_log_id': search_log.search_ID,
-                    'charge_id': charge.rec_charge_ID,
-                    'rec_reference_code': charge.rec_reference_code,
-                    'rec_sys_id': charge.rec_charge_ID,
-                    'customerid': customerid,
-                    'lcic_id': lcic_id,
-                    'rec_insert_date': charge.rec_insert_date.strftime('%d/%m/%Y') if hasattr(charge, 'rec_insert_date') and charge.rec_insert_date else now.strftime('%d/%m/%Y')
-                })
+            # ⭐ สร้าง created_logs array (1 รายการเท่านั้น)
+            created_logs = [{
+                'search_log_id': search_log.search_ID,
+                'charge_id': charge.rec_charge_ID,
+                'rec_reference_code': charge.rec_reference_code,
+                'rec_sys_id': charge.rec_charge_ID,
+                'customerid': customerid,
+                'lcic_id': lcic_id,
+                'rec_insert_date': charge.rec_insert_date.strftime('%d/%m/%Y') if hasattr(charge, 'rec_insert_date') and charge.rec_insert_date else now.strftime('%d/%m/%Y')
+            }]
 
             serializer = IndividualBankIbkInfoSerializer(unique_individuals, many=True)
 
-            # Return ข้อมูลให้ครบถ้วน
+            # Return ข้อมูล
             return Response({
                 'success': True,
                 'individual_info': serializer.data,
                 'total_found': len(unique_individuals),
-                'log_created': len(created_logs),
+                'log_created': 1,  # ⭐ เปลี่ยนเป็น 1
                 'created_logs': created_logs,
                 'debug_info': {
                     'total_raw_records': all_individual_info.count(),
                     'unique_records': len(unique_individuals),
-                    'search_criteria': {'lcic_id': lcic_id}
+                    'search_criteria': {'lcic_id': lcic_id},
+                    'branches_found': len(unique_individuals)  # ⭐ เพิ่ม debug info
                 }
             }, status=status.HTTP_200_OK)
 
@@ -37776,6 +37773,614 @@ class CheckMemberProductAccessAPIView(APIView):
                     'success': False,
                     'message': f'ເກີດຂໍ້ຜິດພາດ: {str(e)}',
                     'has_access': False
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+# views.py
+
+# views.py
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.utils import timezone
+from datetime import datetime
+from decimal import Decimal
+from .credit_score_ind import CreditScoreServiceIND
+from .models import (
+    CreditScoringReport_JSON,
+    CustomerInfoScoring_JSON,
+    LoanDetailScoring_JSON,
+    CollateralDetailScoring_JSON,
+    FinalScoring_JSON,
+    request_charge,
+    searchLog,
+    memberInfo,
+    ChargeMatrix
+)
+from django.db import transaction
+import traceback
+
+
+# views.py
+
+# views.py
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.utils import timezone
+from datetime import datetime
+from .credit_score_ind import CreditScoreServiceIND
+from .models import (
+    CreditScoringReport_JSON,
+    CustomerInfoScoring_JSON,
+    LoanDetailScoring_JSON,
+    CollateralDetailScoring_JSON,
+    FinalScoring_JSON,
+    request_charge,
+    searchLog,
+    memberInfo,
+    ChargeMatrix
+)
+from django.db import transaction
+import traceback
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.throttling import UserRateThrottle
+from django.utils import timezone
+from django.db import transaction
+from django.core.cache import cache
+import traceback
+
+class SaveCreditScoreToJSONAPIView(APIView):
+    throttle_classes = [UserRateThrottle]
+    
+    def post(self, request):
+        lcic_id = request.data.get('lcic_id')
+        user_id = request.data.get('user_id')
+        user_uid = request.data.get('user_uid')
+        bnk_code = request.data.get('bnk_code')
+        rec_reference_code = request.data.get('rec_reference_code')
+        chg_sys_id = request.data.get('chg_sys_id')
+        
+        try:
+            # ✅ 1. Validate input
+            if not all([lcic_id, user_uid, bnk_code, rec_reference_code]):
+                return Response(
+                    {'success': False, 'error': 'Missing required fields'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # ✅ 2. Validate chg_sys_id
+            if not chg_sys_id:
+                return Response(
+                    {'success': False, 'error': 'chg_sys_id is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if chg_sys_id not in [22, 24]:
+                return Response(
+                    {'success': False, 'error': f'Invalid chg_sys_id: {chg_sys_id}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # ✅ 3. Get bank info
+            try:
+                bank_info = memberInfo.objects.get(bnk_code=bnk_code)
+            except memberInfo.DoesNotExist:
+                return Response(
+                    {'success': False, 'error': f'Bank not found: {bnk_code}'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # ✅ 4. Get charge type (with cache)
+            charge_type = self._get_cached_charge_type(chg_sys_id)
+            if not charge_type:
+                return Response(
+                    {'success': False, 'error': f'Charge type not found (chg_sys_id={chg_sys_id})'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            chg_code = charge_type.chg_code
+            chg_amount = charge_type.chg_amount
+            chg_unit = charge_type.chg_unit
+            
+            # ✅ 5. Calculate credit score (เพียง 1 ครั้ง!)
+            service = CreditScoreServiceIND(lcic_id)
+            credit_data = service.calculate_credit_score()
+            
+            if not credit_data:
+                return Response(
+                    {'success': False, 'error': 'Customer not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # ✅ 6. Prepare variables
+            now = timezone.now()
+            inquiry_month_charge = now.strftime('%d%m%Y')
+            sys_usr = f"{user_uid}-{bnk_code}"
+            
+            # ✅ 7. Save data with transaction
+            with transaction.atomic():
+                # 7.1 Create searchLog
+                search_log = searchLog.objects.create(
+                    enterprise_ID='',
+                    LCIC_ID=lcic_id,
+                    LCIC_code=lcic_id,
+                    bnk_code=bank_info.bnk_code,
+                    bnk_type=bank_info.bnk_type,
+                    branch='',
+                    cus_ID='',
+                    cusType='A1',
+                    credit_type=chg_code,
+                    inquiry_month=now.strftime('%Y-%m'),
+                    com_tel='',
+                    com_location='',
+                    rec_loan_amount=0.0,
+                    rec_loan_amount_currency='LAK',
+                    rec_loan_purpose='',
+                    rec_enquiry_type='1',
+                    sys_usr=sys_usr
+                )
+                
+                # 7.2 Create request_charge
+                charge = request_charge.objects.create(
+                    bnk_code=bank_info.bnk_code,
+                    bnk_type=bank_info.bnk_type,
+                    chg_amount=chg_amount,
+                    chg_code=chg_code,
+                    status='pending',
+                    rtp_code='1',
+                    lon_purpose='',
+                    chg_unit=chg_unit,
+                    user_sys_id=sys_usr,
+                    LCIC_code=lcic_id,
+                    cusType='A1',
+                    user_session_id='',
+                    rec_reference_code='',
+                    search_log=search_log
+                )
+                
+                # 7.3 Generate reference code
+                json_reference_code = f"{chg_code}-{charge.rtp_code}-{charge.bnk_code}-{inquiry_month_charge}-{charge.rec_charge_ID}"
+                charge.rec_reference_code = json_reference_code
+                charge.save()
+                
+                # 7.4 Create main report
+                report = CreditScoringReport_JSON.objects.create(
+                    lcic_id=lcic_id,
+                    user_id=user_id,
+                    bnk_code=bnk_code,
+                    reference_scr=rec_reference_code,
+                    file_name=json_reference_code
+                )
+                
+                # 7.5 Create customer info
+                customer_info = credit_data.get('customer_info', {})
+                CustomerInfoScoring_JSON.objects.create(
+                    report=report,
+                    customer_id=customer_info.get('customer_id'),
+                    bnk_code=customer_info.get('bnk_code'),
+                    branch_code=customer_info.get('branch_code'),
+                    national_id=customer_info.get('national_id'),
+                    passport=customer_info.get('passport'),
+                    familybook=customer_info.get('familybook'),
+                    familybook_prov_code=customer_info.get('familybook_prov_code'),
+                    name=customer_info.get('name'),
+                    surname=customer_info.get('surname'),
+                    lao_name=customer_info.get('lao_name'),
+                    lao_surname=customer_info.get('lao_surname'),
+                    birth_date=customer_info.get('birth_date'),
+                    gender=customer_info.get('gender'),
+                    nationality=customer_info.get('nationality'),
+                    civil_status=customer_info.get('civil_status'),
+                    ind_insert_date=customer_info.get('ind_insert_date')
+                )
+                
+                # ✅ 7.6 Bulk create loans & collaterals
+                loan_summary = credit_data.get('loan_summary', {})
+                loans_detail = loan_summary.get('loans_detail', [])
+                
+                loan_objects = []
+                for loan in loans_detail:
+                    loan_objects.append(
+                        LoanDetailScoring_JSON(
+                            report=report,
+                            loan_id=loan.get('loan_id'),
+                            bnk_code=loan.get('bnk_code'),
+                            branch_id=loan.get('branch_id'),
+                            customer_id=loan.get('customer_id'),
+                            loan_status=loan.get('loan_status'),
+                            loan_open_date=loan.get('loan_open_date'),
+                            loan_exp_date=loan.get('loan_exp_date'),
+                            loan_term=loan.get('loan_term'),
+                            loan_purpose=loan.get('loan_purpose'),
+                            credit_line=loan.get('credit_line'),
+                            outstanding_balance=loan.get('outstanding_balance'),
+                            currency=loan.get('currency'),
+                            days_slow=loan.get('days_slow'),
+                            loan_class=loan.get('loan_class'),
+                            loan_type=loan.get('loan_type')
+                        )
+                    )
+                
+                # Bulk insert loans
+                created_loans = LoanDetailScoring_JSON.objects.bulk_create(loan_objects)
+                
+                # Bulk create collaterals
+                collateral_objects = []
+                for i, loan in enumerate(loans_detail):
+                    loan_obj = created_loans[i]
+                    collaterals = loan.get('collaterals', [])
+                    
+                    for col in collaterals:
+                        collateral_objects.append(
+                            CollateralDetailScoring_JSON(
+                                report=report,
+                                loan_detail=loan_obj,
+                                col_type=col.get('col_type'),
+                                col_type_name_eng=col.get('col_type_name_eng'),
+                                col_type_name_lao=col.get('col_type_name_lao'),
+                                col_id=col.get('col_id'),
+                                lcic_id=col.get('LCIC_code'),
+                                loan_id=col.get('loan_id'),
+                                value=col.get('value'),
+                                value_unit=col.get('value_unit'),
+                                status=col.get('status')
+                            )
+                        )
+                
+                if collateral_objects:
+                    CollateralDetailScoring_JSON.objects.bulk_create(collateral_objects)
+                
+                # 7.7 Handle standalone collaterals
+                collateral_summary = credit_data.get('collateral_summary', {})
+                col_details = collateral_summary.get('details', {})
+                
+                standalone_collaterals = []
+                for col_type, col_data in col_details.items():
+                    items = col_data.get('items', [])
+                    for item in items:
+                        existing = CollateralDetailScoring_JSON.objects.filter(
+                            report=report,
+                            col_id=item.get('col_id'),
+                            loan_id=item.get('loan_id')
+                        ).exists()
+                        
+                        if not existing:
+                            standalone_collaterals.append(
+                                CollateralDetailScoring_JSON(
+                                    report=report,
+                                    loan_detail=None,
+                                    col_type=col_type,
+                                    col_type_name_eng=col_data.get('type'),
+                                    col_type_name_lao=col_data.get('type_lao'),
+                                    col_id=item.get('col_id'),
+                                    loan_id=item.get('loan_id'),
+                                    value=item.get('value'),
+                                    status=None
+                                )
+                            )
+                
+                if standalone_collaterals:
+                    CollateralDetailScoring_JSON.objects.bulk_create(standalone_collaterals)
+                
+                # 7.8 Create final scoring
+                score_breakdown = credit_data.get('score_breakdown', {})
+                final_score_calculation = credit_data.get('final_score_calculation', {})
+                calculation_details = final_score_calculation.get('calculation_details', {})
+                
+                FinalScoring_JSON.objects.create(
+                    report=report,
+                    province_score=str(score_breakdown.get('province', {}).get('score', 0)),
+                    marital_status_score=str(score_breakdown.get('marital_status', {}).get('score', 0)),
+                    age_score=str(score_breakdown.get('age', {}).get('score', 0)),
+                    registration_year_score=str(score_breakdown.get('registration_year', {}).get('score', 0)),
+                    loan_purpose_score=str(score_breakdown.get('loan_purpose', {}).get('score', 0)),
+                    loan_term_score=str(score_breakdown.get('loan_term', {}).get('score', 0)),
+                    credit_line_score=str(score_breakdown.get('credit_line', {}).get('score', 0)),
+                    inquiries_score=str(score_breakdown.get('inquiries', {}).get('score', 0)),
+                    overdue_class_score=str(score_breakdown.get('overdue_class', {}).get('score', 0)),
+                    collateral_type_score=str(score_breakdown.get('collateral_type', {}).get('score', 0)),
+                    collateral_value_score=str(score_breakdown.get('collateral_value', {}).get('score', 0)),
+                    outstanding_balance_score=str(score_breakdown.get('outstanding_balance', {}).get('score', 0)),
+                    raw_score=calculation_details.get('raw_score', 0),
+                    final_calculation=calculation_details.get('final_calculation', ''),
+                    final_score=final_score_calculation.get('final_score', 0),
+                    credit_text=credit_data.get('credit_rating', '')
+                )
+            
+            # ✅ 8. Return success
+            return Response(
+                {
+                    'success': True,
+                    'message': 'Data saved successfully',
+                    'data': {
+                        'report_id': report.SCJ_id,
+                        'lcic_id': lcic_id,
+                        'user_id': user_id,
+                        'bnk_code': bnk_code,
+                        'reference_scr': rec_reference_code,
+                        'file_name': json_reference_code,
+                        'chg_code': chg_code,
+                        'chg_amount': float(chg_amount),
+                        'chg_unit': chg_unit,
+                        'search_log_id': search_log.search_ID,
+                        'charge_id': charge.rec_charge_ID,
+                        'created_at': report.created_at.isoformat()
+                    }
+                },
+                status=status.HTTP_201_CREATED
+            )
+            
+        except Exception as e:
+            return Response(
+                {
+                    'success': False,
+                    'error': 'Internal server error',
+                    'message': str(e),
+                    'detail': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def _get_cached_charge_type(self, chg_sys_id):
+        """Get charge type with caching"""
+        cache_key = f"charge_type_{chg_sys_id}"
+        charge_type = cache.get(cache_key)
+        
+        if not charge_type:
+            try:
+                charge_type = ChargeMatrix.objects.get(chg_sys_id=chg_sys_id)
+                cache.set(cache_key, charge_type, 3600)  # Cache for 1 hour
+            except ChargeMatrix.DoesNotExist:
+                return None
+        
+        return charge_type
+
+
+class GetCreditScoreJSONAPIView(APIView):
+    """ดึงข้อมูล JSON ที่บันทึกไว้"""
+    
+    def get(self, request, report_id=None):
+        try:
+            if not report_id:
+                return Response(
+                    {'success': False, 'error': 'report_id is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            try:
+                report = CreditScoringReport_JSON.objects.get(SCJ_id=report_id)
+            except CreditScoringReport_JSON.DoesNotExist:
+                return Response(
+                    {
+                        'success': False,
+                        'error': 'Report not found',
+                        'message': f'ບໍ່ພົບບົດລາຍງານທີ່ມີ SCJ_id: {report_id}'
+                    },
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            data = self._build_response_data(report)
+            
+            return Response(
+                {'success': True, 'data': data},
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            return Response(
+                {
+                    'success': False,
+                    'error': 'Internal server error',
+                    'message': str(e),
+                    'detail': traceback.format_exc()
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def _build_response_data(self, report):
+        """สร้าง response data"""
+        
+        customer_info = None
+        try:
+            customer = report.customer_info
+            customer_info = {
+                'customer_id': customer.customer_id,
+                'bnk_code': customer.bnk_code,
+                'branch_code': customer.branch_code,
+                'national_id': customer.national_id,
+                'passport': customer.passport,
+                'familybook': customer.familybook,
+                'familybook_prov_code': customer.familybook_prov_code,
+                'name': customer.name,
+                'surname': customer.surname,
+                'lao_name': customer.lao_name,
+                'lao_surname': customer.lao_surname,
+                'birth_date': str(customer.birth_date) if customer.birth_date else None,
+                'gender': customer.gender,
+                'nationality': customer.nationality,
+                'civil_status': customer.civil_status,
+                'ind_insert_date': str(customer.ind_insert_date) if customer.ind_insert_date else None,
+            }
+        except:
+            pass
+        
+        loan_details = []
+        loans = report.loan_details.all()
+        for loan in loans:
+            loan_data = {
+                'loan_id': loan.loan_id,
+                'bnk_code': loan.bnk_code,
+                'branch_id': loan.branch_id,
+                'customer_id': loan.customer_id,
+                'loan_status': loan.loan_status,
+                'loan_open_date': str(loan.loan_open_date) if loan.loan_open_date else None,
+                'loan_exp_date': str(loan.loan_exp_date) if loan.loan_exp_date else None,
+                'loan_term': loan.loan_term,
+                'loan_purpose': loan.loan_purpose,
+                'credit_line': float(loan.credit_line) if loan.credit_line else 0,
+                'outstanding_balance': float(loan.outstanding_balance) if loan.outstanding_balance else 0,
+                'currency': loan.currency,
+                'days_slow': loan.days_slow,
+                'loan_class': loan.loan_class,
+                'loan_type': loan.loan_type,
+                'collaterals': []
+            }
+            
+            collaterals = loan.collaterals.all()
+            for col in collaterals:
+                loan_data['collaterals'].append({
+                    'col_type': col.col_type,
+                    'col_type_name_eng': col.col_type_name_eng,
+                    'col_type_name_lao': col.col_type_name_lao,
+                    'col_id': col.col_id,
+                    'lcic_id': col.lcic_id,
+                    'loan_id': col.loan_id,
+                    'value': float(col.value) if col.value else 0,
+                    'value_unit': col.value_unit,
+                    'status': col.status,
+                })
+            
+            loan_details.append(loan_data)
+        
+        score_breakdown = None
+        final_credit_score = None
+        credit_rating = None
+        
+        try:
+            scoring = report.score_breakdown
+            score_breakdown = {
+                'province_score': scoring.province_score,
+                'marital_status_score': scoring.marital_status_score,
+                'age_score': scoring.age_score,
+                'registration_year_score': scoring.registration_year_score,
+                'loan_purpose_score': scoring.loan_purpose_score,
+                'loan_term_score': scoring.loan_term_score,
+                'credit_line_score': scoring.credit_line_score,
+                'inquiries_score': scoring.inquiries_score,
+                'overdue_class_score': scoring.overdue_class_score,
+                'collateral_type_score': scoring.collateral_type_score,
+                'collateral_value_score': scoring.collateral_value_score,
+                'outstanding_balance_score': scoring.outstanding_balance_score,
+                'raw_score': scoring.raw_score,
+                'final_calculation': scoring.final_calculation,
+                'final_score': float(scoring.final_score) if scoring.final_score else 0,
+                'credit_text': scoring.credit_text,
+            }
+            
+            final_credit_score = float(scoring.final_score) if scoring.final_score else 0
+            credit_rating = scoring.credit_text
+            
+        except:
+            pass
+        
+        return {
+            'report_id': report.SCJ_id,
+            'lcic_id': report.lcic_id,
+            'user_id': report.user_id,
+            'bnk_code': report.bnk_code,
+            'reference_scr': report.reference_scr,
+            'file_name': report.file_name,
+            'created_at': report.created_at.isoformat(),
+            'customer_info': customer_info,
+            'loan_details': loan_details,
+            'score_breakdown': score_breakdown,
+        }
+
+class ListAllCreditScoreJSONAPIView(APIView):
+    """ดึงรายการทั้งหมด"""
+    
+    def get(self, request):
+        try:
+            page = int(request.query_params.get('page', 1))
+            page_size = int(request.query_params.get('page_size', 10))
+            user_id = request.query_params.get('user_id')
+            lcic_id = request.query_params.get('lcic_id')
+            bnk_code = request.query_params.get('bnk_code')
+            
+            queryset = CreditScoringReport_JSON.objects.all().order_by('-created_at')
+            
+            if user_id:
+                queryset = queryset.filter(user_id=user_id)
+            if lcic_id:
+                queryset = queryset.filter(lcic_id=lcic_id)
+            if bnk_code:
+                queryset = queryset.filter(bnk_code=bnk_code)
+            
+            total = queryset.count()
+            
+            if total == 0:
+                return Response(
+                    {
+                        'success': True,
+                        'data': [],
+                        'pagination': {
+                            'page': page,
+                            'page_size': page_size,
+                            'total': 0,
+                            'total_pages': 0,
+                        },
+                        'message': 'No data found'
+                    },
+                    status=status.HTTP_200_OK
+                )
+            
+            start = (page - 1) * page_size
+            end = start + page_size
+            reports = queryset[start:end]
+            
+            data_list = []
+            for report in reports:
+                final_score = 0
+                credit_rating = ''
+                
+                try:
+                    scoring = report.score_breakdown
+                    final_score = float(scoring.final_score) if scoring.final_score else 0
+                    credit_rating = scoring.credit_text or ''
+                except:
+                    pass
+                
+                data_list.append({
+                    'report_id': report.SCJ_id,
+                    'lcic_id': report.lcic_id,
+                    'user_id': report.user_id,
+                    'bnk_code': report.bnk_code,
+                    'reference_scr': report.reference_scr,
+                    'file_name': report.file_name,
+                    'final_credit_score': final_score,
+                    'credit_rating': credit_rating,
+                    'created_at': report.created_at.isoformat(),
+                })
+            
+            return Response(
+                {
+                    'success': True,
+                    'data': data_list,
+                    'pagination': {
+                        'page': page,
+                        'page_size': page_size,
+                        'total': total,
+                        'total_pages': (total + page_size - 1) // page_size,
+                    }
+                },
+                status=status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            return Response(
+                {
+                    'success': False,
+                    'error': 'Internal server error',
+                    'message': str(e),
+                    'detail': traceback.format_exc()
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

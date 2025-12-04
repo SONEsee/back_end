@@ -186,7 +186,7 @@ from .views import (
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
                     ,RequestChargeSummaryAPIView,RequestChargeReportAllAPIView,UserLogoutView,UserAccessLogListView,ScoringIndividualInfoSearchView,CreditScoreAPIView,ScrAttTypeDescnewListCreateView, ScrAttTypeDescnewRetrieveUpdateDeleteView,ScrAttributeTablenewListCreateView
                     ,ScrAttributeTablenewRetrieveUpdateDeleteView,CreditScoreINDAPIView,ProductsByBankTypeAPIView,ToggleProductAccessAPIView
-                    ,MemberListWithActiveCountAPIView,ScoreFactorChargeView,CheckMemberProductAccessAPIView)
+                    ,MemberListWithActiveCountAPIView,ScoreFactorChargeView,CheckMemberProductAccessAPIView,SaveCreditScoreToJSONAPIView,GetCreditScoreJSONAPIView,ListAllCreditScoreJSONAPIView)
                     
 
 from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView,process_dispute_notification, process_multiple_disputes,process_multiple_disputescollateral
@@ -436,8 +436,11 @@ urlpatterns = [
     path('products-by-bank-type/', ProductsByBankTypeAPIView.as_view(), name='products-by-bank-type'),
     path('toggle-product-access/', ToggleProductAccessAPIView.as_view(), name='toggle-product-access'),
     path('members-with-count/', MemberListWithActiveCountAPIView.as_view()),    
-     path('charge-score-factors/', ScoreFactorChargeView.as_view(), name='charge_score_factors'),
+    path('charge-score-factors/', ScoreFactorChargeView.as_view(), name='charge_score_factors'),
     path('check-product-access/', CheckMemberProductAccessAPIView.as_view(), name='check-product-access'),
+    path('credit-score-ind/save-to-json/', SaveCreditScoreToJSONAPIView.as_view(), name='save_credit_score_to_json'),
+    path('credit-score-ind/get-json/<int:report_id>/', GetCreditScoreJSONAPIView.as_view(), name='get_credit_score_json'),
+    path('credit-score-ind/list-json/', ListAllCreditScoreJSONAPIView.as_view(), name='list_credit_score_json'),
     
     path('api/individual-files/', IndividualFileListView.as_view(), name='individual-file-list'),
     path('api/borrwor-files/', BorrowerFileListView.as_view(), name='borrwor-file-list'),
