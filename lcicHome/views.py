@@ -40002,36 +40002,6 @@ class CheckMemberProductAccessAPIView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-# views.py
-
-# views.py
-
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from django.utils import timezone
-from datetime import datetime
-from decimal import Decimal
-from .credit_score_ind import CreditScoreServiceIND
-from .models import (
-    CreditScoringReport_JSON,
-    CustomerInfoScoring_JSON,
-    LoanDetailScoring_JSON,
-    CollateralDetailScoring_JSON,
-    FinalScoring_JSON,
-    request_charge,
-    searchLog,
-    memberInfo,
-    ChargeMatrix
-)
-from django.db import transaction
-import traceback
-
-
-# views.py
-
-# views.py
-
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -40051,16 +40021,8 @@ from .models import (
 )
 from django.db import transaction
 import traceback
-
-
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
 from rest_framework.throttling import UserRateThrottle
-from django.utils import timezone
-from django.db import transaction
 from django.core.cache import cache
-import traceback
 
 class SaveCreditScoreToJSONAPIView(APIView):
     throttle_classes = [UserRateThrottle]
