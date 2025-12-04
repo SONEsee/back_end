@@ -176,6 +176,14 @@ from .views import (
     ApproveEnterpriseMappingView,
     CustomerUpdateIDAPIView,
     CustomerUpdateSegmentAPIView,
+    TelecomReportAPIView,
+    suggest_merge_candidates,
+    auto_suggest_merge_all,
+    one_click_merge,
+    get_merge_group_details,
+    selective_merge,
+    auto_suggest_merge_by_filter,
+
     CheckAndCreateEnterpriseViewList,
     group_enterprise_by_code,
     reject_borrower_loan_view,
@@ -188,7 +196,7 @@ from .views import (
 from .views import ( UserListAPIView,UserDetailAPIView,UserGroupList,MemberListView,MemberDetailView, MemberTypeListView, VillageInfoListView,DistrictInfoListView, ProvInfoListView,ChargeMatrixListCreateAPIView, ChargeMatrixDetailAPIView,RequestChargeDetailAPIView
                     ,RequestChargeSummaryAPIView,RequestChargeReportAllAPIView,UserLogoutView,UserAccessLogListView,ScoringIndividualInfoSearchView,CreditScoreAPIView,ScrAttTypeDescnewListCreateView, ScrAttTypeDescnewRetrieveUpdateDeleteView,ScrAttributeTablenewListCreateView
                     ,ScrAttributeTablenewRetrieveUpdateDeleteView,CreditScoreINDAPIView,ProductsByBankTypeAPIView,ToggleProductAccessAPIView
-                    ,MemberListWithActiveCountAPIView)
+                    ,MemberListWithActiveCountAPIView,ScoreFactorChargeView,CheckMemberProductAccessAPIView,SaveCreditScoreToJSONAPIView,GetCreditScoreJSONAPIView,ListAllCreditScoreJSONAPIView)
                     
 
 from .views import UserGroupView,EnterpriseByLCICView,LCICByEnterpriseView,process_dispute_notification, process_multiple_disputes,process_multiple_disputescollateral
@@ -440,6 +448,12 @@ urlpatterns = [
     path('products-by-bank-type/', ProductsByBankTypeAPIView.as_view(), name='products-by-bank-type'),
     path('toggle-product-access/', ToggleProductAccessAPIView.as_view(), name='toggle-product-access'),
     path('members-with-count/', MemberListWithActiveCountAPIView.as_view()),    
+    path('charge-score-factors/', ScoreFactorChargeView.as_view(), name='charge_score_factors'),
+    path('check-product-access/', CheckMemberProductAccessAPIView.as_view(), name='check-product-access'),
+    path('credit-score-ind/save-to-json/', SaveCreditScoreToJSONAPIView.as_view(), name='save_credit_score_to_json'),
+    path('credit-score-ind/get-json/<int:report_id>/', GetCreditScoreJSONAPIView.as_view(), name='get_credit_score_json'),
+    path('credit-score-ind/list-json/', ListAllCreditScoreJSONAPIView.as_view(), name='list_credit_score_json'),
+    
     path('api/individual-files/', IndividualFileListView.as_view(), name='individual-file-list'),
     path('api/borrwor-files/', BorrowerFileListView.as_view(), name='borrwor-file-list'),
     path('api/files-individual-collateral/', IndividualCollateralFileListView.as_view(), name='files-individual-collateral'),
@@ -556,6 +570,8 @@ urlpatterns = [
     path('utility-report/', UtilityReportAPIView.as_view(), name='credit-report-query'),
     path('edl-report/<str:customer_id>/', ElectricReportAPIView.as_view(), name='credit-report'),
     path('edl-report/', ElectricReportAPIView.as_view(), name='credit-report-query'),
+    path('telecom-report/<str:customer_id>/', TelecomReportAPIView.as_view(), name='telecom-report'),
+    path('telecom-report/', TelecomReportAPIView.as_view(), name='telecom-report-query'),
     
     # Dashboard LCIC 
     path('dashboard/bank-user/', BankUsersView.as_view(), name='bankuser'),
@@ -683,6 +699,9 @@ urlpatterns = [
          views.list_all_merges, 
          name='list_all_merges'),
     
+    path('merges/suggest-merge/', suggest_merge_candidates),
+    path('merges/auto-suggest-all/', auto_suggest_merge_all, name='auto-suggest-merge'), # Sai Get Phuak t tong merge all
+    path('merges/auto-suggest-by-filter/', auto_suggest_merge_by_filter, name='suggest-by-filter'),
     #Create Customer With LCIC ID
     path('new/customer/create/',CompareJsonWithDBAPIView.as_view(), name="create_customer_with_lcic_id"),
     path('customer/register/batch/', RegisterCustomerBatchAPIView.as_view(), name="register_customer_batch"),
@@ -713,20 +732,24 @@ urlpatterns = [
         # Get all uploaded customers (Admin)
     path('register/customer/all-uploads/', 
          CustomerAllUploadsAPIView.as_view(), 
-         name='customer-all-uploads'),
+         name='customer-all-uploads'), # New
     
     # Confirm customers with matching
     path('register/customer/confirm/', 
          CustomerConfirmAPIView.as_view(), 
-         name='customer-confirm'),
+         name='customer-confirm'), # New
     
     path('register/customer/update-id/', 
      CustomerUpdateIDAPIView.as_view(), 
-     name='customer-update-id'),
+     name='customer-update-id'), # New
     
     path('register/customer/update-segment/', 
      CustomerUpdateSegmentAPIView.as_view(), 
-     name='customer-update-segment'),
+     name='customer-update-segment'), # New
+
+     path('merges/one-click-merge/', one_click_merge, name='one-click-merge'), # New
+     path('merges/get-details/', get_merge_group_details), # New
+     path('merges/selective-merge/', selective_merge), # New
     
     #---------------------------------------------
     #----- END POINTS -----------------------------

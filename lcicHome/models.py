@@ -1362,20 +1362,20 @@ class col_real_estates(models.Model):
     land_document_no = models.CharField(max_length=50)  # ໃບທີ່ດີນເລກທີ່
     land_out_time = models.CharField(max_length=50)  # ອອກຄັ້ງທີ່ດີນເລກທີ່
     land_area = models.CharField(max_length=255)  # ເນື້ອທີ
-    land_regis_date = models.CharField(null=True)  # ວັນທີອອກໃບຕທດິນ
+    land_regis_date = models.CharField(max_length=100,null=True)  # ວັນທີອອກໃບຕທດິນ
     land_type = models.CharField(max_length=255)  # ປະເພດດິນ
     land_unit = models.CharField(max_length=255)  # ມາດຕາສວນ
     land_insert_date = models.CharField(max_length=255)
     place_regist_no = models.CharField(max_length=255)  # ສະຖານທີ່ອອກໃບຕາດິນ
     owner_name = models.CharField(max_length=255)  # ອອກໃຫ້ແກ່
-    owner_birth_date = models.CharField()  # ວັນ.ເດືອນ.ປີເກີດ
+    owner_birth_date = models.CharField(max_length=100)  # ວັນ.ເດືອນ.ປີເກີດ
     owner_gender = models.CharField(max_length=255)
     owner_nationality = models.CharField(max_length=255)  # ສັນຊາດ
     owner_occupation = models.CharField(max_length=255)  # ອາຊີບ
     current_unit = models.CharField(max_length=50)  # ໜວ່ຍ ປະຈຸບັນ
     current_vilid = models.CharField(max_length=50)  # ລະຫັດບ້ານ ປະຈຸບັນ
     spouse_name = models.CharField(max_length=255, blank=True, null=True)  # ຊື່ຜົວ ຫຼື ເມຍ
-    spouse_birth_date = models.CharField(blank=True, null=True)  # ວັນ.ເດືອນ.ປີເກີດ (ຊື່ຜົວ ຫຼື ເມຍ)
+    spouse_birth_date = models.CharField(blank=True, null=True,max_length=100)  # ວັນ.ເດືອນ.ປີເກີດ (ຊື່ຜົວ ຫຼື ເມຍ)
     spouse_nationality = models.CharField(max_length=30, blank=True, null=True)  # ສັນຊາດ (ຊື່ຜົວ ຫຼື ເມຍ)
     spouse_occupation = models.CharField(max_length=255, blank=True, null=True)  # ອາຊີບ (ຊື່ຜົວ ຫຼື ເມຍ)
     land_acquisition = models.CharField(max_length=255)  # ການໄດ້ມາຂອງສິດນຳໃຊ້ດິນ
@@ -1385,8 +1385,8 @@ class col_real_estates(models.Model):
     owner_name_lao = models.CharField(max_length=255)
     owner_surname_lao = models.CharField(max_length=255)
     data_status = models.CharField(max_length=100, blank=True, null=True)
-    insert_date = models.CharField()
-    update_date = models.CharField()
+    insert_date = models.CharField(max_length=100)
+    update_date = models.CharField(max_length=100)
 
     # def __str__(self):
     #     return f"{self.col_provin} - {self.col_district} - {self.col_village}"
@@ -1423,8 +1423,8 @@ class col_money_mia (models.Model):  #ເອກະສານມີຄ່າ C2.2
     value = models.CharField(max_length=255)
     user_id = models.CharField(max_length=255)
     data_status = models.CharField(max_length=100, blank=True, null=True)
-    insert_date = models.CharField()
-    update_date = models.CharField()
+    insert_date = models.CharField(max_length=100)
+    update_date = models.CharField(max_length=100)
 
     def __str__(self):
         return f"{self.id} - {self.com_enterprise_code}"
@@ -1460,8 +1460,8 @@ class col_equipment_eqi (models.Model):  # ເຄື່ອງຈັກ ແລະ
     user_id = models.CharField(max_length=255)
     data_status = models.CharField(max_length=100, blank=True, null=True)
 
-    insert_date = models.DateField()
-    update_date = models.DateField()
+    insert_date = models.DateField(max_length=20)
+    update_date = models.DateField(max_length=20)
 
     def __str__(self):
         return f"{self.id} - {self.com_enterprise_code}"
@@ -3112,100 +3112,6 @@ class scr_attribute_table_new(models.Model):
     def __str__(self):
         return f"{self.att_name} ({self.att_code})"
 
-class scr_atttype_desc_dy(models.Model):
-    """
-    ⭐ PARAMETER DEFINITION TABLE (Dynamic Scoring Parameters)
-    เก็บ fields เดิมไว้ + เพิ่ม fields ใหม่สำหรับ Dynamic Scoring
-    """
-    
-    # ========== EXISTING FIELDS (ไม่เปลี่ยนแปลง) ==========
-    id_desc = models.AutoField(primary_key=True) 
-    att_type = models.CharField(max_length=50, blank=False, null=False, unique=True)
-    att_type_desc = models.CharField(max_length=100, blank=True, null=True)
-    att_type_lao_desc = models.CharField(max_length=100, blank=True, null=True)
-    att_weight = models.IntegerField()
-    
-    # ========== NEW FIELDS (เพิ่มเข้ามา) ==========
-    
-    calculation_method = models.CharField(
-        max_length=20,
-        choices=[
-            ('simple', 'Simple Match - Direct code match'),
-            ('range', 'Range Match - Value falls in range'),
-            ('min_max', 'MIN/MAX - Get min or max from multiple loans'),
-            ('custom', 'Custom Logic - Special calculation')
-        ],
-        default='simple',
-        help_text="How to calculate score for this parameter"
-    )
-    
-    is_active = models.BooleanField(
-        default=True,
-        help_text="Enable or disable this parameter"
-    )
-    
-    display_order = models.IntegerField(
-        default=0,
-        help_text="Order to display in report (1, 2, 3...)"
-    )
-    
-    group_name = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        choices=[
-            ('Personal Info', 'Personal Info'),
-            ('Payment History', 'Payment History'),
-            ('Amount Owned', 'Amount Owned'),
-            ('Inquiries', 'Inquiries & Purpose'),
-            ('Collateral', 'Collateral')
-        ],
-        help_text="Group for dashboard display"
-    )
-    
-    data_source = models.CharField(
-        max_length=50,
-        blank=True,
-        null=True,
-        choices=[
-            ('customer', 'Customer Info'),
-            ('loan', 'Loan Summary'),
-            ('collateral', 'Collateral Summary'),
-            ('inquiry', 'Inquiry Data')
-        ],
-        help_text="Where to get the input value from"
-    )
-    
-    field_name = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        help_text="Field name in data source (e.g., 'age', 'civil_status')"
-    )
-    
-    description = models.TextField(
-        blank=True,
-        null=True,
-        help_text="Description of what this parameter measures"
-    )
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        ordering = ['display_order']
-        verbose_name = 'Scoring Parameter'
-        verbose_name_plural = 'Scoring Parameters'
-    
-    def __str__(self):
-        # ⭐ ใช้ field เดิม
-        return f"{self.att_type_desc} ({self.att_type})"
-    
-    @property
-    def att_name(self):
-        """Alias for backward compatibility"""
-        return self.att_type_desc
-
 class MemberProductAccess(models.Model):
     access_id = models.AutoField(primary_key=True)
     bnk_code = models.CharField(max_length=10)
@@ -3221,3 +3127,170 @@ class MemberProductAccess(models.Model):
     
     def __str__(self):
         return f"{self.bnk_code} - Product ID: {self.chg_sys_id}"
+
+#json_score
+class CreditScoringReport_JSON(models.Model):
+    """
+    ตารางหลักสำหรับเก็บรายงานคะแนนเครดิต JSON
+    """
+    SCJ_id = models.AutoField(primary_key=True)
+    lcic_id = models.CharField(max_length=50, db_index=True)
+    user_id = models.CharField(max_length=10, null=True, blank=True)  # get from frontend
+    bnk_code = models.CharField(max_length=10, null=True, blank=True)  # ⭐ เพิ่ม field นี้
+    # final_credit_score = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    # credit_rating = models.CharField(max_length=50, null=True, blank=True)
+    reference_scr = models.CharField(max_length=100, null=True, blank=True)
+    file_name = models.CharField(max_length=255, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['lcic_id', '-created_at']),
+            models.Index(fields=['bnk_code', '-created_at']),  # ⭐ เพิ่ม index
+        ]
+    
+    def __str__(self):
+        return f"{self.lcic_id} - {self.file_name}"
+
+
+class CustomerInfoScoring_JSON(models.Model):
+    """
+    ข้อมูลลูกค้า
+    """
+    id = models.AutoField(primary_key=True)
+    report = models.OneToOneField(CreditScoringReport_JSON,on_delete=models.CASCADE,related_name='customer_info')
+    customer_id = models.CharField(max_length=50, null=True, blank=True)
+    bnk_code = models.CharField(max_length=10, null=True, blank=True)
+    branch_code = models.CharField(max_length=10, null=True, blank=True)
+    national_id = models.CharField(max_length=50, null=True, blank=True)
+    passport = models.CharField(max_length=50, null=True, blank=True)
+    familybook = models.CharField(max_length=50, null=True, blank=True)
+    familybook_prov_code = models.CharField(max_length=10, null=True, blank=True)
+    name = models.CharField(max_length=100, null=True, blank=True)
+    surname = models.CharField(max_length=100, null=True, blank=True)
+    lao_name = models.CharField(max_length=100, null=True, blank=True)
+    lao_surname = models.CharField(max_length=100, null=True, blank=True)
+    birth_date = models.DateField(null=True, blank=True)
+    gender = models.CharField(max_length=10, null=True, blank=True)
+    nationality = models.CharField(max_length=50, null=True, blank=True)
+    civil_status = models.CharField(max_length=20, null=True, blank=True)
+    ind_insert_date = models.DateField(null=True, blank=True)
+    
+    def __str__(self):
+        return f"{self.name} {self.surname} - {self.report.lcic_id}"
+
+
+class LoanDetailScoring_JSON(models.Model):
+    """
+    รายละเอียดแต่ละสินเชื่อ
+    """
+    id = models.AutoField(primary_key=True)
+    report = models.ForeignKey(CreditScoringReport_JSON,on_delete=models.CASCADE,related_name='loan_details')
+    loan_id = models.CharField(max_length=50)
+    bnk_code = models.CharField(max_length=10, null=True, blank=True)
+    branch_id = models.CharField(max_length=10, null=True, blank=True)
+    customer_id = models.CharField(max_length=50, null=True, blank=True)
+    loan_status = models.CharField(max_length=20, null=True, blank=True)
+    loan_open_date = models.DateField(null=True, blank=True)
+    loan_exp_date = models.DateField(null=True, blank=True)
+    loan_term = models.CharField(max_length=10, null=True, blank=True)
+    loan_purpose = models.CharField(max_length=50, null=True, blank=True)
+    credit_line = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    outstanding_balance = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    currency = models.CharField(max_length=10, null=True, blank=True)
+    days_slow = models.IntegerField(null=True, blank=True)
+    loan_class = models.CharField(max_length=20, null=True, blank=True)
+    loan_type = models.CharField(max_length=50, null=True, blank=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['report', 'loan_status']),
+            models.Index(fields=['loan_id']),
+        ]
+    
+    def __str__(self):
+        return f"Loan {self.loan_id} - {self.report.lcic_id}"
+
+
+class CollateralDetailScoring_JSON(models.Model):
+    """
+    รายละเอียดแต่ละหลักประกัน
+    """
+    id = models.AutoField(primary_key=True)
+    report = models.ForeignKey(CreditScoringReport_JSON,on_delete=models.CASCADE,related_name='collateral_details')
+    loan_detail = models.ForeignKey(LoanDetailScoring_JSON,on_delete=models.CASCADE,related_name='collaterals',null=True,blank=True,)
+    col_type = models.CharField(max_length=10, null=True, blank=True)
+    col_type_name_eng = models.CharField(max_length=100, null=True, blank=True)
+    col_type_name_lao = models.CharField(max_length=100, null=True, blank=True)
+    col_id = models.CharField(max_length=50, null=True, blank=True)
+    lcic_id = models.CharField(max_length=50, null=True, blank=True)
+    loan_id = models.CharField(max_length=50, null=True, blank=True)
+    value = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    value_unit = models.CharField(max_length=10, null=True, blank=True)
+    status = models.CharField(max_length=50, null=True, blank=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['report', 'col_type']),
+            models.Index(fields=['col_id']),
+        ]
+    
+    def __str__(self):
+        return f"{self.col_type} - {self.col_id} - {self.report.lcic_id}"
+
+
+# models.py
+
+class FinalScoring_JSON(models.Model):
+    """
+    คะแนนแต่ละด้าน พร้อม Final Score Calculation
+    ⭐ ใช้ TextField แทน JSONField ทั้งหมด
+    """
+    id = models.AutoField(primary_key=True)
+    report = models.OneToOneField(CreditScoringReport_JSON,on_delete=models.CASCADE,related_name='score_breakdown')
+    province_score = models.CharField(max_length=10, null=True, blank=True)
+    marital_status_score = models.CharField(max_length=10, null=True, blank=True)
+    age_score = models.CharField(max_length=10, null=True, blank=True)
+    registration_year_score = models.CharField(max_length=10, null=True, blank=True)
+    loan_purpose_score = models.CharField(max_length=10, null=True, blank=True)
+    loan_term_score = models.CharField(max_length=10, null=True, blank=True)
+    credit_line_score =models.CharField(max_length=10, null=True, blank=True)
+    inquiries_score = models.CharField(max_length=10, null=True, blank=True)
+    overdue_class_score = models.CharField(max_length=10, null=True, blank=True)
+    collateral_type_score = models.CharField(max_length=10, null=True, blank=True)
+    collateral_value_score = models.CharField(max_length=10, null=True, blank=True)
+    outstanding_balance_score = models.CharField(max_length=10, null=True, blank=True)
+    raw_score = models.IntegerField(default=0, null=True, blank=True)
+    final_calculation = models.TextField(null=True,blank=True)
+    final_score = models.DecimalField(max_digits=10, decimal_places=2, default=0,)
+    credit_text = models.CharField(max_length=20,null=True,blank=True,)
+    
+    def __str__(self):
+        return f"Score Breakdown - {self.report.lcic_id} - Final Score: {self.final_score}"
+    
+class loan_lon_compare (models.Model):
+    id = models.AutoField(primary_key=True)
+    lon_sys_id = models.CharField(max_length=50, null=True, blank=True)
+    bnk_code = models.CharField(max_length=10, null=True, blank=True)
+    customer_id = models.CharField(max_length=30, null=True, blank=True)
+    branch_id = models.CharField(max_length=30, null=True, blank=True)
+    loan_id = models.CharField(max_length=50, null=True, blank=True)
+    lon_open_date = models.CharField(max_length=50, null=True, blank=True)
+    lon_exp_date = models.CharField(max_length=50, null=True, blank=True)
+    lon_ext_date = models.CharField(max_length=50, null=True, blank=True)
+    lon_int_rate = models.CharField(max_length=50, null=True, blank=True)
+    lon_purpose_code = models.CharField(max_length=50, null=True, blank=True)
+    lon_credit_line = models.CharField(max_length=100, null=True, blank=True)
+    lon_currency_code = models.CharField(max_length=3, null=True, blank=True)
+    lon_outstanding_balance = models.CharField(max_length=100, null=True, blank=True)
+    lon_account_no = models.CharField(max_length=35, null=True, blank=True)
+    lon_no_days_slow = models.CharField(max_length=50, null=True, blank=True)
+    lon_class = models.CharField(max_length=5, null=True, blank=True)
+    lon_type = models.CharField(max_length=10, null=True, blank=True)
+    lon_term = models.CharField(max_length=10, null=True, blank=True)
+    lon_status = models.CharField(max_length=20, null=True, blank=True)
+    lon_insert_date = models.CharField(max_length=50, null=True, blank=True)
+    lon_update_date = models.CharField(max_length=50, null=True, blank=True)
+    lon_applied_date = models.CharField(max_length=50, null=True, blank=True)
+    is_disputed = models.CharField(max_length=50, null=True, blank=True)
+    detail = models.CharField(max_length=50, null=True, blank=True)

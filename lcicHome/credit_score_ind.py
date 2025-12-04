@@ -22,7 +22,7 @@ from .models import (
     col_goldsilver_gold, col_guarantor_com,
     scr_atttype_desc_new, scr_attribute_table_new,  # ⭐ เปลี่ยนเป็น _new
     request_charge,
-    memberInfo
+    memberInfo,Main_catalog_cat
 )
 
 
@@ -62,7 +62,7 @@ class CreditScoreServiceIND:
     
     def get_collateral_type_name(self, col_type):
         """
-        Map col_type to collateral type names
+        Map col_type to collateral type names from Main_catalog_cat
         
         Args:
             col_type: รหัสประเภทหลักประกัน (เช่น 'C2.1', 'C2.2')
@@ -70,54 +70,40 @@ class CreditScoreServiceIND:
         Returns:
             dict: ชื่อหลักประกันภาษาอังกฤษและลาว
         """
-        collateral_mapping = {
-            'C2.1': {
-                'code': 'C2.1',
-                'name_eng': 'BUILDING / BUILDING + LAND / HOME / HOME+LAND / LAND',
-                'name_lao': 'ອາຄານ/ ອາຄານ + ທີ່ດິນ/ ເຮືອນ/ເຮືອນ+ທີ່ດິນ/ ທີ່ດິນ'
-            },
-            'C2.2': {
-                'code': 'C2.2',
-                'name_eng': 'MONEY IN ACCOUNT',
-                'name_lao': 'ເງິນໃນບັນຊີ'
-            },
-            'C2.3': {
-                'code': 'C2.3',
-                'name_eng': 'MACHINERY AND EQUIPMENTS',
-                'name_lao': 'ເຄື່ອງຈັກ ແລະ ອຸປະກອນຕ່າງໆ'
-            },
-            'C2.4': {
-                'code': 'C2.4',
-                'name_eng': 'PROJECT',
-                'name_lao': 'ໂຄງການ'
-            },
-            'C2.5': {
-                'code': 'C2.5',
-                'name_eng': 'VEHICLE',
-                'name_lao': 'ຍານພາຫະນະ'
-            },
-            'C2.6': {
-                'code': 'C2.6',
-                'name_eng': 'GUARANTOR_IND',
-                'name_lao': 'ຜູ້ຄຳ້ປະກັນບຸກຄົນ'
-            },
-            'C2.7': {
-                'code': 'C2.7',
-                'name_eng': 'GOLD AND SILVER',
-                'name_lao': 'ເງິນ ແລະ ຄຳ'
-            },
-            'C2.8': {
-                'code': 'C2.8',
-                'name_eng': 'GUARANTOR_COM',
-                'name_lao': 'ຜູ້ຄຳ້ປະກັນວິສາຫະກິດ'
+        try:
+            if not col_type:
+                return {
+                    'code': None,
+                    'name_eng': 'Unknown',
+                    'name_lao': 'ບໍ່ຮູ້ຈັກ'
+                }
+            
+            # ⭐ ดึงข้อมูลจาก Main_catalog_cat
+            catalog = Main_catalog_cat.objects.filter(
+                ct_type='C1',
+                cat_value=col_type,
+                cat_status=1  # สมมติว่า 1 = active
+            ).first()
+            
+            if catalog:
+                return {
+                    'code': col_type,
+                    'name_eng': catalog.cat_name if catalog.cat_name else f'Unknown Type ({col_type})',
+                    'name_lao': catalog.cat_lao_name if catalog.cat_lao_name else f'ບໍ່ຮູ້ຈັກ ({col_type})'
+                }
+            else:
+                # ⭐ กรณีไม่เจอในฐานข้อมูล ใช้ค่า default
+                return {
+                    'code': col_type,
+                    'name_eng': f'Unknown Type ({col_type})',
+                    'name_lao': f'ບໍ່ຮູ້ຈັກ ({col_type})'
+                }
+        except Exception as e:
+            return {
+                'code': col_type,
+                'name_eng': f'Error: {str(e)}',
+                'name_lao': f'ບໍ່ຮູ້ຈັກ ({col_type})'
             }
-        }
-        
-        return collateral_mapping.get(col_type, {
-            'code': col_type,
-            'name_eng': f'Unknown Type ({col_type})',
-            'name_lao': f'ບໍ່ຮູ້ຈັກ ({col_type})'
-        })
         
     def get_bank_info(self, bnk_code):
         """
@@ -196,7 +182,11 @@ class CreditScoreServiceIND:
         """
         ⭐ NEW: คำนวณคะแนนรวมสุดท้าย
         
-        สูตร: รวมคะแนนทั้งหมด (ไม่มีสูตรซับซ้อน)
+        สูตร: FinalScore = 300 + (Raw/1000) * 600
+        - Raw = รวมคะแนนทั้งหมดจาก breakdown
+        - 1000 = คะแนนเต็ม
+        - 300 = คะแนนฐาน (Base Score)
+        - 600 = คะแนนสูงสุดที่เพิ่มได้ (Maximum Additional Score)
         
         Args:
             breakdown: คะแนนแต่ละด้าน
@@ -205,27 +195,42 @@ class CreditScoreServiceIND:
             dict: คะแนนรวมพร้อมรายละเอียดการคำนวณ
         """
         try:
-            # รวมคะแนนทุกด้าน
+            # ค่าคงที่ในสูตร
+            BASE_SCORE = 300
+            MAX_ADDITIONAL_SCORE = 600
+            FULL_SCORE = 1000
+            
+            # รวมคะแนนทุกด้าน (Raw Score)
             scores = {}
             score_values = []
-            total_score = 0
+            raw_score = 0
             
             for key, value in breakdown.items():
                 score = value.get('score', 0)
                 scores[key] = score
-                score_values.append(str(score))
-                total_score += score
+                score_values.append(str(int(score)))  # แปลงเป็น int เพื่อไม่ให้มีทศนิยม
+                raw_score += score
             
-            # สร้างสูตรการบวก
-            formula = " + ".join(score_values)
-            calculation = f"{formula} = {round(total_score, 2)}"
+            # สร้างสูตรการบวก Raw Score พร้อมผลลัพธ์
+            raw_formula = " + ".join(score_values)
+            calculation = f"{raw_formula} = {int(raw_score)}"
+            
+            # คำนวณ Final Score ตามสูตร
+            # FinalScore = 300 + (Raw/1000) * 600
+            final_score = BASE_SCORE + (raw_score / FULL_SCORE) * MAX_ADDITIONAL_SCORE
+            
+            # สร้างสูตรการคำนวณ Final Score
+            final_calculation = f"{BASE_SCORE} + ({round(raw_score, 2)}/{FULL_SCORE}) * {MAX_ADDITIONAL_SCORE} = {round(final_score, 2)}"
             
             return {
-                'final_score': round(total_score, 2),
+                'final_score': round(final_score, 2),
                 'calculation_details': {
-                    'total_score': round(total_score, 2),
-                    'formula': formula,
+                    'base_score': BASE_SCORE,
+                    'max_additional_score': MAX_ADDITIONAL_SCORE,
+                    'full_score': FULL_SCORE,
+                    'raw_score': int(raw_score),
                     'calculation': calculation,
+                    'final_calculation': final_calculation,
                     'individual_scores': scores
                 }
             }
@@ -735,7 +740,7 @@ class CreditScoreServiceIND:
     # =====================================================
     # SECTION 3: ข้อมูลหลักประกัน (Collateral Summary)
     # =====================================================
-    
+
     def get_collateral_summary(self):
         """Get collateral summary from all C2.x tables - รวมทั้งหมดของ customer"""
         try:
@@ -752,8 +757,11 @@ class CreditScoreServiceIND:
                 total_rel = Decimal('0')
                 items = []
                 
+                # ⭐ ดึงชื่อจาก Main_catalog_cat
+                col_type_info = self.get_collateral_type_name('C2.1')
+                
                 for item in real_estates:
-                    value_lak = self.convert_to_lak(item.value, item.value_unit)
+                    value_lak = self.convert_to_lak(item.col_value, item.value_unit)
                     total_rel += value_lak
                     items.append({
                         'col_id': item.col_id,
@@ -765,7 +773,8 @@ class CreditScoreServiceIND:
                 
                 if len(items) > 0:
                     collateral_data['C2.1'] = {
-                        'type': 'Real Estate',
+                        'type': col_type_info['name_eng'],  # ⭐ ใช้ชื่อจาก catalog
+                        'type_lao': col_type_info['name_lao'],  # ⭐ เพิ่มชื่อภาษาลาว
                         'count': real_estates.count(),
                         'total_value_lak': float(total_rel),
                         'items': items
@@ -778,6 +787,9 @@ class CreditScoreServiceIND:
                 mia_records = col_money_mia.objects.filter(LCIC_code=self.lcic_id)
                 total_mia = Decimal('0')
                 items = []
+                
+                # ⭐ ดึงชื่อจาก Main_catalog_cat
+                col_type_info = self.get_collateral_type_name('C2.2')
                 
                 for item in mia_records:
                     value_lak = self.convert_to_lak(item.value, item.value_unit)
@@ -792,7 +804,8 @@ class CreditScoreServiceIND:
                 
                 if len(items) > 0:
                     collateral_data['C2.2'] = {
-                        'type': 'Money/MIA',
+                        'type': col_type_info['name_eng'],  # ⭐ ใช้ชื่อจาก catalog
+                        'type_lao': col_type_info['name_lao'],  # ⭐ เพิ่มชื่อภาษาลาว
                         'count': mia_records.count(),
                         'total_value_lak': float(total_mia),
                         'items': items
@@ -805,6 +818,9 @@ class CreditScoreServiceIND:
                 equipment_records = col_equipment_eqi.objects.filter(LCIC_code=self.lcic_id)
                 total_eqi = Decimal('0')
                 items = []
+                
+                # ⭐ ดึงชื่อจาก Main_catalog_cat
+                col_type_info = self.get_collateral_type_name('C2.3')
                 
                 for item in equipment_records:
                     value_lak = self.convert_to_lak(item.value, item.value_unit)
@@ -820,7 +836,8 @@ class CreditScoreServiceIND:
                 
                 if len(items) > 0:
                     collateral_data['C2.3'] = {
-                        'type': 'Equipment',
+                        'type': col_type_info['name_eng'],  # ⭐ ใช้ชื่อจาก catalog
+                        'type_lao': col_type_info['name_lao'],  # ⭐ เพิ่มชื่อภาษาลาว
                         'count': equipment_records.count(),
                         'total_value_lak': float(total_eqi),
                         'items': items
@@ -833,6 +850,9 @@ class CreditScoreServiceIND:
                 project_records = col_project_prj.objects.filter(LCIC_code=self.lcic_id)
                 total_prj = Decimal('0')
                 items = []
+                
+                # ⭐ ดึงชื่อจาก Main_catalog_cat
+                col_type_info = self.get_collateral_type_name('C2.4')
                 
                 for item in project_records:
                     value_lak = self.convert_to_lak(item.value, item.value_unit)
@@ -848,7 +868,8 @@ class CreditScoreServiceIND:
                 
                 if len(items) > 0:
                     collateral_data['C2.4'] = {
-                        'type': 'Project',
+                        'type': col_type_info['name_eng'],  # ⭐ ใช้ชื่อจาก catalog
+                        'type_lao': col_type_info['name_lao'],  # ⭐ เพิ่มชื่อภาษาลาว
                         'count': project_records.count(),
                         'total_value_lak': float(total_prj),
                         'items': items
@@ -861,6 +882,9 @@ class CreditScoreServiceIND:
                 vehicle_records = col_vechicle_veh.objects.filter(LCIC_code=self.lcic_id)
                 total_veh = Decimal('0')
                 items = []
+                
+                # ⭐ ดึงชื่อจาก Main_catalog_cat
+                col_type_info = self.get_collateral_type_name('C2.5')
                 
                 for item in vehicle_records:
                     value_lak = self.convert_to_lak(item.value, item.value_unit)
@@ -876,7 +900,8 @@ class CreditScoreServiceIND:
                 
                 if len(items) > 0:
                     collateral_data['C2.5'] = {
-                        'type': 'Vehicle',
+                        'type': col_type_info['name_eng'],  # ⭐ ใช้ชื่อจาก catalog
+                        'type_lao': col_type_info['name_lao'],  # ⭐ เพิ่มชื่อภาษาลาว
                         'count': vehicle_records.count(),
                         'total_value_lak': float(total_veh),
                         'items': items
@@ -889,6 +914,9 @@ class CreditScoreServiceIND:
                 guarantor_records = col_guarantor_gua.objects.filter(LCIC_code=self.lcic_id)
                 total_gua = Decimal('0')
                 items = []
+                
+                # ⭐ ดึงชื่อจาก Main_catalog_cat
+                col_type_info = self.get_collateral_type_name('C2.6')
                 
                 for item in guarantor_records:
                     value_lak = self.convert_to_lak(item.value, item.value_unit)
@@ -904,7 +932,8 @@ class CreditScoreServiceIND:
                 
                 if len(items) > 0:
                     collateral_data['C2.6'] = {
-                        'type': 'Guarantor Individual',
+                        'type': col_type_info['name_eng'],  # ⭐ ใช้ชื่อจาก catalog
+                        'type_lao': col_type_info['name_lao'],  # ⭐ เพิ่มชื่อภาษาลาว
                         'count': guarantor_records.count(),
                         'total_value_lak': float(total_gua),
                         'items': items
@@ -917,6 +946,9 @@ class CreditScoreServiceIND:
                 gold_records = col_goldsilver_gold.objects.filter(LCIC_code=self.lcic_id)
                 total_gld = Decimal('0')
                 items = []
+                
+                # ⭐ ดึงชื่อจาก Main_catalog_cat
+                col_type_info = self.get_collateral_type_name('C2.7')
                 
                 for item in gold_records:
                     value_lak = self.convert_to_lak(item.value, item.value_unit)
@@ -932,7 +964,8 @@ class CreditScoreServiceIND:
                 
                 if len(items) > 0:
                     collateral_data['C2.7'] = {
-                        'type': 'Gold/Silver',
+                        'type': col_type_info['name_eng'],  # ⭐ ใช้ชื่อจาก catalog
+                        'type_lao': col_type_info['name_lao'],  # ⭐ เพิ่มชื่อภาษาลาว
                         'count': gold_records.count(),
                         'total_value_lak': float(total_gld),
                         'items': items
@@ -945,6 +978,9 @@ class CreditScoreServiceIND:
                 guarantor_com_records = col_guarantor_com.objects.filter(LCIC_code=self.lcic_id)
                 total_gua_com = Decimal('0')
                 items = []
+                
+                # ⭐ ดึงชื่อจาก Main_catalog_cat
+                col_type_info = self.get_collateral_type_name('C2.8')
                 
                 for item in guarantor_com_records:
                     value_lak = self.convert_to_lak(item.value, item.value_unit)
@@ -960,7 +996,8 @@ class CreditScoreServiceIND:
                 
                 if len(items) > 0:
                     collateral_data['C2.8'] = {
-                        'type': 'Guarantor Company',
+                        'type': col_type_info['name_eng'],  # ⭐ ใช้ชื่อจาก catalog
+                        'type_lao': col_type_info['name_lao'],  # ⭐ เพิ่มชื่อภาษาลาว
                         'count': guarantor_com_records.count(),
                         'total_value_lak': float(total_gua_com),
                         'items': items
@@ -983,49 +1020,22 @@ class CreditScoreServiceIND:
     
     def get_inquiries_count(self):
         """
-        นับจำนวนครั้งที่ถูกตรวจสอบเครดิต (ยกเว้นธนาคารตัวเอง)
+        นับจำนวนครั้งที่ถูกตรวจสอบเครดิต (ยกเว้น bnk_code = '01')
         """
         try:
-            customer_bnk_code = None
-            if self.customer:
-                customer_bnk_code = self.customer.get('bnk_code')
-            
             inquiries = request_charge.objects.filter(
                 LCIC_code=self.lcic_id,
                 chg_code__in=['FCR', 'FCRF']
-            )
-            
-            if customer_bnk_code:
-                inquiries = inquiries.exclude(bnk_code=customer_bnk_code)
+            ).exclude(bnk_code='01')  # ✅ ไม่นับ bnk_code = '01'
             
             inquiry_count = inquiries.count()
             
-            # ⭐ NEW: เปลี่ยนเป็น range
-            if inquiry_count == 0:
-                category_code = "0"
-            elif 1 <= inquiry_count <= 3:
-                category_code = "1|3"
-            else:
-                category_code = "4|999"
-            
             return {
-                'count': inquiry_count,
-                'category_code': category_code,
-                'inquiries': list(inquiries.values(
-                    'rec_charge_ID',
-                    'bnk_code',
-                    'bnk_type',
-                    'chg_code',
-                    'insert_date',
-                    'cusType',
-                    'lon_purpose'
-                ))
+                'count': inquiry_count
             }
         except Exception as e:
             return {
                 'count': 0,
-                'category_code': "0",
-                'inquiries': [],
                 'error': str(e)
             }
     
@@ -1167,6 +1177,7 @@ class CreditScoreServiceIND:
         """
         ⭐ NEW: คำนวณคะแนนแบบ MIN/MAX
         + แสดง att_weight เสมอ
+        + แสดงเฉพาะ selected item (ไม่แสดง all_scores)
         """
         try:
             # ⭐ ดึง att_weight ก่อนเสมอ
@@ -1221,6 +1232,7 @@ class CreditScoreServiceIND:
                 selected = max(scores, key=lambda x: x['score'])
                 strategy = 'MAX'
             
+            # ✅ แสดงเฉพาะ detail ของ selected item
             return {
                 'score': selected['score'],
                 'att_type': att_type,
@@ -1228,7 +1240,6 @@ class CreditScoreServiceIND:
                 'strategy': strategy,
                 'selected_code': selected['code'],
                 'selected_loan_id': selected['loan_id'],
-                'all_scores': scores,
                 'att_value': selected['att_value'],
                 'att_group_id': selected.get('att_group_id'),
                 'att_name': selected.get('att_name'),
@@ -1252,6 +1263,7 @@ class CreditScoreServiceIND:
         """
         ⭐ NEW: คำนวณคะแนน Collateral Type แบบ MIN/MAX
         + แสดง att_weight เสมอ
+        + ดึงชื่อหลักประกันจาก Main_catalog_cat
         """
         try:
             # ⭐ ดึง att_weight ก่อนเสมอ
@@ -1261,6 +1273,9 @@ class CreditScoreServiceIND:
             scores = []
             
             for col_type in col_types:
+                # ⭐ ดึงชื่อหลักประกันจาก Main_catalog_cat
+                col_type_info = self.get_collateral_type_name(col_type)
+                
                 attributes = scr_attribute_table_new.objects.filter(
                     att_type='colTypeID',
                     att_code__startswith=col_type
@@ -1269,8 +1284,10 @@ class CreditScoreServiceIND:
                 for attr in attributes:
                     scores.append({
                         'col_type': col_type,
+                        'col_type_name_eng': col_type_info['name_eng'],  # ⭐ เพิ่มชื่อภาษาอังกฤษ
+                        'col_type_name_lao': col_type_info['name_lao'],  # ⭐ เพิ่มชื่อภาษาลาว
                         'att_code': attr.att_code,
-                        'att_name': attr.att_name,
+                        'att_name': attr.att_name,  # ⭐ เก็บไว้สำหรับ reference (ถ้าต้องการ)
                         'score': attr.att_value,
                         'att_value': attr.att_value,
                         'att_group_id': attr.att_group_id,
@@ -1305,7 +1322,7 @@ class CreditScoreServiceIND:
                 'all_scores': scores,
                 'att_value': selected['att_value'],
                 'att_group_id': selected.get('att_group_id'),
-                'att_name': selected.get('att_name'),
+                'att_name': selected.get('att_name'),  # ⭐ เก็บไว้สำหรับ reference
             }
         except Exception as e:
             # ⭐ กรณี error
@@ -1497,14 +1514,17 @@ class CreditScoreServiceIND:
                             })
                 
                 if loan_term_scores:
+                    # ⭐ เปลี่ยนจากเลือก MIN/MAX score เป็นเลือก longest/shortest term
                     if has_active:
-                        loan_term_scores.sort(key=lambda x: (x['score'], x['term_years']))
+                        # ACTIVE: เลือก longest term (term_years มากที่สุด)
+                        loan_term_scores.sort(key=lambda x: x['term_years'], reverse=True)
                         selected = loan_term_scores[0]
-                        strategy = 'MIN'
+                        strategy = 'LONGEST'
                     else:
-                        loan_term_scores.sort(key=lambda x: (x['score'], x['term_years']), reverse=True)
+                        # INACTIVE: เลือก shortest term (term_years น้อยที่สุด)
+                        loan_term_scores.sort(key=lambda x: x['term_years'])
                         selected = loan_term_scores[0]
-                        strategy = 'MAX'
+                        strategy = 'SHORTEST'
                     
                     breakdown['loan_term'] = {
                         'score': selected['score'],
@@ -1518,7 +1538,6 @@ class CreditScoreServiceIND:
                             'term_years': selected['term_years'],
                             'open_date': str(selected['open_date']),
                             'exp_date': str(selected['exp_date']),
-                            'all_scores': loan_term_scores,
                             'att_value': selected['att_value'],
                             'att_group_id': selected.get('att_group_id'),
                             'att_code': selected.get('att_code'),
@@ -1579,19 +1598,14 @@ class CreditScoreServiceIND:
             # 8. inqueriesID (Inquiries)
             # =====================================================
             inquiries_data = self.get_inquiries_count()
-            inquiry_code = inquiries_data['category_code']
-            
+
+            # ✅ ใช้ get_score_range เพื่อหา score จาก model
             inquiries_detail = self.get_score_range('inqueriesID', inquiries_data['count'])
+
             breakdown['inquiries'] = {
                 'score': inquiries_detail['score'],
-                'input_value': {
-                    'inquiry_count': inquiries_data['count'],
-                    'category_code': inquiry_code
-                },
-                'details': {
-                    **inquiries_detail,
-                    'inquiries_list': inquiries_data['inquiries']
-                }
+                'input_value': inquiries_data['count'],
+                'details': inquiries_detail
             }
             
             # =====================================================
@@ -1716,1311 +1730,3 @@ class CreditScoreServiceIND:
             return breakdown
         except Exception as e:
             raise Exception(f"Error calculating score breakdown: {str(e)}")
-
-
-# credit_score_ind.py (dynamic)
-
-# from decimal import Decimal
-# from datetime import date, datetime
-# from django.db.models import Sum, Max, Count, Q, F
-# from .models import (
-#     IndividualBankIbk, B1, C1,
-#     col_real_estates, col_money_mia, col_equipment_eqi,
-#     col_project_prj, col_vechicle_veh, col_guarantor_gua,
-#     col_goldsilver_gold, col_guarantor_com,
-#     scr_atttype_desc_dy, scr_attribute_table_new,
-#     request_charge,
-#     memberInfo
-# )
-
-
-# class CreditScoreServiceIND:
-#     """
-#     ⭐ DYNAMIC CREDIT SCORING SERVICE
-    
-#     This service automatically reads scoring parameters from the database
-#     and calculates scores accordingly.
-    
-#     NO CODE CHANGES NEEDED when adding new parameters!
-#     """
-    
-#     EXCHANGE_RATES = {
-#         'USD': Decimal('9593'),
-#         'THB': Decimal('345'),
-#         'LAK': Decimal('1')
-#     }
-    
-#     def __init__(self, lcic_id):
-#         self.lcic_id = lcic_id
-#         self.customer = None
-#         self.loans = None
-#         self.collaterals = None
-    
-#     # =====================================================
-#     # HELPER FUNCTIONS
-#     # =====================================================
-    
-#     def get_collateral_type_name(self, col_type):
-#         """Map col_type to collateral type names"""
-#         collateral_mapping = {
-#             'C2.1': {
-#                 'code': 'C2.1',
-#                 'name_eng': 'BUILDING / BUILDING + LAND / HOME / HOME+LAND / LAND',
-#                 'name_lao': 'ອາຄານ/ ອາຄານ + ທີ່ດິນ/ ເຮືອນ/ເຮືອນ+ທີ່ດິນ/ ທີ່ດິນ'
-#             },
-#             'C2.2': {
-#                 'code': 'C2.2',
-#                 'name_eng': 'MONEY IN ACCOUNT',
-#                 'name_lao': 'ເງິນໃນບັນຊີ'
-#             },
-#             'C2.3': {
-#                 'code': 'C2.3',
-#                 'name_eng': 'MACHINERY AND EQUIPMENTS',
-#                 'name_lao': 'ເຄື່ອງຈັກ ແລະ ອຸປະກອນຕ່າງໆ'
-#             },
-#             'C2.4': {
-#                 'code': 'C2.4',
-#                 'name_eng': 'PROJECT',
-#                 'name_lao': 'ໂຄງການ'
-#             },
-#             'C2.5': {
-#                 'code': 'C2.5',
-#                 'name_eng': 'VEHICLE',
-#                 'name_lao': 'ຍານພາຫະນະ'
-#             },
-#             'C2.6': {
-#                 'code': 'C2.6',
-#                 'name_eng': 'GUARANTOR_IND',
-#                 'name_lao': 'ຜູ້ຄຳ້ປະກັນບຸກຄົນ'
-#             },
-#             'C2.7': {
-#                 'code': 'C2.7',
-#                 'name_eng': 'GOLD AND SILVER',
-#                 'name_lao': 'ເງິນ ແລະ ຄຳ'
-#             },
-#             'C2.8': {
-#                 'code': 'C2.8',
-#                 'name_eng': 'GUARANTOR_COM',
-#                 'name_lao': 'ຜູ້ຄຳ້ປະກັນວິສາຫະກິດ'
-#             }
-#         }
-        
-#         return collateral_mapping.get(col_type, {
-#             'code': col_type,
-#             'name_eng': f'Unknown Type ({col_type})',
-#             'name_lao': f'ບໍ່ຮູ້ຈັກ ({col_type})'
-#         })
-    
-#     def get_bank_info(self, bnk_code):
-#         """Get bank information"""
-#         try:
-#             if not bnk_code:
-#                 return {
-#                     'bnk_code': None,
-#                     'code': None,
-#                     'display_code': None,
-#                     'name': None,
-#                     'name_lao': None
-#                 }
-            
-#             bank = memberInfo.objects.filter(bnk_code=bnk_code).first()
-            
-#             if bank:
-#                 return {
-#                     'bnk_code': bank.bnk_code,
-#                     'code': bank.code,
-#                     'display_code': f"{bank.code}-{bank.bnk_code}",
-#                     'name': bank.nameE,
-#                     'name_lao': bank.nameL
-#                 }
-#             else:
-#                 return {
-#                     'bnk_code': bnk_code,
-#                     'code': None,
-#                     'display_code': bnk_code,
-#                     'name': f"Unknown Bank ({bnk_code})",
-#                     'name_lao': f"ບໍ່ຮູ້ຈັກ ({bnk_code})"
-#                 }
-#         except Exception as e:
-#             return {
-#                 'bnk_code': bnk_code,
-#                 'code': None,
-#                 'display_code': bnk_code,
-#                 'name': f"Error: {str(e)}",
-#                 'name_lao': None
-#             }
-    
-#     def convert_to_lak(self, value, currency):
-#         """Convert currency to LAK"""
-#         try:
-#             if not value:
-#                 return Decimal('0')
-#             value = Decimal(str(value))
-#             rate = self.EXCHANGE_RATES.get(currency, Decimal('1'))
-#             return value * rate
-#         except:
-#             return Decimal('0')
-    
-#     # =====================================================
-#     # MAIN CALCULATION ENTRY POINT
-#     # =====================================================
-    
-#     def calculate_credit_score(self):
-#         """Main function to calculate credit score"""
-#         try:
-#             # 1. Get customer information
-#             self.customer = self.get_customer_info()
-#             if not self.customer:
-#                 return None
-            
-#             # 2. Get loan information
-#             loan_summary = self.get_loan_summary()
-            
-#             # 3. Get collateral information
-#             collateral_summary = self.get_collateral_summary()
-            
-#             # 4. ⭐ DYNAMIC SCORE CALCULATION
-#             score_breakdown = self.calculate_score_breakdown_dynamic(
-#                 self.customer,
-#                 loan_summary,
-#                 collateral_summary
-#             )
-            
-#             # 5. Calculate final score
-#             final_score_data = self.calculate_final_score(score_breakdown)
-#             final_score = final_score_data.get('final_score', 0)
-            
-#             # 6. Get credit rating
-#             credit_rating = self.get_credit_rating(final_score)
-            
-#             return {
-#                 'customer_info': self.customer,
-#                 'loan_summary': loan_summary,
-#                 'collateral_summary': collateral_summary,
-#                 'score_breakdown': score_breakdown,
-#                 'final_score_calculation': final_score_data,
-#                 'final_credit_score': final_score,
-#                 'credit_rating': credit_rating
-#             }
-#         except Exception as e:
-#             import traceback
-#             error_detail = traceback.format_exc()
-#             raise Exception(f"Error calculating credit score: {str(e)}\n{error_detail}")
-    
-#     # =====================================================
-#     # ⭐ DYNAMIC SCORE BREAKDOWN CALCULATION
-#     # =====================================================
-    
-#     def calculate_score_breakdown_dynamic(self, customer, loan_summary, collateral_summary):
-#         """
-#         ⭐ DYNAMIC CALCULATION - Main scoring logic
-        
-#         Automatically reads all active parameters from database
-#         and calculates scores based on their calculation_method.
-#         """
-#         try:
-#             breakdown = {}
-            
-#             # Prepare data for scoring
-#             has_active = loan_summary.get('has_active_or_writeoff', False)
-#             scoring_loans_data = loan_summary.get('scoring_loans', [])
-            
-#             if scoring_loans_data:
-#                 loan_ids = [loan['loan_id'] for loan in scoring_loans_data]
-#                 scoring_loans = B1.objects.filter(loan_id__in=loan_ids)
-#             else:
-#                 scoring_loans = B1.objects.none()
-            
-#             # ⭐ STEP 1: Get all active parameters from database
-#             active_params = scr_atttype_desc_dy.objects.filter(
-#                 is_active=True
-#             ).order_by('display_order')
-                        
-#             # ⭐ STEP 2: Loop through each parameter
-#             for param in active_params:
-#                 att_type = param.att_type
-#                 calculation_method = param.calculation_method
-                                
-#                 # ⭐ STEP 3: Calculate score based on method
-#                 try:
-#                     if calculation_method == 'simple':
-#                         result = self._calculate_simple_score(
-#                             param, customer, loan_summary, collateral_summary
-#                         )
-                    
-#                     elif calculation_method == 'range':
-#                         result = self._calculate_range_score(
-#                             param, customer, loan_summary, collateral_summary
-#                         )
-                    
-#                     elif calculation_method == 'min_max':
-#                         result = self._calculate_min_max_score(
-#                             param, scoring_loans, has_active
-#                         )
-                    
-#                     elif calculation_method == 'custom':
-#                         result = self._calculate_custom_score(
-#                             param, customer, loan_summary, collateral_summary, scoring_loans, has_active
-#                         )
-                    
-#                     else:
-#                         result = self._get_zero_score(param, f"Unknown method: {calculation_method}")
-                    
-#                     # Store result with key name
-#                     key_name = self._get_key_name(att_type)
-#                     breakdown[key_name] = result
-                                    
-#                 except Exception as e:
-#                       breakdown[self._get_key_name(att_type)] = self._get_zero_score(param, str(e))
-            
-#             return breakdown
-        
-#         except Exception as e:
-#             raise Exception(f"Error in dynamic score calculation: {str(e)}")
-    
-#     # =====================================================
-#     # HELPER: Get Key Name for Frontend
-#     # =====================================================
-    
-#     def _get_key_name(self, att_type):
-#         """Convert att_type to frontend key name"""
-#         mapping = {
-#             'cpID': 'province',
-#             'mstatusID': 'marital_status',
-#             'AgeID': 'age',
-#             'regID': 'registration_year',
-#             'lpID': 'loan_purpose',
-#             'ltID': 'loan_term',
-#             'CLID': 'credit_line',
-#             'inqueriesID': 'inquiries',
-#             'ovdID': 'overdue_class',
-#             'colTypeID': 'collateral_type',
-#             'colValueID': 'collateral_value',
-#             'totaloustBalance': 'outstanding_balance'
-#         }
-#         return mapping.get(att_type, att_type.lower())
-    
-#     # =====================================================
-#     # HELPER: Get Zero Score
-#     # =====================================================
-    
-#     def _get_zero_score(self, param, message='No data found'):
-#         """Return zero score with parameter info"""
-#         return {
-#             'score': 0,
-#             'input_value': None,
-#             'details': {
-#                 'att_type': param.att_type,
-#                 'att_code': None,
-#                 'att_name': '-',
-#                 'att_value': 0,
-#                 'att_weight': float(param.att_weight),
-#                 'message': message
-#             }
-#         }
-    
-#     # =====================================================
-#     # HELPER: Get Value from Data Source
-#     # =====================================================
-    
-#     def _get_value_from_source(self, param, customer, loan_summary, collateral_summary):
-#         """Get value from the specified data source"""
-#         try:
-#             data_source = param.data_source
-#             field_name = param.field_name
-            
-#             if not data_source or not field_name:
-#                 return None
-            
-#             if data_source == 'customer':
-#                 return customer.get(field_name)
-            
-#             elif data_source == 'loan':
-#                 return loan_summary.get(field_name)
-            
-#             elif data_source == 'collateral':
-#                 return collateral_summary.get(field_name)
-            
-#             elif data_source == 'inquiry':
-#                 inquiries_data = self.get_inquiries_count()
-#                 return inquiries_data.get(field_name)
-            
-#             else:
-#                 return None
-        
-#         except Exception as e:
-#             return None
-    
-#     # =====================================================
-#     # CALCULATION METHOD 1: SIMPLE MATCH
-#     # =====================================================
-    
-#     def _calculate_simple_score(self, param, customer, loan_summary, collateral_summary):
-#         """
-#         Simple Match Method
-#         Direct code matching (e.g., Province '01' → 50 points)
-#         """
-#         try:
-#             value = self._get_value_from_source(param, customer, loan_summary, collateral_summary)
-            
-#             if value:
-#                 detail = self.get_score_simple(param.att_type, value)
-#             else:
-#                 detail = {
-#                     'score': 0,
-#                     'att_type': param.att_type,
-#                     'att_code': None,
-#                     'att_name': '-',
-#                     'att_value': 0,
-#                     'att_weight': float(param.att_weight),
-#                     'message': f'No {param.field_name} found'
-#                 }
-            
-#             return {
-#                 'score': detail['score'],
-#                 'input_value': value,
-#                 'details': detail
-#             }
-        
-#         except Exception as e:
-#             return self._get_zero_score(param, str(e))
-    
-#     # =====================================================
-#     # CALCULATION METHOD 2: RANGE MATCH
-#     # =====================================================
-    
-# # credit_score_ind.py
-
-#     def _calculate_range_score(self, param, customer, loan_summary, collateral_summary):
-#         """
-#         Range Match Method
-#         Value falls within a range (e.g., Age 25 → '18|35' range → 50 points)
-#         """
-#         try:
-#             # ⭐ แก้ไข: เพิ่ม special case สำหรับ inquiries
-#             if param.att_type == 'inqueriesID':
-#                 # สำหรับ inquiries ใช้วิธีพิเศษ
-#                 inquiries_data = self.get_inquiries_count()
-#                 value = inquiries_data.get('count', 0)  # ⭐ ใช้ 'count' ไม่ใช่ 'field_name'
-#             else:
-#                 # สำหรับ parameter อื่นๆ ใช้วิธีปกติ
-#                 value = self._get_value_from_source(param, customer, loan_summary, collateral_summary)
-            
-#             if value is not None and value >= 0:  # ⭐ เปลี่ยนจาก > 0 เป็น >= 0 เพราะ 0 ก็ต้องได้คะแนน
-#                 detail = self.get_score_range(param.att_type, value)
-                
-#                 # ⭐ เพิ่มข้อมูล inquiry_count สำหรับ inquiries
-#                 if param.att_type == 'inqueriesID':
-#                     inquiries_data = self.get_inquiries_count()
-#                     input_value = {
-#                         'inquiry_count': inquiries_data.get('count', 0),
-#                         'category_code': inquiries_data.get('category_code', '0'),
-#                         'inquiries_list': inquiries_data.get('inquiries', [])
-#                     }
-#                 else:
-#                     input_value = value
-#             else:
-#                 detail = {
-#                     'score': 0,
-#                     'att_type': param.att_type,
-#                     'att_code': None,
-#                     'att_name': '-',
-#                     'att_value': 0,
-#                     'att_weight': float(param.att_weight),
-#                     'message': f'No {getattr(param, "field_name", "value")} found'
-#                 }
-#                 input_value = None
-            
-#             return {
-#                 'score': detail['score'],
-#                 'input_value': input_value,
-#                 'details': detail
-#             }
-        
-#         except Exception as e:
-#             return self._get_zero_score(param, str(e))
-    
-#     # =====================================================
-#     # CALCULATION METHOD 3: MIN/MAX FROM LOANS
-#     # =====================================================
-    
-#     def _calculate_min_max_score(self, param, scoring_loans, has_active):
-#         """
-#         MIN/MAX Method
-#         Get minimum or maximum score from multiple loans
-#         """
-#         try:
-#             if scoring_loans.exists():
-#                 detail = self.get_score_min_max(param.att_type, scoring_loans, has_active)
-#                 return {
-#                     'score': detail['score'],
-#                     'input_value': detail.get('selected_code'),
-#                     'details': detail
-#                 }
-#             else:
-#                 return self._get_zero_score(param, 'No loans found')
-        
-#         except Exception as e:
-#             return self._get_zero_score(param, str(e))
-    
-#     # =====================================================
-#     # CALCULATION METHOD 4: CUSTOM LOGIC
-#     # =====================================================
-    
-#     def _calculate_custom_score(self, param, customer, loan_summary, collateral_summary, scoring_loans, has_active):
-#         """
-#         Custom Logic Method
-#         Complex calculations (Loan Term, Collateral %, etc.)
-#         """
-#         try:
-#             att_type = param.att_type
-            
-#             if att_type == 'ltID':
-#                 return self._calculate_loan_term_custom(param, scoring_loans, has_active)
-            
-#             elif att_type == 'colTypeID':
-#                 return self._calculate_collateral_type_custom(param, collateral_summary, has_active)
-            
-#             elif att_type == 'colValueID':
-#                 return self._calculate_collateral_value_custom(param, loan_summary, collateral_summary)
-            
-#             elif att_type == 'totaloustBalance':
-#                 return self._calculate_outstanding_balance_custom(param, loan_summary)
-            
-#             else:
-#                 return self._get_zero_score(param, f'Custom logic not implemented for {att_type}')
-        
-#         except Exception as e:
-#             return self._get_zero_score(param, str(e))
-    
-#     # =====================================================
-#     # CUSTOM LOGIC IMPLEMENTATIONS
-#     # =====================================================
-    
-#     def _calculate_loan_term_custom(self, param, scoring_loans, has_active):
-#         """Custom: Loan Term Calculation"""
-#         try:
-#             if not scoring_loans.exists():
-#                 return self._get_zero_score(param, 'No loans found')
-            
-#             loan_term_scores = []
-#             att_weight = float(param.att_weight)
-            
-#             for loan in scoring_loans:
-#                 if loan.lon_open_date and loan.lon_exp_date:
-#                     term_years = loan.lon_exp_date.year - loan.lon_open_date.year
-#                     term_score_data = self.get_score_range(param.att_type, term_years)
-                    
-#                     if term_score_data.get('score', 0) > 0:
-#                         loan_term_scores.append({
-#                             'loan_id': loan.loan_id,
-#                             'open_date': loan.lon_open_date,
-#                             'exp_date': loan.lon_exp_date,
-#                             'term_years': term_years,
-#                             'score': term_score_data['score'],
-#                             'att_value': term_score_data.get('att_value', 0),
-#                             'att_group_id': term_score_data.get('att_group_id'),
-#                             'att_code': term_score_data.get('att_code'),
-#                             'att_name': term_score_data.get('att_name'),
-#                             'att_weight': att_weight,
-#                         })
-            
-#             if loan_term_scores:
-#                 if has_active:
-#                     loan_term_scores.sort(key=lambda x: (x['score'], x['term_years']))
-#                     selected = loan_term_scores[0]
-#                     strategy = 'MIN'
-#                 else:
-#                     loan_term_scores.sort(key=lambda x: (x['score'], x['term_years']), reverse=True)
-#                     selected = loan_term_scores[0]
-#                     strategy = 'MAX'
-                
-#                 return {
-#                     'score': selected['score'],
-#                     'input_value': selected['term_years'],
-#                     'details': {
-#                         'score': selected['score'],
-#                         'att_type': param.att_type,
-#                         'att_weight': att_weight,
-#                         'strategy': strategy,
-#                         'selected_loan_id': selected['loan_id'],
-#                         'term_years': selected['term_years'],
-#                         'open_date': str(selected['open_date']),
-#                         'exp_date': str(selected['exp_date']),
-#                         'all_scores': loan_term_scores,
-#                         'att_value': selected['att_value'],
-#                         'att_group_id': selected.get('att_group_id'),
-#                         'att_code': selected.get('att_code'),
-#                         'att_name': selected.get('att_name'),
-#                     }
-#                 }
-#             else:
-#                 return self._get_zero_score(param, 'No valid loan terms found')
-        
-#         except Exception as e:
-#             return self._get_zero_score(param, str(e))
-    
-#     def _calculate_collateral_type_custom(self, param, collateral_summary, has_active):
-#         """Custom: Collateral Type Calculation"""
-#         try:
-#             col_types = collateral_summary.get('collateral_types', [])
-            
-#             if col_types:
-#                 detail = self.get_collateral_type_score_min_max(col_types, has_active)
-#                 return {
-#                     'score': detail['score'],
-#                     'input_value': col_types,
-#                     'details': detail
-#                 }
-#             else:
-#                 return {
-#                     'score': 0,
-#                     'input_value': [],
-#                     'details': {
-#                         'att_type': param.att_type,
-#                         'att_code': None,
-#                         'att_name': 'No Collateral',
-#                         'att_value': 0,
-#                         'att_weight': float(param.att_weight),
-#                         'message': 'No collateral found'
-#                     }
-#                 }
-        
-#         except Exception as e:
-#             return self._get_zero_score(param, str(e))
-    
-#     def _calculate_collateral_value_custom(self, param, loan_summary, collateral_summary):
-#         """Custom: Collateral Value Calculation"""
-#         try:
-#             col_value = collateral_summary.get('total_collateral_value_lak', 0)
-#             outstanding = loan_summary.get('total_outstanding_balance_lak', 0)
-            
-#             if outstanding > 0:
-#                 col_percentage = (col_value / outstanding) * 100
-#                 detail = self.get_score_range(param.att_type, col_percentage)
-#             else:
-#                 col_percentage = 0
-#                 detail = {
-#                     'score': 0,
-#                     'att_type': param.att_type,
-#                     'att_code': None,
-#                     'att_name': '-',
-#                     'att_value': 0,
-#                     'att_weight': float(param.att_weight),
-#                     'message': 'No outstanding balance'
-#                 }
-            
-#             return {
-#                 'score': detail['score'],
-#                 'input_value': {
-#                     'collateral_value_lak': col_value,
-#                     'outstanding_balance_lak': outstanding,
-#                     'percentage': round(col_percentage, 2),
-#                     'att_code': detail.get('att_code'),
-#                 },
-#                 'details': detail
-#             }
-        
-#         except Exception as e:
-#             return self._get_zero_score(param, str(e))
-    
-#     def _calculate_outstanding_balance_custom(self, param, loan_summary):
-#         """Custom: Outstanding Balance Calculation"""
-#         try:
-#             total_outstanding = loan_summary.get('total_outstanding_balance_lak', 0)
-#             total_credit = loan_summary.get('total_credit_line_lak', 0)
-            
-#             if total_credit > 0:
-#                 percentage = (total_outstanding / total_credit) * 100
-#                 detail = self.get_score_range(param.att_type, percentage)
-#             else:
-#                 percentage = 0
-#                 detail = {
-#                     'score': 0,
-#                     'att_type': param.att_type,
-#                     'att_code': None,
-#                     'att_name': '-',
-#                     'att_value': 0,
-#                     'att_weight': float(param.att_weight),
-#                     'message': 'No credit line found'
-#                 }
-            
-#             return {
-#                 'score': detail['score'],
-#                 'input_value': {
-#                     'percentage': round(percentage, 2),
-#                     'total_outstanding_lak': total_outstanding,
-#                     'total_credit_line_lak': total_credit
-#                 },
-#                 'details': detail
-#             }
-        
-#         except Exception as e:
-#             return self._get_zero_score(param, str(e))
-    
-#     # =====================================================
-#     # SCORE MATCHING FUNCTIONS
-#     # =====================================================
-    
-#     def get_score_simple(self, att_type, att_code):
-#             """Find exact match in scoring table"""
-#             try:
-#                 desc = scr_atttype_desc_dy.objects.filter(att_type=att_type).first()
-#                 att_weight = desc.att_weight if desc else 0
-                
-#                 result = scr_attribute_table_new.objects.filter(
-#                     att_type=att_type,
-#                     att_code=att_code
-#                 ).first()
-                
-#                 if result:
-#                     return {
-#                         'score': float(result.att_value),
-#                         'att_type': att_type,
-#                         'att_code': att_code,
-#                         'att_name': result.att_name,
-#                         'att_value': float(result.att_value),
-#                         'att_group_id': result.att_group_id,
-#                         'att_desc': result.att_desc,
-#                         'att_weight': float(att_weight),  # ⭐ IntegerField -> float
-#                     }
-                
-#                 return {
-#                     'score': 0,
-#                     'att_type': att_type,
-#                     'att_code': att_code,
-#                     'att_name': '-',
-#                     'att_value': 0,
-#                     'att_weight': float(att_weight),  # ⭐ IntegerField -> float
-#                     'message': 'Not found in scoring table'
-#                 }
-#             except Exception as e:
-#                 desc = scr_atttype_desc_dy.objects.filter(att_type=att_type).first()
-#                 att_weight = desc.att_weight if desc else 0
-                
-#                 return {
-#                     'score': 0,
-#                     'att_type': att_type,
-#                     'att_code': att_code,
-#                     'att_name': '-',
-#                     'att_value': 0,
-#                     'att_weight': float(att_weight),  # ⭐ IntegerField -> float
-#                     'error': str(e)
-#                 }
-    
-#     def get_score_range(self, att_type, value):
-#         """Find value in range"""
-#         try:
-#             desc = scr_atttype_desc_dy.objects.filter(att_type=att_type).first()
-#             att_weight = desc.att_weight if desc else 0
-            
-#             attributes = scr_attribute_table_new.objects.filter(att_type=att_type)
-            
-#             for attr in attributes:
-#                 if '|' not in attr.att_code:
-#                     if str(value) == str(attr.att_code):
-#                         return {
-#                             'score': float(attr.att_value),
-#                             'att_type': att_type,
-#                             'att_code': attr.att_code,
-#                             'att_name': attr.att_name,
-#                             'att_value': float(attr.att_value),
-#                             'att_group_id': attr.att_group_id,
-#                             'att_desc': attr.att_desc,
-#                             'att_weight': float(att_weight),
-#                             'input_value': value,
-#                             'range': f"Exact match: {attr.att_code}",
-#                         }
-#                 else:
-#                     parts = attr.att_code.split('|')
-#                     try:
-#                         min_val = Decimal(parts[0]) if parts[0] else Decimal('0')
-#                         max_val = Decimal(parts[1]) if parts[1] else Decimal('999999999999')
-                        
-#                         if min_val <= Decimal(str(value)) <= max_val:
-#                             return {
-#                                 'score': float(attr.att_value),
-#                                 'att_type': att_type,
-#                                 'att_code': attr.att_code,
-#                                 'att_name': attr.att_name,
-#                                 'att_value': float(attr.att_value),
-#                                 'att_group_id': attr.att_group_id,
-#                                 'att_desc': attr.att_desc,
-#                                 'att_weight': float(att_weight),
-#                                 'input_value': value,
-#                                 'range': f"{float(min_val)} - {float(max_val)}",
-#                             }
-#                     except (ValueError, IndexError):
-#                         continue
-            
-#             return {
-#                 'score': 0,
-#                 'att_type': att_type,
-#                 'att_code': None,
-#                 'att_name': '-',
-#                 'att_value': 0,
-#                 'att_weight': float(att_weight),
-#                 'input_value': value,
-#                 'message': 'Value not in any range'
-#             }
-#         except Exception as e:
-#             desc = scr_atttype_desc_dy.objects.filter(att_type=att_type).first()
-#             att_weight = desc.att_weight if desc else 0
-            
-#             return {
-#                 'score': 0,
-#                 'att_type': att_type,
-#                 'att_code': None,
-#                 'att_name': '-',
-#                 'att_value': 0,
-#                 'att_weight': float(att_weight),
-#                 'input_value': value,
-#                 'error': str(e)
-#             }
-    
-#     def get_score_min_max(self, att_type, loans, is_active):
-#         """Get MIN/MAX score from loans"""
-#         try:
-#             desc = scr_atttype_desc_dy.objects.filter(att_type=att_type).first()
-#             att_weight = desc.att_weight if desc else 0
-            
-#             scores = []
-            
-#             for loan in loans:
-#                 if att_type == 'lpID':
-#                     code = loan.lon_purpose_code
-#                 elif att_type == 'ltID':
-#                     code = loan.lon_term
-#                 elif att_type == 'ovdID':
-#                     code = loan.lon_class
-#                 else:
-#                     continue
-                
-#                 if not code:
-#                     continue
-                
-#                 score_data = self.get_score_simple(att_type, code)
-#                 if score_data.get('score', 0) > 0:
-#                     scores.append({
-#                         'loan_id': loan.loan_id,
-#                         'code': code,
-#                         'score': score_data['score'],
-#                         'att_value': score_data['att_value'],
-#                         'att_group_id': score_data.get('att_group_id'),
-#                         'att_name': score_data.get('att_name'),
-#                         'att_weight': att_weight,
-#                     })
-            
-#             if not scores:
-#                 return {
-#                     'score': 0,
-#                     'att_type': att_type,
-#                     'att_name': '-',
-#                     'att_value': 0,
-#                     'att_weight': att_weight,
-#                     'strategy': 'MIN' if is_active else 'MAX',
-#                     'message': 'No valid scores found'
-#                 }
-            
-#             if is_active:
-#                 selected = min(scores, key=lambda x: x['score'])
-#                 strategy = 'MIN'
-#             else:
-#                 selected = max(scores, key=lambda x: x['score'])
-#                 strategy = 'MAX'
-            
-#             return {
-#                 'score': selected['score'],
-#                 'att_type': att_type,
-#                 'att_weight': att_weight,
-#                 'strategy': strategy,
-#                 'selected_code': selected['code'],
-#                 'selected_loan_id': selected['loan_id'],
-#                 'all_scores': scores,
-#                 'att_value': selected['att_value'],
-#                 'att_group_id': selected.get('att_group_id'),
-#                 'att_name': selected.get('att_name'),
-#             }
-#         except Exception as e:
-#             desc = scr_atttype_desc_dy.objects.filter(att_type=att_type).first()
-#             att_weight = desc.att_weight if desc else 0
-            
-#             return {
-#                 'score': 0,
-#                 'att_type': att_type,
-#                 'att_name': '-',
-#                 'att_value': 0,
-#                 'att_weight': att_weight,
-#                 'error': str(e)
-#             }
-    
-#     def get_collateral_type_score_min_max(self, col_types, is_active):
-#         """Get MIN/MAX score from collateral types"""
-#         try:
-#             desc = scr_atttype_desc_dy.objects.filter(att_type='colTypeID').first()
-#             att_weight = desc.att_weight if desc else 0
-            
-#             scores = []
-            
-#             for col_type in col_types:
-#                 attributes = scr_attribute_table_new.objects.filter(
-#                     att_type='colTypeID',
-#                     att_code__startswith=col_type
-#                 )
-                
-#                 for attr in attributes:
-#                     scores.append({
-#                         'col_type': col_type,
-#                         'att_code': attr.att_code,
-#                         'att_name': attr.att_name,
-#                         'score': float(attr.att_value),
-#                         'att_value': float(attr.att_value),
-#                         'att_group_id': attr.att_group_id,
-#                         'att_weight': float(att_weight),
-#                     })
-#                     break
-            
-#             if not scores:
-#                 return {
-#                     'score': 0,
-#                     'att_type': 'colTypeID',
-#                     'att_name': '-',
-#                     'att_value': 0,
-#                     'att_weight': att_weight,
-#                     'message': f'No collateral types found'
-#                 }
-            
-#             if is_active:
-#                 selected = min(scores, key=lambda x: x['score'])
-#                 strategy = 'MIN'
-#             else:
-#                 selected = max(scores, key=lambda x: x['score'])
-#                 strategy = 'MAX'
-            
-#             return {
-#                 'score': selected['score'],
-#                 'att_type': 'colTypeID',
-#                 'att_weight': att_weight,
-#                 'strategy': strategy,
-#                 'selected_col_type': selected['col_type'],
-#                 'all_scores': scores,
-#                 'att_value': selected['att_value'],
-#                 'att_group_id': selected.get('att_group_id'),
-#                 'att_name': selected.get('att_name'),
-#             }
-#         except Exception as e:
-#             desc = scr_atttype_desc_dy.objects.filter(att_type='colTypeID').first()
-#             att_weight = desc.att_weight if desc else 0
-            
-#             return {
-#                 'score': 0,
-#                 'att_type': 'colTypeID',
-#                 'att_name': '-',
-#                 'att_value': 0,
-#                 'att_weight': att_weight,
-#                 'error': str(e)
-#             }
-    
-#     # =====================================================
-#     # DATA RETRIEVAL FUNCTIONS (Keep your existing code)
-#     # =====================================================
-    
-#     def get_customer_info(self):
-#         """Get customer information from IndividualBankIbk"""
-#         try:
-#             customer = IndividualBankIbk.objects.filter(
-#                 lcic_id=self.lcic_id
-#             ).first()
-            
-#             if not customer:
-#                 return None
-            
-#             # Calculate age
-#             age = None
-#             if customer.ind_birth_date:
-#                 today = date.today()
-#                 age = today.year - customer.ind_birth_date.year - (
-#                     (today.month, today.day) < 
-#                     (customer.ind_birth_date.month, customer.ind_birth_date.day)
-#                 )
-            
-#             # Calculate registration year
-#             registration_year = None
-#             if customer.ind_insert_date:
-#                 today = date.today()
-#                 registration_year = today.year - customer.ind_insert_date.year
-            
-#             bank_info = self.get_bank_info(customer.bnk_code)
-            
-#             return {
-#                 'lcic_id': customer.lcic_id,
-#                 'customer_id': customer.customerid,
-#                 'bnk_code': customer.bnk_code,
-#                 'bank_info': bank_info,
-#                 'branch_code': customer.branchcode,
-#                 'national_id': customer.ind_national_id,
-#                 'passport': customer.ind_passport,
-#                 'familybook': customer.ind_familybook,
-#                 'familybook_prov_code': customer.ind_familybook_prov_code,
-#                 'name': customer.ind_name,
-#                 'surname': customer.ind_surname,
-#                 'lao_name': customer.ind_lao_name,
-#                 'lao_surname': customer.ind_lao_surname,
-#                 'birth_date': customer.ind_birth_date,
-#                 'age': age,
-#                 'gender': customer.ind_gender,
-#                 'nationality': customer.ind_nationality,
-#                 'civil_status': customer.ind_civil_status,
-#                 'ind_insert_date': customer.ind_insert_date,
-#                 'registration_year': registration_year,
-#             }
-#         except Exception as e:
-#             raise Exception(f"Error getting customer info: {str(e)}")
-    
-#     def get_loan_summary(self):
-#         """Get loan summary from B1"""
-#         try:
-#             all_loans = B1.objects.filter(
-#                 LCIC_code=self.lcic_id
-#             ).order_by('-lon_credit_line')
-            
-#             if not all_loans.exists():
-#                 return {
-#                     'total_loans': 0,
-#                     'active_loans': 0,
-#                     'inactive_loans': 0,
-#                     'loans_detail': [],
-#                     'has_active_or_writeoff': False,
-#                     'scoring_loans': [],
-#                     'total_credit_line_lak': 0,
-#                     'total_outstanding_balance_lak': 0,
-#                 }
-            
-#             active_writeoff_loans = all_loans.filter(
-#                 lon_status__in=['ACTIVE', 'WRITE-OFF']
-#             )
-#             inactive_loans = all_loans.filter(lon_status='INACTIVE')
-            
-#             has_active = active_writeoff_loans.exists()
-            
-#             if has_active:
-#                 scoring_loans = active_writeoff_loans
-#                 loan_status_used = 'ACTIVE/WRITE-OFF'
-#             else:
-#                 scoring_loans = inactive_loans
-#                 loan_status_used = 'INACTIVE'
-            
-#             loans_detail = []
-#             for loan in all_loans:
-#                 loan_open_year = None
-#                 if loan.lon_open_date:
-#                     today = date.today()
-#                     loan_open_year = today.year - loan.lon_open_date.year
-                
-#                 loan_term_year = None
-#                 if loan.lon_open_date and loan.lon_exp_date:
-#                     term_years = loan.lon_exp_date.year - loan.lon_open_date.year
-#                     loan_term_year = term_years
-                
-#                 credit_line_lak = self.convert_to_lak(
-#                     loan.lon_credit_line,
-#                     loan.lon_currency_code
-#                 )
-#                 outstanding_lak = self.convert_to_lak(
-#                     loan.lon_outstanding_balance,
-#                     loan.lon_currency_code
-#                 )
-                
-#                 loan_collaterals = self.get_loan_collaterals(
-#                     loan.loan_id,
-#                     loan.bnk_code,
-#                     loan.branch_id,
-#                     loan.customer_id
-#                 )
-                
-#                 bank_info = self.get_bank_info(loan.bnk_code)
-                
-#                 loan_info = {
-#                     'loan_id': loan.loan_id,
-#                     'bnk_code': loan.bnk_code,
-#                     'bank_info': bank_info,
-#                     'branch_id': loan.branch_id,
-#                     'customer_id': loan.customer_id,
-#                     'loan_status': loan.lon_status,
-#                     'product_type': loan.product_type,
-#                     'loan_open_date': loan.lon_open_date,
-#                     'loan_exp_date': loan.lon_exp_date,
-#                     'loan_open_year': loan_open_year,
-#                     'loan_term': loan.lon_term,
-#                     'loan_term_year': loan_term_year,
-#                     'loan_purpose': loan.lon_purpose_code,
-#                     'credit_line': float(loan.lon_credit_line) if loan.lon_credit_line else 0,
-#                     'outstanding_balance': float(loan.lon_outstanding_balance) if loan.lon_outstanding_balance else 0,
-#                     'credit_line_lak': float(credit_line_lak),
-#                     'outstanding_balance_lak': float(outstanding_lak),
-#                     'currency': loan.lon_currency_code,
-#                     'interest_rate': float(loan.lon_int_rate) if loan.lon_int_rate else 0,
-#                     'days_slow': loan.lon_no_days_slow if loan.lon_no_days_slow else 0,
-#                     'loan_class': loan.lon_class,
-#                     'loan_type': loan.lon_type,
-#                     'account_no': loan.lon_account_no,
-#                     'collaterals': loan_collaterals['details'],
-#                     'total_collateral_value': loan_collaterals['total_value'],
-#                     'collateral_count': loan_collaterals['count'],
-#                 }
-                
-#                 loans_detail.append(loan_info)
-            
-#             total_credit_line_lak = Decimal('0')
-#             total_outstanding_lak = Decimal('0')
-            
-#             for loan in scoring_loans:
-#                 credit_lak = self.convert_to_lak(loan.lon_credit_line, loan.lon_currency_code)
-#                 outstanding_lak = self.convert_to_lak(loan.lon_outstanding_balance, loan.lon_currency_code)
-#                 total_credit_line_lak += credit_lak
-#                 total_outstanding_lak += outstanding_lak
-            
-#             max_credit_loan = scoring_loans.first() if scoring_loans.exists() else None
-            
-#             loan_open_year = None
-#             if max_credit_loan and max_credit_loan.lon_open_date:
-#                 today = date.today()
-#                 loan_open_year = today.year - max_credit_loan.lon_open_date.year
-            
-#             return {
-#                 'total_loans': all_loans.count(),
-#                 'active_loans': active_writeoff_loans.count(),
-#                 'inactive_loans': inactive_loans.count(),
-#                 'loans_detail': loans_detail,
-#                 'has_active_or_writeoff': has_active,
-#                 'loan_status_used': loan_status_used,
-#                 'scoring_loans': list(scoring_loans.values(
-#                     'loan_id', 'lon_purpose_code', 'lon_term', 'lon_class',
-#                     'lon_credit_line', 'lon_outstanding_balance', 'lon_currency_code',
-#                     'lon_open_date', 'lon_exp_date'
-#                 )),
-#                 'total_credit_line_lak': float(total_credit_line_lak),
-#                 'total_outstanding_balance_lak': float(total_outstanding_lak),
-#                 'loan_open_year': loan_open_year,
-#             }
-#         except Exception as e:
-#             raise Exception(f"Error getting loan summary: {str(e)}")
-    
-#     def get_loan_collaterals(self, loan_id, bnk_code, branch_id, customer_id):
-#         """Get collaterals for a specific loan"""
-#         try:
-#             collateral_data = []
-#             total_value_lak = Decimal('0')
-            
-#             c1_records = C1.objects.filter(
-#                 loan_id=loan_id,
-#                 bnk_code=bnk_code,
-#                 branch_id_code=branch_id,
-#                 bank_customer_ID=customer_id,
-#                 LCIC_code=self.lcic_id
-#             )
-            
-#             for c1 in c1_records:
-#                 col_type = c1.col_type
-#                 col_id = c1.col_id
-                
-#                 col_type_info = self.get_collateral_type_name(col_type)
-                
-#                 # C2.1 - Real Estate
-#                 if col_type == 'C2.1':
-#                     items = col_real_estates.objects.filter(loan_id=loan_id, col_id=col_id)
-#                     for item in items:
-#                         value_lak = self.convert_to_lak(item.value, item.value_unit)
-#                         collateral_data.append({
-#                             'col_type': 'C2.1',
-#                             'col_type_name_eng': col_type_info['name_eng'],
-#                             'col_type_name_lao': col_type_info['name_lao'],
-#                             'col_id': item.col_id,
-#                             'LCIC_code': item.LCIC_code,
-#                             'loan_id': item.loan_id,
-#                             'description': f"Land No: {item.land_no}",
-#                             'value': float(value_lak),
-#                             'value_unit': item.value_unit,
-#                             'original_value': float(item.value) if item.value else 0,
-#                             'owner': item.owner_name,
-#                             'status': item.rel_status,
-#                             'is_own_loan': item.loan_id == loan_id
-#                         })
-#                         total_value_lak += value_lak
-                
-#                 # C2.2 - Money/MIA
-#                 elif col_type == 'C2.2':
-#                     items = col_money_mia.objects.filter(loan_id=loan_id, col_id=col_id)
-#                     for item in items:
-#                         value_lak = self.convert_to_lak(item.value, item.value_unit)
-#                         collateral_data.append({
-#                             'col_type': 'C2.2',
-#                             'col_type_name_eng': col_type_info['name_eng'],
-#                             'col_type_name_lao': col_type_info['name_lao'],
-#                             'col_id': item.col_id,
-#                             'LCIC_code': item.LCIC_code,
-#                             'loan_id': item.loan_id,
-#                             'description': f"Account: {item.account_no}",
-#                             'account_type': item.account_type,
-#                             'value': float(value_lak),
-#                             'value_unit': item.value_unit,
-#                             'original_value': float(item.value) if item.value else 0,
-#                             'owner': item.owner_name,
-#                             'status': item.mia_status,
-#                             'is_own_loan': item.loan_id == loan_id
-#                         })
-#                         total_value_lak += value_lak
-                
-#                 # Add other collateral types (C2.3 - C2.8) similarly...
-#                 # (Keep your existing code for other collateral types)
-            
-#             return {
-#                 'details': collateral_data,
-#                 'count': len(collateral_data),
-#                 'total_value': float(total_value_lak)
-#             }
-#         except Exception as e:
-#             return {
-#                 'details': [],
-#                 'count': 0,
-#                 'total_value': 0
-#             }
-    
-#     def get_collateral_summary(self):
-#         """Get collateral summary from all C2.x tables"""
-#         try:
-#             collateral_data = {}
-#             total_value_lak = Decimal('0')
-#             collateral_types = []
-            
-#             c1_records = C1.objects.filter(LCIC_code=self.lcic_id)
-#             c1_col_types = list(c1_records.values_list('col_type', flat=True).distinct())
-            
-#             # C2.1 - Real Estate
-#             if 'C2.1' in c1_col_types or col_real_estates.objects.filter(LCIC_code=self.lcic_id).exists():
-#                 real_estates = col_real_estates.objects.filter(LCIC_code=self.lcic_id)
-#                 total_rel = Decimal('0')
-#                 items = []
-                
-#                 for item in real_estates:
-#                     value_lak = self.convert_to_lak(item.value, item.value_unit)
-#                     total_rel += value_lak
-#                     items.append({
-#                         'col_id': item.col_id,
-#                         'loan_id': item.loan_id,
-#                         'land_no': item.land_no,
-#                         'value': float(value_lak),
-#                         'owner': item.owner_name
-#                     })
-                
-#                 if len(items) > 0:
-#                     collateral_data['C2.1'] = {
-#                         'type': 'Real Estate',
-#                         'count': real_estates.count(),
-#                         'total_value_lak': float(total_rel),
-#                         'items': items
-#                     }
-#                     total_value_lak += total_rel
-#                     collateral_types.append('C2.1')
-            
-#             # Add other collateral types (C2.2 - C2.8) similarly...
-#             # (Keep your existing code)
-            
-#             return {
-#                 'total_collateral_value_lak': float(total_value_lak),
-#                 'collateral_types': collateral_types,
-#                 'collateral_count': len(collateral_types),
-#                 'details': collateral_data
-#             }
-#         except Exception as e:
-#             raise Exception(f"Error getting collateral summary: {str(e)}")
-    
-#     def get_inquiries_count(self):
-#         """Count credit inquiries"""
-#         try:
-#             customer_bnk_code = None
-#             if self.customer:
-#                 customer_bnk_code = self.customer.get('bnk_code')
-            
-#             inquiries = request_charge.objects.filter(
-#                 LCIC_code=self.lcic_id,
-#                 chg_code__in=['FCR', 'FCRF']
-#             )
-            
-#             if customer_bnk_code:
-#                 inquiries = inquiries.exclude(bnk_code=customer_bnk_code)
-            
-#             inquiry_count = inquiries.count()
-            
-#             if inquiry_count == 0:
-#                 category_code = "0"
-#             elif 1 <= inquiry_count <= 3:
-#                 category_code = "1|3"
-#             else:
-#                 category_code = "4|999"
-            
-#             return {
-#                 'count': inquiry_count,
-#                 'category_code': category_code,
-#                 'inquiries': list(inquiries.values(
-#                     'rec_charge_ID',
-#                     'bnk_code',
-#                     'bnk_type',
-#                     'chg_code',
-#                     'insert_date',
-#                     'cusType',
-#                     'lon_purpose'
-#                 ))
-#             }
-#         except Exception as e:
-#             return {
-#                 'count': 0,
-#                 'category_code': "0",
-#                 'inquiries': [],
-#                 'error': str(e)
-#             }
-    
-#     # =====================================================
-#     # FINAL SCORE CALCULATION
-#     # =====================================================
-    
-#     def calculate_final_score(self, breakdown):
-#         """Calculate total score"""
-#         try:
-#             scores = {}
-#             score_values = []
-#             total_score = 0
-            
-#             for key, value in breakdown.items():
-#                 score = value.get('score', 0)
-#                 scores[key] = score
-#                 score_values.append(str(score))
-#                 total_score += score
-            
-#             formula = " + ".join(score_values)
-#             calculation = f"{formula} = {round(total_score, 2)}"
-            
-#             return {
-#                 'final_score': round(total_score, 2),
-#                 'calculation_details': {
-#                     'total_score': round(total_score, 2),
-#                     'formula': formula,
-#                     'calculation': calculation,
-#                     'individual_scores': scores
-#                 }
-#             }
-#         except Exception as e:
-#             raise Exception(f"Error calculating final score: {str(e)}")
-    
-#     def get_credit_rating(self, score):
-#         """Get credit rating"""
-#         if score >= 850:
-#             return "Excellent"
-#         elif score >= 750:
-#             return "Good"
-#         elif score >= 650:
-#             return "Fair"
-#         elif score >= 550:
-#             return "Poor"
-#         else:
-#             return "Very Poor"
